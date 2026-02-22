@@ -1,0 +1,48 @@
+# ──────────────────────────────────────────────────────────────
+# Root .gitignore — covers both frontend (Next.js) and backend (Django)
+# ──────────────────────────────────────────────────────────────
+
+# ── Environment variables ──────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── OS / Editor ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Tooling / Planning artifacts ───────────────────────────────
+.claude/
+*.resolved
+
+# ─────────────────────────────────────────────────────────────
+# Frontend — Next.js
+# ─────────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+frontend/.turbo/
+frontend/coverage/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# ─────────────────────────────────────────────────────────────
+# Backend — Python / Django
+# ─────────────────────────────────────────────────────────────
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+backend/db.sqlite3
+backend/staticfiles/
+backend/mediafiles/
+backend/*.log
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
