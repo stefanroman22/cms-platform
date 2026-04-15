@@ -1,0 +1,522 @@
+import logging
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import List
+
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+
+logger = logging.getLogger(__name__)
+
+import secrets
+import string
+
+from ..models.schemas import (
+    ServiceOut,
+    ServiceDetailOut,
+    ContentSaveRequest,
+    ServiceCreateRequest,
+    ServiceTypeOut,
+    AdminProjectOut,
+    UserAdminOut,
+    ProjectSettingsOut,
+    ProjectSettingsIn,
+    CreateClientRequest,
+    CreateClientOut,
+)
+from ..services.supabase_client import get_supabase, get_supabase_admin
+from ..models.schemas import UserOut
+from .deps import require_user, require_project_access
+
+STORAGE_BUCKET = "cms-files"
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+# Which MIME prefix is allowed per service type. None = any type accepted.
+_ALLOWED_MIME: dict[str, str | None] = {
+    "image":         "image/",
+    "floor_plan":    "image/",
+    "gallery":       "image/",
+    "video":         "video/",
+    "file_download": None,
+}
+
+# Fallback extensions when the uploaded filename has none
+_MIME_TO_EXT: dict[str, str] = {
+    "image/jpeg":  ".jpg",
+    "image/png":   ".png",
+    "image/gif":   ".gif",
+    "image/webp":  ".webp",
+    "image/svg+xml": ".svg",
+    "video/mp4":   ".mp4",
+    "video/webm":  ".webm",
+    "application/pdf": ".pdf",
+}
+
+router = APIRouter(tags=["workspace"])
+
+ACCESS_COOKIE = "access_token"
+
+
+# ── Auth helpers ─────────────────────────────────────────────────────────────
+
+async def _require_admin(request: Request) -> UserOut:
+    user = await require_user(request)
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+def _flatten_service(svc: dict) -> dict:
+    """Extracts nested service_types + content_entries into a flat dict.
+
+    supabase-py returns content_entries as a dict (not list) when a unique
+    constraint exists on the FK column — PostgREST treats it as one-to-one.
+    """
+    st = svc.get("service_types") or {}
+    raw = svc.get("content_entries")
+    if isinstance(raw, dict):
+        entry = raw  # one-to-one embed
+    elif isinstance(raw, list):
+        entry = raw[0] if raw else None
+    else:
+        entry = None
+    return {
+        "id": svc["id"],
+        "service_key": svc["service_key"],
+        "label": svc.get("label"),
+        "service_type_slug": svc["service_type_slug"],
+        "service_type_name": st.get("name", svc["service_type_slug"]),
+        "service_type_icon": st.get("icon", "Box"),
+        "display_order": svc.get("display_order", 0),
+        "page_name": svc.get("page_name", "General"),
+        "last_updated": entry.get("updated_at") if entry else None,
+        "schema": st.get("schema", {}),
+        "content": entry.get("content", {}) if entry else {},
+    }
+
+
+# ── Client workspace endpoints ───────────────────────────────────────────────
+
+@router.get("/projects/{project_slug}/services", response_model=List[ServiceOut])
+async def list_services(project_slug: str, request: Request):
+    user = await require_user(request)
+    project = require_project_access(project_slug, user)
+
+    try:
+        sb = get_supabase()
+        result = (
+            sb.table("project_services")
+            .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon), content_entries(updated_at)")
+            .eq("project_id", project["id"])
+            .order("display_order")
+            .execute()
+        )
+        return [_flatten_service(s) for s in (result.data or [])]
+    except Exception as exc:
+        logger.exception("list_services failed for project %s: %s", project_slug, exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
+async def get_service(project_slug: str, service_key: str, request: Request):
+    user = await require_user(request)
+    project = require_project_access(project_slug, user)
+
+    sb = get_supabase()
+    result = (
+        sb.table("project_services")
+        .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema), content_entries(content, updated_at)")
+        .eq("project_id", project["id"])
+        .eq("service_key", service_key)
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
+
+    return _flatten_service(result.data)
+
+
+@router.put("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
+async def save_service(project_slug: str, service_key: str, body: ContentSaveRequest, request: Request):
+    user = await require_user(request)
+    project = require_project_access(project_slug, user)
+
+    sb = get_supabase()
+
+    # Resolve the project_service id
+    svc_result = (
+        sb.table("project_services")
+        .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema)")
+        .eq("project_id", project["id"])
+        .eq("service_key", service_key)
+        .single()
+        .execute()
+    )
+    if not svc_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
+
+    svc_id = svc_result.data["id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Upsert content entry
+    sb.table("content_entries").upsert(
+        {
+            "project_service_id": svc_id,
+            "content": body.content,
+            "updated_at": now,
+            "updated_by": user.id,
+        },
+        on_conflict="project_service_id",
+    ).execute()
+
+    # Return fresh state
+    return await get_service(project_slug, service_key, request)
+
+
+@router.post("/projects/{project_slug}/services/{service_key}/upload")
+async def upload_file(
+    project_slug: str,
+    service_key: str,
+    request: Request,
+    file: UploadFile = File(...),
+):
+    user = await require_user(request)
+    project = require_project_access(project_slug, user)
+
+    # Resolve service + type
+    sb = get_supabase()
+    svc_result = (
+        sb.table("project_services")
+        .select("service_type_slug")
+        .eq("project_id", project["id"])
+        .eq("service_key", service_key)
+        .single()
+        .execute()
+    )
+    if not svc_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
+
+    service_type = svc_result.data["service_type_slug"]
+
+    if service_type not in _ALLOWED_MIME:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Service type '{service_type}' does not support file uploads.",
+        )
+
+    # MIME type validation
+    mime = file.content_type or "application/octet-stream"
+    allowed_prefix = _ALLOWED_MIME[service_type]
+    if allowed_prefix is not None and not mime.startswith(allowed_prefix):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"File type '{mime}' is not allowed for service type '{service_type}'. Expected: {allowed_prefix}*",
+        )
+
+    # Read + size check
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File exceeds the 50 MB limit.",
+        )
+
+    # Build storage path: {project_slug}/{service_key}/{uuid}.{ext}
+    original_suffix = Path(file.filename or "").suffix.lower()
+    ext = original_suffix if original_suffix else _MIME_TO_EXT.get(mime, "")
+    storage_path = f"{project_slug}/{service_key}/{uuid.uuid4()}{ext}"
+
+    # Upload via service role client (bypasses RLS)
+    sb_admin = get_supabase_admin()
+    sb_admin.storage.from_(STORAGE_BUCKET).upload(
+        path=storage_path,
+        file=content,
+        file_options={"content-type": mime, "upsert": "false"},
+    )
+
+    public_url = sb_admin.storage.from_(STORAGE_BUCKET).get_public_url(storage_path)
+
+    return {
+        "url": public_url,
+        "filename": file.filename,
+        "size": len(content),
+        "mime_type": mime,
+    }
+
+
+# ── Admin-only endpoints ─────────────────────────────────────────────────────
+
+@router.post("/projects/{project_slug}/services", status_code=status.HTTP_201_CREATED)
+async def add_service(project_slug: str, body: ServiceCreateRequest, request: Request):
+    user = await _require_admin(request)
+    project = require_project_access(project_slug, user)
+
+    # Validate service_type_slug exists
+    sb = get_supabase()
+    st_check = sb.table("service_types").select("slug").eq("slug", body.service_type_slug).single().execute()
+    if not st_check.data:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown service type")
+
+    # Validate service_key is alphanumeric + underscores only
+    import re
+    if not re.match(r"^[a-z0-9_]+$", body.service_key):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="service_key must contain only lowercase letters, digits, and underscores",
+        )
+
+    # Repeater requires item_schema
+    if body.service_type_slug == "repeater":
+        if not body.item_schema:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="item_schema is required when creating a repeater service",
+            )
+        valid_field_types = {"string", "richtext", "url", "tags"}
+        for field in body.item_schema:
+            if field.type not in valid_field_types:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"item_schema field type '{field.type}' is invalid. Must be one of: {', '.join(sorted(valid_field_types))}",
+                )
+
+    sb.table("project_services").insert({
+        "project_id": project["id"],
+        "service_type_slug": body.service_type_slug,
+        "service_key": body.service_key,
+        "label": body.label,
+        "display_order": body.display_order,
+        "page_name": body.page_name,
+    }).execute()
+
+    # For repeater: seed the content_entries row with _schema + empty items
+    if body.service_type_slug == "repeater" and body.item_schema:
+        svc_result = (
+            sb.table("project_services")
+            .select("id")
+            .eq("project_id", project["id"])
+            .eq("service_key", body.service_key)
+            .single()
+            .execute()
+        )
+        if svc_result.data:
+            schema_payload = [f.model_dump() for f in body.item_schema]
+            sb.table("content_entries").insert({
+                "project_service_id": svc_result.data["id"],
+                "content": {"_schema": schema_payload, "items": []},
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_by": user.id,
+            }).execute()
+
+    return {"success": True, "service_key": body.service_key}
+
+
+@router.delete("/projects/{project_slug}/services/{service_key}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_service(project_slug: str, service_key: str, request: Request):
+    user = await _require_admin(request)
+    project = require_project_access(project_slug, user)
+
+    sb = get_supabase()
+    sb.table("project_services").delete().eq("project_id", project["id"]).eq("service_key", service_key).execute()
+
+
+@router.get("/admin/projects", response_model=List[AdminProjectOut])
+async def admin_list_projects(request: Request):
+    await _require_admin(request)
+
+    sb = get_supabase()
+    result = (
+        sb.table("projects")
+        .select("id, name, slug, is_active, created_at, user_id, users(email, full_name)")
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    out = []
+    for p in (result.data or []):
+        user_row = p.get("users") or {}
+        out.append({
+            "id": p["id"],
+            "name": p["name"],
+            "slug": p["slug"],
+            "is_active": p["is_active"],
+            "created_at": p["created_at"],
+            "user_id": p["user_id"],
+            "user_email": user_row.get("email"),
+            "user_full_name": user_row.get("full_name"),
+        })
+    return out
+
+
+@router.get("/admin/clients", response_model=List[UserAdminOut])
+async def admin_list_clients(request: Request):
+    await _require_admin(request)
+
+    sb = get_supabase()
+    users_result = (
+        sb.table("users")
+        .select("id, email, full_name, is_admin, is_active, created_at")
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    out = []
+    for u in (users_result.data or []):
+        count_result = (
+            sb.table("projects")
+            .select("id", count="exact")
+            .eq("user_id", u["id"])
+            .eq("is_active", True)
+            .execute()
+        )
+        out.append({**u, "projects_count": count_result.count or 0})
+    return out
+
+
+@router.get("/admin/service-types", response_model=List[ServiceTypeOut])
+async def admin_list_service_types(request: Request):
+    await _require_admin(request)
+
+    sb = get_supabase()
+    result = sb.table("service_types").select("slug, name, description, icon, schema").order("slug").execute()
+    return result.data or []
+
+
+@router.get("/projects/{project_slug}/settings", response_model=ProjectSettingsOut)
+async def get_project_settings(project_slug: str, request: Request):
+    user = await _require_admin(request)
+    project = require_project_access(project_slug, user)
+
+    sb = get_supabase()
+    result = (
+        sb.table("projects")
+        .select("website_url, allowed_origins")
+        .eq("id", project["id"])
+        .single()
+        .execute()
+    )
+    data = result.data or {}
+    return {
+        "website_url": data.get("website_url"),
+        "allowed_origins": data.get("allowed_origins") or [],
+    }
+
+
+@router.patch("/projects/{project_slug}/settings", response_model=ProjectSettingsOut)
+async def update_project_settings(
+    project_slug: str,
+    body: ProjectSettingsIn,
+    request: Request,
+):
+    user = await _require_admin(request)
+    project = require_project_access(project_slug, user)
+
+    # Normalise: strip whitespace, remove empty strings
+    origins = [o.strip() for o in body.allowed_origins if o.strip()]
+    website_url = body.website_url.strip() if body.website_url else None
+
+    sb = get_supabase()
+    sb.table("projects").update({
+        "website_url": website_url,
+        "allowed_origins": origins,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", project["id"]).execute()
+
+    return {"website_url": website_url, "allowed_origins": origins}
+
+
+# ── Admin client management ──────────────────────────────────────────────────
+
+def _generate_password(length: int = 16) -> str:
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+@router.get("/admin/clients/lookup", response_model=CreateClientOut)
+async def lookup_client(email: str, request: Request):
+    """Check whether an email already has an account. Returns account info (no password)."""
+    await _require_admin(request)
+
+    sb = get_supabase()
+    result = (
+        sb.table("users")
+        .select("id, email, full_name")
+        .eq("email", email.lower().strip())
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    u = result.data[0]
+    return CreateClientOut(
+        id=u["id"],
+        email=u["email"],
+        full_name=u.get("full_name"),
+        created=False,
+        generated_password=None,
+    )
+
+
+@router.post("/admin/clients", response_model=CreateClientOut, status_code=status.HTTP_201_CREATED)
+async def create_client(body: CreateClientRequest, request: Request):
+    """
+    Create a new client account (if email not found) or return the existing one.
+    When a new account is created, a random password is generated and returned once.
+    """
+    await _require_admin(request)
+
+    email = body.email.lower().strip()
+    sb = get_supabase()
+    sb_admin = get_supabase_admin()
+
+    # Check for existing user
+    existing = (
+        sb.table("users")
+        .select("id, email, full_name")
+        .eq("email", email)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        u = existing.data[0]
+        return CreateClientOut(
+            id=u["id"],
+            email=u["email"],
+            full_name=u.get("full_name"),
+            created=False,
+            generated_password=None,
+        )
+
+    # Create via Supabase Auth admin API
+    password = _generate_password()
+    auth_resp = sb_admin.auth.admin.create_user({
+        "email": email,
+        "password": password,
+        "email_confirm": True,
+        "user_metadata": {"full_name": body.full_name or ""},
+    })
+
+    if not auth_resp.user:
+        raise HTTPException(status_code=500, detail="Failed to create auth user")
+
+    user_id = auth_resp.user.id
+
+    # Insert into public users table
+    sb_admin.table("users").insert({
+        "id": user_id,
+        "email": email,
+        "full_name": body.full_name,
+        "is_admin": False,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+
+    return CreateClientOut(
+        id=user_id,
+        email=email,
+        full_name=body.full_name,
+        created=True,
+        generated_password=password,
+    )
