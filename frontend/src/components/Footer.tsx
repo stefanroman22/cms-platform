@@ -17,12 +17,12 @@ const CONTACT_ITEMS = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-white/[0.06] bg-black">
+    <footer className="border-t border-white/[0.1] bg-black">
       <motion.div
         variants={stagger}
         initial="hidden"
         whileInView="visible"
-        viewport={{ once: true, amount: 0.2 }}
+        viewport={{ once: true, amount: 0.5 }}
         className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8 lg:py-16"
       >
         {/* ── Top: brand + contact ──────────────────────────────────────── */}

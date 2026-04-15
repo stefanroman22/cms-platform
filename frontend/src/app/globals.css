@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Dashboard dark mode — scoped to .dark wrapper applied by ThemeShell.
+   This replaces the default prefers-color-scheme media query so system dark mode
+   has no effect; only the .dark class on the dashboard wrapper triggers dark: utilities. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Force dark theme — this is a dark-first SaaS product */
 :root {
   --background: #000000;
@@ -17,4 +22,13 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Hide scrollbar visually but keep scroll functionality */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

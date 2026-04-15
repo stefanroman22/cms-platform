@@ -7,6 +7,7 @@ import {
     dashboardFieldLabelCn,
     dashboardSectionCardCn,
     dashboardErrorBannerCn,
+    dashboardPrimaryBtnCn,
 } from "@/lib/styles";
 import { InfoTooltip } from "@/components/dashboard/InfoTooltip";
 
@@ -131,7 +132,7 @@ export function IssueForm({ projectSlug, onSubmitted }: IssueFormProps) {
                                     key={p}
                                     type="button"
                                     onClick={() => setPriority(p)}
-                                    className={`flex-1 py-1.5 text-sm font-medium transition-colors ${
+                                    className={`flex-1 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
                                         priority === p
                                             ? prioritySelectedCn[p]
                                             : priorityUnselectedCn
@@ -147,7 +148,7 @@ export function IssueForm({ projectSlug, onSubmitted }: IssueFormProps) {
                     <button
                         type="submit"
                         disabled={submitting}
-                        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                        className={dashboardPrimaryBtnCn}
                     >
                         {submitting ? "Submitting…" : "Submit Issue"}
                     </button>

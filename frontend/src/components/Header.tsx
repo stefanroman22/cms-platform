@@ -3,17 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, User } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import {
   backdrop,
   drawerRight,
-  fadeDown,
   fadeIn,
-  stagger,
   staggerFast,
 } from "@/lib/animations";
 import { ctaButtonCn, navLinkCn } from "@/lib/styles";
+import { useAuth } from "@/context/auth";
 
 /* ─── Data ───────────────────────────────────────────────────────────────── */
 
@@ -27,6 +26,7 @@ const NAV_LINKS = [
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isLoggedIn } = useAuth();
 
   const close = () => setMobileOpen(false);
 
@@ -46,33 +46,83 @@ export default function Header() {
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.4 }}
-        className="fixed left-0 right-0 top-0 z-40 border-b border-white/[0.06] bg-black"
+        className="fixed left-0 right-0 top-0 z-40 border-b border-white/[0.1] bg-black"
       >
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-8">
-          <Logo />
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-8 border-">
+          {/* Mobile Logo */}
+          <div className="flex md:hidden">
+            <Logo />
+          </div>
+
+          {/* Desktop Logo */}
+          <motion.div
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="hidden md:flex"
+          >
+            <Logo />
+          </motion.div>
 
           {/* ── Desktop nav (md and above) ───────────────────────────────── */}
-          <motion.nav
-            variants={stagger}
-            initial="hidden"
-            animate="visible"
+          <nav
             className="hidden items-center gap-1 md:flex"
             aria-label="Primary navigation"
           >
-            {NAV_LINKS.map((link) => (
-              <motion.div key={link.label} variants={fadeIn}>
+            {NAV_LINKS.map((link, index) => (
+              <motion.div
+                key={link.label}
+                initial={{ y: -20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.2 + index * 0.1 }}
+              >
                 <Link href={link.href} className={`px-4 py-2 ${navLinkCn}`}>
                   {link.label}
                 </Link>
               </motion.div>
             ))}
 
-            <motion.div variants={fadeIn} className="ml-2">
-              <Link href="/contact" className={ctaButtonCn}>
-                Get in touch
-              </Link>
+            <motion.div
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.2 + NAV_LINKS.length * 0.1 }}
+              className="ml-2 relative h-8 w-8"
+            >
+              <AnimatePresence mode="wait">
+                {isLoggedIn ? (
+                  <motion.div
+                    key="user-icon"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute inset-0"
+                  >
+                    <button
+                      onClick={() => window.open("/dashboard", "cms-dashboard")}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+                      aria-label="Open dashboard"
+                    >
+                      <User className="h-4 w-4 cursor-pointer" />
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="login-btn"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute inset-0 flex items-center"
+                  >
+                    <Link href="/log-in" className={ctaButtonCn}>
+                      Log In
+                    </Link>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
-          </motion.nav>
+          </nav>
 
           {/* ── Hamburger (below md) ─────────────────────────────────────── */}
           <button

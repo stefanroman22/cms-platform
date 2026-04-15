@@ -240,7 +240,7 @@ export default function ProjectWorkspacePage({
                                 <button
                                     type="submit"
                                     disabled={settingsSaving}
-                                    className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                                    className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-700 dark:hover:bg-zinc-600 cursor-pointer"
                                 >
                                     {settingsSaving ? "Saving…" : "Save settings"}
                                 </button>
