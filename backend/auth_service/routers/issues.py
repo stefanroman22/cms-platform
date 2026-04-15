@@ -3,7 +3,7 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from ..models.schemas import IssueCreateRequest, IssueOut
+from ..models.schemas import IssueCreateRequest, IssueOut, IssueUpdateRequest, IssueStatusRequest
 from ..services.supabase_client import get_supabase
 from .deps import require_user, require_project_access
 
@@ -18,7 +18,7 @@ async def list_issues(project_slug: str, request: Request):
     sb = get_supabase()
     result = (
         sb.table("project_issues")
-        .select("id, project_id, title, description, priority, created_by, created_at, users(email)")
+        .select("id, project_id, title, description, priority, status, created_by, created_at, users(email)")
         .eq("project_id", project["id"])
         .order("created_at", desc=True)
         .execute()
@@ -33,6 +33,7 @@ async def list_issues(project_slug: str, request: Request):
             title=row["title"],
             description=row["description"],
             priority=row["priority"],
+            status=row.get("status", "pending"),
             created_by=row.get("created_by"),
             created_by_email=user_row.get("email"),
             created_at=row["created_at"],
@@ -70,7 +71,165 @@ async def create_issue(project_slug: str, body: IssueCreateRequest, request: Req
         title=row["title"],
         description=row["description"],
         priority=row["priority"],
+        status="pending",
         created_by=row.get("created_by"),
         created_by_email=user.email,
         created_at=row["created_at"],
+    )
+
+
+@router.patch("/projects/{project_slug}/issues/{issue_id}", response_model=IssueOut)
+async def update_issue(
+    project_slug: str,
+    issue_id: str,
+    body: IssueUpdateRequest,
+    request: Request,
+):
+    user = await require_user(request)
+    project = require_project_access(project_slug, user)
+
+    sb = get_supabase()
+    issue_result = (
+        sb.table("project_issues")
+        .select("id, project_id, created_by")
+        .eq("id", issue_id)
+        .eq("project_id", project["id"])
+        .maybe_single()
+        .execute()
+    )
+    if not issue_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found.")
+
+    row = issue_result.data
+    if not user.is_admin and row.get("created_by") != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only edit your own issues.")
+
+    update_data: dict = {}
+    if body.title is not None:
+        update_data["title"] = body.title.strip()
+    if body.description is not None:
+        update_data["description"] = body.description.strip()
+    if body.priority is not None:
+        update_data["priority"] = body.priority
+
+    if not update_data:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No fields to update.")
+
+    updated = (
+        sb.table("project_issues")
+        .update(update_data)
+        .eq("id", issue_id)
+        .execute()
+    )
+    if not updated.data:
+        raise HTTPException(status_code=500, detail="Issue could not be updated.")
+
+    r = updated.data[0]
+    email_result = (
+        sb.table("users")
+        .select("email")
+        .eq("id", r["created_by"])
+        .maybe_single()
+        .execute()
+    ) if r.get("created_by") else None
+
+    return IssueOut(
+        id=r["id"],
+        project_id=r["project_id"],
+        title=r["title"],
+        description=r["description"],
+        priority=r["priority"],
+        status=r.get("status", "pending"),
+        created_by=r.get("created_by"),
+        created_by_email=email_result.data.get("email") if email_result and email_result.data else None,
+        created_at=r["created_at"],
+    )
+
+
+@router.delete(
+    "/projects/{project_slug}/issues/{issue_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_issue(project_slug: str, issue_id: str, request: Request):
+    user = await require_user(request)
+    project = require_project_access(project_slug, user)
+
+    sb = get_supabase()
+    issue_result = (
+        sb.table("project_issues")
+        .select("id, created_by")
+        .eq("id", issue_id)
+        .eq("project_id", project["id"])
+        .maybe_single()
+        .execute()
+    )
+    if not issue_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found.")
+
+    row = issue_result.data
+    if not user.is_admin and row.get("created_by") != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete your own issues.")
+
+    sb.table("project_issues").delete().eq("id", issue_id).execute()
+
+
+@router.patch(
+    "/projects/{project_slug}/issues/{issue_id}/status",
+    response_model=IssueOut,
+)
+async def update_issue_status(
+    project_slug: str,
+    issue_id: str,
+    body: IssueStatusRequest,
+    request: Request,
+):
+    user = await require_user(request)
+    project = require_project_access(project_slug, user)
+
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can update issue status.",
+        )
+
+    sb = get_supabase()
+    issue_result = (
+        sb.table("project_issues")
+        .select("id, project_id")
+        .eq("id", issue_id)
+        .eq("project_id", project["id"])
+        .maybe_single()
+        .execute()
+    )
+    if not issue_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found.")
+
+    updated = (
+        sb.table("project_issues")
+        .update({"status": body.status})
+        .eq("id", issue_id)
+        .execute()
+    )
+    if not updated.data:
+        raise HTTPException(status_code=500, detail="Status could not be updated.")
+
+    r = updated.data[0]
+    email_result = (
+        sb.table("users")
+        .select("email")
+        .eq("id", r["created_by"])
+        .maybe_single()
+        .execute()
+    ) if r.get("created_by") else None
+
+    return IssueOut(
+        id=r["id"],
+        project_id=r["project_id"],
+        title=r["title"],
+        description=r["description"],
+        priority=r["priority"],
+        status=r["status"],
+        created_by=r.get("created_by"),
+        created_by_email=email_result.data.get("email") if email_result and email_result.data else None,
+        created_at=r["created_at"],
     )
