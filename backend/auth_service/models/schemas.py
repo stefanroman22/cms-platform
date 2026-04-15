@@ -182,6 +182,31 @@ class IssueOut(BaseModel):
     title: str
     description: str
     priority: str
+    status: str
     created_by: str | None
     created_by_email: str | None
     created_at: str
+
+
+class IssueUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, min_length=1, max_length=10_000)
+    priority: str | None = None
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("High", "Medium", "Low"):
+            raise ValueError("priority must be High, Medium, or Low")
+        return v
+
+
+class IssueStatusRequest(BaseModel):
+    status: str
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        if v not in ("pending", "in_progress", "done"):
+            raise ValueError("status must be pending, in_progress, or done")
+        return v
