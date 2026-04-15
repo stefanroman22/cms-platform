@@ -184,6 +184,8 @@ export default function ProjectWorkspacePage({
                 <IssueList
                     projectSlug={projectSlug}
                     refreshTrigger={issueRefreshKey}
+                    isAdmin={isAdmin}
+                    currentUserId={user?.id ?? null}
                 />
             </div>
 
