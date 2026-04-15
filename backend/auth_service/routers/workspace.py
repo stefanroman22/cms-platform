@@ -54,9 +54,6 @@ _MIME_TO_EXT: dict[str, str] = {
 
 router = APIRouter(tags=["workspace"])
 
-ACCESS_COOKIE = "access_token"
-
-
 # ── Auth helpers ─────────────────────────────────────────────────────────────
 
 async def _require_admin(request: Request) -> UserOut:

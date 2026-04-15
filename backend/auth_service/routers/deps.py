@@ -25,7 +25,7 @@ def require_project_access(project_slug: str, user: UserOut) -> dict:
         .select("id, name, slug, user_id, is_active")
         .eq("slug", project_slug)
         .eq("is_active", True)
-        .single()
+        .maybe_single()
         .execute()
     )
     if not result.data:
