@@ -159,31 +159,70 @@ def _resolve_client(api_url: str, api_token: str, client_email: str | None) -> s
 
 
 def _call_claude(model: str, project_slug: str, files: dict[str, str]) -> dict:
-    """Send files to Claude and parse the returned JSON manifest."""
-    try:
-        import anthropic
-    except ImportError:
-        click.echo("Error: anthropic package not installed. Run: pip install anthropic", err=True)
-        sys.exit(1)
+    """Send files to Claude and parse the returned JSON manifest.
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        click.echo("Error: ANTHROPIC_API_KEY environment variable not set.", err=True)
-        sys.exit(1)
+    Prefers the `claude` CLI (covered by Max/Pro subscriptions, no extra
+    billing). Falls back to the anthropic Python SDK if the CLI isn't found,
+    which requires ANTHROPIC_API_KEY and bills per-token.
+    """
+    import shutil
 
-    client = anthropic.Anthropic(api_key=api_key)
     user_message = build_user_message(project_slug, files)
+    combined = f"{SYSTEM_PROMPT}\n\n{user_message}"
 
-    click.echo(f"  Sending {len(files)} files to Claude ({model})…")
+    claude_bin = shutil.which("claude")
+    if claude_bin:
+        import subprocess
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
+        click.echo(f"  Sending {len(files)} files to Claude CLI ({model})…")
+        try:
+            result = subprocess.run(
+                [claude_bin, "-p", "--output-format", "text", "--model", model],
+                input=combined,
+                capture_output=True,
+                text=True,
+                check=True,
+                encoding="utf-8",
+            )
+        except subprocess.CalledProcessError as e:
+            click.echo(
+                f"Error: claude CLI failed (exit {e.returncode}).\nstderr: {e.stderr}",
+                err=True,
+            )
+            sys.exit(1)
+        raw = result.stdout.strip()
+    else:
+        # Fallback: SDK + API key (pay-per-token)
+        try:
+            import anthropic
+        except ImportError:
+            click.echo(
+                "Error: neither `claude` CLI nor anthropic package available. "
+                "Install Claude Code (`npm i -g @anthropic-ai/claude-code`) or "
+                "`pip install anthropic` + set ANTHROPIC_API_KEY.",
+                err=True,
+            )
+            sys.exit(1)
 
-    raw = response.content[0].text.strip()
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            click.echo(
+                "Error: `claude` CLI not on PATH and ANTHROPIC_API_KEY not set. "
+                "Install Claude Code for Max-plan usage or set the API key.",
+                err=True,
+            )
+            sys.exit(1)
+
+        client = anthropic.Anthropic(api_key=api_key)
+        click.echo(f"  Sending {len(files)} files to Claude SDK ({model}, billed)…")
+
+        response = client.messages.create(
+            model=model,
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        raw = response.content[0].text.strip()
 
     # Strip markdown code fences if Claude wrapped the JSON anyway
     if raw.startswith("```"):
