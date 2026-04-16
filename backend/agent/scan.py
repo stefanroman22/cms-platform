@@ -324,13 +324,18 @@ def _vercel_setup(
     # 1. Reuse preview_token if present, else generate a fresh one
     preview_token = existing.get("preview_token") or secrets.token_urlsafe(32)
 
-    # 2. Find or create Vercel project
-    project_id = vercel.find_project_by_repo(vercel_token, github_repo)
-    if project_id:
-        click.echo(f"  ✓ Found existing Vercel project: {project_id}")
+    # 2. Find or create Vercel project — use Vercel's productionBranch if we
+    #    find an existing project (authoritative source), else fall back to
+    #    GitHub's default_branch.
+    found = vercel.find_project_by_repo(vercel_token, github_repo)
+    if found:
+        project_id = found["id"]
+        prod_branch = found.get("production_branch") or github.get_default_branch(github_token, github_repo)
+        click.echo(f"  ✓ Found existing Vercel project: {project_id} (prod branch: {prod_branch})")
     else:
         project_id = vercel.create_project(vercel_token, name=slug, github_repo=github_repo)
-        click.echo(f"  ✓ Created Vercel project: {project_id}")
+        prod_branch = github.get_default_branch(github_token, github_repo)
+        click.echo(f"  ✓ Created Vercel project: {project_id} (prod branch: {prod_branch})")
 
     # 3. Set env vars (upserts)
     endpoint_prod = f"{cms_endpoint_base}/content/{slug}"
@@ -340,16 +345,20 @@ def _vercel_setup(
     vercel.set_env_var(vercel_token, project_id, "CMS_PREVIEW_TOKEN", preview_token, target=["preview"])
     click.echo("  ✓ Env vars set (production + preview)")
 
-    # 4. Create cms-preview branch if missing
+    # 4. Create cms-preview branch if missing (branched from production branch)
     if not github.branch_exists(github_token, github_repo, "cms-preview"):
-        github.create_branch(github_token, github_repo, "cms-preview", from_branch="main")
-        click.echo("  ✓ Created cms-preview branch")
+        github.create_branch(github_token, github_repo, "cms-preview", from_branch=prod_branch)
+        click.echo(f"  ✓ Created cms-preview branch (from {prod_branch})")
     else:
         click.echo("  ✓ cms-preview branch already exists")
 
-    # 5. Trigger deployments
-    prod = vercel.trigger_deployment(vercel_token, project_id, github_repo, "main")
-    preview = vercel.trigger_deployment(vercel_token, project_id, github_repo, "cms-preview")
+    # 5. Trigger deployments (production branch → production target)
+    prod = vercel.trigger_deployment(
+        vercel_token, project_id, github_repo, prod_branch, production_branch=prod_branch
+    )
+    preview = vercel.trigger_deployment(
+        vercel_token, project_id, github_repo, "cms-preview", production_branch=prod_branch
+    )
 
     production_url = f"https://{prod['url']}" if prod.get("url") else None
     preview_url = f"https://{preview['url']}" if preview.get("url") else None

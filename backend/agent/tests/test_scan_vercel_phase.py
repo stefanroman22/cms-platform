@@ -21,6 +21,7 @@ def test_vercel_setup_creates_project_and_saves_urls_to_cms():
 
         mock_vercel.find_project_by_repo.return_value = None  # project doesn't exist yet
         mock_vercel.create_project.return_value = "prj_abc"
+        mock_gh.get_default_branch.return_value = "main"
         mock_vercel.trigger_deployment.side_effect = [
             {"id": "dpl_1", "url": "portfolio.vercel.app"},         # prod
             {"id": "dpl_2", "url": "portfolio-git-cms-preview.vercel.app"},  # preview
@@ -74,7 +75,10 @@ def test_vercel_setup_preserves_existing_preview_token_on_rerun():
             existing_project if method == "GET" else {"updated": 5}
         )
 
-        mock_vercel.find_project_by_repo.return_value = "prj_existing"
+        mock_vercel.find_project_by_repo.return_value = {
+            "id": "prj_existing",
+            "production_branch": "master",
+        }
         mock_vercel.trigger_deployment.side_effect = [
             {"id": "dpl_1", "url": "portfolio.vercel.app"},
             {"id": "dpl_2", "url": "portfolio-git-cms-preview.vercel.app"},

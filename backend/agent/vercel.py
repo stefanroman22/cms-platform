@@ -30,13 +30,26 @@ def _request(token: str, method: str, path: str, body: dict | None = None) -> di
         raise RuntimeError(f"Vercel API {method} {path} failed: {e.code} {err_body}") from e
 
 
-def find_project_by_repo(token: str, github_repo: str) -> str | None:
-    """Returns the Vercel project id linked to the given GitHub repo, or None."""
+def find_project_by_repo(token: str, github_repo: str) -> dict | None:
+    """Returns {"id": str, "production_branch": str | None} for the Vercel
+    project linked to the given GitHub repo (owner/name), or None.
+
+    Vercel's /v9/projects returns the link as {type, org, repo, productionBranch},
+    where `org` is the GitHub owner and `repo` is just the repo name (no slash).
+    We compare against `f"{org}/{repo}"` to match against the fully-qualified
+    OWNER/NAME slug the caller passes in.
+    """
     data = _request(token, "GET", "/v9/projects?limit=100")
     for proj in data.get("projects", []):
         link = proj.get("link") or {}
-        if link.get("type") == "github" and link.get("repo") == github_repo:
-            return proj["id"]
+        if link.get("type") != "github":
+            continue
+        full = f"{link.get('org', '')}/{link.get('repo', '')}"
+        if full == github_repo:
+            return {
+                "id": proj["id"],
+                "production_branch": link.get("productionBranch"),
+            }
     return None
 
 
@@ -93,12 +106,18 @@ def trigger_deployment(
     project_id: str,
     github_repo: str,
     branch: str,
+    production_branch: str | None = None,
 ) -> dict:
     """Triggers a deployment of `branch` for the Vercel project.
+
+    If `branch == production_branch`, targets production; otherwise preview.
+    When production_branch is None, treats any non-'main' branch as preview
+    (legacy behaviour; callers should pass the real production branch).
 
     Returns {"id": str, "url": str} — url is the *.vercel.app hostname.
     """
     owner, repo = github_repo.split("/", 1)
+    is_production = branch == (production_branch or "main")
     payload = {
         "name": repo,
         "project": project_id,
@@ -107,7 +126,7 @@ def trigger_deployment(
             "ref": branch,
             "repoId": None,
         },
-        "target": "production" if branch == "main" else None,
+        "target": "production" if is_production else None,
     }
     data = _request(token, "POST", "/v13/deployments", payload)
     return {"id": data["id"], "url": data.get("url") or ""}

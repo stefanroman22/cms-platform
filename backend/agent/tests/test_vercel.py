@@ -22,14 +22,23 @@ def _json_response(data: dict, status: int = 200):
 
 
 def test_find_project_by_github_repo_returns_id_if_exists(fake_urlopen):
+    # Vercel API returns `link.org` + `link.repo` separately (not combined)
     fake_urlopen.return_value = _json_response({
         "projects": [
-            {"id": "prj_abc", "link": {"type": "github", "repo": "lauriand/portfolio"}},
+            {
+                "id": "prj_abc",
+                "link": {
+                    "type": "github",
+                    "org": "lauriand",
+                    "repo": "portfolio",
+                    "productionBranch": "master",
+                },
+            },
         ]
     })
 
     result = vercel.find_project_by_repo("tok", "lauriand/portfolio")
-    assert result == "prj_abc"
+    assert result == {"id": "prj_abc", "production_branch": "master"}
 
 
 def test_find_project_by_github_repo_returns_none_when_missing(fake_urlopen):
@@ -84,5 +93,38 @@ def test_trigger_deployment_from_branch(fake_urlopen):
         project_id="prj_xyz",
         github_repo="lauriand/portfolio",
         branch="cms-preview",
+        production_branch="master",
     )
     assert result["url"] == "portfolio-git-cms-preview.vercel.app"
+
+
+def test_trigger_deployment_targets_production_on_prod_branch(fake_urlopen):
+    fake_urlopen.return_value = _json_response({"id": "dpl_p", "url": "portfolio.vercel.app"})
+
+    vercel.trigger_deployment(
+        token="tok",
+        project_id="prj_xyz",
+        github_repo="lauriand/portfolio",
+        branch="master",
+        production_branch="master",
+    )
+
+    call = fake_urlopen.call_args_list[0][0][0]
+    body = json.loads(call.data.decode())
+    assert body["target"] == "production"
+
+
+def test_trigger_deployment_targets_preview_on_non_prod_branch(fake_urlopen):
+    fake_urlopen.return_value = _json_response({"id": "dpl_q", "url": "p-git-x.vercel.app"})
+
+    vercel.trigger_deployment(
+        token="tok",
+        project_id="prj_xyz",
+        github_repo="lauriand/portfolio",
+        branch="cms-preview",
+        production_branch="master",
+    )
+
+    call = fake_urlopen.call_args_list[0][0][0]
+    body = json.loads(call.data.decode())
+    assert body["target"] is None
