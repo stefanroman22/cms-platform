@@ -118,7 +118,7 @@ def trigger_deployment(
     """
     owner, repo = github_repo.split("/", 1)
     is_production = branch == (production_branch or "main")
-    payload = {
+    payload: dict = {
         "name": repo,
         "project": project_id,
         "gitSource": {
@@ -127,7 +127,11 @@ def trigger_deployment(
             "repo": repo,
             "ref": branch,
         },
-        "target": "production" if is_production else None,
     }
+    # Only include target when it's "production" — Vercel rejects target: null
+    # with "Invalid request: `target` should be string." Preview deploys come
+    # from omitting the field entirely.
+    if is_production:
+        payload["target"] = "production"
     data = _request(token, "POST", "/v13/deployments", payload)
     return {"id": data["id"], "url": data.get("url") or ""}

@@ -127,4 +127,5 @@ def test_trigger_deployment_targets_preview_on_non_prod_branch(fake_urlopen):
 
     call = fake_urlopen.call_args_list[0][0][0]
     body = json.loads(call.data.decode())
-    assert body["target"] is None
+    # Vercel rejects target:null — preview deploys must omit the field entirely.
+    assert "target" not in body
