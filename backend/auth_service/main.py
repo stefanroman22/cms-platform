@@ -5,7 +5,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .core.config import settings
 from .core.limiter import limiter
-from .routers import auth, projects, content, workspace
+from .routers import auth, projects, content, workspace, publish
 from .routers.issues import router as issues_router
 from .routers.forms import router as forms_router
 
@@ -42,6 +42,7 @@ app.include_router(projects.router)
 app.include_router(content.router)
 app.include_router(workspace.router)
 app.include_router(issues_router)
+app.include_router(publish.router)
 
 
 @app.get("/health")

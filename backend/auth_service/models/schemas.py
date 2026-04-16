@@ -210,3 +210,21 @@ class IssueStatusRequest(BaseModel):
         if v not in ("pending", "in_progress", "done"):
             raise ValueError("status must be pending, in_progress, or done")
         return v
+
+
+# ── Preview / Publish ────────────────────────────────────────────────────────
+
+class PublishResponse(BaseModel):
+    published_count: int
+    last_published_at: str | None
+
+
+class ProjectStatusOut(BaseModel):
+    unpublished_count: int
+    last_published_at: str | None
+    preview_url: str | None
+    production_url: str | None
+
+
+class RotateTokenResponse(BaseModel):
+    preview_token: str
