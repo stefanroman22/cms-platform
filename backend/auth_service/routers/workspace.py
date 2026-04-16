@@ -23,6 +23,8 @@ from ..models.schemas import (
     ProjectSettingsIn,
     CreateClientRequest,
     CreateClientOut,
+    AdminProjectPatchIn,
+    AdminProjectDetailOut,
 )
 from ..services.supabase_client import get_supabase, get_supabase_admin
 from ..models.schemas import UserOut
@@ -365,6 +367,36 @@ async def admin_list_projects(request: Request):
             "user_full_name": user_row.get("full_name"),
         })
     return out
+
+
+@router.get("/admin/projects/{project_slug}", response_model=AdminProjectDetailOut)
+async def admin_get_project(project_slug: str, request: Request):
+    await _require_admin(request)
+    sb = get_supabase()
+    result = (
+        sb.table("projects")
+        .select("slug, name, github_repo, vercel_project_id, production_url, preview_url, preview_token, last_published_at")
+        .eq("slug", project_slug)
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return result.data
+
+
+@router.patch("/admin/projects/{project_slug}")
+async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, request: Request):
+    await _require_admin(request)
+
+    sb = get_supabase()
+    update_data = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not update_data:
+        return {"updated": 0}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    sb.table("projects").update(update_data).eq("slug", project_slug).execute()
+    return {"updated": len(update_data)}
 
 
 @router.get("/admin/clients", response_model=List[UserAdminOut])

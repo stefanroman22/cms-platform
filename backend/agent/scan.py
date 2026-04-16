@@ -33,17 +33,27 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
+# Allow importing as both a script (`python scan.py`) and a package module
+# (`from agent import scan`). The existing flat imports below depend on the
+# agent directory being on sys.path.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
 import click
 
 from file_reader import read_website_files
 from prompts import SYSTEM_PROMPT, build_user_message
 from output_writer import write_outputs
+import vercel
+import github
 
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
@@ -249,6 +259,78 @@ def _provision(manifest: dict, api_url: str, api_token: str) -> None:
     click.echo(f"\n  Created {created} service(s), seeded {seeded} with initial content.")
 
 
+def _vercel_setup(
+    manifest: dict,
+    github_repo: str,
+    vercel_token: str,
+    github_token: str,
+    cms_api_url: str,
+    cms_api_token: str,
+    cms_endpoint_base: str,
+) -> None:
+    """Creates/locates Vercel project, sets env vars, creates preview branch,
+    triggers prod + preview deploys, saves URLs/token to the CMS project row.
+    Idempotent: safe to re-run — reuses existing preview_token from CMS.
+    """
+    slug = manifest["project_slug"]
+    click.echo(f"\n🚀 Vercel setup for {github_repo}…")
+
+    base = cms_api_url.rstrip("/")
+    headers = {"Content-Type": "application/json", "Cookie": f"access_token={cms_api_token}"}
+
+    # 0. Fetch existing project row from CMS to check for reusable state (idempotency)
+    existing = _http("GET", f"{base}/admin/projects/{slug}", headers) or {}
+
+    # 1. Reuse preview_token if present, else generate a fresh one
+    preview_token = existing.get("preview_token") or secrets.token_urlsafe(32)
+
+    # 2. Find or create Vercel project
+    project_id = vercel.find_project_by_repo(vercel_token, github_repo)
+    if project_id:
+        click.echo(f"  ✓ Found existing Vercel project: {project_id}")
+    else:
+        project_id = vercel.create_project(vercel_token, name=slug, github_repo=github_repo)
+        click.echo(f"  ✓ Created Vercel project: {project_id}")
+
+    # 3. Set env vars (upserts)
+    endpoint_prod = f"{cms_endpoint_base}/content/{slug}"
+    endpoint_preview = f"{cms_endpoint_base}/content/{slug}/draft"
+    vercel.set_env_var(vercel_token, project_id, "CMS_ENDPOINT", endpoint_prod, target=["production"])
+    vercel.set_env_var(vercel_token, project_id, "CMS_ENDPOINT", endpoint_preview, target=["preview"])
+    vercel.set_env_var(vercel_token, project_id, "CMS_PREVIEW_TOKEN", preview_token, target=["preview"])
+    click.echo("  ✓ Env vars set (production + preview)")
+
+    # 4. Create cms-preview branch if missing
+    if not github.branch_exists(github_token, github_repo, "cms-preview"):
+        github.create_branch(github_token, github_repo, "cms-preview", from_branch="main")
+        click.echo("  ✓ Created cms-preview branch")
+    else:
+        click.echo("  ✓ cms-preview branch already exists")
+
+    # 5. Trigger deployments
+    prod = vercel.trigger_deployment(vercel_token, project_id, github_repo, "main")
+    preview = vercel.trigger_deployment(vercel_token, project_id, github_repo, "cms-preview")
+
+    production_url = f"https://{prod['url']}" if prod.get("url") else None
+    preview_url = f"https://{preview['url']}" if preview.get("url") else None
+    click.echo(f"  ✓ Deployments triggered\n    prod:    {production_url}\n    preview: {preview_url}")
+
+    # 6. Save to CMS project row via admin PATCH (base + headers defined at top)
+    _http(
+        "PATCH",
+        f"{base}/admin/projects/{slug}",
+        headers,
+        {
+            "github_repo": github_repo,
+            "vercel_project_id": project_id,
+            "production_url": production_url,
+            "preview_url": preview_url,
+            "preview_token": preview_token,
+        },
+    )
+    click.echo("  ✓ Saved Vercel metadata to CMS project row")
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 @click.command()
@@ -262,6 +344,10 @@ def _provision(manifest: dict, api_url: str, api_token: str) -> None:
 @click.option("--api-url", default=DEFAULT_CMS_API, show_default=True, help="CMS API base URL (used with --provision).")
 @click.option("--api-token", default=None, help="Admin access_token cookie value (required with --provision).")
 @click.option("--model", default=DEFAULT_MODEL, show_default=True, help="Claude model ID.")
+@click.option("--github-repo", "github_repo", default=None, help="GitHub repo (OWNER/NAME) — enables Vercel setup.")
+@click.option("--vercel-token", "vercel_token", default=None, envvar="VERCEL_TOKEN", help="Vercel API token (env: VERCEL_TOKEN).")
+@click.option("--github-token", "github_token", default=None, envvar="GITHUB_TOKEN", help="GitHub API token (env: GITHUB_TOKEN).")
+@click.option("--skip-vercel", is_flag=True, default=False, help="Skip Vercel setup even if --github-repo is given.")
 def main(
     website_dir: str | None,
     slug: str | None,
@@ -273,6 +359,10 @@ def main(
     api_url: str,
     api_token: str | None,
     model: str,
+    github_repo: str | None,
+    vercel_token: str | None,
+    github_token: str | None,
+    skip_vercel: bool,
 ) -> None:
     """
     Auto-Config Agent: scan a client website and generate CMS configuration files.
@@ -364,6 +454,25 @@ def main(
     if provision:
         click.echo(f"🚀 Provisioning services via {api_url}…")
         _provision(manifest, api_url, api_token)
+
+    # ── Optional Vercel setup ──────────────────────────────────────────────────
+    if github_repo and not skip_vercel:
+        if not vercel_token or not github_token:
+            raise click.ClickException("--vercel-token and --github-token (or env vars) required for Vercel setup.")
+        if not api_token:
+            raise click.ClickException("--api-token required for Vercel setup (used to PATCH the project row).")
+
+        # Derive CMS endpoint base from the existing --endpoint (strip any /content suffix)
+        endpoint_base = endpoint.rstrip("/").rsplit("/content", 1)[0]
+        _vercel_setup(
+            manifest=manifest,
+            github_repo=github_repo,
+            vercel_token=vercel_token,
+            github_token=github_token,
+            cms_api_url=api_url,
+            cms_api_token=api_token,
+            cms_endpoint_base=endpoint_base,
+        )
 
 
 if __name__ == "__main__":
