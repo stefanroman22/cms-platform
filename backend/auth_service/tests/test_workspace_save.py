@@ -85,3 +85,50 @@ def test_get_service_falls_back_to_published_when_draft_null(mock_supabase, clie
     res = client.get("/projects/demo/services/hero")
     assert res.status_code == 200
     assert res.json()["content"]["title"] == "PUB"
+
+
+def test_put_service_with_seed_true_writes_both_columns(mock_supabase, client, auth_as, admin_user):
+    auth_as(admin_user)
+
+    mock_supabase.execute.side_effect = [
+        MagicMock(data={
+            "id": "svc-1",
+            "service_key": "hero",
+            "label": "Hero",
+            "display_order": 1,
+            "page_name": "General",
+            "service_type_slug": "text_block",
+            "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
+        }),
+        MagicMock(data=[{"id": "svc-1"}]),
+        MagicMock(data={
+            "id": "svc-1",
+            "service_key": "hero",
+            "label": "Hero",
+            "display_order": 1,
+            "page_name": "General",
+            "service_type_slug": "text_block",
+            "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
+            "content_entries": {"published_content": {"title": "X"}, "draft_content": {"title": "X"}, "updated_at": "2026-04-16T10:00:00Z"},
+        }),
+    ]
+
+    res = client.put(
+        "/projects/demo/services/hero?seed=true",
+        json={"content": {"title": "X"}},
+    )
+    assert res.status_code == 200
+
+    payload = mock_supabase.upsert.call_args_list[0].args[0]
+    assert payload.get("draft_content") == {"title": "X"}
+    assert payload.get("published_content") == {"title": "X"}
+
+
+def test_put_service_seed_true_requires_admin(mock_supabase, client, auth_as, client_user):
+    auth_as(client_user)
+
+    res = client.put(
+        "/projects/demo/services/hero?seed=true",
+        json={"content": {"title": "X"}},
+    )
+    assert res.status_code == 403

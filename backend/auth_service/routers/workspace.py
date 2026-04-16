@@ -144,8 +144,16 @@ async def get_service(project_slug: str, service_key: str, request: Request):
 
 
 @router.put("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
-async def save_service(project_slug: str, service_key: str, body: ContentSaveRequest, request: Request):
+async def save_service(
+    project_slug: str,
+    service_key: str,
+    body: ContentSaveRequest,
+    request: Request,
+    seed: bool = False,
+):
     user = await require_user(request)
+    if seed and not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seed=true requires admin")
     project = require_project_access(project_slug, user)
 
     sb = get_supabase()
@@ -165,16 +173,19 @@ async def save_service(project_slug: str, service_key: str, body: ContentSaveReq
     svc_id = svc_result.data["id"]
     now = datetime.now(timezone.utc).isoformat()
 
-    # Upsert draft only — production keeps serving published_content until publish.
-    sb.table("content_entries").upsert(
-        {
-            "project_service_id": svc_id,
-            "draft_content": body.content,
-            "updated_at": now,
-            "updated_by": user.id,
-        },
-        on_conflict="project_service_id",
-    ).execute()
+    # Upsert draft only by default — production keeps serving published_content
+    # until publish. When seed=true (admin-only, agent provisioning path), also
+    # initialize published_content so a brand-new service has a first publish.
+    payload: dict = {
+        "project_service_id": svc_id,
+        "draft_content": body.content,
+        "updated_at": now,
+        "updated_by": user.id,
+    }
+    if seed:
+        payload["published_content"] = body.content
+
+    sb.table("content_entries").upsert(payload, on_conflict="project_service_id").execute()
 
     # Return fresh state
     return await get_service(project_slug, service_key, request)
