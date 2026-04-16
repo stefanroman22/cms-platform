@@ -16,6 +16,13 @@ Thumbs.db
 # ── Tooling / Planning artifacts ───────────────────────────────
 .claude/
 *.resolved
+.mcp.json
+findings.md
+progress.md
+task_plan.md
+
+# ── Secrets: never commit private keys ─────────────────────────
+backend/keys/
 
 # ─────────────────────────────────────────────────────────────
 # Frontend — Next.js
