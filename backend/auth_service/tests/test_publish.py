@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock
+from unittest.mock import patch as patch_
 
 
 def test_publish_copies_draft_to_published_and_bumps_timestamp(mock_supabase, client, auth_as, client_user):
@@ -75,3 +76,30 @@ def test_status_reports_unpublished_count_and_urls(mock_supabase, client, auth_a
     assert body["preview_url"] == "https://preview.example.com"
     assert body["production_url"] == "https://prod.example.com"
     assert body["last_published_at"] == "2026-04-16T10:00:00Z"
+
+
+def test_rotate_preview_token_regenerates_and_stores(mock_supabase, client, auth_as, admin_user):
+    auth_as(admin_user)
+
+    mock_supabase.execute.side_effect = [
+        # Fetch project + vercel_project_id
+        MagicMock(data={"id": "project-demo", "vercel_project_id": "prj_123"}),
+        # Update row
+        MagicMock(data=[{"preview_token": "<new>"}]),
+    ]
+
+    # Patch Vercel call to a no-op
+    with patch_("auth_service.routers.publish._update_vercel_preview_env_var") as mock_vercel:
+        res = client.post("/admin/projects/demo/rotate-preview-token")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert len(body["preview_token"]) >= 32
+    mock_vercel.assert_called_once()
+
+
+def test_rotate_preview_token_requires_admin(mock_supabase, client, auth_as, client_user):
+    auth_as(client_user)
+
+    res = client.post("/admin/projects/demo/rotate-preview-token")
+    assert res.status_code == 403

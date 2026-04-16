@@ -1,8 +1,13 @@
+import json
+import os
+import secrets
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from ..models.schemas import ProjectStatusOut, PublishResponse
+from ..models.schemas import ProjectStatusOut, PublishResponse, RotateTokenResponse
 from ..services.supabase_client import get_supabase
 from .deps import require_project_access, require_user
 
@@ -105,3 +110,96 @@ async def project_status(project_slug: str, request: Request):
         "preview_url": p_data.get("preview_url"),
         "production_url": p_data.get("production_url"),
     }
+
+
+VERCEL_API_BASE = "https://api.vercel.com"
+
+
+def _update_vercel_preview_env_var(vercel_project_id: str, new_token: str) -> None:
+    """Updates CMS_PREVIEW_TOKEN env var on the Vercel project's Preview environment.
+
+    Uses VERCEL_TOKEN from the server environment. If unset, skip silently —
+    the DB token is still rotated and a re-deploy of the preview can pull the
+    latest env later. The agent's initial setup is the normal path to set this.
+    """
+    vercel_token = os.environ.get("VERCEL_TOKEN")
+    if not vercel_token:
+        return
+
+    # Find existing env var ID
+    list_url = f"{VERCEL_API_BASE}/v9/projects/{vercel_project_id}/env"
+    req = urllib.request.Request(list_url, headers={"Authorization": f"Bearer {vercel_token}"})
+    try:
+        with urllib.request.urlopen(req) as resp:
+            envs = json.loads(resp.read().decode()).get("envs", [])
+    except urllib.error.HTTPError:
+        return
+
+    existing = next(
+        (e for e in envs if e.get("key") == "CMS_PREVIEW_TOKEN" and "preview" in (e.get("target") or [])),
+        None,
+    )
+
+    body = json.dumps({
+        "key": "CMS_PREVIEW_TOKEN",
+        "value": new_token,
+        "type": "encrypted",
+        "target": ["preview"],
+    }).encode()
+
+    if existing:
+        patch_url = f"{VERCEL_API_BASE}/v9/projects/{vercel_project_id}/env/{existing['id']}"
+        req = urllib.request.Request(
+            patch_url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {vercel_token}",
+                "Content-Type": "application/json",
+            },
+            method="PATCH",
+        )
+    else:
+        req = urllib.request.Request(
+            list_url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {vercel_token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+    try:
+        urllib.request.urlopen(req).read()
+    except urllib.error.HTTPError:
+        pass
+
+
+async def _require_admin(request: Request):
+    user = await require_user(request)
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+@router.post("/admin/projects/{project_slug}/rotate-preview-token", response_model=RotateTokenResponse)
+async def rotate_preview_token(project_slug: str, request: Request):
+    await _require_admin(request)
+
+    sb = get_supabase()
+    p_result = (
+        sb.table("projects")
+        .select("id, vercel_project_id")
+        .eq("slug", project_slug)
+        .single()
+        .execute()
+    )
+    if not p_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    new_token = secrets.token_urlsafe(32)
+    sb.table("projects").update({"preview_token": new_token}).eq("id", p_result.data["id"]).execute()
+
+    if p_result.data.get("vercel_project_id"):
+        _update_vercel_preview_env_var(p_result.data["vercel_project_id"], new_token)
+
+    return {"preview_token": new_token}
