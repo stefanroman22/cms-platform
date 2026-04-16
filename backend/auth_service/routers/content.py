@@ -57,7 +57,7 @@ async def get_project_content(project_slug: str, request: Request):
     sb = get_supabase()
     services_result = (
         sb.table("project_services")
-        .select("service_key, label, display_order, service_type_slug, content_entries(content, updated_at)")
+        .select("service_key, label, display_order, service_type_slug, content_entries(published_content, draft_content, updated_at)")
         .eq("project_id", project["id"])
         .order("display_order")
         .execute()
@@ -71,7 +71,10 @@ async def get_project_content(project_slug: str, request: Request):
             continue
 
         entry = _resolve_content_entry(svc)
-        raw_content: dict = entry.get("content", {}) if entry else {}
+        raw_published: dict | None = entry.get("published_content") if entry else None
+        # Filter: services with no published content don't appear in the public response.
+        if raw_published is None:
+            continue
         updated_at: str | None = entry.get("updated_at") if entry else None
 
         if updated_at and (last_updated is None or updated_at > last_updated):
@@ -80,7 +83,7 @@ async def get_project_content(project_slug: str, request: Request):
         content_map[svc["service_key"]] = {
             "_type": svc["service_type_slug"],
             "_label": svc.get("label") or svc["service_key"],
-            **raw_content,
+            **raw_published,
         }
 
     payload = {
