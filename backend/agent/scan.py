@@ -42,10 +42,11 @@ from pathlib import Path
 
 # Allow importing as both a script (`python scan.py`) and a package module
 # (`from agent import scan`). The existing flat imports below depend on the
-# agent directory being on sys.path.
+# agent directory being on sys.path. Use append (not insert(0)) so that
+# installed packages (e.g. a user-installed `github` module) still win.
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
+    sys.path.append(str(_SCRIPT_DIR))
 
 import click
 
