@@ -28,7 +28,7 @@ def _resolve_project(project_slug: str) -> dict:
     sb = get_supabase()
     result = (
         sb.table("projects")
-        .select("id, name, slug, is_active")
+        .select("id, name, slug, is_active, preview_token")
         .eq("slug", project_slug)
         .eq("is_active", True)
         .single()
@@ -117,6 +117,67 @@ async def get_project_content(project_slug: str, request: Request):
         headers["Last-Modified"] = last_updated
 
     return JSONResponse(content=payload, headers=headers)
+
+
+@router.get("/{project_slug}/draft")
+async def get_project_draft_content(project_slug: str, request: Request):
+    """Draft content for preview deployments. Requires X-CMS-Preview-Token header."""
+    project = _resolve_project(project_slug)
+
+    token_header = request.headers.get("X-CMS-Preview-Token")
+    expected = project.get("preview_token")
+    if not expected or token_header != expected:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing preview token")
+
+    sb = get_supabase()
+    services_result = (
+        sb.table("project_services")
+        .select("service_key, label, display_order, service_type_slug, content_entries(published_content, draft_content, updated_at)")
+        .eq("project_id", project["id"])
+        .order("display_order")
+        .execute()
+    )
+
+    content_map: dict = {}
+    last_updated: str | None = None
+
+    for svc in (services_result.data or []):
+        if svc["service_type_slug"] in _PRIVATE_SERVICE_TYPES:
+            continue
+
+        entry = _resolve_content_entry(svc)
+        if entry is None:
+            continue
+
+        # Draft with fallback to published
+        raw = entry.get("draft_content") or entry.get("published_content")
+        if raw is None:
+            continue
+
+        updated_at: str | None = entry.get("updated_at")
+        if updated_at and (last_updated is None or updated_at > last_updated):
+            last_updated = updated_at
+
+        content_map[svc["service_key"]] = {
+            "_type": svc["service_type_slug"],
+            "_label": svc.get("label") or svc["service_key"],
+            **raw,
+        }
+
+    payload = {
+        "project_slug": project["slug"],
+        "project_name": project["name"],
+        "last_updated": last_updated,
+        "content": content_map,
+    }
+
+    return JSONResponse(
+        content=payload,
+        headers={
+            "Cache-Control": "no-store",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
 
 
 @router.get("/{project_slug}/types")
