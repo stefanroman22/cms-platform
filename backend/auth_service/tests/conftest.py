@@ -69,11 +69,15 @@ def auth_as(monkeypatch):
             return user
         # Patch every router's require_user import site
         monkeypatch.setattr("auth_service.routers.workspace.require_user", fake_require_user)
-        monkeypatch.setattr("auth_service.routers.projects.require_user", fake_require_user)
+        # projects.py uses a private _require_user that doesn't import from deps — skip safely
+        try:
+            monkeypatch.setattr("auth_service.routers.projects.require_user", fake_require_user)
+        except (AttributeError, ModuleNotFoundError, ImportError):
+            pass
         # publish.py — added in Task 9, but the patch is idempotent (AttributeError caught)
         try:
             monkeypatch.setattr("auth_service.routers.publish.require_user", fake_require_user)
-        except (AttributeError, ModuleNotFoundError):
+        except (AttributeError, ModuleNotFoundError, ImportError):
             pass
 
         def fake_require_project_access(slug, u):
@@ -81,6 +85,6 @@ def auth_as(monkeypatch):
         monkeypatch.setattr("auth_service.routers.workspace.require_project_access", fake_require_project_access)
         try:
             monkeypatch.setattr("auth_service.routers.publish.require_project_access", fake_require_project_access)
-        except (AttributeError, ModuleNotFoundError):
+        except (AttributeError, ModuleNotFoundError, ImportError):
             pass
     return _apply

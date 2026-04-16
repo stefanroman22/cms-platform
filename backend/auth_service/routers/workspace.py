@@ -66,17 +66,26 @@ async def _require_admin(request: Request) -> UserOut:
 def _flatten_service(svc: dict) -> dict:
     """Extracts nested service_types + content_entries into a flat dict.
 
-    supabase-py returns content_entries as a dict (not list) when a unique
-    constraint exists on the FK column — PostgREST treats it as one-to-one.
+    `content` in the response is the draft (what the client is editing) — falls
+    back to published_content if the service has never had a draft. Unpublished
+    services with null published_content still return their draft to the CMS UI.
+
+    Uses `is not None` (not `or`) so an explicitly-cleared draft ({}) renders
+    as empty rather than falling back to published.
     """
     st = svc.get("service_types") or {}
     raw = svc.get("content_entries")
     if isinstance(raw, dict):
-        entry = raw  # one-to-one embed
+        entry = raw
     elif isinstance(raw, list):
         entry = raw[0] if raw else None
     else:
         entry = None
+
+    draft = entry.get("draft_content") if entry else None
+    published = entry.get("published_content") if entry else None
+    content = draft if draft is not None else (published or {})
+
     return {
         "id": svc["id"],
         "service_key": svc["service_key"],
@@ -88,7 +97,7 @@ def _flatten_service(svc: dict) -> dict:
         "page_name": svc.get("page_name", "General"),
         "last_updated": entry.get("updated_at") if entry else None,
         "schema": st.get("schema", {}),
-        "content": entry.get("content", {}) if entry else {},
+        "content": content,
     }
 
 
@@ -103,7 +112,7 @@ async def list_services(project_slug: str, request: Request):
         sb = get_supabase()
         result = (
             sb.table("project_services")
-            .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon), content_entries(updated_at)")
+            .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon), content_entries(updated_at, draft_content, published_content)")
             .eq("project_id", project["id"])
             .order("display_order")
             .execute()
@@ -122,7 +131,7 @@ async def get_service(project_slug: str, service_key: str, request: Request):
     sb = get_supabase()
     result = (
         sb.table("project_services")
-        .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema), content_entries(content, updated_at)")
+        .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema), content_entries(draft_content, published_content, updated_at)")
         .eq("project_id", project["id"])
         .eq("service_key", service_key)
         .single()
@@ -156,11 +165,11 @@ async def save_service(project_slug: str, service_key: str, body: ContentSaveReq
     svc_id = svc_result.data["id"]
     now = datetime.now(timezone.utc).isoformat()
 
-    # Upsert content entry
+    # Upsert draft only — production keeps serving published_content until publish.
     sb.table("content_entries").upsert(
         {
             "project_service_id": svc_id,
-            "content": body.content,
+            "draft_content": body.content,
             "updated_at": now,
             "updated_by": user.id,
         },
@@ -301,7 +310,8 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
             schema_payload = [f.model_dump() for f in body.item_schema]
             sb.table("content_entries").insert({
                 "project_service_id": svc_result.data["id"],
-                "content": {"_schema": schema_payload, "items": []},
+                "published_content": {"_schema": schema_payload, "items": []},
+                "draft_content": {"_schema": schema_payload, "items": []},
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "updated_by": user.id,
             }).execute()
