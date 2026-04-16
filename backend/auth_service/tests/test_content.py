@@ -105,3 +105,25 @@ def test_draft_falls_back_to_published_when_draft_null(mock_supabase, client):
     res = client.get("/content/demo/draft", headers={"X-CMS-Preview-Token": "secret-token-xyz"})
     assert res.status_code == 200
     assert res.json()["content"]["hero"]["title"] == "PUB"
+
+
+def test_draft_empty_dict_does_not_fall_back_to_published(mock_supabase, client):
+    """An editor who clears all fields in a draft must see empty preview,
+    not the published content — empty-dict is a real draft state, not 'no draft'."""
+    mock_supabase.execute.side_effect = [
+        MagicMock(data={"id": "p1", "slug": "demo", "name": "Demo", "is_active": True, "preview_token": "secret-token-xyz"}),
+        MagicMock(data=[
+            {
+                "service_key": "hero",
+                "label": "Hero",
+                "display_order": 1,
+                "service_type_slug": "text_block",
+                "content_entries": {"published_content": {"title": "PUB"}, "draft_content": {}, "updated_at": "2026-04-16T10:00:00Z"},
+            },
+        ]),
+    ]
+    res = client.get("/content/demo/draft", headers={"X-CMS-Preview-Token": "secret-token-xyz"})
+    assert res.status_code == 200
+    hero = res.json()["content"]["hero"]
+    assert "title" not in hero  # draft is {} — no title should appear (not PUB's title)
+    assert hero["_type"] == "text_block"

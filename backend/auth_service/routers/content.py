@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
@@ -126,7 +127,7 @@ async def get_project_draft_content(project_slug: str, request: Request):
 
     token_header = request.headers.get("X-CMS-Preview-Token")
     expected = project.get("preview_token")
-    if not expected or token_header != expected:
+    if not expected or not token_header or not hmac.compare_digest(token_header, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing preview token")
 
     sb = get_supabase()
@@ -149,8 +150,11 @@ async def get_project_draft_content(project_slug: str, request: Request):
         if entry is None:
             continue
 
-        # Draft with fallback to published
-        raw = entry.get("draft_content") or entry.get("published_content")
+        # Draft with fallback to published. Use `is not None` instead of `or`
+        # so an explicitly-cleared draft ({}) renders as-is rather than falling
+        # back to published content.
+        draft = entry.get("draft_content")
+        raw = draft if draft is not None else entry.get("published_content")
         if raw is None:
             continue
 
