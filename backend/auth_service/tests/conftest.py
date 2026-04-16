@@ -21,24 +21,29 @@ def mock_supabase():
         getattr(mock, method).return_value = mock
 
     # Each patch wrapped in try/except so early tasks can run before later
-    # modules (e.g. publish.py in Task 7) exist.
+    # modules (e.g. publish.py in Task 7) exist. Includes get_supabase_admin
+    # because workspace.py uses it for file upload + client account creation —
+    # an untrapped admin call would silently hit a real DB in tests.
     targets = [
         "auth_service.routers.content.get_supabase",
         "auth_service.routers.workspace.get_supabase",
+        "auth_service.routers.workspace.get_supabase_admin",
         "auth_service.routers.projects.get_supabase",
         "auth_service.routers.publish.get_supabase",  # created in Task 7
     ]
     started = []
-    for target in targets:
-        try:
-            p = patch(target, return_value=mock)
-            p.start()
-            started.append(p)
-        except (ModuleNotFoundError, AttributeError):
-            continue
-    yield mock
-    for p in started:
-        p.stop()
+    try:
+        for target in targets:
+            try:
+                p = patch(target, return_value=mock)
+                p.start()
+                started.append(p)
+            except (ModuleNotFoundError, AttributeError):
+                continue
+        yield mock
+    finally:
+        for p in started:
+            p.stop()
 
 
 @pytest.fixture
