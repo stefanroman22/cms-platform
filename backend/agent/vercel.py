@@ -123,8 +123,9 @@ def trigger_deployment(
         "project": project_id,
         "gitSource": {
             "type": "github",
+            "org": owner,
+            "repo": repo,
             "ref": branch,
-            "repoId": None,
         },
         "target": "production" if is_production else None,
     }
