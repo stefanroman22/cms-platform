@@ -37,10 +37,16 @@ def test_put_service_writes_to_draft_content_only(mock_supabase, client, auth_as
     )
     assert res.status_code == 200
 
-    # Verify the upsert payload targeted draft_content, NOT published_content
-    upsert_calls = [c for c in mock_supabase.upsert.call_args_list]
-    assert any("draft_content" in c.args[0] for c in upsert_calls)
-    assert not any("published_content" in c.args[0] for c in upsert_calls)
+    # Find the content_entries upsert (identified by project_service_id key)
+    # and assert IT specifically writes draft_content and not published_content.
+    content_upserts = [
+        c.args[0] for c in mock_supabase.upsert.call_args_list
+        if isinstance(c.args[0], dict) and "project_service_id" in c.args[0]
+    ]
+    assert len(content_upserts) == 1, f"expected exactly one content_entries upsert, got {len(content_upserts)}"
+    payload = content_upserts[0]
+    assert "draft_content" in payload
+    assert "published_content" not in payload
 
 
 def test_get_service_returns_draft_with_fallback_to_published(mock_supabase, client, auth_as, client_user):
