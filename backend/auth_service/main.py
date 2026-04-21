@@ -39,6 +39,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Private Network Access (Chrome 123+) ──────────────────────────────────────
+# Chrome blocks HTTPS public-origin pages (e.g. *.vercel.app) from fetching
+# loopback resources (localhost) unless the server acknowledges the
+# `Access-Control-Request-Private-Network: true` preflight with
+# `Access-Control-Allow-Private-Network: true`. Starlette's CORSMiddleware
+# doesn't emit this header, so we inject it via a thin ASGI wrapper that runs
+# AROUND the CORS middleware. Dev-mode only — in production the CMS is served
+# from a public HTTPS host and PNA doesn't apply.
+class _PrivateNetworkAccessMiddleware:
+    def __init__(self, asgi_app):
+        self.app = asgi_app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        wants_pna = any(
+            k == b"access-control-request-private-network" and v == b"true"
+            for k, v in scope.get("headers", [])
+        )
+        if not wants_pna:
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_pna_header(message):
+            if message["type"] == "http.response.start":
+                headers_list = list(message.get("headers", []))
+                headers_list.append((b"access-control-allow-private-network", b"true"))
+                message["headers"] = headers_list
+            await send(message)
+
+        await self.app(scope, receive, send_with_pna_header)
+
+
+if settings.ENVIRONMENT == "development":
+    app.add_middleware(_PrivateNetworkAccessMiddleware)
+
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(content.router)
