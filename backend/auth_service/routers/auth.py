@@ -21,12 +21,15 @@ IS_PROD = settings.ENVIRONMENT == "production"
 
 
 def _set_auth_cookies(response: Response, access_token: str, raw_refresh: str, refresh_expires: datetime):
+    # Cross-origin (production): SameSite=None requires Secure. Browsers
+    # reject SameSite=None on http://localhost, so dev stays on Lax.
+    samesite = "none" if IS_PROD else "lax"
     response.set_cookie(
         key=ACCESS_COOKIE,
         value=access_token,
         httponly=True,
         secure=IS_PROD,
-        samesite="lax",
+        samesite=samesite,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -35,7 +38,7 @@ def _set_auth_cookies(response: Response, access_token: str, raw_refresh: str, r
         value=raw_refresh,
         httponly=True,
         secure=IS_PROD,
-        samesite="lax",
+        samesite=samesite,
         max_age=int((refresh_expires - datetime.now(timezone.utc)).total_seconds()),
         path="/",
     )
