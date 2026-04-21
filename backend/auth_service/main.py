@@ -16,13 +16,15 @@ app = FastAPI(title="CMS Auth Service", version="1.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# In development allow any localhost / LAN origin so the dev server works
-# regardless of whether it's accessed via localhost, 127.0.0.1, or a LAN IP.
+# In development allow any localhost / LAN / Vercel origin so the dev server
+# works regardless of whether it's accessed via localhost, 127.0.0.1, LAN IP,
+# or a *.vercel.app preview URL (hitting the local CMS from the user's browser).
 # In production only the explicit FRONTEND_ORIGINS list is accepted.
 _cors_kwargs: dict = (
     {
         "allow_origin_regex": (
             r"http://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?"
+            r"|https://[a-zA-Z0-9.-]+\.vercel\.app"
         )
     }
     if settings.ENVIRONMENT == "development"
