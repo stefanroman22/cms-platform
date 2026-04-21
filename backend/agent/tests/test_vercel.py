@@ -82,11 +82,17 @@ def test_set_env_var_creates_preview_scoped(fake_urlopen):
     assert body["target"] == ["preview"]
 
 
-def test_trigger_deployment_from_branch(fake_urlopen):
-    fake_urlopen.return_value = _json_response({
-        "id": "dpl_1",
-        "url": "portfolio-git-cms-preview.vercel.app",
-    })
+def test_trigger_deployment_returns_stable_alias_when_available(fake_urlopen):
+    # First call: POST /deployments creates the deployment.
+    # Second call: GET /deployments/{id} returns a populated alias array.
+    fake_urlopen.side_effect = [
+        _json_response({"id": "dpl_1", "url": "portfolio-abc123.vercel.app"}),
+        _json_response({
+            "id": "dpl_1",
+            "url": "portfolio-abc123.vercel.app",
+            "alias": ["portfolio-git-cms-preview.vercel.app"],
+        }),
+    ]
 
     result = vercel.trigger_deployment(
         token="tok",
@@ -95,11 +101,33 @@ def test_trigger_deployment_from_branch(fake_urlopen):
         branch="cms-preview",
         production_branch="master",
     )
+    # Should return the stable alias, not the per-deploy URL
     assert result["url"] == "portfolio-git-cms-preview.vercel.app"
+    assert result["id"] == "dpl_1"
+
+
+def test_trigger_deployment_falls_back_to_deploy_url_if_alias_never_assigned(fake_urlopen):
+    # POST creates, then every GET returns no aliases. Poll exhausts.
+    fake_urlopen.side_effect = [
+        _json_response({"id": "dpl_2", "url": "portfolio-xyz.vercel.app"}),
+    ] + [_json_response({"id": "dpl_2", "alias": []})] * 50  # many polls, no alias
+
+    result = vercel.trigger_deployment(
+        token="tok",
+        project_id="prj_xyz",
+        github_repo="lauriand/portfolio",
+        branch="cms-preview",
+        production_branch="master",
+        alias_poll_seconds=0,  # don't actually wait in tests
+    )
+    assert result["url"] == "portfolio-xyz.vercel.app"  # fallback
 
 
 def test_trigger_deployment_targets_production_on_prod_branch(fake_urlopen):
-    fake_urlopen.return_value = _json_response({"id": "dpl_p", "url": "portfolio.vercel.app"})
+    fake_urlopen.side_effect = [
+        _json_response({"id": "dpl_p", "url": "portfolio.vercel.app"}),
+        _json_response({"id": "dpl_p", "alias": ["portfolio.vercel.app"]}),
+    ]
 
     vercel.trigger_deployment(
         token="tok",
@@ -115,7 +143,10 @@ def test_trigger_deployment_targets_production_on_prod_branch(fake_urlopen):
 
 
 def test_trigger_deployment_targets_preview_on_non_prod_branch(fake_urlopen):
-    fake_urlopen.return_value = _json_response({"id": "dpl_q", "url": "p-git-x.vercel.app"})
+    fake_urlopen.side_effect = [
+        _json_response({"id": "dpl_q", "url": "p-git-x.vercel.app"}),
+        _json_response({"id": "dpl_q", "alias": ["p-git-cms-preview.vercel.app"]}),
+    ]
 
     vercel.trigger_deployment(
         token="tok",

@@ -337,13 +337,16 @@ def _vercel_setup(
         prod_branch = github.get_default_branch(github_token, github_repo)
         click.echo(f"  ✓ Created Vercel project: {project_id} (prod branch: {prod_branch})")
 
-    # 3. Set env vars (upserts)
+    # 3. Set env vars (upserts). We use VITE_ prefix because the initial
+    #    target framework is Vite — only VITE_*-prefixed env vars are exposed
+    #    to client-side code by Vite's build. Future Next.js/Astro clients
+    #    will need NEXT_PUBLIC_* / PUBLIC_* variants set here too.
     endpoint_prod = f"{cms_endpoint_base}/content/{slug}"
     endpoint_preview = f"{cms_endpoint_base}/content/{slug}/draft"
-    vercel.set_env_var(vercel_token, project_id, "CMS_ENDPOINT", endpoint_prod, target=["production"])
-    vercel.set_env_var(vercel_token, project_id, "CMS_ENDPOINT", endpoint_preview, target=["preview"])
-    vercel.set_env_var(vercel_token, project_id, "CMS_PREVIEW_TOKEN", preview_token, target=["preview"])
-    click.echo("  ✓ Env vars set (production + preview)")
+    vercel.set_env_var(vercel_token, project_id, "VITE_CMS_ENDPOINT", endpoint_prod, target=["production"])
+    vercel.set_env_var(vercel_token, project_id, "VITE_CMS_ENDPOINT", endpoint_preview, target=["preview"])
+    vercel.set_env_var(vercel_token, project_id, "VITE_CMS_PREVIEW_TOKEN", preview_token, target=["preview"])
+    click.echo("  ✓ Env vars set (production + preview, VITE_ prefix)")
 
     # 4. Create cms-preview branch if missing (branched from production branch)
     if not github.branch_exists(github_token, github_repo, "cms-preview"):

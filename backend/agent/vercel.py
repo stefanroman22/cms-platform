@@ -107,6 +107,7 @@ def trigger_deployment(
     github_repo: str,
     branch: str,
     production_branch: str | None = None,
+    alias_poll_seconds: int = 30,
 ) -> dict:
     """Triggers a deployment of `branch` for the Vercel project.
 
@@ -114,8 +115,16 @@ def trigger_deployment(
     When production_branch is None, treats any non-'main' branch as preview
     (legacy behaviour; callers should pass the real production branch).
 
-    Returns {"id": str, "url": str} — url is the *.vercel.app hostname.
+    After creation, polls the deployment object for up to ~alias_poll_seconds
+    to get the stable branch alias (e.g. `project-git-cms-preview-team.vercel.app`).
+    The stable alias tracks future builds on the branch; the per-deploy URL
+    only works for the specific build and becomes stale on every push.
+
+    Returns {"id": str, "url": str} — url is the stable alias if we got one,
+    otherwise the per-deploy URL as a fallback.
     """
+    import time
+
     owner, repo = github_repo.split("/", 1)
     is_production = branch == (production_branch or "main")
     payload: dict = {
@@ -134,4 +143,16 @@ def trigger_deployment(
     if is_production:
         payload["target"] = "production"
     data = _request(token, "POST", "/v13/deployments", payload)
-    return {"id": data["id"], "url": data.get("url") or ""}
+    dep_id = data["id"]
+    fallback_url = data.get("url") or ""
+
+    # Poll for alias — Vercel assigns it shortly after build starts.
+    deadline = time.monotonic() + alias_poll_seconds
+    while time.monotonic() < deadline:
+        detail = _request(token, "GET", f"/v13/deployments/{dep_id}")
+        aliases = detail.get("alias") or []
+        if aliases:
+            return {"id": dep_id, "url": aliases[0]}
+        time.sleep(1.5)
+
+    return {"id": dep_id, "url": fallback_url}
