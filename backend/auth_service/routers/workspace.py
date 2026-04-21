@@ -23,6 +23,8 @@ from ..models.schemas import (
     ProjectSettingsIn,
     CreateClientRequest,
     CreateClientOut,
+    AdminProjectPatchIn,
+    AdminProjectDetailOut,
 )
 from ..services.supabase_client import get_supabase, get_supabase_admin
 from ..models.schemas import UserOut
@@ -66,17 +68,26 @@ async def _require_admin(request: Request) -> UserOut:
 def _flatten_service(svc: dict) -> dict:
     """Extracts nested service_types + content_entries into a flat dict.
 
-    supabase-py returns content_entries as a dict (not list) when a unique
-    constraint exists on the FK column — PostgREST treats it as one-to-one.
+    `content` in the response is the draft (what the client is editing) — falls
+    back to published_content if the service has never had a draft. Unpublished
+    services with null published_content still return their draft to the CMS UI.
+
+    Uses `is not None` (not `or`) so an explicitly-cleared draft ({}) renders
+    as empty rather than falling back to published.
     """
     st = svc.get("service_types") or {}
     raw = svc.get("content_entries")
     if isinstance(raw, dict):
-        entry = raw  # one-to-one embed
+        entry = raw
     elif isinstance(raw, list):
         entry = raw[0] if raw else None
     else:
         entry = None
+
+    draft = entry.get("draft_content") if entry else None
+    published = entry.get("published_content") if entry else None
+    content = draft if draft is not None else (published or {})
+
     return {
         "id": svc["id"],
         "service_key": svc["service_key"],
@@ -88,7 +99,7 @@ def _flatten_service(svc: dict) -> dict:
         "page_name": svc.get("page_name", "General"),
         "last_updated": entry.get("updated_at") if entry else None,
         "schema": st.get("schema", {}),
-        "content": entry.get("content", {}) if entry else {},
+        "content": content,
     }
 
 
@@ -103,7 +114,7 @@ async def list_services(project_slug: str, request: Request):
         sb = get_supabase()
         result = (
             sb.table("project_services")
-            .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon), content_entries(updated_at)")
+            .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon), content_entries(updated_at, draft_content, published_content)")
             .eq("project_id", project["id"])
             .order("display_order")
             .execute()
@@ -122,7 +133,7 @@ async def get_service(project_slug: str, service_key: str, request: Request):
     sb = get_supabase()
     result = (
         sb.table("project_services")
-        .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema), content_entries(content, updated_at)")
+        .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema), content_entries(draft_content, published_content, updated_at)")
         .eq("project_id", project["id"])
         .eq("service_key", service_key)
         .single()
@@ -135,8 +146,16 @@ async def get_service(project_slug: str, service_key: str, request: Request):
 
 
 @router.put("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
-async def save_service(project_slug: str, service_key: str, body: ContentSaveRequest, request: Request):
+async def save_service(
+    project_slug: str,
+    service_key: str,
+    body: ContentSaveRequest,
+    request: Request,
+    seed: bool = False,
+):
     user = await require_user(request)
+    if seed and not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seed=true requires admin")
     project = require_project_access(project_slug, user)
 
     sb = get_supabase()
@@ -156,16 +175,19 @@ async def save_service(project_slug: str, service_key: str, body: ContentSaveReq
     svc_id = svc_result.data["id"]
     now = datetime.now(timezone.utc).isoformat()
 
-    # Upsert content entry
-    sb.table("content_entries").upsert(
-        {
-            "project_service_id": svc_id,
-            "content": body.content,
-            "updated_at": now,
-            "updated_by": user.id,
-        },
-        on_conflict="project_service_id",
-    ).execute()
+    # Upsert draft only by default — production keeps serving published_content
+    # until publish. When seed=true (admin-only, agent provisioning path), also
+    # initialize published_content so a brand-new service has a first publish.
+    payload: dict = {
+        "project_service_id": svc_id,
+        "draft_content": body.content,
+        "updated_at": now,
+        "updated_by": user.id,
+    }
+    if seed:
+        payload["published_content"] = body.content
+
+    sb.table("content_entries").upsert(payload, on_conflict="project_service_id").execute()
 
     # Return fresh state
     return await get_service(project_slug, service_key, request)
@@ -301,7 +323,8 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
             schema_payload = [f.model_dump() for f in body.item_schema]
             sb.table("content_entries").insert({
                 "project_service_id": svc_result.data["id"],
-                "content": {"_schema": schema_payload, "items": []},
+                "published_content": {"_schema": schema_payload, "items": []},
+                "draft_content": {"_schema": schema_payload, "items": []},
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "updated_by": user.id,
             }).execute()
@@ -344,6 +367,36 @@ async def admin_list_projects(request: Request):
             "user_full_name": user_row.get("full_name"),
         })
     return out
+
+
+@router.get("/admin/projects/{project_slug}", response_model=AdminProjectDetailOut)
+async def admin_get_project(project_slug: str, request: Request):
+    await _require_admin(request)
+    sb = get_supabase()
+    result = (
+        sb.table("projects")
+        .select("slug, name, github_repo, vercel_project_id, production_url, preview_url, preview_token, last_published_at")
+        .eq("slug", project_slug)
+        .single()
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return result.data
+
+
+@router.patch("/admin/projects/{project_slug}")
+async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, request: Request):
+    await _require_admin(request)
+
+    sb = get_supabase()
+    update_data = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not update_data:
+        return {"updated": 0}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    sb.table("projects").update(update_data).eq("slug", project_slug).execute()
+    return {"updated": len(update_data)}
 
 
 @router.get("/admin/clients", response_model=List[UserAdminOut])

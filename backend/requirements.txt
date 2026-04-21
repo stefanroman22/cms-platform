@@ -1,8 +1,33 @@
+# Runtime dependencies for the Python backend. Vercel's @vercel/python
+# builder reads this file from the project root; it installs every entry
+# regardless of whether the Django or FastAPI subtree actually uses it.
+#
+# The Django rows (Django itself, djangorestframework, psycopg2-binary,
+# etc.) are kept for local legacy use (`manage.py` / `backend/projects/`).
+# The FastAPI rows power the `auth_service` app that Vercel serves via
+# `vercel_entry.py`.
+
+# ── Shared ────────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+
+# ── Django (legacy, local only) ───────────────────────────────────────────
 asgiref==3.11.1
 Django==6.0.2
 django-cors-headers==4.9.0
 djangorestframework==3.16.1
 sqlparse==0.5.5
 tzdata==2025.3
-python-jose[cryptography]==3.3.0
 psycopg2-binary==2.9.10
+
+# ── FastAPI (production — what Vercel serves) ─────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+argon2-cffi==23.1.0
+supabase==2.10.0
+pydantic[email]==2.10.3
+pydantic-settings==2.7.0
+slowapi==0.1.9
+python-dotenv==1.0.1
+python-multipart==0.0.20
+resend==2.7.0
+httpx==0.27.2

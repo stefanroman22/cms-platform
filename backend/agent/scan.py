@@ -33,17 +33,28 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
+# Allow importing as both a script (`python scan.py`) and a package module
+# (`from agent import scan`). The existing flat imports below depend on the
+# agent directory being on sys.path. Use append (not insert(0)) so that
+# installed packages (e.g. a user-installed `github` module) still win.
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.append(str(_SCRIPT_DIR))
+
 import click
 
 from file_reader import read_website_files
 from prompts import SYSTEM_PROMPT, build_user_message
 from output_writer import write_outputs
+import vercel
+import github
 
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
@@ -148,31 +159,70 @@ def _resolve_client(api_url: str, api_token: str, client_email: str | None) -> s
 
 
 def _call_claude(model: str, project_slug: str, files: dict[str, str]) -> dict:
-    """Send files to Claude and parse the returned JSON manifest."""
-    try:
-        import anthropic
-    except ImportError:
-        click.echo("Error: anthropic package not installed. Run: pip install anthropic", err=True)
-        sys.exit(1)
+    """Send files to Claude and parse the returned JSON manifest.
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        click.echo("Error: ANTHROPIC_API_KEY environment variable not set.", err=True)
-        sys.exit(1)
+    Prefers the `claude` CLI (covered by Max/Pro subscriptions, no extra
+    billing). Falls back to the anthropic Python SDK if the CLI isn't found,
+    which requires ANTHROPIC_API_KEY and bills per-token.
+    """
+    import shutil
 
-    client = anthropic.Anthropic(api_key=api_key)
     user_message = build_user_message(project_slug, files)
+    combined = f"{SYSTEM_PROMPT}\n\n{user_message}"
 
-    click.echo(f"  Sending {len(files)} files to Claude ({model})…")
+    claude_bin = shutil.which("claude")
+    if claude_bin:
+        import subprocess
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
+        click.echo(f"  Sending {len(files)} files to Claude CLI ({model})…")
+        try:
+            result = subprocess.run(
+                [claude_bin, "-p", "--output-format", "text", "--model", model],
+                input=combined,
+                capture_output=True,
+                text=True,
+                check=True,
+                encoding="utf-8",
+            )
+        except subprocess.CalledProcessError as e:
+            click.echo(
+                f"Error: claude CLI failed (exit {e.returncode}).\nstderr: {e.stderr}",
+                err=True,
+            )
+            sys.exit(1)
+        raw = result.stdout.strip()
+    else:
+        # Fallback: SDK + API key (pay-per-token)
+        try:
+            import anthropic
+        except ImportError:
+            click.echo(
+                "Error: neither `claude` CLI nor anthropic package available. "
+                "Install Claude Code (`npm i -g @anthropic-ai/claude-code`) or "
+                "`pip install anthropic` + set ANTHROPIC_API_KEY.",
+                err=True,
+            )
+            sys.exit(1)
 
-    raw = response.content[0].text.strip()
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            click.echo(
+                "Error: `claude` CLI not on PATH and ANTHROPIC_API_KEY not set. "
+                "Install Claude Code for Max-plan usage or set the API key.",
+                err=True,
+            )
+            sys.exit(1)
+
+        client = anthropic.Anthropic(api_key=api_key)
+        click.echo(f"  Sending {len(files)} files to Claude SDK ({model}, billed)…")
+
+        response = client.messages.create(
+            model=model,
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        raw = response.content[0].text.strip()
 
     # Strip markdown code fences if Claude wrapped the JSON anyway
     if raw.startswith("```"):
@@ -249,6 +299,90 @@ def _provision(manifest: dict, api_url: str, api_token: str) -> None:
     click.echo(f"\n  Created {created} service(s), seeded {seeded} with initial content.")
 
 
+def _vercel_setup(
+    manifest: dict,
+    github_repo: str,
+    vercel_token: str,
+    github_token: str,
+    cms_api_url: str,
+    cms_api_token: str,
+    cms_endpoint_base: str,
+) -> None:
+    """Creates/locates Vercel project, sets env vars, creates preview branch,
+    triggers prod + preview deploys, saves URLs/token to the CMS project row.
+    Idempotent: safe to re-run — reuses existing preview_token from CMS.
+    """
+    slug = manifest["project_slug"]
+    click.echo(f"\n🚀 Vercel setup for {github_repo}…")
+
+    base = cms_api_url.rstrip("/")
+    headers = {"Content-Type": "application/json", "Cookie": f"access_token={cms_api_token}"}
+
+    # 0. Fetch existing project row from CMS to check for reusable state (idempotency)
+    existing = _http("GET", f"{base}/admin/projects/{slug}", headers) or {}
+
+    # 1. Reuse preview_token if present, else generate a fresh one
+    preview_token = existing.get("preview_token") or secrets.token_urlsafe(32)
+
+    # 2. Find or create Vercel project — use Vercel's productionBranch if we
+    #    find an existing project (authoritative source), else fall back to
+    #    GitHub's default_branch.
+    found = vercel.find_project_by_repo(vercel_token, github_repo)
+    if found:
+        project_id = found["id"]
+        prod_branch = found.get("production_branch") or github.get_default_branch(github_token, github_repo)
+        click.echo(f"  ✓ Found existing Vercel project: {project_id} (prod branch: {prod_branch})")
+    else:
+        project_id = vercel.create_project(vercel_token, name=slug, github_repo=github_repo)
+        prod_branch = github.get_default_branch(github_token, github_repo)
+        click.echo(f"  ✓ Created Vercel project: {project_id} (prod branch: {prod_branch})")
+
+    # 3. Set env vars (upserts). We use VITE_ prefix because the initial
+    #    target framework is Vite — only VITE_*-prefixed env vars are exposed
+    #    to client-side code by Vite's build. Future Next.js/Astro clients
+    #    will need NEXT_PUBLIC_* / PUBLIC_* variants set here too.
+    endpoint_prod = f"{cms_endpoint_base}/content/{slug}"
+    endpoint_preview = f"{cms_endpoint_base}/content/{slug}/draft"
+    vercel.set_env_var(vercel_token, project_id, "VITE_CMS_ENDPOINT", endpoint_prod, target=["production"])
+    vercel.set_env_var(vercel_token, project_id, "VITE_CMS_ENDPOINT", endpoint_preview, target=["preview"])
+    vercel.set_env_var(vercel_token, project_id, "VITE_CMS_PREVIEW_TOKEN", preview_token, target=["preview"])
+    click.echo("  ✓ Env vars set (production + preview, VITE_ prefix)")
+
+    # 4. Create cms-preview branch if missing (branched from production branch)
+    if not github.branch_exists(github_token, github_repo, "cms-preview"):
+        github.create_branch(github_token, github_repo, "cms-preview", from_branch=prod_branch)
+        click.echo(f"  ✓ Created cms-preview branch (from {prod_branch})")
+    else:
+        click.echo("  ✓ cms-preview branch already exists")
+
+    # 5. Trigger deployments (production branch → production target)
+    prod = vercel.trigger_deployment(
+        vercel_token, project_id, github_repo, prod_branch, production_branch=prod_branch
+    )
+    preview = vercel.trigger_deployment(
+        vercel_token, project_id, github_repo, "cms-preview", production_branch=prod_branch
+    )
+
+    production_url = f"https://{prod['url']}" if prod.get("url") else None
+    preview_url = f"https://{preview['url']}" if preview.get("url") else None
+    click.echo(f"  ✓ Deployments triggered\n    prod:    {production_url}\n    preview: {preview_url}")
+
+    # 6. Save to CMS project row via admin PATCH (base + headers defined at top)
+    _http(
+        "PATCH",
+        f"{base}/admin/projects/{slug}",
+        headers,
+        {
+            "github_repo": github_repo,
+            "vercel_project_id": project_id,
+            "production_url": production_url,
+            "preview_url": preview_url,
+            "preview_token": preview_token,
+        },
+    )
+    click.echo("  ✓ Saved Vercel metadata to CMS project row")
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 @click.command()
@@ -262,6 +396,10 @@ def _provision(manifest: dict, api_url: str, api_token: str) -> None:
 @click.option("--api-url", default=DEFAULT_CMS_API, show_default=True, help="CMS API base URL (used with --provision).")
 @click.option("--api-token", default=None, help="Admin access_token cookie value (required with --provision).")
 @click.option("--model", default=DEFAULT_MODEL, show_default=True, help="Claude model ID.")
+@click.option("--github-repo", "github_repo", default=None, help="GitHub repo (OWNER/NAME) — enables Vercel setup.")
+@click.option("--vercel-token", "vercel_token", default=None, envvar="VERCEL_TOKEN", help="Vercel API token (env: VERCEL_TOKEN).")
+@click.option("--github-token", "github_token", default=None, envvar="GITHUB_TOKEN", help="GitHub API token (env: GITHUB_TOKEN).")
+@click.option("--skip-vercel", is_flag=True, default=False, help="Skip Vercel setup even if --github-repo is given.")
 def main(
     website_dir: str | None,
     slug: str | None,
@@ -273,6 +411,10 @@ def main(
     api_url: str,
     api_token: str | None,
     model: str,
+    github_repo: str | None,
+    vercel_token: str | None,
+    github_token: str | None,
+    skip_vercel: bool,
 ) -> None:
     """
     Auto-Config Agent: scan a client website and generate CMS configuration files.
@@ -364,6 +506,25 @@ def main(
     if provision:
         click.echo(f"🚀 Provisioning services via {api_url}…")
         _provision(manifest, api_url, api_token)
+
+    # ── Optional Vercel setup ──────────────────────────────────────────────────
+    if github_repo and not skip_vercel:
+        if not vercel_token or not github_token:
+            raise click.ClickException("--vercel-token and --github-token (or env vars) required for Vercel setup.")
+        if not api_token:
+            raise click.ClickException("--api-token required for Vercel setup (used to PATCH the project row).")
+
+        # Derive CMS endpoint base from the existing --endpoint (strip any /content suffix)
+        endpoint_base = endpoint.rstrip("/").rsplit("/content", 1)[0]
+        _vercel_setup(
+            manifest=manifest,
+            github_repo=github_repo,
+            vercel_token=vercel_token,
+            github_token=github_token,
+            cms_api_url=api_url,
+            cms_api_token=api_token,
+            cms_endpoint_base=endpoint_base,
+        )
 
 
 if __name__ == "__main__":

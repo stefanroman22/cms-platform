@@ -6,6 +6,7 @@ import { ArrowLeft, ChevronRight, Save, CheckCircle, AlertCircle } from "lucide-
 import { useQuery } from "@/hooks/useQuery";
 import { ServiceIcon } from "@/components/dashboard/ServiceIcon";
 import { EDITOR_MAP } from "@/components/dashboard/editors";
+import { PreviewPublishBar } from "@/components/dashboard/PreviewPublishBar";
 import {
     dashboardSectionCardCn,
     dashboardErrorBannerCn,
@@ -126,6 +127,7 @@ export default function ServiceEditorPage({
 
     return (
         <div className="p-8">
+            <PreviewPublishBar projectSlug={projectSlug} projectName={projectSlug} />
             {/* Breadcrumb */}
             <div className="mb-6 flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">
                 <Link

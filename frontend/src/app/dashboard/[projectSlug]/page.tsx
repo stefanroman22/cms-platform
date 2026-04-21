@@ -9,6 +9,7 @@ import { ServiceGrid } from "@/components/dashboard/ServiceGrid";
 import type { ServiceCardService } from "@/components/dashboard/ServiceCard";
 import { IssueForm } from "@/components/dashboard/IssueForm";
 import { IssueList } from "@/components/dashboard/IssueList";
+import { PreviewPublishBar } from "@/components/dashboard/PreviewPublishBar";
 import { dashboardInputCn, dashboardFieldLabelCn, dashboardSectionCardCn, dashboardErrorBannerCn } from "@/lib/styles";
 import * as cache from "@/lib/cache";
 
@@ -131,6 +132,7 @@ export default function ProjectWorkspacePage({
 
     return (
         <div className="p-8">
+            <PreviewPublishBar projectSlug={projectSlug} projectName={project?.name ?? projectSlug} />
             {/* Breadcrumb */}
             <div className="mb-6 flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">
                 <Link

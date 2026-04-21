@@ -1,3 +1,6 @@
+import base64
+import os
+
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
@@ -37,10 +40,16 @@ class Settings(BaseSettings):
 
     @property
     def private_key(self) -> str:
+        env_b64 = os.environ.get("JWT_PRIVATE_KEY_B64")
+        if env_b64:
+            return base64.b64decode(env_b64).decode("utf-8")
         return Path(self.PRIVATE_KEY_PATH).read_text()
 
     @property
     def public_key(self) -> str:
+        env_b64 = os.environ.get("JWT_PUBLIC_KEY_B64")
+        if env_b64:
+            return base64.b64decode(env_b64).decode("utf-8")
         return Path(self.PUBLIC_KEY_PATH).read_text()
 
     model_config = {
