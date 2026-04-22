@@ -2,23 +2,21 @@ from fastapi import APIRouter, HTTPException, Request, status
 from typing import List
 
 from ..models.schemas import ProjectOut, AccountOut, ProjectRequestIn
-from ..services.auth_service import get_user_from_access_token
+from ..services.sessions import validate_session
 from ..services.supabase_client import get_supabase
 
 router = APIRouter(prefix="", tags=["projects"])
 
-ACCESS_COOKIE = "access_token"
+SESSION_COOKIE = "sid"
 
 PROJECT_TYPES = {"website", "web_app", "mobile_app", "other"}
 
 
 async def _require_user(request: Request):
-    token = request.cookies.get(ACCESS_COOKIE)
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    user = await get_user_from_access_token(token)
+    sid = request.cookies.get(SESSION_COOKIE)
+    user = await validate_session(sid)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return user
 
 

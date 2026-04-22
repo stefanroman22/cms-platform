@@ -2,7 +2,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from ..main import app
 from ..models.schemas import UserOut
 
 
@@ -30,6 +29,10 @@ def mock_supabase():
         "auth_service.routers.workspace.get_supabase_admin",
         "auth_service.routers.projects.get_supabase",
         "auth_service.routers.publish.get_supabase",  # created in Task 7
+        "auth_service.services.sessions.get_supabase",
+        # auth.change_password does `from ..services.supabase_client import get_supabase`
+        # inline — patch the source so the late import sees the mock.
+        "auth_service.services.supabase_client.get_supabase",
     ]
     started = []
     try:
@@ -48,6 +51,11 @@ def mock_supabase():
 
 @pytest.fixture
 def client():
+    # Import lazily — the app graph currently fails to import on this branch
+    # (Task 1 stripped JWT helpers still referenced by services.auth_service).
+    # Tests that don't need the HTTP client (e.g. test_sessions.py) should not
+    # pay that cost.
+    from ..main import app
     return TestClient(app)
 
 

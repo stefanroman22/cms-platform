@@ -1,120 +1,86 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Response, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
-from ..models.schemas import LoginRequest, TokenResponse, UserOut, ChangePasswordRequest, ChangeNameRequest
-from ..services.auth_service import (
-    authenticate_user,
-    issue_tokens,
-    refresh_access_token,
-    revoke_refresh_token,
-    get_user_from_access_token,
-    change_user_password,
-)
 from ..core.config import settings
+from ..models.schemas import ChangeNameRequest, ChangePasswordRequest, LoginRequest, TokenResponse, UserOut
+from ..services.auth_service import authenticate_user, change_user_password
+from ..services.sessions import (
+    DEFAULT_DAYS,
+    REMEMBER_ME_DAYS,
+    create_session,
+    revoke_all_for_user,
+    revoke_session,
+    validate_session,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-REFRESH_COOKIE = "refresh_token"
-ACCESS_COOKIE = "access_token"
+SESSION_COOKIE = "sid"
 IS_PROD = settings.ENVIRONMENT == "production"
 
 
-def _set_auth_cookies(response: Response, access_token: str, raw_refresh: str, refresh_expires: datetime):
-    # Cross-origin (production): SameSite=None requires Secure. Browsers
-    # reject SameSite=None on http://localhost, so dev stays on Lax.
-    samesite = "none" if IS_PROD else "lax"
+def _set_session_cookie(response: Response, raw_sid: str, remember_me: bool) -> None:
+    days = REMEMBER_ME_DAYS if remember_me else DEFAULT_DAYS
     response.set_cookie(
-        key=ACCESS_COOKIE,
-        value=access_token,
+        key=SESSION_COOKIE,
+        value=raw_sid,
         httponly=True,
         secure=IS_PROD,
-        samesite=samesite,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        path="/",
-    )
-    response.set_cookie(
-        key=REFRESH_COOKIE,
-        value=raw_refresh,
-        httponly=True,
-        secure=IS_PROD,
-        samesite=samesite,
-        max_age=int((refresh_expires - datetime.now(timezone.utc)).total_seconds()),
+        samesite="strict" if IS_PROD else "lax",
+        max_age=days * 24 * 60 * 60,
         path="/",
     )
 
 
-def _clear_auth_cookies(response: Response):
-    response.delete_cookie(ACCESS_COOKIE, path="/")
-    response.delete_cookie(REFRESH_COOKIE, path="/")
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE, path="/")
+
+
+def _client_meta(request: Request) -> tuple[str | None, str | None]:
+    ua = request.headers.get("user-agent")
+    fwd = request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else None)
+    return ua, ip
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, response: Response):
+async def login(body: LoginRequest, request: Request, response: Response):
     user = await authenticate_user(body.email, body.password)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
-    access_token, raw_refresh, refresh_expires = await issue_tokens(user, body.remember_me)
-    _set_auth_cookies(response, access_token, raw_refresh, refresh_expires)
-    return TokenResponse(access_token=access_token)
-
-
-@router.post("/refresh", response_model=TokenResponse)
-async def refresh(request: Request, response: Response):
-    raw_refresh = request.cookies.get(REFRESH_COOKIE)
-    if not raw_refresh:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token")
-
-    result = await refresh_access_token(raw_refresh)
-    if not result:
-        _clear_auth_cookies(response)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
-
-    access_token, new_raw_refresh, new_expires = result
-    _set_auth_cookies(response, access_token, new_raw_refresh, new_expires)
-    return TokenResponse(access_token=access_token)
+    user_agent, ip = _client_meta(request)
+    raw_sid, _expires_at = await create_session(user, body.remember_me, user_agent=user_agent, ip=ip)
+    _set_session_cookie(response, raw_sid, body.remember_me)
+    # TokenResponse remains in the contract for backward compat; body is unused
+    # by the frontend — the cookie is the source of truth.
+    return TokenResponse(access_token="session")
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(request: Request, response: Response):
-    raw_refresh = request.cookies.get(REFRESH_COOKIE)
-    if raw_refresh:
-        await revoke_refresh_token(raw_refresh)
-    _clear_auth_cookies(response)
+    sid = request.cookies.get(SESSION_COOKIE)
+    if sid:
+        await revoke_session(sid)
+    _clear_session_cookie(response)
 
 
 @router.get("/me", response_model=UserOut)
 async def me(request: Request):
-    token = request.cookies.get(ACCESS_COOKIE)
-    if not token:
-        # Also accept Bearer token in Authorization header
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    user = await get_user_from_access_token(token)
+    sid = request.cookies.get(SESSION_COOKIE)
+    user = await validate_session(sid)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
-
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return user
 
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
-async def change_password(body: ChangePasswordRequest, request: Request):
-    token = request.cookies.get(ACCESS_COOKIE)
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    user = await get_user_from_access_token(token)
+async def change_password(body: ChangePasswordRequest, request: Request, response: Response):
+    sid = request.cookies.get(SESSION_COOKIE)
+    user = await validate_session(sid)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     if len(body.new_password) < 8:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="New password must be at least 8 characters.")
@@ -123,16 +89,22 @@ async def change_password(body: ChangePasswordRequest, request: Request):
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect.")
 
+    # Revoke ALL sessions (including this one) and mint a fresh session
+    await revoke_all_for_user(user.id)
+    from ..services.supabase_client import get_supabase
+    sb = get_supabase()
+    fresh_user = sb.table("users").select("*").eq("id", user.id).single().execute().data
+    user_agent, ip = _client_meta(request)
+    raw_sid, _ = await create_session(fresh_user, remember_me=False, user_agent=user_agent, ip=ip)
+    _set_session_cookie(response, raw_sid, remember_me=False)
+
 
 @router.patch("/profile", status_code=status.HTTP_200_OK)
 async def update_profile(body: ChangeNameRequest, request: Request):
-    token = request.cookies.get(ACCESS_COOKIE)
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
-    user = await get_user_from_access_token(token)
+    sid = request.cookies.get(SESSION_COOKIE)
+    user = await validate_session(sid)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     name = body.full_name.strip()
     if not name:

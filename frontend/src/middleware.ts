@@ -31,19 +31,6 @@ function clearVerified(response: NextResponse): void {
   response.cookies.set(VERIFIED_COOKIE, "", { maxAge: 0, path: "/" });
 }
 
-async function tryRefresh(cookieHeader: string): Promise<Response | null> {
-  try {
-    const res = await fetch(`${AUTH_SERVICE_URL}/auth/refresh`, {
-      method: "POST",
-      headers: { Cookie: cookieHeader },
-      cache: "no-store",
-    });
-    return res.ok ? res : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function middleware(request: NextRequest) {
   // ── Legacy host redirect ────────────────────────────────────────────────
   // Move anyone on the *.vercel.app URL to the custom domain. Runs for
@@ -66,9 +53,9 @@ export async function middleware(request: NextRequest) {
   const cookies = request.cookies;
   const cookieHeader = request.headers.get("cookie") ?? "";
 
-  // ── Fast path: both access_token and auth_verified present ───────────────
+  // ── Fast path: both sid and auth_verified present ───────────────────────
   // Skip upstream call entirely — the verified stamp confirms a recent /auth/me
-  if (cookies.get("access_token") && cookies.get(VERIFIED_COOKIE)) {
+  if (cookies.get("sid") && cookies.get(VERIFIED_COOKIE)) {
     if (isAuthRoute) return NextResponse.redirect(new URL("/dashboard", request.url));
     return NextResponse.next();
   }
@@ -83,24 +70,6 @@ export async function middleware(request: NextRequest) {
     isAuthenticated = res.ok;
   } catch {
     isAuthenticated = false;
-  }
-
-  // ── Silent refresh if access token expired ────────────────────────────────
-  if (!isAuthenticated) {
-    const refreshRes = await tryRefresh(cookieHeader);
-    if (refreshRes) {
-      isAuthenticated = true;
-      const destination = isProtected
-        ? NextResponse.next()
-        : NextResponse.redirect(new URL("/dashboard", request.url));
-      // Forward all Set-Cookie headers from the refresh response
-      const newCookies = refreshRes.headers.getSetCookie();
-      for (const c of newCookies) {
-        destination.headers.append("set-cookie", c);
-      }
-      markVerified(destination);
-      return destination;
-    }
   }
 
   if (isProtected && !isAuthenticated) {
