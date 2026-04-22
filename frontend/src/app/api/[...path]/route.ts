@@ -40,7 +40,12 @@ async function handler(
     // middleware can never read them from incoming browser requests.
     const setCookies = upstream.headers.getSetCookie();
     for (const c of setCookies) {
-        outHeaders.append("set-cookie", c);
+        // Strip any Domain=... attribute so the browser uses the request host
+        // (the frontend custom domain). Without this, the cookie would be
+        // scoped to the backend's Vercel URL and not be sent on subsequent
+        // frontend requests.
+        const cleaned = c.replace(/;\s*Domain=[^;]+/gi, "");
+        outHeaders.append("set-cookie", cleaned);
     }
 
     const ct = upstream.headers.get("content-type");
