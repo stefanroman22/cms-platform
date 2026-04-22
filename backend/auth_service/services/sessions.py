@@ -70,10 +70,12 @@ async def validate_session(raw_sid: Optional[str]) -> Optional[UserOut]:
         .select("id, expires_at, remember_me, users(id, email, full_name, is_admin, is_active)")
         .eq("token_hash", token_hash)
         .eq("revoked", False)
-        .single()
+        .maybe_single()
         .execute()
     )
-    if not result.data:
+    # maybe_single() returns APIResponse(data=None) on 0 rows rather than
+    # raising PGRST116, which is the graceful behaviour we want here.
+    if result is None or not getattr(result, "data", None):
         return None
     row = result.data
     now = datetime.now(timezone.utc)
