@@ -4,6 +4,11 @@ const PROTECTED_ROUTES = ["/dashboard"];
 const AUTH_ROUTES = ["/log-in"];
 const AUTH_SERVICE_URL = process.env.FASTAPI_URL ?? "http://localhost:8001";
 
+// Canonical host for the CMS admin UI. Any request arriving on the legacy
+// Vercel default subdomain (cms-frontend-roman.vercel.app) is permanently
+// redirected here so the old URL is effectively unreachable.
+const CANONICAL_HOST = "roman-technologies.dev";
+
 // Short-lived middleware-level auth cache cookie.
 // Set after a successful /auth/me so we skip the upstream call on every navigation.
 // TTL must be shorter than the access token lifetime (15 min) so we never serve
@@ -40,6 +45,17 @@ async function tryRefresh(cookieHeader: string): Promise<Response | null> {
 }
 
 export async function middleware(request: NextRequest) {
+  // ── Legacy host redirect ────────────────────────────────────────────────
+  // Move anyone on the *.vercel.app URL to the custom domain. Runs for
+  // every matched path (including the landing page).
+  const host = request.headers.get("host") ?? "";
+  if (host.startsWith("cms-frontend-roman.") && host.endsWith(".vercel.app")) {
+    const url = request.nextUrl.clone();
+    url.host = CANONICAL_HOST;
+    url.protocol = "https:";
+    return NextResponse.redirect(url, 308);
+  }
+
   const { pathname } = request.nextUrl;
 
   const isProtected = PROTECTED_ROUTES.some((r) => pathname.startsWith(r));
@@ -104,5 +120,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/log-in"],
+  // Match every non-static path so the legacy-host redirect runs regardless
+  // of which page the visitor is hitting. The auth-flow logic inside the
+  // handler early-returns for paths other than /dashboard and /log-in.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js|woff2?)).*)"],
 };
