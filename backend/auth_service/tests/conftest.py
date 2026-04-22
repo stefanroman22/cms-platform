@@ -15,8 +15,8 @@ def mock_supabase():
     mock = MagicMock()
     # Make every builder method return the mock itself so chains like
     # .table().select().eq().single().execute() all work.
-    for method in ["table", "select", "eq", "in_", "order", "limit", "single", "insert",
-                   "upsert", "update", "delete", "neq", "filter"]:
+    for method in ["table", "select", "eq", "in_", "order", "limit", "single", "maybe_single",
+                   "insert", "upsert", "update", "delete", "neq", "filter"]:
         getattr(mock, method).return_value = mock
 
     # Each patch wrapped in try/except so early tasks can run before later
