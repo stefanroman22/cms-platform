@@ -1,3 +1,5 @@
+import re
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -16,10 +18,27 @@ app = FastAPI(title="CMS Auth Service", version="1.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# In development allow any localhost / LAN / Vercel origin so the dev server
-# works regardless of whether it's accessed via localhost, 127.0.0.1, LAN IP,
-# or a *.vercel.app preview URL (hitting the local CMS from the user's browser).
-# In production only the explicit FRONTEND_ORIGINS list is accepted.
+# CORS policy.
+#
+# Development: allow any localhost / LAN / *.vercel.app origin so local dev
+# works regardless of how it's accessed.
+#
+# Production: allow the explicit FRONTEND_ORIGINS list PLUS any *.vercel.app
+# subdomain. The wildcard is intentional — client websites host their
+# production + preview deployments on *.vercel.app and need to call the
+# public /content/* endpoints. Authenticated endpoints require the auth
+# cookie which is scoped to the CMS frontend domain only (SameSite=None
+# still means the browser won't send the cookie across-origin unless the
+# backend trusts the caller's origin, and the portfolio doesn't have the
+# cookie to begin with).
+def _prod_origin_regex() -> str:
+    explicit = [re.escape(o) for o in settings.cors_origins]
+    vercel = r"https://[a-zA-Z0-9.-]+\.vercel\.app"
+    if explicit:
+        return "(" + "|".join(explicit) + ")" + f"|{vercel}"
+    return vercel
+
+
 _cors_kwargs: dict = (
     {
         "allow_origin_regex": (
@@ -28,7 +47,7 @@ _cors_kwargs: dict = (
         )
     }
     if settings.ENVIRONMENT == "development"
-    else {"allow_origins": settings.cors_origins}
+    else {"allow_origin_regex": _prod_origin_regex()}
 )
 
 app.add_middleware(
