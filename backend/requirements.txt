@@ -7,9 +7,6 @@
 # The FastAPI rows power the `auth_service` app that Vercel serves via
 # `vercel_entry.py`.
 
-# ── Shared ────────────────────────────────────────────────────────────────
-python-jose[cryptography]==3.3.0
-
 # ── Django (legacy, local only) ───────────────────────────────────────────
 asgiref==3.11.1
 Django==6.0.2
