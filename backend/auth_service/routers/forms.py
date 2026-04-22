@@ -125,20 +125,24 @@ async def submit_form(
 
     svc_id = svc_result.data["id"]
 
-    config_result = (
-        sb.table("email_configs")
-        .select("destination_email")
+    # Destination email lives in content_entries (where the CMS UI writes it
+    # via the generic save path). Prefer the published value; fall back to
+    # draft so a client can wire up forms before the first publish.
+    ce_result = (
+        sb.table("content_entries")
+        .select("published_content, draft_content")
         .eq("project_service_id", svc_id)
         .single()
         .execute()
     )
-    if not config_result.data or not config_result.data.get("destination_email"):
+    pub = (ce_result.data or {}).get("published_content") or {}
+    draft = (ce_result.data or {}).get("draft_content") or {}
+    destination = pub.get("destination_email") or draft.get("destination_email")
+    if not destination:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Email destination not configured for this form",
         )
-
-    destination = config_result.data["destination_email"]
 
     # ── 4. Sanitise fields (strings only, skip internal keys) ─────────────────
     fields = {
