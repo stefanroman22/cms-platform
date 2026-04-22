@@ -7,6 +7,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .core.config import settings
 from .core.limiter import limiter
+from .core.security_headers import SecurityHeadersMiddleware
 from .routers import auth, projects, content, workspace, publish
 from .routers.issues import router as issues_router
 from .routers.forms import router as forms_router
@@ -96,6 +97,8 @@ class _PrivateNetworkAccessMiddleware:
 
 if settings.ENVIRONMENT == "development":
     app.add_middleware(_PrivateNetworkAccessMiddleware)
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(auth.router)
 app.include_router(projects.router)
