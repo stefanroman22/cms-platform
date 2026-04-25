@@ -82,7 +82,7 @@ export default function CreateNewProjectPage() {
 
     if (submitted) {
         return (
-            <div className="p-8">
+            <div className="p-4 md:p-8">
               <div className="max-w-xl">
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50 py-16 text-center px-8 dark:border-emerald-900 dark:bg-emerald-950">
                     <CheckCircle className="h-10 w-10 text-emerald-500 dark:text-emerald-400 mb-4" />
@@ -107,7 +107,7 @@ export default function CreateNewProjectPage() {
     }
 
     return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
           <div className="max-w-xl">
             <PageHeader
                 title="Create New Project"
