@@ -2,6 +2,7 @@
 
 import { use, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, Save, CheckCircle, AlertCircle } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { ServiceIcon } from "@/components/dashboard/ServiceIcon";
@@ -77,6 +78,7 @@ export default function ServiceEditorPage({
     params: Promise<{ projectSlug: string; serviceKey: string }>;
 }) {
     const { projectSlug, serviceKey } = use(params);
+    const router = useRouter();
     const cacheKey = `service:${projectSlug}:${serviceKey}`;
 
     const { data: service, loading, error, refresh } = useQuery<ServiceDetail>(
@@ -128,6 +130,20 @@ export default function ServiceEditorPage({
     return (
         <div className="p-8">
             <PreviewPublishBar projectSlug={projectSlug} projectName={projectSlug} />
+
+            {/* Back button — restores the previous page including the active
+                tab via browser history. Distinct from the breadcrumb's
+                project link, which always returns to the first tab. */}
+            <button
+                type="button"
+                onClick={() => router.back()}
+                aria-label="Go back to previous page"
+                className="cursor-pointer mb-4 inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 active:scale-[0.98] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+            >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back
+            </button>
+
             {/* Breadcrumb */}
             <div className="mb-6 flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">
                 <Link
