@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { BoxSelect, Mail } from "lucide-react";
 import { PageTabs } from "@/components/dashboard/PageTabs";
 import { ServiceCard, type ServiceCardService } from "@/components/dashboard/ServiceCard";
@@ -42,10 +43,22 @@ export function ServiceGrid({
         return sortPages(Array.from(pageSet));
     }, [contentServices]);
 
-    const [activePage, setActivePage] = useState<string>(() => pages[0] ?? "General");
+    // Active page is URL-derived so browser back from a service editor lands
+    // on the same tab the user was on. URL: ?tab=<page-name>. Falls back to
+    // the first available page when the param is missing or invalid.
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const requestedTab = searchParams.get("tab");
+    const effectivePage = requestedTab && pages.includes(requestedTab)
+        ? requestedTab
+        : (pages[0] ?? "General");
 
-    // Keep activePage in sync when pages change (e.g. after add/remove)
-    const effectivePage = pages.includes(activePage) ? activePage : (pages[0] ?? "General");
+    function setActivePage(page: string) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("tab", page);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
 
     const visibleServices = contentServices.filter(
         (s) => (s.page_name || "General") === effectivePage,

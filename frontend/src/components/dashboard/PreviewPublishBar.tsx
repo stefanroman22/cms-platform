@@ -117,24 +117,22 @@ export function PreviewPublishBar({ projectSlug, projectName = "Project" }: Prev
                             {count} unpublished {count === 1 ? "change" : "changes"}
                         </span>
                     )}
-                    <div className="flex flex-col items-end">
-                        <button
-                            type="button"
-                            disabled={count === 0 || publishing || loading}
-                            onClick={() => setModalOpen(true)}
-                            className="cursor-pointer inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-                        >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Publish Changes
-                        </button>
-                        {lastPublished && (
-                            <span className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">
-                                Last published {lastPublished}
-                            </span>
-                        )}
-                    </div>
+                    <button
+                        type="button"
+                        disabled={count === 0 || publishing || loading}
+                        onClick={() => setModalOpen(true)}
+                        className="cursor-pointer inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                    >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Publish Changes
+                    </button>
                 </div>
             </div>
+            {lastPublished && (
+                <p className="-mt-5 mb-4 px-1 text-right text-[10px] text-zinc-400 dark:text-zinc-500">
+                    Last published {lastPublished}
+                </p>
+            )}
 
             <PublishConfirmModal
                 open={modalOpen}
