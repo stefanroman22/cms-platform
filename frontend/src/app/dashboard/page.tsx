@@ -37,7 +37,7 @@ export default function ProjectsOverviewPage() {
     );
 
     return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
             <PageHeader title="Projects" description="All active projects associated with your account." />
 
             {/* Search */}

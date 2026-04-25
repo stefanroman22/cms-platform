@@ -131,7 +131,7 @@ export default function ProjectWorkspacePage({
     }
 
     return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
             <PreviewPublishBar projectSlug={projectSlug} projectName={project?.name ?? projectSlug} />
             {/* Breadcrumb */}
             <div className="mb-6 flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">

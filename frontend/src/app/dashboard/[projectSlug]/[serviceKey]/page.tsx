@@ -128,7 +128,7 @@ export default function ServiceEditorPage({
     const EditorComponent = service ? EDITOR_MAP[service.service_type_slug] : null;
 
     return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
             <PreviewPublishBar projectSlug={projectSlug} projectName={projectSlug} />
 
             {/* Back button — restores the previous page including the active
@@ -145,7 +145,7 @@ export default function ServiceEditorPage({
             </button>
 
             {/* Breadcrumb */}
-            <div className="mb-6 flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">
+            <div className="mb-6 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-zinc-400 dark:text-zinc-500">
                 <Link
                     href="/dashboard"
                     className="hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
@@ -165,8 +165,8 @@ export default function ServiceEditorPage({
             </div>
 
             {/* Header */}
-            <div className="mb-6 flex items-start justify-between gap-4">
-                <div className="flex items-center gap-3">
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
                     {service && (
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
                             <ServiceIcon name={service.service_type_icon} className="h-5 w-5 text-zinc-600 dark:text-zinc-300" />

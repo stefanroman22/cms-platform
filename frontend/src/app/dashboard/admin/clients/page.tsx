@@ -31,7 +31,7 @@ export default function AdminClientsPage() {
     );
 
     return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
             <PageHeader title="All Clients" description="Every registered user across the platform." />
 
             {error && <p className="mb-6 text-sm text-red-600 dark:text-red-400">{error}</p>}

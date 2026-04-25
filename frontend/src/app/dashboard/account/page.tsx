@@ -120,7 +120,7 @@ export default function AccountSettingsPage() {
     // ── Render ──────────────────────────────────────────────────────────────
     if (loading) {
         return (
-            <div className="p-8">
+            <div className="p-4 md:p-8">
                 <div className="h-6 w-40 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse mb-2" />
                 <div className="h-4 w-64 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
             </div>
@@ -128,7 +128,7 @@ export default function AccountSettingsPage() {
     }
 
     return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
           <div className="max-w-2xl">
             <PageHeader title="Account Settings" description="Manage your profile and security settings." />
 

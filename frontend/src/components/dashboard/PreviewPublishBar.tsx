@@ -99,7 +99,7 @@ export function PreviewPublishBar({ projectSlug, projectName = "Project" }: Prev
 
     return (
         <>
-            <div className="sticky top-0 z-30 -mx-8 mb-6 flex items-center justify-between gap-4 border-b border-zinc-200 bg-white/90 px-8 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
+            <div className="sticky top-0 z-30 -mx-4 md:-mx-8 mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-zinc-200 bg-white/90 px-4 md:px-8 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
                 <button
                     type="button"
                     disabled={!hasPreview || loading}

@@ -47,7 +47,7 @@ export default function AdminProjectsPage({
         : null;
 
     return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
             <PageHeader
                 title="All Projects"
                 description={
