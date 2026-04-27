@@ -99,40 +99,51 @@ export function PreviewPublishBar({ projectSlug, projectName = "Project" }: Prev
 
     return (
         <>
-            <div className="sticky top-0 z-30 -mx-4 md:-mx-8 mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-zinc-200 bg-white/90 px-4 md:px-8 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
+            {/* Sticky bar — fixed h-16 so its bottom border aligns with the
+                Sidebar brand divider (also h-16) across the column boundary,
+                even during scroll. "Last published" lives inside the right
+                column so it stays glued to the Publish button. */}
+            <div className="sticky top-0 z-30 -mx-4 md:-mx-8 mb-6 flex h-16 items-center justify-between gap-3 border-b border-zinc-200 bg-white/90 px-4 md:px-8 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
                 <button
                     type="button"
                     disabled={!hasPreview || loading}
                     onClick={() => status?.preview_url && window.open(status.preview_url, "_blank", "noopener,noreferrer")}
                     title={hasPreview ? "Open preview in a new tab" : "Preview not set up — contact admin"}
-                    className="cursor-pointer inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    className="cursor-pointer inline-flex shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
                     <ExternalLink className="h-4 w-4" />
-                    See Preview
+                    <span className="hidden sm:inline">See Preview</span>
+                    <span className="sm:hidden">Preview</span>
                 </button>
 
-                <div className="flex items-center gap-3">
-                    {count > 0 && (
-                        <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                            {count} unpublished {count === 1 ? "change" : "changes"}
-                        </span>
+                <div className="flex flex-col items-end gap-0.5 min-w-0">
+                    <div className="flex items-center gap-2">
+                        {count > 0 && (
+                            <span
+                                title={`${count} unpublished change${count === 1 ? "" : "s"}`}
+                                className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-100 px-1.5 text-[11px] font-bold tabular-nums text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                            >
+                                {count}
+                            </span>
+                        )}
+                        <button
+                            type="button"
+                            disabled={count === 0 || publishing || loading}
+                            onClick={() => setModalOpen(true)}
+                            className="cursor-pointer inline-flex shrink-0 items-center gap-2 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                        >
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span className="hidden sm:inline">Publish Changes</span>
+                            <span className="sm:hidden">Publish</span>
+                        </button>
+                    </div>
+                    {lastPublished && (
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-none">
+                            Last published {lastPublished}
+                        </p>
                     )}
-                    <button
-                        type="button"
-                        disabled={count === 0 || publishing || loading}
-                        onClick={() => setModalOpen(true)}
-                        className="cursor-pointer inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-                    >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Publish Changes
-                    </button>
                 </div>
             </div>
-            {lastPublished && (
-                <p className="-mt-5 mb-4 px-1 text-right text-[10px] text-zinc-400 dark:text-zinc-500">
-                    Last published {lastPublished}
-                </p>
-            )}
 
             <PublishConfirmModal
                 open={modalOpen}
