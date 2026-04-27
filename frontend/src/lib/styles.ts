@@ -24,7 +24,7 @@ export const dividerCn = "h-px bg-white/[0.08]";
 
 /** Primary action button — dark fill, disabled state included */
 export const dashboardPrimaryBtnCn =
-  "flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer";
+  "flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer dark:bg-zinc-700 dark:hover:bg-zinc-600";
 
 /** Text input / select / textarea — standard (py-2) */
 export const dashboardInputCn =

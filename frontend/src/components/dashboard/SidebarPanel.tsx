@@ -59,8 +59,10 @@ export function SidebarPanel({ onLinkClick }: Props) {
 
     return (
         <div className="flex h-full flex-col bg-white dark:bg-zinc-950">
-            {/* Brand */}
-            <div className="flex items-center gap-2.5 px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
+            {/* Brand — h-16 matches PreviewPublishBar so the bottom borders
+                align across the column boundary (desktop) and stay aligned
+                during scroll, since both regions are sticky at top-0. */}
+            <div className="flex h-16 items-center gap-2.5 px-5 border-b border-zinc-100 dark:border-zinc-800">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-900 dark:bg-zinc-800">
                     <Layers className="h-4 w-4 text-white" strokeWidth={1.5} />
                 </span>
