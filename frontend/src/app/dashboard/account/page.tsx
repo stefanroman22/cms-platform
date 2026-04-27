@@ -134,16 +134,18 @@ export default function AccountSettingsPage() {
 
             {/* Profile info */}
             <section className={`mb-8 ${dashboardSectionCardCn}`}>
-                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="px-4 py-4 border-b border-zinc-100 dark:border-zinc-800 sm:px-6">
                     <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Profile</h2>
                 </div>
                 <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                     <Row icon={<Mail className="h-4 w-4" />} label="Email" value={user?.email ?? "—"} />
 
                     {/* Full name — editable row */}
-                    <div className="flex items-start gap-4 px-6 py-4">
-                        <span className="text-zinc-400 dark:text-zinc-500 shrink-0 mt-0.5"><User className="h-4 w-4" /></span>
-                        <span className="w-36 shrink-0 text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Full name</span>
+                    <div className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-start sm:gap-4 sm:px-6">
+                        <div className="flex items-center gap-3 sm:items-start sm:gap-4 sm:w-44 sm:shrink-0">
+                            <span className="text-zinc-400 dark:text-zinc-500 shrink-0 sm:mt-0.5"><User className="h-4 w-4" /></span>
+                            <span className="text-sm text-zinc-500 dark:text-zinc-400 sm:mt-0.5">Full name</span>
+                        </div>
                         <div className="flex-1 min-w-0">
                             {editingName ? (
                                 <div className="space-y-2">
@@ -229,19 +231,21 @@ export default function AccountSettingsPage() {
 
             {/* Appearance */}
             <section className={`mb-8 ${dashboardSectionCardCn}`}>
-                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="px-4 py-4 border-b border-zinc-100 dark:border-zinc-800 sm:px-6">
                     <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Appearance</h2>
                 </div>
-                <div className="flex items-center gap-4 px-6 py-4">
-                    <span className="text-zinc-400 dark:text-zinc-500 shrink-0">
-                        <Palette className="h-4 w-4" />
-                    </span>
-                    <span className="w-36 shrink-0 text-sm text-zinc-500 dark:text-zinc-400">Theme</span>
+                <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 sm:px-6">
+                    <div className="flex items-center gap-3 sm:gap-4 sm:w-44 sm:shrink-0">
+                        <span className="text-zinc-400 dark:text-zinc-500 shrink-0">
+                            <Palette className="h-4 w-4" />
+                        </span>
+                        <span className="text-sm text-zinc-500 dark:text-zinc-400">Theme</span>
+                    </div>
                     <button
                         role="switch"
                         aria-checked={theme === "dark"}
                         onClick={toggleTheme}
-                        className="flex items-center gap-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 p-1 transition-colors cursor-pointer"
+                        className="self-start flex items-center gap-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 p-1 transition-colors cursor-pointer"
                         aria-label="Toggle theme"
                     >
                         <span className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${theme === "light" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"}`}>
@@ -258,7 +262,7 @@ export default function AccountSettingsPage() {
 
             {/* Change password */}
             <section className={dashboardSectionCardCn}>
-                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="px-4 py-4 border-b border-zinc-100 dark:border-zinc-800 sm:px-6">
                     <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Change Password</h2>
                 </div>
                 <form onSubmit={handleChangePassword} className="p-6 space-y-4">
@@ -290,10 +294,18 @@ function Row({ icon, label, value, muted = false }: {
     icon: React.ReactNode; label: string; value: string; muted?: boolean;
 }) {
     return (
-        <div className="flex items-center gap-4 px-6 py-4">
-            <span className="text-zinc-400 dark:text-zinc-500 shrink-0">{icon}</span>
-            <span className="w-36 shrink-0 text-sm text-zinc-500 dark:text-zinc-400">{label}</span>
-            <span className={`text-sm ${muted ? "text-zinc-400 dark:text-zinc-500 italic" : "text-zinc-900 dark:text-zinc-100"}`}>{value}</span>
+        <div className="flex flex-col gap-1 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 sm:px-6">
+            <div className="flex items-center gap-3 sm:gap-4 sm:w-44 sm:shrink-0">
+                <span className="text-zinc-400 dark:text-zinc-500 shrink-0">{icon}</span>
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">{label}</span>
+            </div>
+            <span
+                className={`pl-7 text-sm break-all sm:pl-0 sm:min-w-0 sm:flex-1 ${
+                    muted ? "text-zinc-400 dark:text-zinc-500 italic" : "text-zinc-900 dark:text-zinc-100"
+                }`}
+            >
+                {value}
+            </span>
         </div>
     );
 }

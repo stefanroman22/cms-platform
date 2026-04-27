@@ -82,49 +82,54 @@ export default function AdminProjectsPage({
             )}
 
             {!loading && filtered.length > 0 && (
-                <div className={dashboardSectionCardCn}>
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Project</th>
-                                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Client</th>
-                                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Slug</th>
-                                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Created</th>
-                                <th className="px-5 py-3" />
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                            {filtered.map((project) => (
-                                <tr key={project.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                                    <td className="px-5 py-3.5">
-                                        <span className="font-medium text-zinc-900 dark:text-zinc-100">{project.name}</span>
-                                    </td>
-                                    <td className="px-5 py-3.5">
-                                        <p className="text-zinc-700 dark:text-zinc-300">{project.user_full_name ?? "—"}</p>
-                                        <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{project.user_email}</p>
-                                    </td>
-                                    <td className="px-5 py-3.5">
-                                        <span className="font-mono text-xs rounded-md bg-zinc-100 px-2 py-0.5 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                                            /{project.slug}
-                                        </span>
-                                    </td>
-                                    <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400">
-                                        {new Date(project.created_at).toLocaleDateString("en-GB", {
-                                            day: "numeric", month: "short", year: "numeric",
-                                        })}
-                                    </td>
-                                    <td className="px-5 py-3.5 text-right">
-                                        <Link
-                                            href={`/dashboard/${project.slug}`}
-                                            className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-                                        >
-                                            Open <ArrowRight className="h-3.5 w-3.5" />
-                                        </Link>
-                                    </td>
+                <div className={`${dashboardSectionCardCn} overflow-hidden`}>
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[680px] text-sm">
+                            <thead>
+                                <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Project</th>
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Client</th>
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Slug</th>
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Created</th>
+                                    <th className="px-5 py-3" />
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                {filtered.map((project) => (
+                                    <tr key={project.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                                        <td className="px-5 py-3.5 whitespace-nowrap">
+                                            <span className="font-medium text-zinc-900 dark:text-zinc-100">{project.name}</span>
+                                        </td>
+                                        <td className="px-5 py-3.5 whitespace-nowrap">
+                                            <p className="text-zinc-700 dark:text-zinc-300">{project.user_full_name ?? "—"}</p>
+                                            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{project.user_email}</p>
+                                        </td>
+                                        <td className="px-5 py-3.5 whitespace-nowrap">
+                                            <span className="font-mono text-xs rounded-md bg-zinc-100 px-2 py-0.5 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                                /{project.slug}
+                                            </span>
+                                        </td>
+                                        <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                                            {new Date(project.created_at).toLocaleDateString("en-GB", {
+                                                day: "numeric", month: "short", year: "numeric",
+                                            })}
+                                        </td>
+                                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                                            <Link
+                                                href={`/dashboard/${project.slug}`}
+                                                className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                                            >
+                                                Open <ArrowRight className="h-3.5 w-3.5" />
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p className="md:hidden border-t border-zinc-100 px-4 py-2 text-[10px] text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">
+                        Swipe horizontally to see more →
+                    </p>
                 </div>
             )}
         </div>
