@@ -48,54 +48,59 @@ export default function AdminClientsPage() {
             )}
 
             {!loading && (clients ?? []).length > 0 && (
-                <div className={dashboardSectionCardCn}>
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Client</th>
-                                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Role</th>
-                                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Projects</th>
-                                <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Joined</th>
-                                <th className="px-5 py-3" />
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                            {(clients ?? []).map((client) => (
-                                <tr key={client.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                                    <td className="px-5 py-3.5">
-                                        <p className="font-medium text-zinc-900 dark:text-zinc-100">{client.full_name ?? "—"}</p>
-                                        <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{client.email}</p>
-                                    </td>
-                                    <td className="px-5 py-3.5">
-                                        {client.is_admin ? (
-                                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">
-                                                <ShieldCheck className="h-3 w-3" /> Admin
-                                            </span>
-                                        ) : (
-                                            <span className="text-xs text-zinc-400 dark:text-zinc-500">Client</span>
-                                        )}
-                                    </td>
-                                    <td className="px-5 py-3.5">
-                                        <span className="tabular-nums text-zinc-700 dark:text-zinc-300">{client.projects_count}</span>
-                                    </td>
-                                    <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400">
-                                        {new Date(client.created_at).toLocaleDateString("en-GB", {
-                                            day: "numeric", month: "short", year: "numeric",
-                                        })}
-                                    </td>
-                                    <td className="px-5 py-3.5 text-right">
-                                        <Link
-                                            href={`/dashboard/admin/projects?user=${client.id}`}
-                                            className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-                                        >
-                                            <ExternalLink className="h-3.5 w-3.5" />
-                                            Projects
-                                        </Link>
-                                    </td>
+                <div className={`${dashboardSectionCardCn} overflow-hidden`}>
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[640px] text-sm">
+                            <thead>
+                                <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Client</th>
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Role</th>
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Projects</th>
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Joined</th>
+                                    <th className="px-5 py-3" />
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                {(clients ?? []).map((client) => (
+                                    <tr key={client.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                                        <td className="px-5 py-3.5 whitespace-nowrap">
+                                            <p className="font-medium text-zinc-900 dark:text-zinc-100">{client.full_name ?? "—"}</p>
+                                            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{client.email}</p>
+                                        </td>
+                                        <td className="px-5 py-3.5 whitespace-nowrap">
+                                            {client.is_admin ? (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                                                    <ShieldCheck className="h-3 w-3" /> Admin
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs text-zinc-400 dark:text-zinc-500">Client</span>
+                                            )}
+                                        </td>
+                                        <td className="px-5 py-3.5 whitespace-nowrap">
+                                            <span className="tabular-nums text-zinc-700 dark:text-zinc-300">{client.projects_count}</span>
+                                        </td>
+                                        <td className="px-5 py-3.5 text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                                            {new Date(client.created_at).toLocaleDateString("en-GB", {
+                                                day: "numeric", month: "short", year: "numeric",
+                                            })}
+                                        </td>
+                                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                                            <Link
+                                                href={`/dashboard/admin/projects?user=${client.id}`}
+                                                className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                                Projects
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p className="md:hidden border-t border-zinc-100 px-4 py-2 text-[10px] text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">
+                        Swipe horizontally to see more →
+                    </p>
                 </div>
             )}
         </div>
