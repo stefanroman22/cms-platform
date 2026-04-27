@@ -60,7 +60,10 @@ describe("PreviewPublishBar", () => {
 
         render(<PreviewPublishBar projectSlug="demo" projectName="Demo" />);
 
-        expect(await screen.findByText(/3 unpublished changes/i)).toBeInTheDocument();
+        // Badge displays just the count; full text is on the button's aria-label.
+        expect(
+            await screen.findByRole("button", { name: /3 unpublished changes/i }),
+        ).toBeInTheDocument();
     });
 
     it("opens modal on Publish click, confirms, calls /publish, refetches status", async () => {
@@ -110,7 +113,9 @@ describe("PreviewPublishBar", () => {
 
         // After refetch, badge disappears
         await waitFor(() => {
-            expect(screen.queryByText(/unpublished changes/i)).not.toBeInTheDocument();
+            expect(
+                screen.queryByRole("button", { name: /unpublished change/i }),
+            ).not.toBeInTheDocument();
         });
     });
 });
