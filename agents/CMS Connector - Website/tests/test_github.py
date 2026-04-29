@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from .. import github as gh
+import github as gh
 
 
 @pytest.fixture

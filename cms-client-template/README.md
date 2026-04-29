@@ -198,7 +198,7 @@ Instead of writing `cms.config.ts` by hand, run the CMS scanner agent against yo
 source code:
 
 ```bash
-python backend/agent/scan.py \
+python "agents/CMS Connector - Website/scan.py" \
     --dir path/to/your-website/src \
     --slug your-project-slug \
     --out ./output \

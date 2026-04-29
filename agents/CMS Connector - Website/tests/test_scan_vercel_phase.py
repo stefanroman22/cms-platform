@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from .. import scan
+import scan
 
 
 def test_vercel_setup_creates_project_and_saves_urls_to_cms():
