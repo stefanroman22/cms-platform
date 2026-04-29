@@ -6,10 +6,10 @@ Scans a client website's source code with Claude and generates the CMS config
 and provisioning manifest automatically.
 
 Usage (direct):
-    python backend/agent/scan.py --dir ../my-website --slug my-website
+    python "agents/CMS Connector - Website/scan.py" --dir ../my-website --slug my-website
 
 Usage (scratch-dir discovery):
-    python backend/agent/scan.py --scratch-dir ../../scratch
+    python "agents/CMS Connector - Website/scan.py" --scratch-dir ../../scratch
 
 Options:
     --dir          Path to the client website directory (required unless --scratch-dir used)
@@ -40,10 +40,10 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-# Allow importing as both a script (`python scan.py`) and a package module
-# (`from agent import scan`). The existing flat imports below depend on the
-# agent directory being on sys.path. Use append (not insert(0)) so that
-# installed packages (e.g. a user-installed `github` module) still win.
+# The folder name "CMS Connector - Website" contains spaces and a hyphen so
+# it cannot be a Python package. Add the script's directory to sys.path so
+# the flat imports below resolve. Use append (not insert(0)) so installed
+# packages (e.g. a user-installed `github` module) still win.
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.append(str(_SCRIPT_DIR))
@@ -423,13 +423,13 @@ def main(
 
     Examples:
       # Direct mode
-      python backend/agent/scan.py --dir ../../scratch/my-site --slug my-site
+      python "agents/CMS Connector - Website/scan.py" --dir ../../scratch/my-site --slug my-site
 
       # Discovery mode — pick from all projects in scratch
-      python backend/agent/scan.py --scratch-dir ../../scratch
+      python "agents/CMS Connector - Website/scan.py" --scratch-dir ../../scratch
 
       # With provisioning and client account creation
-      python backend/agent/scan.py --scratch-dir ../../scratch --provision --api-token <token>
+      python "agents/CMS Connector - Website/scan.py" --scratch-dir ../../scratch --provision --api-token <token>
     """
     # ── Resolve website directory ─────────────────────────────────────────────
     if scratch_dir:
