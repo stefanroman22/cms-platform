@@ -1,22 +1,10 @@
-# Runtime dependencies for the Python backend. Vercel's @vercel/python
-# builder reads this file from the project root; it installs every entry
-# regardless of whether the Django or FastAPI subtree actually uses it.
+# Runtime dependencies for the FastAPI backend. Vercel's @vercel/python
+# builder reads this file from backend/ and installs every entry. The
+# auth_service app is served via vercel_entry.py.
 #
-# The Django rows (Django itself, djangorestframework, psycopg2-binary,
-# etc.) are kept for local legacy use (`manage.py` / `backend/projects/`).
-# The FastAPI rows power the `auth_service` app that Vercel serves via
-# `vercel_entry.py`.
+# Legacy Django entries were dropped in the env-config-hygiene pass
+# (Pass C). If you need Django for archaeology, check git history.
 
-# ── Django (legacy, local only) ───────────────────────────────────────────
-asgiref==3.11.1
-Django==6.0.2
-django-cors-headers==4.9.0
-djangorestframework==3.16.1
-sqlparse==0.5.5
-tzdata==2025.3
-psycopg2-binary==2.9.10
-
-# ── FastAPI (production — what Vercel serves) ─────────────────────────────
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
 argon2-cffi==23.1.0
