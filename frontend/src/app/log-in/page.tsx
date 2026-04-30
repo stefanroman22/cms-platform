@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, CheckCircle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { createSlideIn } from "@/lib/animations";
@@ -181,25 +181,48 @@ export default function LogInPage() {
                         </div>
                     </div>
 
-                    <div className="flex w-full flex-row items-center justify-between gap-4">
-                        <div className="flex shrink-0 items-center">
+                    {/* Remember me + forgot password row.
+                        Stacks vertically on the smallest screens (<= 380px label width)
+                        so the row never overflows the form card width. Custom
+                        checkbox so the check renders consistently across mobile
+                        browsers (native `accent-color` checkmark is unreliable on
+                        Safari iOS / Samsung Internet). */}
+                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
                             <input
                                 id="remember-me"
                                 name="remember-me"
                                 type="checkbox"
                                 checked={rememberMe}
                                 onChange={(e) => setRememberMe(e.target.checked)}
-                                className="h-4 w-4 shrink-0 cursor-pointer rounded border-white/[0.12] bg-zinc-950 accent-white focus:ring-1 focus:ring-white/30 focus:ring-offset-0 checked:border-white checked:bg-white transition-colors"
+                                className="sr-only"
                             />
+                            <button
+                                type="button"
+                                role="checkbox"
+                                aria-checked={rememberMe}
+                                aria-labelledby="remember-me-label"
+                                onClick={() => setRememberMe((v) => !v)}
+                                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors focus:outline-none focus:ring-1 focus:ring-white/30 ${
+                                    rememberMe
+                                        ? "border-white bg-white"
+                                        : "border-white/30 bg-zinc-950 hover:border-white/50"
+                                }`}
+                            >
+                                {rememberMe && (
+                                    <Check className="h-3 w-3 text-black" strokeWidth={3} />
+                                )}
+                            </button>
                             <label
-                                htmlFor="remember-me"
-                                className="ml-2 block cursor-pointer text-sm text-zinc-400"
+                                id="remember-me-label"
+                                onClick={() => setRememberMe((v) => !v)}
+                                className="cursor-pointer text-sm text-zinc-400 select-none"
                             >
                                 Remember me
                             </label>
                         </div>
 
-                        <div className="shrink-0 text-right text-sm">
+                        <div className="text-sm">
                             <a
                                 href="#"
                                 className="font-medium text-white transition-colors hover:text-zinc-300"

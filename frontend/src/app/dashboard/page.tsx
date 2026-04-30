@@ -32,7 +32,7 @@ export default function ProjectsOverviewPage() {
 
     const [search, setSearch] = useState("");
 
-    const filtered = (projects ?? []).filter((p) =>
+    const filtered = (Array.isArray(projects) ? projects : []).filter((p) =>
         p.name.toLowerCase().includes(search.toLowerCase())
     );
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { use, useState, useEffect } from "react";
-import { ArrowLeft, ChevronRight, Settings } from "lucide-react";
+import { ArrowLeft, ChevronRight, Settings, Globe, ExternalLink } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { useUser } from "@/context/user";
 import { ServiceGrid } from "@/components/dashboard/ServiceGrid";
@@ -16,6 +16,7 @@ import * as cache from "@/lib/cache";
 interface ProjectInfo {
     name: string;
     slug: string;
+    website_url?: string | null;
 }
 
 function fetchServices(projectSlug: string): Promise<ServiceCardService[]> {
@@ -31,13 +32,9 @@ function fetchServices(projectSlug: string): Promise<ServiceCardService[]> {
     });
 }
 
-function fetchProject(projectSlug: string): Promise<ProjectInfo> {
+function fetchProjects(): Promise<ProjectInfo[]> {
     return fetch(`/api/projects`, { credentials: "include", cache: "no-store" })
-        .then((r) => r.json())
-        .then((projects: { name: string; slug: string }[]) => {
-            const match = projects.find((p) => p.slug === projectSlug);
-            return match ?? { name: projectSlug, slug: projectSlug };
-        });
+        .then((r) => r.json());
 }
 
 export default function ProjectWorkspacePage({
@@ -56,12 +53,19 @@ export default function ProjectWorkspacePage({
         { ttl: 60 * 1000 }
     );
 
-    const { data: project } = useQuery<ProjectInfo>(
+    // Shared cache key with the projects-overview page. Both pages read the
+    // same array; this page derives its single project locally. Storing a
+    // single object under "projects" used to overwrite the overview's array
+    // and crash `.filter()` on next navigation.
+    const { data: projectsList } = useQuery<ProjectInfo[]>(
         "projects",
-        () => fetchProject(projectSlug),
+        fetchProjects,
         { ttl: 2 * 60 * 1000 }
     );
 
+    const project = Array.isArray(projectsList)
+        ? projectsList.find((p) => p.slug === projectSlug)
+        : undefined;
     const projectName = project?.name ?? projectSlug;
 
     // ── Project settings (admin only) ────────────────────────────────────────
@@ -151,6 +155,30 @@ export default function ProjectWorkspacePage({
                 <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                     Manage content and settings for this project.
                 </p>
+                {(project?.website_url || settings?.website_url) && (
+                    <a
+                        href={(project?.website_url || settings?.website_url) as string}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-4 flex w-full max-w-xl items-start gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-zinc-800 dark:bg-zinc-900/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/30"
+                    >
+                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                            <Globe className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                                Live website
+                            </p>
+                            <p className="mt-0.5 truncate font-mono text-sm text-zinc-900 dark:text-zinc-100">
+                                {((project?.website_url || settings?.website_url) as string).replace(/^https?:\/\//, "")}
+                            </p>
+                            <p className="mt-1 text-xs leading-snug text-zinc-500 dark:text-zinc-400">
+                                This is the public website your visitors see.
+                            </p>
+                        </div>
+                        <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" />
+                    </a>
+                )}
             </div>
 
             {error && (

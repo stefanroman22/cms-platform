@@ -48,9 +48,10 @@ export default function AdminClientsPage() {
             )}
 
             {!loading && (clients ?? []).length > 0 && (
-                <div className={`${dashboardSectionCardCn} overflow-hidden`}>
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[640px] text-sm">
+                <>
+                    {/* Desktop / tablet — table view (md+) */}
+                    <div className={`hidden md:block ${dashboardSectionCardCn} overflow-hidden`}>
+                        <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-zinc-100 dark:border-zinc-800">
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Client</th>
@@ -98,10 +99,52 @@ export default function AdminClientsPage() {
                             </tbody>
                         </table>
                     </div>
-                    <p className="md:hidden border-t border-zinc-100 px-4 py-2 text-[10px] text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">
-                        Swipe horizontally to see more →
-                    </p>
-                </div>
+
+                    {/* Mobile — tappable card stack (< md) */}
+                    <div className="md:hidden space-y-3">
+                        {(clients ?? []).map((client) => (
+                            <Link
+                                key={client.id}
+                                href={`/dashboard/admin/projects?user=${client.id}`}
+                                className={`block ${dashboardSectionCardCn} group p-4 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700`}
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-medium text-zinc-900 dark:text-zinc-100 truncate">{client.full_name ?? "—"}</p>
+                                        <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500 truncate">{client.email}</p>
+                                    </div>
+                                    {client.is_admin ? (
+                                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                                            <ShieldCheck className="h-3 w-3" /> Admin
+                                        </span>
+                                    ) : (
+                                        <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                            Client
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="mt-3 border-t border-zinc-100 dark:border-zinc-800 pt-3 grid grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Projects</p>
+                                        <p className="mt-0.5 tabular-nums font-medium text-zinc-700 dark:text-zinc-300">{client.projects_count}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Joined</p>
+                                        <p className="mt-0.5 text-zinc-700 dark:text-zinc-300">
+                                            {new Date(client.created_at).toLocaleDateString("en-GB", {
+                                                day: "numeric", month: "short", year: "numeric",
+                                            })}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="mt-3 flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-200 transition-colors">
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    View projects
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </>
             )}
         </div>
     );

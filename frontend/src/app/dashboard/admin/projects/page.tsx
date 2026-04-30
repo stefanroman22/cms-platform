@@ -82,9 +82,10 @@ export default function AdminProjectsPage({
             )}
 
             {!loading && filtered.length > 0 && (
-                <div className={`${dashboardSectionCardCn} overflow-hidden`}>
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[680px] text-sm">
+                <>
+                    {/* Desktop / tablet — table view (md+) */}
+                    <div className={`hidden md:block ${dashboardSectionCardCn} overflow-hidden`}>
+                        <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-zinc-100 dark:border-zinc-800">
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider whitespace-nowrap">Project</th>
@@ -127,10 +128,44 @@ export default function AdminProjectsPage({
                             </tbody>
                         </table>
                     </div>
-                    <p className="md:hidden border-t border-zinc-100 px-4 py-2 text-[10px] text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">
-                        Swipe horizontally to see more →
-                    </p>
-                </div>
+
+                    {/* Mobile — tappable card stack (< md). Each card is a Link
+                        to the project page. All info visible without horizontal scroll. */}
+                    <div className="md:hidden space-y-3">
+                        {filtered.map((project) => (
+                            <Link
+                                key={project.id}
+                                href={`/dashboard/${project.slug}`}
+                                className={`block ${dashboardSectionCardCn} group p-4 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700`}
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-medium text-zinc-900 dark:text-zinc-100 truncate">{project.name}</p>
+                                        <span className="mt-1 inline-block font-mono text-[11px] rounded-md bg-zinc-100 px-2 py-0.5 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                            /{project.slug}
+                                        </span>
+                                    </div>
+                                    <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-zinc-300 group-hover:text-zinc-500 dark:text-zinc-600 dark:group-hover:text-zinc-400 transition-colors" />
+                                </div>
+                                <div className="mt-3 border-t border-zinc-100 dark:border-zinc-800 pt-3 grid grid-cols-2 gap-3 text-xs">
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Client</p>
+                                        <p className="mt-0.5 truncate text-zinc-700 dark:text-zinc-300">{project.user_full_name ?? "—"}</p>
+                                        <p className="truncate text-[11px] text-zinc-400 dark:text-zinc-500">{project.user_email}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Created</p>
+                                        <p className="mt-0.5 text-zinc-700 dark:text-zinc-300">
+                                            {new Date(project.created_at).toLocaleDateString("en-GB", {
+                                                day: "numeric", month: "short", year: "numeric",
+                                            })}
+                                        </p>
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </>
             )}
         </div>
     );

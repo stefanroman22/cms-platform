@@ -236,6 +236,7 @@ class AdminProjectPatchIn(BaseModel):
     production_url: str | None = None
     preview_url: str | None = None
     preview_token: str | None = None
+    website_url: str | None = None
 
 
 class AdminProjectDetailOut(BaseModel):

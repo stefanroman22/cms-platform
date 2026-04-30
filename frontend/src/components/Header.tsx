@@ -194,8 +194,28 @@ export default function Header() {
                   </motion.div>
                 ))}
 
-                {/* CTA — inline-flex keeps it at natural width, never stretches */}
+                {/* Auth CTA — Log In (logged out) or Open Dashboard (logged in) */}
                 <motion.div variants={fadeIn} className="pt-4">
+                  {isLoggedIn ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        close();
+                        window.open("/dashboard", "cms-dashboard");
+                      }}
+                      className={ctaButtonCn}
+                    >
+                      Open Dashboard
+                    </button>
+                  ) : (
+                    <Link href="/log-in" onClick={close} className={ctaButtonCn}>
+                      Log In
+                    </Link>
+                  )}
+                </motion.div>
+
+                {/* Secondary CTA — Get in touch (always visible) */}
+                <motion.div variants={fadeIn} className="pt-2">
                   <Link href="/contact" onClick={close} className={ctaButtonCn}>
                     Get in touch
                   </Link>
