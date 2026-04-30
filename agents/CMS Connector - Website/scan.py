@@ -21,7 +21,7 @@ Options:
     --client-email Client email for provisioning (interactive if omitted with --provision)
     --api-url      CMS API base URL (default: http://localhost:8001, required with --provision)
     --api-token    Admin access token (required with --provision)
-    --model        Claude model to use (default: claude-sonnet-4-6)
+    --model        Claude model to use (default: claude-opus-4-7 — strongest available; scan accuracy drives every downstream phase, do not downgrade)
 
 Requirements:
     pip install anthropic click
@@ -51,13 +51,13 @@ if str(_SCRIPT_DIR) not in sys.path:
 import click
 
 from file_reader import read_website_files
-from prompts import SYSTEM_PROMPT, build_user_message
+from prompts import build_system_prompt, build_user_message
 from output_writer import write_outputs
 import vercel
 import github
 
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "claude-opus-4-7"
 DEFAULT_CMS_API = "http://localhost:8001"
 DEFAULT_ENDPOINT = "https://cms.romantechnologies.com/content"
 
@@ -167,8 +167,9 @@ def _call_claude(model: str, project_slug: str, files: dict[str, str]) -> dict:
     """
     import shutil
 
+    system_prompt = build_system_prompt()
     user_message = build_user_message(project_slug, files)
-    combined = f"{SYSTEM_PROMPT}\n\n{user_message}"
+    combined = f"{system_prompt}\n\n{user_message}"
 
     claude_bin = shutil.which("claude")
     if claude_bin:
@@ -216,10 +217,11 @@ def _call_claude(model: str, project_slug: str, files: dict[str, str]) -> dict:
         client = anthropic.Anthropic(api_key=api_key)
         click.echo(f"  Sending {len(files)} files to Claude SDK ({model}, billed)…")
 
+        # cache_control on system block hits the 5-min prompt cache on retries.
         response = client.messages.create(
             model=model,
             max_tokens=4096,
-            system=SYSTEM_PROMPT,
+            system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_message}],
         )
         raw = response.content[0].text.strip()

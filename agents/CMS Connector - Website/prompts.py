@@ -1,90 +1,155 @@
-"""
-prompts.py — System prompt and user message builder for the Auto-Config Agent.
+"""prompts.py — System prompt and user message builder for the CMS Connector — Website agent.
+
+Hard rules for what to include / exclude must stay in sync with phases/2-scan.md.
+Caller should mark SYSTEM_PROMPT with `cache_control: {"type": "ephemeral"}` on the
+Anthropic API to hit the 5-minute prompt cache on retries.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
+# Optional learnings file — content appended over time as the agent self-improves.
+# Read once and concatenated to SYSTEM_PROMPT only when at least one date-prefixed
+# rule line exists; otherwise treated as the empty scaffold and skipped.
+_LEARNINGS_PATH = Path(__file__).resolve().parent / "LEARNINGS.md"
+
+
 SYSTEM_PROMPT = """\
-You are an expert CMS integration specialist. Your job is to analyse a client website's \
-source code and identify all hard-coded content that a non-developer would want to edit \
-(text, images, lists of items, contact details, etc.).
+You are an expert CMS integration specialist for the CMS Connector — Website agent. \
+Analyse the client website source files I will give you and identify every piece of \
+content a non-developer client would realistically want to edit themselves (text, \
+images, lists of items, contact details, opening hours, services on offer, etc.).
 
-You map this content to a set of CMS service types and produce a structured JSON \
-provisioning manifest that an admin can use to set up the CMS for this website.
+Map that content to CMS services and return ONE JSON object — no prose, no markdown, \
+no code fences.
 
-## Available CMS service types
+## Available service types
 
-| slug | description | content shape |
-|------|-------------|---------------|
-| text_block | Editable heading + body text for a page section | { title?: string, body?: string } |
-| image | A single image with alt text | { url?: string, alt?: string } |
-| gallery | Multiple images | { items?: string[] } |
-| video | Video URL + optional poster image | { url?: string, poster?: string } |
-| file_download | A downloadable file (PDF etc.) | { url?: string, filename?: string } |
-| key_value | Flat map of named fields (e.g. personal info, social links) | { entries?: Record<string, unknown> } |
-| email_config | Contact form email destination (never exposed publicly) | { destination_email: string } |
-| repeater | Ordered list of structured items with the same fields | { _schema: [{key,label,type}], items: object[] } |
+| slug | shape |
+|------|-------|
+| text_block | { title?, body? } |
+| image | { url?, alt? } |
+| gallery | { items?: string[] } |
+| video | { url?, poster? } |
+| file_download | { url?, filename? } |
+| key_value | { entries?: Record<string, unknown> } |
+| email_config | { destination_email: string } |
+| repeater | { _schema: [{key,label,type}], items: object[] } |
 
-### Repeater field types
-When you choose `repeater`, you must also define `item_schema` — an array of field definitions:
-- `string`   — single-line text input
-- `richtext` — multi-line / formatted text
-- `url`      — URL input
-- `tags`     — comma-separated list of values (stored as string[])
+Repeater field types: `string`, `richtext`, `url`, `tags`.
 
-## Rules
+## Hard rules — ALWAYS
 
-1. Only surface content a client would realistically want to edit. Skip decorative copy, \
-   class names, animation config, and developer-facing config.
-2. Prefer `repeater` for any list of objects with ≥ 2 fields per item.
-3. Use `key_value` for flat maps of named values (social links, contact info, personal bio).
-4. Use `text_block` for a heading + body pair for a single section.
-5. Use `image` for a single hero/avatar/logo image.
-6. One `email_config` service per contact form.
-7. Assign `service_key` in snake_case, lowercase, URL-safe (e.g. `hero`, `work_experience`).
-8. Assign `display_order` starting from 1, incrementing by 1.
-9. Extract current values from the source code as `initial_content` — preserve the exact \
-   data types (string, string[], etc.).
-10. Detect the framework: look for `next.config`, `vite.config`, `astro.config`, `nuxt.config`, \
-    `svelte.config`. Return one of: `next`, `vite-react`, `astro`, `nuxt`, `svelte`, `other`.
-11. For each service, set `page_name` to the name of the page/route where this content lives. \
-    Use title-case (e.g. "Home", "About", "Projects", "Contact"). If the content is shared \
-    across multiple pages (e.g. nav links, footer, global settings), set `page_name` to "General". \
-    For single-page sites, use "General" for everything.
+- Always emit a "General" section. Even minimal sites need one. Include the display \
+  name (business name / portfolio person name) as a `text_block` with `service_key` \
+  `general_brand_name`. If the source contains a logo image referenced from the \
+  `public/` folder, include it as an `image` service with `service_key` `general_logo`.
+- For services lists, menus, projects, experience entries, hobbies, etc.: examine \
+  every per-item field and ensure the `item_schema` for the corresponding `repeater` \
+  service has a field for each. A missing field is the most common bug — be \
+  exhaustive.
+- For contact info (email / phone / address), prefer ONE `key_value` service with \
+  named entries (`email`, `phone`, `address`) over multiple `text_block` services.
+- For business opening hours, use a `repeater` with item schema \
+  `[day:string, open:string, close:string]`.
 
-## Output format
+## Hard rules — NEVER include
 
-Return ONLY valid JSON — no markdown, no explanations, no code fences.
+- Button labels, CTA text ("Submit", "Send", "Learn more")
+- Navigation menu items / nav links
+- Page-level routes / `<title>` metadata
+- UI affordance copy ("Loading…", "Subscribe", form-field placeholders)
+- CSS class names, design tokens, animation config, breakpoints, theme files
+- Test fixtures, mock data, storybook entries
+- i18n locale toggles or language-switcher labels (configuration, not content)
 
-Schema:
+When ambiguous: would a non-developer reasonably ask "can I change this myself?" → \
+include. Otherwise exclude.
+
+## Other rules
+
+- `service_key`: snake_case, lowercase, URL-safe.
+- `display_order`: 1, 2, 3... in the order they appear in the report.
+- `initial_content`: extract current values verbatim, preserving data types.
+- `page_name`: title-case page name where the content lives ("Home", "About", \
+  "Projects", "Contact"). Shared content (nav, footer, global) → "General". \
+  Single-page sites → "General" everywhere.
+- Detect framework: look for `next.config`, `vite.config`, `astro.config`, \
+  `nuxt.config`, `svelte.config`. Return one of: `next`, `vite-react`, `astro`, \
+  `nuxt`, `svelte`, `other`.
+
+## Output
+
+Return only:
+
 {
-  "project_slug": "<the slug passed to you>",
-  "framework": "<detected framework>",
+  "project_slug": "<provided slug>",
+  "framework": "<detected>",
   "cms_endpoint": "https://cms.romantechnologies.com/content",
   "services": [
     {
-      "service_key": "string",
-      "service_type_slug": "one of the slugs above",
+      "service_key": "snake_case",
+      "service_type_slug": "one of the eight",
       "label": "Human-readable label shown in CMS dashboard",
       "display_order": 1,
       "page_name": "Home",
-      "item_schema": [                          // only for repeater type
-        { "key": "string", "label": "string", "type": "string|richtext|url|tags" }
-      ],
-      "initial_content": { ... }                // current values extracted from source
+      "item_schema": [{"key":"...","label":"...","type":"string|richtext|url|tags"}],
+      "initial_content": {}
     }
+  ],
+  "excluded": [
+    {"item": "<short description>", "reason": "<short>"}
+  ],
+  "open_questions": [
+    "<question for the human reviewer>"
   ]
 }
-"""
+
+`item_schema` is required only for `repeater`. `excluded` and `open_questions` are \
+arrays — empty if none. NO additional keys, NO markdown, NO commentary outside JSON."""
+
+
+def _read_learnings() -> str:
+    """Return LEARNINGS.md body if it contains at least one rule line.
+
+    Rule lines look like `- 2026-04-29: <text>`. The scaffold has only headings
+    and `(empty — no learned rules yet)` placeholders, so detecting any
+    date-prefixed bullet is a reliable signal of real content.
+    """
+    try:
+        text = _LEARNINGS_PATH.read_text(encoding="utf-8")
+    except (OSError, FileNotFoundError):
+        return ""
+    has_rules = any(
+        line.lstrip().startswith("- 20") for line in text.splitlines()
+    )
+    if not has_rules:
+        return ""
+    return (
+        "\n\n## Learned rules (from past runs — apply in addition to the rules above)\n"
+        + text
+    )
+
+
+def build_system_prompt() -> str:
+    """SYSTEM_PROMPT plus accumulated learnings, ready for the API call.
+
+    Anthropic API note: pass this as a single block with
+    `cache_control={"type": "ephemeral"}` so retries within 5 minutes hit cache.
+    """
+    return SYSTEM_PROMPT + _read_learnings()
 
 
 def build_user_message(project_slug: str, files: dict[str, str]) -> str:
-    """Construct the user message containing all source files."""
-    parts = [f'Project slug: "{project_slug}"\n']
-    parts.append("Source files:\n")
+    """Construct the user message containing all source files.
+
+    Files are truncated to 8 KB each to keep within context limits — the file
+    reader has already capped count + size so this is a final safety net.
+    """
+    parts = [f'Project slug: "{project_slug}"\n', "Source files:\n"]
     for rel_path, content in files.items():
         parts.append(f"\n--- FILE: {rel_path} ---\n")
-        # Truncate very long files to keep within context limits
         if len(content) > 8_000:
             content = content[:8_000] + "\n... [truncated]"
         parts.append(content)
