@@ -28,7 +28,9 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.FRONTEND_ORIGINS.split(",") if o.strip()]
 
     model_config = {
-        "env_file": str(Path(__file__).resolve().parent.parent / ".env"),
+        # Single source of truth: backend/.env (sibling of vercel_entry.py).
+        # Pass B of the env-hygiene plan moved it up from auth_service/.
+        "env_file": str(Path(__file__).resolve().parents[2] / ".env"),
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
