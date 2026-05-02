@@ -33,42 +33,30 @@ Headless CMS platform for managing client websites. Two services, one repo.
 
 ## Local development
 
-### Backend
+Single entry point: the root `Makefile`. `make help` lists every target.
 
 ```bash
-cd backend
-python -m venv venv
-source venv/Scripts/activate     # Git Bash on Windows
-pip install -r requirements.txt
-cp .env.example .env             # then fill in SUPABASE_*, RESEND_*
-uvicorn auth_service.main:app --reload --port 8001
+# First clone:
+make install     # creates backend venv, installs all deps, sets up pre-commit hooks
+make env         # bootstraps backend/.env and frontend/.env.local from .env.example
+
+# Edit backend/.env (Supabase + Resend creds — see docs/ENVIRONMENTS.md)
+# Edit frontend/.env.local (defaults to FASTAPI_URL=http://localhost:8001)
+
+# Daily:
+make dev         # prints the two terminal commands to run
+make test        # all suites: backend pytest + agent pytest + frontend vitest
+make lint        # ruff + black --check + ESLint + Prettier --check + tsc --noEmit
+make format      # auto-fix everything (ruff --fix + black + prettier)
+make ci          # same gate as GitHub Actions (lint + test)
 ```
 
-`http://localhost:8001/health` → `{"status":"ok"}`.
+**Prerequisites**: Node ≥ 22 (pinned in `.nvmrc`), Python ≥ 3.13 (pinned in
+`.python-version`). `nvm`/`pyenv` users auto-switch.
 
-### Frontend
-
-```bash
-cd frontend
-npm install
-cp .env.example .env.local       # FASTAPI_URL=http://localhost:8001 by default
-npm run dev
-```
-
-`http://localhost:3000`.
-
-### Tests
-
-```bash
-# Backend
-cd backend && python -m pytest auth_service/tests/ -q
-
-# Frontend
-cd frontend && npm test
-
-# Agent
-cd "agents/CMS Connector - Website" && python -m pytest tests/ -q
-```
+**Windows note**: `make` is not bundled with Git Bash. Install via
+[Chocolatey](https://chocolatey.org/) (`choco install make`),
+[Scoop](https://scoop.sh/) (`scoop install make`), or run inside WSL.
 
 ## Production
 
