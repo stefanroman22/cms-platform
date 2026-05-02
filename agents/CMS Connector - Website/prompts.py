@@ -86,7 +86,7 @@ Return only:
 {
   "project_slug": "<provided slug>",
   "framework": "<detected>",
-  "cms_endpoint": "https://cms.romantechnologies.com/content",
+  "cms_endpoint": "https://cms-backend-roman.vercel.app/content",
   "services": [
     {
       "service_key": "snake_case",

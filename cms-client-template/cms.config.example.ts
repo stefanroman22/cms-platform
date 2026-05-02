@@ -16,7 +16,7 @@ export const cmsConfig = {
     projectSlug: "your-project-slug",
 
     /** Base URL of the CMS content API — no trailing slash */
-    endpoint: "https://cms.romantechnologies.com/content",
+    endpoint: "https://cms-backend-roman.vercel.app/content",
 
     /**
      * Map of service keys to service types.

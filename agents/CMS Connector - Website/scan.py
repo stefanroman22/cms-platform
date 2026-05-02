@@ -16,7 +16,7 @@ Options:
     --slug         Project slug to use in the output config (derived from dir name if omitted)
     --scratch-dir  Scan folder: lists all subdirectories and lets you pick a project
     --out          Output directory for generated files (default: same as --dir)
-    --endpoint     CMS content endpoint (default: https://cms.romantechnologies.com/content)
+    --endpoint     CMS content endpoint (default: https://cms-backend-roman.vercel.app/content)
     --provision    After generating, call the CMS admin API to create services + seed content
     --client-email Client email for provisioning (interactive if omitted with --provision)
     --api-url      CMS API base URL (default: http://localhost:8001, required with --provision)
@@ -58,8 +58,10 @@ import github
 
 
 DEFAULT_MODEL = "claude-opus-4-7"
-DEFAULT_CMS_API = "http://localhost:8001"
-DEFAULT_ENDPOINT = "https://cms.romantechnologies.com/content"
+# Real backend lives at cms-backend-roman.vercel.app. The historical
+# romantechnologies.com domain is parked on hugedomains.com — never use it.
+DEFAULT_CMS_API = "https://cms-backend-roman.vercel.app"
+DEFAULT_ENDPOINT = "https://cms-backend-roman.vercel.app/content"
 
 # Directories to skip when discovering projects in --scratch-dir
 _SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", "dist", ".next", "build"}

@@ -34,7 +34,7 @@ cp cms.config.example.json your-project/cms.config.json
 // cms.config.ts
 export const cmsConfig = {
     projectSlug: "your-project-slug",   // must match the slug in the CMS dashboard
-    endpoint: "https://cms.romantechnologies.com/content",
+    endpoint: "https://cms-backend-roman.vercel.app/content",
     services: {
         hero:          "text_block",
         hero_image:    "image",
@@ -175,7 +175,7 @@ Forms POST to the CMS forms endpoint — no email credentials needed in your web
 
 ```ts
 const FORMS_ENDPOINT =
-    'https://cms.romantechnologies.com/forms/your-project-slug/contact_form'
+    'https://cms-backend-roman.vercel.app/forms/your-project-slug/contact_form'
 
 async function submitForm(form: { name: string; email: string; message: string }) {
     const res = await fetch(FORMS_ENDPOINT, {
@@ -203,7 +203,7 @@ python "agents/CMS Connector - Website/scan.py" \
     --slug your-project-slug \
     --out ./output \
     --provision \
-    --api-url https://cms.romantechnologies.com \
+    --api-url https://cms-backend-roman.vercel.app \
     --api-token YOUR_JWT_TOKEN
 ```
 

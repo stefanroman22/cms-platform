@@ -26,7 +26,7 @@ const ROOT = join(__dirname, "..");
 // Priority: CMS_PROJECT_SLUG env var → read from cms.config.json → error
 
 let projectSlug = process.env.CMS_PROJECT_SLUG;
-let endpoint = process.env.CMS_ENDPOINT ?? "https://cms.romantechnologies.com/content";
+let endpoint = process.env.CMS_ENDPOINT ?? "https://cms-backend-roman.vercel.app/content";
 
 if (!projectSlug) {
     // Try to read from cms.config.json (simpler JSON alternative to the TS file)

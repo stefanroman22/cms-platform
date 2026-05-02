@@ -29,7 +29,7 @@ def write_outputs(manifest: dict, out_dir: str | Path) -> tuple[Path, Path]:
 
     config = {
         "projectSlug": manifest["project_slug"],
-        "endpoint": manifest.get("cms_endpoint", "https://cms.romantechnologies.com/content"),
+        "endpoint": manifest.get("cms_endpoint", "https://cms-backend-roman.vercel.app/content"),
         "services": services_map,
     }
 
