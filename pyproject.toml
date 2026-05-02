@@ -39,3 +39,8 @@ extend-exclude = '''
   | __pycache__
 )/
 '''
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: hits the deployed backend over the network",
+]
