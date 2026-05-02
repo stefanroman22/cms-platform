@@ -42,6 +42,13 @@ REGULAR_EMAIL = "e2e-user@cms-test.local"
 ADMIN_EMAIL = "e2e-admin@cms-test.local"
 PROJECT_SLUG = "e2e-test-project"
 PROJECT_NAME = "E2E Test Project"
+E2E_ALLOWED_ORIGIN = "https://cms-frontend-roman.vercel.app"
+
+# All values interpolated into SQL strings below are either Supabase-returned
+# UUIDs, module-level constants, or already escaped (ce_json). Do NOT extend
+# this script's SQL with user-controlled input without parameterization —
+# the Supabase Management /database/query endpoint does not accept bound
+# parameters, so any new string field must go through ``str.replace("'", "''")``.
 
 
 def _http(method: str, url: str, headers: dict, body: dict | None = None) -> dict:
@@ -110,7 +117,12 @@ def find_or_create_auth_user(email: str, password: str, full_name: str) -> str:
 
 
 def upsert_public_user(uid: str, email: str, full_name: str, is_admin: bool) -> None:
-    """Insert into public.users with argon2-hashed password."""
+    """Insert into public.users with argon2-hashed password the BACKEND's
+    auth_service.verify_password() can validate. We hash via supabase
+    stored proc rather than reaching for argon2 here so the script stays
+    stdlib-only — but supabase doesn't have argon2 built in, so we must
+    install argon2-cffi temporarily. Keep this script's deps in sync with
+    backend/requirements.txt."""
     from argon2 import PasswordHasher  # noqa: PLC0415
 
     hasher = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4)
@@ -140,7 +152,7 @@ def upsert_project(owner_id: str, *, reset: bool) -> str:
         "INSERT INTO projects (user_id, name, slug, description, is_active, allowed_origins) "
         f"VALUES ('{owner_id}', '{PROJECT_NAME}', '{PROJECT_SLUG}', "
         "'Used by E2E tests — do not delete.', true, "
-        "ARRAY['https://cms-frontend-roman.vercel.app']::text[]) "
+        f"ARRAY['{E2E_ALLOWED_ORIGIN}']::text[]) "
         "RETURNING id"
     )
     pid = inserted[0]["id"]
