@@ -1,0 +1,72 @@
+# .github/workflows/e2e.yml
+# Backend integration + frontend E2E. Runs on every push to dev/master.
+# Used by scheduled-merge.yml as a hard gate (in addition to ci.yml).
+
+name: E2E
+
+on:
+  push:
+    branches: [master, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-integration:
+    name: Backend integration (httpx → deployed FastAPI)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      E2E_BASE_URL_BACKEND: ${{ secrets.E2E_BASE_URL_BACKEND }}
+      E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+      E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run integration tests
+        run: python -m pytest auth_service/tests_integration/ -v -m integration
+
+  frontend-e2e:
+    name: Frontend E2E (Playwright → deployed Next.js)
+    runs-on: ubuntu-latest
+    needs: backend-integration
+    defaults:
+      run:
+        working-directory: e2e
+    env:
+      E2E_BASE_URL_FRONTEND: ${{ secrets.E2E_BASE_URL_FRONTEND }}
+      E2E_BASE_URL_BACKEND: ${{ secrets.E2E_BASE_URL_BACKEND }}
+      E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+      E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7
