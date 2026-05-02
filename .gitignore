@@ -16,11 +16,15 @@ Thumbs.db
 
 # ── Tooling / Planning artifacts ───────────────────────────────
 .claude/
-*.resolved
 .mcp.json
-findings.md
-progress.md
-task_plan.md
+# Original-setup planning docs were archived to docs/archive/ in the
+# dev-experience-hardening pass; they are committed there for historical
+# reference. New transient planning files at the repo ROOT continue to
+# be ignored if a contributor drops them.
+/findings.md
+/progress.md
+/task_plan.md
+/*.resolved
 
 # ── Secrets: never commit private keys ─────────────────────────
 backend/keys/

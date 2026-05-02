@@ -1,0 +1,9 @@
+# CMS Platform Setup
+
+- [ ] Create Next.js frontend with Tailwind CSS
+  - [ ] Run create-next-app with Tailwind
+- [ ] Create Django backend
+  - [ ] Create `backend` directory
+  - [ ] Set up Python virtual environment
+  - [ ] Install Django and core dependencies (DRF, CORS)
+  - [ ] Initialize Django project

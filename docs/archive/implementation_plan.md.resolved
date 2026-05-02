@@ -1,0 +1,23 @@
+# Goal Description
+Create the initial repository structure for a new CMS platform, consisting of a Next.js (Tailwind CSS) frontend and a Django backend. Both will exist in separate directories (`frontend` and `backend`) within the current workspace.
+
+## User Review Required
+Standard scaffolding will be used for both frontend (Next.js with App Router and Tailwind) and backend (Django with Django Rest Framework and CORS headers). Please review if there are any additional initial tech stack requirements.
+
+## Proposed Changes
+
+### Frontend Setup
+- Execute `npx -y create-next-app@latest frontend --typescript --tailwind --eslint --app --src-dir false --import-alias "@/*"` to scaffold the Next.js app in the `frontend` folder.
+
+### Backend Setup
+- Create a new directory named `backend`.
+- Inside `backend`, set up a Python virtual environment: `python -m venv venv`.
+- Install dependencies: `django`, `djangorestframework`, and `django-cors-headers`.
+- Run `django-admin startproject core .` inside the `backend` folder to initialize the Django backend.
+- Configure `settings.py` for CORS and REST Framework.
+
+## Verification Plan
+
+### Manual Verification
+- Start the frontend server (`npm run dev`) and verify it is accessible on port 3000.
+- Start the backend server (`python manage.py runserver`) and verify it is accessible on port 8000.
