@@ -114,7 +114,7 @@ def test_trigger_deployment_falls_back_to_deploy_url_if_alias_never_assigned(fak
     fake_urlopen.side_effect = [
         _json_response({"id": "dpl_2", "url": "portfolio-xyz.vercel.app"}),
     ] + [
-        _json_response({"id": "dpl_2", "alias": []})
+        _json_response({"id": "dpl_2", "alias": []}),
     ] * 50  # many polls, no alias
 
     result = vercel.trigger_deployment(

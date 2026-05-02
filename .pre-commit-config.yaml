@@ -1,0 +1,38 @@
+# .pre-commit-config.yaml — runs lint + format on every commit.
+# Tests do NOT run here (too slow); CI handles that on push to master.
+# Install via: `make install` (Task C1) — sets up the git hook.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+
+  # Frontend hook — delegates to lint-staged (configured in package.json
+  # by Task B5) so we don't duplicate Prettier/ESLint pin versions here.
+  - repo: local
+    hooks:
+      - id: frontend-lint-staged
+        name: frontend lint-staged (Prettier + ESLint on staged JS/TS)
+        entry: bash -c 'cd frontend && npx --no-install lint-staged'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx|css|md)$
+        pass_filenames: false

@@ -897,7 +897,7 @@ git commit -m "feat: pass isAdmin and currentUserId to IssueList"
 
 ## Task 6: Global `cursor-pointer` sweep — all CMS buttons
 
-**Files:**  
+**Files:**
 Read each file below, then add `cursor-pointer` to every `<button>` element that is missing it. Do NOT modify buttons that already have `cursor-pointer` or use `dashboardPrimaryBtnCn` (which already includes it).
 
 - [ ] **Step 1: Audit `IssueForm.tsx` — priority buttons**

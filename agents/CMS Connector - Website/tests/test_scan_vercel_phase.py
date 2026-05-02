@@ -12,7 +12,6 @@ def test_vercel_setup_creates_project_and_saves_urls_to_cms():
         patch.object(scan, "_http") as mock_http,
         patch("secrets.token_urlsafe", return_value="tok32"),
     ):
-
         # _http GET returns None → no existing project row
         mock_http.side_effect = lambda method, url, headers, body=None: (
             None if method == "GET" else {"updated": 5}
@@ -65,7 +64,6 @@ def test_vercel_setup_preserves_existing_preview_token_on_rerun():
         patch.object(scan, "_http") as mock_http,
         patch("secrets.token_urlsafe", return_value="newtok_should_not_be_used"),
     ):
-
         # _http GET returns existing project with existing preview_token
         existing_project = {
             "github_repo": "lauriand/portfolio",
