@@ -50,22 +50,24 @@ jobs:
             exit 0
           fi
 
-      - name: Verify CI on dev tip is green
+      - name: Verify CI + E2E on dev tip are both green
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DEV_SHA=$(git rev-parse dev)
-          echo "Checking CI status of dev tip: $DEV_SHA"
-          # Find the most recent completed CI run on dev's HEAD commit
-          CONCLUSION=$(gh api \
-            "repos/${{ github.repository }}/actions/runs?head_sha=$DEV_SHA&status=completed&per_page=20" \
-            --jq '[.workflow_runs[] | select(.name == "CI")][0].conclusion')
-          echo "CI conclusion on $DEV_SHA: $CONCLUSION"
-          if [ "$CONCLUSION" != "success" ]; then
-            echo "::error::CI on dev ($DEV_SHA) is '$CONCLUSION', refusing to merge to master."
-            echo "Run CI on dev (push or trigger manually), wait for green, then re-run this workflow."
-            exit 1
-          fi
+          echo "Verifying CI + E2E on dev tip: $DEV_SHA"
+
+          for WORKFLOW in "CI" "E2E"; do
+            CONCLUSION=$(gh api \
+              "repos/${{ github.repository }}/actions/runs?head_sha=$DEV_SHA&status=completed&per_page=20" \
+              --jq "[.workflow_runs[] | select(.name == \"$WORKFLOW\")][0].conclusion")
+            echo "$WORKFLOW conclusion on $DEV_SHA: $CONCLUSION"
+            if [ "$CONCLUSION" != "success" ]; then
+              echo "::error::$WORKFLOW on dev ($DEV_SHA) is '$CONCLUSION', refusing to merge to master."
+              echo "Run $WORKFLOW on dev (push or trigger manually), wait for green, then re-run this workflow."
+              exit 1
+            fi
+          done
 
       - name: Fast-forward master to dev
         run: |
