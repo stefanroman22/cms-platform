@@ -1,0 +1,80 @@
+# .github/workflows/scheduled-merge.yml
+#
+# SDLC: dev → master, gated by CI.
+#
+# Two triggers:
+#   • Cron — every Friday at 16:00 UTC (= 18:00 Europe/Bucharest in summer
+#     CEST; 17:00 in winter CET — GitHub cron is UTC-only, no DST).
+#   • workflow_dispatch — manual button at Actions → Run workflow.
+#
+# What it does:
+#   1. Fetch dev + master.
+#   2. Refuse to run if dev == master (nothing to merge).
+#   3. Look up the latest CI run on dev's HEAD. If conclusion ≠ success,
+#      refuse the merge.
+#   4. Fast-forward master to dev (no merge commit) and push.
+#      Push to master triggers Vercel auto-redeploy of backend + frontend.
+
+name: Scheduled merge dev → master
+
+on:
+  schedule:
+    - cron: "0 16 * * 5"
+  workflow_dispatch:
+
+concurrency:
+  group: dev-to-master-merge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout master with full history
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch dev branch
+        run: git fetch origin dev:dev
+
+      - name: Refuse if dev == master
+        run: |
+          if [ "$(git rev-parse master)" = "$(git rev-parse dev)" ]; then
+            echo "dev is already at master — nothing to merge."
+            exit 0
+          fi
+
+      - name: Verify CI on dev tip is green
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DEV_SHA=$(git rev-parse dev)
+          echo "Checking CI status of dev tip: $DEV_SHA"
+          # Find the most recent completed CI run on dev's HEAD commit
+          CONCLUSION=$(gh api \
+            "repos/${{ github.repository }}/actions/runs?head_sha=$DEV_SHA&status=completed&per_page=20" \
+            --jq '[.workflow_runs[] | select(.name == "CI")][0].conclusion')
+          echo "CI conclusion on $DEV_SHA: $CONCLUSION"
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::CI on dev ($DEV_SHA) is '$CONCLUSION', refusing to merge to master."
+            echo "Run CI on dev (push or trigger manually), wait for green, then re-run this workflow."
+            exit 1
+          fi
+
+      - name: Fast-forward master to dev
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --ff-only dev
+          git push origin master
+
+      - name: Summary
+        run: |
+          echo "✅ master fast-forwarded to dev: $(git rev-parse master)"
+          echo "Vercel will auto-deploy backend + frontend from this push."

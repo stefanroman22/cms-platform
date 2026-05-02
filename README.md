@@ -58,6 +58,31 @@ make ci          # same gate as GitHub Actions (lint + test)
 [Chocolatey](https://chocolatey.org/) (`choco install make`),
 [Scoop](https://scoop.sh/) (`scoop install make`), or run inside WSL.
 
+## Branching + release flow
+
+Two branches:
+
+- **`dev`** — your sandbox. Push here directly. Every push runs CI
+  (backend + agent + frontend) but does NOT trigger a Vercel deploy.
+- **`master`** — production-only. Never edited directly. Vercel auto-deploys
+  backend + frontend on every push.
+
+Promotion happens via `.github/workflows/scheduled-merge.yml`:
+
+- **Scheduled**: every Friday at 16:00 UTC (= 18:00 Europe/Bucharest summer,
+  17:00 winter — GitHub cron is UTC, no DST).
+- **Manual**: GitHub → **Actions** → **Scheduled merge dev → master** →
+  **Run workflow** (`workflow_dispatch`).
+
+Either trigger:
+1. Looks up the latest CI run on `dev`'s HEAD.
+2. If green → fast-forwards `master` to `dev` and pushes. Vercel deploys.
+3. If red or pending → refuses, prints the failing run.
+
+There are no merge commits — only fast-forwards. If `master` ever moves
+ahead of `dev` (it shouldn't), the merge will fail until the divergence
+is resolved.
+
 ## Production
 
 Both services deploy to Vercel on push to `master`. Env vars live in each
