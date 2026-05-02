@@ -14,8 +14,7 @@ export const ctaButtonCn =
   "inline-flex shrink-0 items-center justify-center rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-colors duration-200 hover:bg-zinc-200 cursor-pointer";
 
 /** Small uppercase section label (e.g., "Contact") */
-export const sectionLabelCn =
-  "text-xs font-semibold uppercase tracking-widest text-zinc-600";
+export const sectionLabelCn = "text-xs font-semibold uppercase tracking-widest text-zinc-600";
 
 /** Hairline horizontal rule */
 export const dividerCn = "h-px bg-white/[0.08]";

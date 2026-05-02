@@ -27,7 +27,6 @@ export default function Footer() {
       >
         {/* ── Top: brand + contact ──────────────────────────────────────── */}
         <div className="flex flex-col gap-10 sm:flex-row sm:items-start sm:justify-between">
-
           {/* Brand */}
           <motion.div variants={fadeUp} className="flex flex-col gap-3">
             <Logo />

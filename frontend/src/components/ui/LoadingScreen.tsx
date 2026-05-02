@@ -42,10 +42,7 @@ export function LoadingScreen({ isVisible }: LoadingScreenProps) {
           </div>
 
           {/* Brand name */}
-          <p
-            className="m-0 select-none  text-sm font-semibold tracking-tight text-white"
-
-          >
+          <p className="m-0 select-none  text-sm font-semibold tracking-tight text-white">
             Roman Technologies
           </p>
 

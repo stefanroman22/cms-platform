@@ -19,10 +19,7 @@ export function Logo({ variant = "dark", clickable = true }: LogoProps) {
           isDark ? "bg-white" : "bg-zinc-900"
         }`}
       >
-        <Layers
-          className={`h-4 w-4 ${isDark ? "text-black" : "text-white"}`}
-          strokeWidth={1.5}
-        />
+        <Layers className={`h-4 w-4 ${isDark ? "text-black" : "text-white"}`} strokeWidth={1.5} />
       </span>
       <span
         className={`text-sm font-semibold tracking-tight ${
@@ -35,11 +32,7 @@ export function Logo({ variant = "dark", clickable = true }: LogoProps) {
   );
 
   if (!clickable) {
-    return (
-      <div className="flex w-fit items-center gap-2.5">
-        {content}
-      </div>
-    );
+    return <div className="flex w-fit items-center gap-2.5">{content}</div>;
   }
 
   return (

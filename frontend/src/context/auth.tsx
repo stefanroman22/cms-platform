@@ -45,9 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setLoggedIn = useCallback((v: boolean) => setIsLoggedIn(v), []);
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, setLoggedIn }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ isLoggedIn, setLoggedIn }}>{children}</AuthContext.Provider>
   );
 }
 

@@ -1,10 +1,10 @@
 import type { ComponentType } from "react";
 
 export interface EditorProps {
-    initialContent: Record<string, unknown>;
-    onChange: (content: Record<string, unknown>) => void;
-    /** Phase 16: upload a file and receive its public URL. */
-    onUpload?: (file: File) => Promise<string>;
+  initialContent: Record<string, unknown>;
+  onChange: (content: Record<string, unknown>) => void;
+  /** Phase 16: upload a file and receive its public URL. */
+  onUpload?: (file: File) => Promise<string>;
 }
 
 // Dynamically import to keep each editor's bundle separate
@@ -29,13 +29,13 @@ import { KeyValueEditor } from "./KeyValueEditor";
 import { RepeaterEditor } from "./RepeaterEditor";
 
 export const EDITOR_MAP: Record<string, ComponentType<EditorProps>> = {
-    text_block: TextBlockEditor,
-    image: ImageEditor,
-    gallery: GalleryEditor,
-    email_config: EmailConfigEditor,
-    floor_plan: FloorPlanEditor,
-    video: VideoEditor,
-    file_download: FileDownloadEditor,
-    key_value: KeyValueEditor,
-    repeater: RepeaterEditor,
+  text_block: TextBlockEditor,
+  image: ImageEditor,
+  gallery: GalleryEditor,
+  email_config: EmailConfigEditor,
+  floor_plan: FloorPlanEditor,
+  video: VideoEditor,
+  file_download: FileDownloadEditor,
+  key_value: KeyValueEditor,
+  repeater: RepeaterEditor,
 };

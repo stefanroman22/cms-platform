@@ -5,12 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, User } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
-import {
-  backdrop,
-  drawerRight,
-  fadeIn,
-  staggerFast,
-} from "@/lib/animations";
+import { backdrop, drawerRight, fadeIn, staggerFast } from "@/lib/animations";
 import { ctaButtonCn, navLinkCn } from "@/lib/styles";
 import { useAuth } from "@/context/auth";
 
@@ -33,7 +28,9 @@ export default function Header() {
   // Lock body scroll while drawer is open
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [mobileOpen]);
 
   return (
@@ -65,10 +62,7 @@ export default function Header() {
           </motion.div>
 
           {/* ── Desktop nav (md and above) ───────────────────────────────── */}
-          <nav
-            className="hidden items-center gap-1 md:flex"
-            aria-label="Primary navigation"
-          >
+          <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
             {NAV_LINKS.map((link, index) => (
               <motion.div
                 key={link.label}

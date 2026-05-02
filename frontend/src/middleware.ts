@@ -92,5 +92,7 @@ export const config = {
   // Match every non-static path so the legacy-host redirect runs regardless
   // of which page the visitor is hitting. The auth-flow logic inside the
   // handler early-returns for paths other than /dashboard and /log-in.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js|woff2?)).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js|woff2?)).*)",
+  ],
 };
