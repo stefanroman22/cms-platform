@@ -1,0 +1,41 @@
+# pyproject.toml — Python tooling config for the whole monorepo.
+# ruff + black target backend/ and the CMS Connector agent only.
+# Vercel doesn't install dev deps so this file is a no-op at deploy time.
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = [
+    "backend/venv",
+    "backend/migrations",   # SQL-only, not Python
+    "backend/__pycache__",
+    "**/__pycache__",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (undefined names, unused imports)
+    "I",    # isort (import order)
+    "B",    # flake8-bugbear (likely bugs)
+    "UP",   # pyupgrade (modern syntax)
+    "C4",   # flake8-comprehensions
+]
+ignore = [
+    "E501", # line length — black handles this
+    "B008", # FastAPI uses `Depends()` defaults intentionally
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["F841"]  # tests sometimes assign for clarity
+
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+extend-exclude = '''
+/(
+  backend/venv
+  | backend/migrations
+  | __pycache__
+)/
+'''
