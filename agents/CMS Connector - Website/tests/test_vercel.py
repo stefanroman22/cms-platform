@@ -2,7 +2,6 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 import vercel
 
 
@@ -23,19 +22,21 @@ def _json_response(data: dict, status: int = 200):
 
 def test_find_project_by_github_repo_returns_id_if_exists(fake_urlopen):
     # Vercel API returns `link.org` + `link.repo` separately (not combined)
-    fake_urlopen.return_value = _json_response({
-        "projects": [
-            {
-                "id": "prj_abc",
-                "link": {
-                    "type": "github",
-                    "org": "lauriand",
-                    "repo": "portfolio",
-                    "productionBranch": "master",
+    fake_urlopen.return_value = _json_response(
+        {
+            "projects": [
+                {
+                    "id": "prj_abc",
+                    "link": {
+                        "type": "github",
+                        "org": "lauriand",
+                        "repo": "portfolio",
+                        "productionBranch": "master",
+                    },
                 },
-            },
-        ]
-    })
+            ]
+        }
+    )
 
     result = vercel.find_project_by_repo("tok", "lauriand/portfolio")
     assert result == {"id": "prj_abc", "production_branch": "master"}
@@ -87,11 +88,13 @@ def test_trigger_deployment_returns_stable_alias_when_available(fake_urlopen):
     # Second call: GET /deployments/{id} returns a populated alias array.
     fake_urlopen.side_effect = [
         _json_response({"id": "dpl_1", "url": "portfolio-abc123.vercel.app"}),
-        _json_response({
-            "id": "dpl_1",
-            "url": "portfolio-abc123.vercel.app",
-            "alias": ["portfolio-git-cms-preview.vercel.app"],
-        }),
+        _json_response(
+            {
+                "id": "dpl_1",
+                "url": "portfolio-abc123.vercel.app",
+                "alias": ["portfolio-git-cms-preview.vercel.app"],
+            }
+        ),
     ]
 
     result = vercel.trigger_deployment(
@@ -110,7 +113,9 @@ def test_trigger_deployment_falls_back_to_deploy_url_if_alias_never_assigned(fak
     # POST creates, then every GET returns no aliases. Poll exhausts.
     fake_urlopen.side_effect = [
         _json_response({"id": "dpl_2", "url": "portfolio-xyz.vercel.app"}),
-    ] + [_json_response({"id": "dpl_2", "alias": []})] * 50  # many polls, no alias
+    ] + [
+        _json_response({"id": "dpl_2", "alias": []})
+    ] * 50  # many polls, no alias
 
     result = vercel.trigger_deployment(
         token="tok",

@@ -3,6 +3,7 @@
 Stdlib-only HTTP (matches scan.py). All functions raise
 RuntimeError on unexpected status codes so callers can log + retry.
 """
+
 from __future__ import annotations
 
 import json

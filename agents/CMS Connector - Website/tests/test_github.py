@@ -1,9 +1,8 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import github as gh
+import pytest
 
 
 @pytest.fixture
@@ -52,7 +51,11 @@ def test_branch_exists_returns_false_on_404(fake_urlopen):
     import urllib.error
 
     err = urllib.error.HTTPError(
-        url="", code=404, msg="not found", hdrs=None, fp=None,
+        url="",
+        code=404,
+        msg="not found",
+        hdrs=None,
+        fp=None,
     )
     fake_urlopen.side_effect = err
 

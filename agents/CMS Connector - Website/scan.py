@@ -48,14 +48,12 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.append(str(_SCRIPT_DIR))
 
-import click
-
-from file_reader import read_website_files
-from prompts import build_system_prompt, build_user_message
-from output_writer import write_outputs
-import vercel
-import github
-
+import click  # noqa: E402
+import github  # noqa: E402
+import vercel  # noqa: E402
+from file_reader import read_website_files  # noqa: E402
+from output_writer import write_outputs  # noqa: E402
+from prompts import build_system_prompt, build_user_message  # noqa: E402
 
 DEFAULT_MODEL = "claude-opus-4-7"
 # Real backend lives at cms-backend-roman.vercel.app. The historical
@@ -69,6 +67,7 @@ _SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv", "dist", ".
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _slugify(name: str) -> str:
     """Convert a directory name to a URL-safe slug."""
     s = name.lower().strip()
@@ -79,7 +78,8 @@ def _slugify(name: str) -> str:
 def _discover_projects(scratch_dir: Path) -> list[Path]:
     """List immediate subdirectories in scratch_dir that look like client projects."""
     return sorted(
-        p for p in scratch_dir.iterdir()
+        p
+        for p in scratch_dir.iterdir()
         if p.is_dir() and p.name not in _SKIP_DIRS and not p.name.startswith(".")
     )
 
@@ -140,7 +140,10 @@ def _resolve_client(api_url: str, api_token: str, client_email: str | None) -> s
 
     # Create new account
     click.echo("  Account not found. Creating new client account…")
-    full_name = click.prompt("  Client full name (optional, press Enter to skip)", default="").strip() or None
+    full_name = (
+        click.prompt("  Client full name (optional, press Enter to skip)", default="").strip()
+        or None
+    )
     payload = {"email": client_email}
     if full_name:
         payload["full_name"] = full_name
@@ -149,13 +152,15 @@ def _resolve_client(api_url: str, api_token: str, client_email: str | None) -> s
     if not result:
         raise click.ClickException("Failed to create client account.")
 
-    click.echo(f"\n  ✅ New client account created!")
+    click.echo("\n  ✅ New client account created!")
     click.echo(f"     Email:    {result['email']}")
     if result.get("full_name"):
         click.echo(f"     Name:     {result['full_name']}")
     if result.get("generated_password"):
         click.echo(f"     Password: {result['generated_password']}")
-        click.echo("     ⚠️  Share this password with your client. They can change it after first login.")
+        click.echo(
+            "     ⚠️  Share this password with your client. They can change it after first login."
+        )
 
     return client_email
 
@@ -223,7 +228,9 @@ def _call_claude(model: str, project_slug: str, files: dict[str, str]) -> dict:
         response = client.messages.create(
             model=model,
             max_tokens=4096,
-            system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+            system=[
+                {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
+            ],
             messages=[{"role": "user", "content": user_message}],
         )
         raw = response.content[0].text.strip()
@@ -277,7 +284,9 @@ def _provision(manifest: dict, api_url: str, api_token: str) -> None:
             click.echo(f"  ✓ Created {page_tag} {svc['service_key']}")
         except urllib.error.HTTPError as e:
             err_body = e.read().decode()
-            click.echo(f"  ✗ Failed to create '{svc['service_key']}': {e.code} {err_body}", err=True)
+            click.echo(
+                f"  ✗ Failed to create '{svc['service_key']}': {e.code} {err_body}", err=True
+            )
             continue
 
         # Seed initial content (skip email_config — destination set separately)
@@ -334,7 +343,9 @@ def _vercel_setup(
     found = vercel.find_project_by_repo(vercel_token, github_repo)
     if found:
         project_id = found["id"]
-        prod_branch = found.get("production_branch") or github.get_default_branch(github_token, github_repo)
+        prod_branch = found.get("production_branch") or github.get_default_branch(
+            github_token, github_repo
+        )
         click.echo(f"  ✓ Found existing Vercel project: {project_id} (prod branch: {prod_branch})")
     else:
         project_id = vercel.create_project(vercel_token, name=slug, github_repo=github_repo)
@@ -347,9 +358,15 @@ def _vercel_setup(
     #    will need NEXT_PUBLIC_* / PUBLIC_* variants set here too.
     endpoint_prod = f"{cms_endpoint_base}/content/{slug}"
     endpoint_preview = f"{cms_endpoint_base}/content/{slug}/draft"
-    vercel.set_env_var(vercel_token, project_id, "VITE_CMS_ENDPOINT", endpoint_prod, target=["production"])
-    vercel.set_env_var(vercel_token, project_id, "VITE_CMS_ENDPOINT", endpoint_preview, target=["preview"])
-    vercel.set_env_var(vercel_token, project_id, "VITE_CMS_PREVIEW_TOKEN", preview_token, target=["preview"])
+    vercel.set_env_var(
+        vercel_token, project_id, "VITE_CMS_ENDPOINT", endpoint_prod, target=["production"]
+    )
+    vercel.set_env_var(
+        vercel_token, project_id, "VITE_CMS_ENDPOINT", endpoint_preview, target=["preview"]
+    )
+    vercel.set_env_var(
+        vercel_token, project_id, "VITE_CMS_PREVIEW_TOKEN", preview_token, target=["preview"]
+    )
     click.echo("  ✓ Env vars set (production + preview, VITE_ prefix)")
 
     # 4. Create cms-preview branch if missing (branched from production branch)
@@ -369,7 +386,9 @@ def _vercel_setup(
 
     production_url = f"https://{prod['url']}" if prod.get("url") else None
     preview_url = f"https://{preview['url']}" if preview.get("url") else None
-    click.echo(f"  ✓ Deployments triggered\n    prod:    {production_url}\n    preview: {preview_url}")
+    click.echo(
+        f"  ✓ Deployments triggered\n    prod:    {production_url}\n    preview: {preview_url}"
+    )
 
     # 6. Save to CMS project row via admin PATCH (base + headers defined at top)
     _http(
@@ -389,21 +408,65 @@ def _vercel_setup(
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+
 @click.command()
 @click.option("--dir", "website_dir", default=None, help="Path to the client website directory.")
 @click.option("--slug", default=None, help="Project slug (derived from directory name if omitted).")
-@click.option("--scratch-dir", "scratch_dir", default=None, help="Discover projects inside this folder interactively.")
+@click.option(
+    "--scratch-dir",
+    "scratch_dir",
+    default=None,
+    help="Discover projects inside this folder interactively.",
+)
 @click.option("--out", "out_dir", default=None, help="Output directory (default: same as --dir).")
-@click.option("--endpoint", default=DEFAULT_ENDPOINT, show_default=True, help="CMS content endpoint URL.")
-@click.option("--provision", is_flag=True, default=False, help="Call the CMS admin API to create services.")
-@click.option("--client-email", "client_email", default=None, help="Client email for account lookup/creation (prompted if --provision is set).")
-@click.option("--api-url", default=DEFAULT_CMS_API, show_default=True, help="CMS API base URL (used with --provision).")
-@click.option("--api-token", default=None, help="Admin access_token cookie value (required with --provision).")
+@click.option(
+    "--endpoint", default=DEFAULT_ENDPOINT, show_default=True, help="CMS content endpoint URL."
+)
+@click.option(
+    "--provision", is_flag=True, default=False, help="Call the CMS admin API to create services."
+)
+@click.option(
+    "--client-email",
+    "client_email",
+    default=None,
+    help="Client email for account lookup/creation (prompted if --provision is set).",
+)
+@click.option(
+    "--api-url",
+    default=DEFAULT_CMS_API,
+    show_default=True,
+    help="CMS API base URL (used with --provision).",
+)
+@click.option(
+    "--api-token", default=None, help="Admin access_token cookie value (required with --provision)."
+)
 @click.option("--model", default=DEFAULT_MODEL, show_default=True, help="Claude model ID.")
-@click.option("--github-repo", "github_repo", default=None, help="GitHub repo (OWNER/NAME) — enables Vercel setup.")
-@click.option("--vercel-token", "vercel_token", default=None, envvar="VERCEL_TOKEN", help="Vercel API token (env: VERCEL_TOKEN).")
-@click.option("--github-token", "github_token", default=None, envvar="GITHUB_TOKEN", help="GitHub API token (env: GITHUB_TOKEN).")
-@click.option("--skip-vercel", is_flag=True, default=False, help="Skip Vercel setup even if --github-repo is given.")
+@click.option(
+    "--github-repo",
+    "github_repo",
+    default=None,
+    help="GitHub repo (OWNER/NAME) — enables Vercel setup.",
+)
+@click.option(
+    "--vercel-token",
+    "vercel_token",
+    default=None,
+    envvar="VERCEL_TOKEN",
+    help="Vercel API token (env: VERCEL_TOKEN).",
+)
+@click.option(
+    "--github-token",
+    "github_token",
+    default=None,
+    envvar="GITHUB_TOKEN",
+    help="GitHub API token (env: GITHUB_TOKEN).",
+)
+@click.option(
+    "--skip-vercel",
+    is_flag=True,
+    default=False,
+    help="Skip Vercel setup even if --github-repo is given.",
+)
 def main(
     website_dir: str | None,
     slug: str | None,
@@ -484,7 +547,7 @@ def main(
     # ── Write output files ────────────────────────────────────────────────────
     config_path, provision_path = write_outputs(manifest, output_path)
 
-    click.echo(f"\n✅ Done!")
+    click.echo("\n✅ Done!")
     click.echo(f"   cms.config.json    → {config_path}")
     click.echo(f"   cms-provision.json → {provision_path}")
 
@@ -514,9 +577,13 @@ def main(
     # ── Optional Vercel setup ──────────────────────────────────────────────────
     if github_repo and not skip_vercel:
         if not vercel_token or not github_token:
-            raise click.ClickException("--vercel-token and --github-token (or env vars) required for Vercel setup.")
+            raise click.ClickException(
+                "--vercel-token and --github-token (or env vars) required for Vercel setup."
+            )
         if not api_token:
-            raise click.ClickException("--api-token required for Vercel setup (used to PATCH the project row).")
+            raise click.ClickException(
+                "--api-token required for Vercel setup (used to PATCH the project row)."
+            )
 
         # Derive CMS endpoint base from the existing --endpoint (strip any /content suffix)
         endpoint_base = endpoint.rstrip("/").rsplit("/content", 1)[0]

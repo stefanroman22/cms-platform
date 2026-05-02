@@ -1,9 +1,8 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
-from .supabase_client import get_supabase
 from ..core.security import generate_session_id, hash_token
 from ..models.schemas import UserOut
+from .supabase_client import get_supabase
 
 DEFAULT_DAYS = 30
 REMEMBER_ME_DAYS = 60
@@ -14,8 +13,8 @@ MAX_SESSIONS_PER_USER = 5
 async def create_session(
     user: dict,
     remember_me: bool,
-    user_agent: Optional[str] = None,
-    ip: Optional[str] = None,
+    user_agent: str | None = None,
+    ip: str | None = None,
 ) -> tuple[str, datetime]:
     """Issues a fresh session. Returns (raw_sid, expires_at).
 
@@ -24,7 +23,7 @@ async def create_session(
     raw_sid = generate_session_id()
     token_hash = hash_token(raw_sid)
     days = REMEMBER_ME_DAYS if remember_me else DEFAULT_DAYS
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = now + timedelta(days=days)
 
     sb = get_supabase()
@@ -43,21 +42,23 @@ async def create_session(
         oldest_ids = [r["id"] for r in active.data[:overflow]]
         sb.table("sessions").update({"revoked": True}).in_("id", oldest_ids).execute()
 
-    sb.table("sessions").insert({
-        "user_id": user["id"],
-        "token_hash": token_hash,
-        "expires_at": expires_at.isoformat(),
-        "revoked": False,
-        "remember_me": remember_me,
-        "last_used_at": now.isoformat(),
-        "user_agent": user_agent,
-        "ip_address": ip,
-    }).execute()
+    sb.table("sessions").insert(
+        {
+            "user_id": user["id"],
+            "token_hash": token_hash,
+            "expires_at": expires_at.isoformat(),
+            "revoked": False,
+            "remember_me": remember_me,
+            "last_used_at": now.isoformat(),
+            "user_agent": user_agent,
+            "ip_address": ip,
+        }
+    ).execute()
 
     return raw_sid, expires_at
 
 
-async def validate_session(raw_sid: Optional[str]) -> Optional[UserOut]:
+async def validate_session(raw_sid: str | None) -> UserOut | None:
     """Returns the user for a valid sid, or None. Slides expires_at when
     remaining lifetime falls below (full_lifetime - RENEWAL_WINDOW).
     """
@@ -78,7 +79,7 @@ async def validate_session(raw_sid: Optional[str]) -> Optional[UserOut]:
     if result is None or not getattr(result, "data", None):
         return None
     row = result.data
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = datetime.fromisoformat(row["expires_at"])
     if expires_at < now:
         return None
@@ -91,10 +92,12 @@ async def validate_session(raw_sid: Optional[str]) -> Optional[UserOut]:
     full_lifetime = timedelta(days=REMEMBER_ME_DAYS if row.get("remember_me") else DEFAULT_DAYS)
     if remaining < full_lifetime - RENEWAL_WINDOW:
         new_expires = now + full_lifetime
-        sb.table("sessions").update({
-            "expires_at": new_expires.isoformat(),
-            "last_used_at": now.isoformat(),
-        }).eq("id", row["id"]).execute()
+        sb.table("sessions").update(
+            {
+                "expires_at": new_expires.isoformat(),
+                "last_used_at": now.isoformat(),
+            }
+        ).eq("id", row["id"]).execute()
 
     return UserOut(
         id=user["id"],
@@ -115,4 +118,6 @@ async def revoke_session(raw_sid: str) -> None:
 async def revoke_all_for_user(user_id: str) -> None:
     """Marks every active session for this user as revoked. Used on password change."""
     sb = get_supabase()
-    sb.table("sessions").update({"revoked": True}).eq("user_id", user_id).eq("revoked", False).execute()
+    sb.table("sessions").update({"revoked": True}).eq("user_id", user_id).eq(
+        "revoked", False
+    ).execute()

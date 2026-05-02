@@ -1,9 +1,15 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from ..core.config import settings
-from ..models.schemas import ChangeNameRequest, ChangePasswordRequest, LoginRequest, TokenResponse, UserOut
+from ..models.schemas import (
+    ChangeNameRequest,
+    ChangePasswordRequest,
+    LoginRequest,
+    TokenResponse,
+    UserOut,
+)
 from ..services.auth_service import authenticate_user, change_user_password
 from ..services.sessions import (
     DEFAULT_DAYS,
@@ -48,10 +54,14 @@ def _client_meta(request: Request) -> tuple[str | None, str | None]:
 async def login(body: LoginRequest, request: Request, response: Response):
     user = await authenticate_user(body.email, body.password)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
 
     user_agent, ip = _client_meta(request)
-    raw_sid, _expires_at = await create_session(user, body.remember_me, user_agent=user_agent, ip=ip)
+    raw_sid, _expires_at = await create_session(
+        user, body.remember_me, user_agent=user_agent, ip=ip
+    )
     _set_session_cookie(response, raw_sid, body.remember_me)
     # TokenResponse remains in the contract for backward compat; body is unused
     # by the frontend — the cookie is the source of truth.
@@ -83,15 +93,21 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     if len(body.new_password) < 8:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="New password must be at least 8 characters.")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="New password must be at least 8 characters.",
+        )
 
     success = await change_user_password(user.id, body.current_password, body.new_password)
     if not success:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect."
+        )
 
     # Revoke ALL sessions (including this one) and mint a fresh session
     await revoke_all_for_user(user.id)
     from ..services.supabase_client import get_supabase
+
     sb = get_supabase()
     fresh_user = sb.table("users").select("*").eq("id", user.id).single().execute().data
     user_agent, ip = _client_meta(request)
@@ -108,15 +124,23 @@ async def update_profile(body: ChangeNameRequest, request: Request):
 
     name = body.full_name.strip()
     if not name:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Full name cannot be empty.")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Full name cannot be empty."
+        )
     if len(name) > 100:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Full name must be 100 characters or fewer.")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Full name must be 100 characters or fewer.",
+        )
 
     from ..services.supabase_client import get_supabase
+
     sb = get_supabase()
-    sb.table("users").update({
-        "full_name": name,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("id", user.id).execute()
+    sb.table("users").update(
+        {
+            "full_name": name,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    ).eq("id", user.id).execute()
 
     return {"full_name": name}

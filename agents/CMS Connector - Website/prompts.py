@@ -121,15 +121,10 @@ def _read_learnings() -> str:
         text = _LEARNINGS_PATH.read_text(encoding="utf-8")
     except (OSError, FileNotFoundError):
         return ""
-    has_rules = any(
-        line.lstrip().startswith("- 20") for line in text.splitlines()
-    )
+    has_rules = any(line.lstrip().startswith("- 20") for line in text.splitlines())
     if not has_rules:
         return ""
-    return (
-        "\n\n## Learned rules (from past runs — apply in addition to the rules above)\n"
-        + text
-    )
+    return "\n\n## Learned rules (from past runs — apply in addition to the rules above)\n" + text
 
 
 def build_system_prompt() -> str:

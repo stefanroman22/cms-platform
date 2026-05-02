@@ -14,13 +14,24 @@ INCLUDE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte", ".astro"}
 PRIORITY_DIRS = {"constants", "data", "content", "config", "views", "pages", "sections"}
 
 EXCLUDE_DIRS = {
-    "node_modules", "dist", ".next", ".nuxt", ".output", ".git",
-    "__pycache__", "venv", ".venv", "coverage", ".turbo", "build",
-    "storybook-static", ".cache",
+    "node_modules",
+    "dist",
+    ".next",
+    ".nuxt",
+    ".output",
+    ".git",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "coverage",
+    ".turbo",
+    "build",
+    "storybook-static",
+    ".cache",
 }
 
-MAX_FILE_SIZE_BYTES = 150_000   # skip files larger than ~150 KB
-MAX_FILES = 60                  # hard cap — Claude context has limits
+MAX_FILE_SIZE_BYTES = 150_000  # skip files larger than ~150 KB
+MAX_FILES = 60  # hard cap — Claude context has limits
 
 
 def _is_excluded(path: Path) -> bool:
@@ -44,7 +55,10 @@ def _priority_score(rel_path: str) -> int:
     if any(k in lower for k in ("view", "page", "section", "hero", "about", "contact")):
         score += 1
     # Deprioritise test files and config
-    if any(k in lower for k in ("test", "spec", "story", "mock", ".config.", "vite", "eslint", "tailwind")):
+    if any(
+        k in lower
+        for k in ("test", "spec", "story", "mock", ".config.", "vite", "eslint", "tailwind")
+    ):
         score -= 3
     return score
 

@@ -8,9 +8,9 @@ from slowapi.errors import RateLimitExceeded
 from .core.config import settings
 from .core.limiter import limiter
 from .core.security_headers import SecurityHeadersMiddleware
-from .routers import auth, projects, content, workspace, publish
-from .routers.issues import router as issues_router
+from .routers import auth, content, projects, publish, workspace
 from .routers.forms import router as forms_router
+from .routers.issues import router as issues_router
 
 # ── Main app ──────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,7 @@ app = FastAPI(title="CMS Auth Service", version="1.0.0")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # CORS policy.
 #

@@ -30,6 +30,7 @@ class ChangeNameRequest(BaseModel):
 
 # ── Projects / Account ──────────────────────────────────────────────────────
 
+
 class ProjectOut(BaseModel):
     id: str
     name: str
@@ -59,6 +60,7 @@ class ProjectRequestIn(BaseModel):
 
 
 # ── Workspace / Services ─────────────────────────────────────────────────────
+
 
 class ServiceOut(BaseModel):
     id: str
@@ -102,10 +104,13 @@ class ServiceCreateRequest(BaseModel):
     label: str | None = None
     display_order: int = 0
     page_name: str = "General"
-    item_schema: list[RepeaterItemField] | None = None  # required when service_type_slug == "repeater"
+    item_schema: list[RepeaterItemField] | None = (
+        None  # required when service_type_slug == "repeater"
+    )
 
 
 # ── Admin ────────────────────────────────────────────────────────────────────
+
 
 class ServiceTypeOut(BaseModel):
     slug: str
@@ -148,6 +153,7 @@ class ProjectSettingsIn(BaseModel):
 
 # ── Admin client management ──────────────────────────────────────────────────
 
+
 class CreateClientRequest(BaseModel):
     email: EmailStr
     full_name: str | None = None
@@ -157,11 +163,12 @@ class CreateClientOut(BaseModel):
     id: str
     email: str
     full_name: str | None
-    created: bool           # True = new account, False = existing account
+    created: bool  # True = new account, False = existing account
     generated_password: str | None = None  # only set when created=True
 
 
 # ── Issues ───────────────────────────────────────────────────────────────────
+
 
 class IssueCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -213,6 +220,7 @@ class IssueStatusRequest(BaseModel):
 
 
 # ── Preview / Publish ────────────────────────────────────────────────────────
+
 
 class PublishResponse(BaseModel):
     published_count: int

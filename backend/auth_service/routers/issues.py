@@ -1,16 +1,15 @@
-from datetime import datetime, timezone
-from typing import List
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from ..models.schemas import IssueCreateRequest, IssueOut, IssueUpdateRequest, IssueStatusRequest
+from ..models.schemas import IssueCreateRequest, IssueOut, IssueStatusRequest, IssueUpdateRequest
 from ..services.supabase_client import get_supabase
-from .deps import require_user, require_project_access
+from .deps import require_project_access, require_user
 
 router = APIRouter(tags=["issues"])
 
 
-@router.get("/projects/{project_slug}/issues", response_model=List[IssueOut])
+@router.get("/projects/{project_slug}/issues", response_model=list[IssueOut])
 async def list_issues(project_slug: str, request: Request):
     user = await require_user(request)
     project = require_project_access(project_slug, user)
@@ -18,47 +17,55 @@ async def list_issues(project_slug: str, request: Request):
     sb = get_supabase()
     result = (
         sb.table("project_issues")
-        .select("id, project_id, title, description, priority, status, created_by, created_at, users(email)")
+        .select(
+            "id, project_id, title, description, priority, status, created_by, created_at, users(email)"
+        )
         .eq("project_id", project["id"])
         .order("created_at", desc=True)
         .execute()
     )
 
     out = []
-    for row in (result.data or []):
+    for row in result.data or []:
         user_row = row.get("users") or {}
-        out.append(IssueOut(
-            id=row["id"],
-            project_id=row["project_id"],
-            title=row["title"],
-            description=row["description"],
-            priority=row["priority"],
-            status=row.get("status", "pending"),
-            created_by=row.get("created_by"),
-            created_by_email=user_row.get("email"),
-            created_at=row["created_at"],
-        ))
+        out.append(
+            IssueOut(
+                id=row["id"],
+                project_id=row["project_id"],
+                title=row["title"],
+                description=row["description"],
+                priority=row["priority"],
+                status=row.get("status", "pending"),
+                created_by=row.get("created_by"),
+                created_by_email=user_row.get("email"),
+                created_at=row["created_at"],
+            )
+        )
     return out
 
 
-@router.post("/projects/{project_slug}/issues", response_model=IssueOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/projects/{project_slug}/issues", response_model=IssueOut, status_code=status.HTTP_201_CREATED
+)
 async def create_issue(project_slug: str, body: IssueCreateRequest, request: Request):
     user = await require_user(request)
     project = require_project_access(project_slug, user)
 
     sb = get_supabase()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     result = (
         sb.table("project_issues")
-        .insert({
-            "project_id": project["id"],
-            "title": body.title.strip(),
-            "description": body.description.strip(),
-            "priority": body.priority,
-            "created_by": user.id,
-            "created_at": now,
-        })
+        .insert(
+            {
+                "project_id": project["id"],
+                "title": body.title.strip(),
+                "description": body.description.strip(),
+                "priority": body.priority,
+                "created_by": user.id,
+                "created_at": now,
+            }
+        )
         .execute()
     )
 
@@ -102,7 +109,9 @@ async def update_issue(
 
     row = issue_result.data
     if not user.is_admin and row.get("created_by") != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only edit your own issues.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="You can only edit your own issues."
+        )
 
     update_data: dict = {}
     if body.title is not None:
@@ -113,25 +122,20 @@ async def update_issue(
         update_data["priority"] = body.priority
 
     if not update_data:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No fields to update.")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No fields to update."
+        )
 
-    updated = (
-        sb.table("project_issues")
-        .update(update_data)
-        .eq("id", issue_id)
-        .execute()
-    )
+    updated = sb.table("project_issues").update(update_data).eq("id", issue_id).execute()
     if not updated.data:
         raise HTTPException(status_code=500, detail="Issue could not be updated.")
 
     r = updated.data[0]
     email_result = (
-        sb.table("users")
-        .select("email")
-        .eq("id", r["created_by"])
-        .maybe_single()
-        .execute()
-    ) if r.get("created_by") else None
+        (sb.table("users").select("email").eq("id", r["created_by"]).maybe_single().execute())
+        if r.get("created_by")
+        else None
+    )
 
     return IssueOut(
         id=r["id"],
@@ -141,7 +145,9 @@ async def update_issue(
         priority=r["priority"],
         status=r.get("status", "pending"),
         created_by=r.get("created_by"),
-        created_by_email=email_result.data.get("email") if email_result and email_result.data else None,
+        created_by_email=(
+            email_result.data.get("email") if email_result and email_result.data else None
+        ),
         created_at=r["created_at"],
     )
 
@@ -168,7 +174,9 @@ async def delete_issue(project_slug: str, issue_id: str, request: Request):
 
     row = issue_result.data
     if not user.is_admin and row.get("created_by") != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete your own issues.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete your own issues."
+        )
 
     sb.table("project_issues").delete().eq("id", issue_id).execute()
 
@@ -205,22 +213,17 @@ async def update_issue_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found.")
 
     updated = (
-        sb.table("project_issues")
-        .update({"status": body.status})
-        .eq("id", issue_id)
-        .execute()
+        sb.table("project_issues").update({"status": body.status}).eq("id", issue_id).execute()
     )
     if not updated.data:
         raise HTTPException(status_code=500, detail="Status could not be updated.")
 
     r = updated.data[0]
     email_result = (
-        sb.table("users")
-        .select("email")
-        .eq("id", r["created_by"])
-        .maybe_single()
-        .execute()
-    ) if r.get("created_by") else None
+        (sb.table("users").select("email").eq("id", r["created_by"]).maybe_single().execute())
+        if r.get("created_by")
+        else None
+    )
 
     return IssueOut(
         id=r["id"],
@@ -230,6 +233,8 @@ async def update_issue_status(
         priority=r["priority"],
         status=r["status"],
         created_by=r.get("created_by"),
-        created_by_email=email_result.data.get("email") if email_result and email_result.data else None,
+        created_by_email=(
+            email_result.data.get("email") if email_result and email_result.data else None
+        ),
         created_at=r["created_at"],
     )

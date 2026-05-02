@@ -8,6 +8,7 @@ Requires env vars:
 
 Idempotent.
 """
+
 from __future__ import annotations
 
 import json
@@ -63,8 +64,11 @@ def create_project() -> str:
 def upsert_env_var(project_id: str, key: str, value: str, target: list[str]) -> None:
     existing = _req("GET", f"/v9/projects/{project_id}/env")
     match = next(
-        (e for e in existing.get("envs", [])
-         if e.get("key") == key and set(e.get("target") or []) == set(target)),
+        (
+            e
+            for e in existing.get("envs", [])
+            if e.get("key") == key and set(e.get("target") or []) == set(target)
+        ),
         None,
     )
     body = {"key": key, "value": value, "type": "encrypted", "target": target}

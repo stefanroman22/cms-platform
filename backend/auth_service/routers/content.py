@@ -14,14 +14,14 @@ _PRIVATE_SERVICE_TYPES = {"email_config"}
 
 # TS type shapes per service type slug
 _TS_TYPE_MAP: dict[str, str] = {
-    "text_block":    '{ _type: "text_block"; _label: string; title?: string; body?: string }',
-    "image":         '{ _type: "image"; _label: string; url?: string; alt?: string }',
-    "gallery":       '{ _type: "gallery"; _label: string; items?: string[] }',
-    "floor_plan":    '{ _type: "floor_plan"; _label: string; url?: string; alt?: string }',
-    "video":         '{ _type: "video"; _label: string; url?: string; poster?: string }',
+    "text_block": '{ _type: "text_block"; _label: string; title?: string; body?: string }',
+    "image": '{ _type: "image"; _label: string; url?: string; alt?: string }',
+    "gallery": '{ _type: "gallery"; _label: string; items?: string[] }',
+    "floor_plan": '{ _type: "floor_plan"; _label: string; url?: string; alt?: string }',
+    "video": '{ _type: "video"; _label: string; url?: string; poster?: string }',
     "file_download": '{ _type: "file_download"; _label: string; url?: string; filename?: string }',
-    "key_value":     '{ _type: "key_value"; _label: string; entries?: Record<string, unknown> }',
-    "repeater":      '{ _type: "repeater"; _label: string; _schema?: Array<{ key: string; label: string; type: string }>; items?: Record<string, unknown>[] }',
+    "key_value": '{ _type: "key_value"; _label: string; entries?: Record<string, unknown> }',
+    "repeater": '{ _type: "repeater"; _label: string; _schema?: Array<{ key: string; label: string; type: string }>; items?: Record<string, unknown>[] }',
 }
 
 
@@ -58,7 +58,9 @@ async def get_project_content(project_slug: str, request: Request):
     sb = get_supabase()
     services_result = (
         sb.table("project_services")
-        .select("service_key, label, display_order, service_type_slug, content_entries(published_content, draft_content, updated_at)")
+        .select(
+            "service_key, label, display_order, service_type_slug, content_entries(published_content, draft_content, updated_at)"
+        )
         .eq("project_id", project["id"])
         .order("display_order")
         .execute()
@@ -67,7 +69,7 @@ async def get_project_content(project_slug: str, request: Request):
     content_map: dict = {}
     last_updated: str | None = None
 
-    for svc in (services_result.data or []):
+    for svc in services_result.data or []:
         if svc["service_type_slug"] in _PRIVATE_SERVICE_TYPES:
             continue
 
@@ -99,7 +101,7 @@ async def get_project_content(project_slug: str, request: Request):
     etag = f'"{hashlib.sha256(body_str.encode()).hexdigest()[:16]}"'
 
     _cors = "Access-Control-Allow-Origin"
-    _cc   = "Cache-Control"
+    _cc = "Cache-Control"
 
     # Conditional GET — return 304 when the client already has current content
     if request.headers.get("If-None-Match") == etag:
@@ -128,12 +130,16 @@ async def get_project_draft_content(project_slug: str, request: Request):
     token_header = request.headers.get("X-CMS-Preview-Token")
     expected = project.get("preview_token")
     if not expected or not token_header or not hmac.compare_digest(token_header, expected):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing preview token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing preview token"
+        )
 
     sb = get_supabase()
     services_result = (
         sb.table("project_services")
-        .select("service_key, label, display_order, service_type_slug, content_entries(published_content, draft_content, updated_at)")
+        .select(
+            "service_key, label, display_order, service_type_slug, content_entries(published_content, draft_content, updated_at)"
+        )
         .eq("project_id", project["id"])
         .order("display_order")
         .execute()
@@ -142,7 +148,7 @@ async def get_project_draft_content(project_slug: str, request: Request):
     content_map: dict = {}
     last_updated: str | None = None
 
-    for svc in (services_result.data or []):
+    for svc in services_result.data or []:
         if svc["service_type_slug"] in _PRIVATE_SERVICE_TYPES:
             continue
 
@@ -209,7 +215,7 @@ async def get_project_types(project_slug: str):
         "  content: {",
     ]
 
-    for svc in (services_result.data or []):
+    for svc in services_result.data or []:
         if svc["service_type_slug"] in _PRIVATE_SERVICE_TYPES:
             continue
         ts_type = _TS_TYPE_MAP.get(svc["service_type_slug"], "Record<string, unknown>")

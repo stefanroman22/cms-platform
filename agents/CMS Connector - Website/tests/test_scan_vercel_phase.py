@@ -1,7 +1,4 @@
-import json
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 import scan
 
@@ -9,10 +6,12 @@ import scan
 def test_vercel_setup_creates_project_and_saves_urls_to_cms():
     manifest = {"project_slug": "demo"}
 
-    with patch.object(scan, "vercel") as mock_vercel, \
-         patch.object(scan, "github") as mock_gh, \
-         patch.object(scan, "_http") as mock_http, \
-         patch("secrets.token_urlsafe", return_value="tok32"):
+    with (
+        patch.object(scan, "vercel") as mock_vercel,
+        patch.object(scan, "github") as mock_gh,
+        patch.object(scan, "_http") as mock_http,
+        patch("secrets.token_urlsafe", return_value="tok32"),
+    ):
 
         # _http GET returns None → no existing project row
         mock_http.side_effect = lambda method, url, headers, body=None: (
@@ -23,7 +22,7 @@ def test_vercel_setup_creates_project_and_saves_urls_to_cms():
         mock_vercel.create_project.return_value = "prj_abc"
         mock_gh.get_default_branch.return_value = "main"
         mock_vercel.trigger_deployment.side_effect = [
-            {"id": "dpl_1", "url": "portfolio.vercel.app"},         # prod
+            {"id": "dpl_1", "url": "portfolio.vercel.app"},  # prod
             {"id": "dpl_2", "url": "portfolio-git-cms-preview.vercel.app"},  # preview
         ]
         mock_gh.branch_exists.return_value = False
@@ -39,7 +38,9 @@ def test_vercel_setup_creates_project_and_saves_urls_to_cms():
         )
 
         mock_vercel.create_project.assert_called_once()
-        mock_gh.create_branch.assert_called_once_with("gtok", "lauriand/portfolio", "cms-preview", from_branch="main")
+        mock_gh.create_branch.assert_called_once_with(
+            "gtok", "lauriand/portfolio", "cms-preview", from_branch="main"
+        )
 
         # Env vars set: prod + preview (2 × CMS_ENDPOINT, 1 × CMS_PREVIEW_TOKEN)
         assert mock_vercel.set_env_var.call_count == 3
@@ -58,10 +59,12 @@ def test_vercel_setup_preserves_existing_preview_token_on_rerun():
     """Idempotency: re-running against an existing project must not regenerate the token."""
     manifest = {"project_slug": "demo"}
 
-    with patch.object(scan, "vercel") as mock_vercel, \
-         patch.object(scan, "github") as mock_gh, \
-         patch.object(scan, "_http") as mock_http, \
-         patch("secrets.token_urlsafe", return_value="newtok_should_not_be_used"):
+    with (
+        patch.object(scan, "vercel") as mock_vercel,
+        patch.object(scan, "github") as mock_gh,
+        patch.object(scan, "_http") as mock_http,
+        patch("secrets.token_urlsafe", return_value="newtok_should_not_be_used"),
+    ):
 
         # _http GET returns existing project with existing preview_token
         existing_project = {

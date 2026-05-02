@@ -4,7 +4,6 @@ from typing import Literal
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
-
 SESSION_COOKIE_NAME: str = "sid"
 
 # Three deploy tiers. Anything else is rejected at startup so a typo

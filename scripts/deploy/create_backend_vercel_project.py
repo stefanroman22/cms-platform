@@ -10,6 +10,7 @@ Requires env vars:
 
 Idempotent: if the project already exists, updates env vars and exits.
 """
+
 from __future__ import annotations
 
 import json
@@ -62,23 +63,29 @@ def create_project() -> str:
 
 def _env_vars() -> dict:
     return {
-        "ENVIRONMENT":               ("production",                                   ["production"]),
-        "SUPABASE_URL":              (os.environ.get("SUPABASE_URL", ""),             ["production"]),
-        "SUPABASE_ANON_KEY":         (os.environ.get("SUPABASE_ANON_KEY", ""),        ["production"]),
-        "SUPABASE_SERVICE_ROLE_KEY": (os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""),["production"]),
-        "JWT_PRIVATE_KEY_B64":       (os.environ.get("JWT_PRIVATE_KEY_B64", ""),      ["production"]),
-        "JWT_PUBLIC_KEY_B64":        (os.environ.get("JWT_PUBLIC_KEY_B64", ""),       ["production"]),
-        "JWT_ALGORITHM":             ("RS256",                                        ["production"]),
-        "RESEND_API_KEY":            (os.environ.get("RESEND_API_KEY", ""),           ["production"]),
-        "FRONTEND_ORIGINS":          ("https://cms-frontend-roman.vercel.app",        ["production"]),
+        "ENVIRONMENT": ("production", ["production"]),
+        "SUPABASE_URL": (os.environ.get("SUPABASE_URL", ""), ["production"]),
+        "SUPABASE_ANON_KEY": (os.environ.get("SUPABASE_ANON_KEY", ""), ["production"]),
+        "SUPABASE_SERVICE_ROLE_KEY": (
+            os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+            ["production"],
+        ),
+        "JWT_PRIVATE_KEY_B64": (os.environ.get("JWT_PRIVATE_KEY_B64", ""), ["production"]),
+        "JWT_PUBLIC_KEY_B64": (os.environ.get("JWT_PUBLIC_KEY_B64", ""), ["production"]),
+        "JWT_ALGORITHM": ("RS256", ["production"]),
+        "RESEND_API_KEY": (os.environ.get("RESEND_API_KEY", ""), ["production"]),
+        "FRONTEND_ORIGINS": ("https://cms-frontend-roman.vercel.app", ["production"]),
     }
 
 
 def upsert_env_var(project_id: str, key: str, value: str, target: list[str]) -> None:
     existing = _req("GET", f"/v9/projects/{project_id}/env")
     match = next(
-        (e for e in existing.get("envs", [])
-         if e.get("key") == key and set(e.get("target") or []) == set(target)),
+        (
+            e
+            for e in existing.get("envs", [])
+            if e.get("key") == key and set(e.get("target") or []) == set(target)
+        ),
         None,
     )
     body = {"key": key, "value": value, "type": "encrypted", "target": target}
@@ -91,9 +98,15 @@ def upsert_env_var(project_id: str, key: str, value: str, target: list[str]) -> 
 
 
 def main() -> None:
-    required = ("VERCEL_TOKEN", "SUPABASE_URL", "SUPABASE_ANON_KEY",
-                "SUPABASE_SERVICE_ROLE_KEY", "JWT_PRIVATE_KEY_B64",
-                "JWT_PUBLIC_KEY_B64", "RESEND_API_KEY")
+    required = (
+        "VERCEL_TOKEN",
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "JWT_PRIVATE_KEY_B64",
+        "JWT_PUBLIC_KEY_B64",
+        "RESEND_API_KEY",
+    )
     missing = [v for v in required if not os.environ.get(v)]
     if missing:
         print(f"ERROR: missing env vars: {', '.join(missing)}", file=sys.stderr)

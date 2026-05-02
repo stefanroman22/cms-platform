@@ -1,13 +1,11 @@
-from typing import Optional
-
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
 from .supabase_client import get_supabase
 
 ph = PasswordHasher(
-    time_cost=3,       # OWASP recommended
-    memory_cost=65536, # 64 MB
+    time_cost=3,  # OWASP recommended
+    memory_cost=65536,  # 64 MB
     parallelism=4,
 )
 
@@ -24,7 +22,7 @@ def hash_password(plain: str) -> str:
     return ph.hash(plain)
 
 
-async def authenticate_user(email: str, password: str) -> Optional[dict]:
+async def authenticate_user(email: str, password: str) -> dict | None:
     sb = get_supabase()
     # maybe_single() returns None on 0 rows (vs single() which raises PGRST116
     # → 500). Wrong email must yield 401, not 500.

@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request, status
-from typing import List
 
-from ..models.schemas import ProjectOut, AccountOut, ProjectRequestIn
+from ..models.schemas import AccountOut, ProjectOut, ProjectRequestIn
 from ..services.sessions import validate_session
 from ..services.supabase_client import get_supabase
 
@@ -20,7 +19,7 @@ async def _require_user(request: Request):
     return user
 
 
-@router.get("/projects", response_model=List[ProjectOut])
+@router.get("/projects", response_model=list[ProjectOut])
 async def list_projects(request: Request):
     user = await _require_user(request)
     sb = get_supabase()
@@ -68,12 +67,14 @@ async def create_project_request(body: ProjectRequestIn, request: Request):
         )
     user = await _require_user(request)
     sb = get_supabase()
-    sb.table("project_requests").insert({
-        "user_id": user.id,
-        "name": body.name,
-        "type": body.type,
-        "description": body.description,
-        "budget_range": body.budget_range or None,
-        "timeline": body.timeline or None,
-    }).execute()
+    sb.table("project_requests").insert(
+        {
+            "user_id": user.id,
+            "name": body.name,
+            "type": body.type,
+            "description": body.description,
+            "budget_range": body.budget_range or None,
+            "timeline": body.timeline or None,
+        }
+    ).execute()
     return {"success": True}

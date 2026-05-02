@@ -1,62 +1,61 @@
 import logging
+import secrets
+import string
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import List
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
-logger = logging.getLogger(__name__)
-
-import secrets
-import string
-
 from ..models.schemas import (
-    ServiceOut,
-    ServiceDetailOut,
-    ContentSaveRequest,
-    ServiceCreateRequest,
-    ServiceTypeOut,
-    AdminProjectOut,
-    UserAdminOut,
-    ProjectSettingsOut,
-    ProjectSettingsIn,
-    CreateClientRequest,
-    CreateClientOut,
-    AdminProjectPatchIn,
     AdminProjectDetailOut,
+    AdminProjectOut,
+    AdminProjectPatchIn,
+    ContentSaveRequest,
+    CreateClientOut,
+    CreateClientRequest,
+    ProjectSettingsIn,
+    ProjectSettingsOut,
+    ServiceCreateRequest,
+    ServiceDetailOut,
+    ServiceOut,
+    ServiceTypeOut,
+    UserAdminOut,
+    UserOut,
 )
 from ..services.supabase_client import get_supabase, get_supabase_admin
-from ..models.schemas import UserOut
-from .deps import require_user, require_project_access
+from .deps import require_project_access, require_user
+
+logger = logging.getLogger(__name__)
 
 STORAGE_BUCKET = "cms-files"
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
 # Which MIME prefix is allowed per service type. None = any type accepted.
 _ALLOWED_MIME: dict[str, str | None] = {
-    "image":         "image/",
-    "floor_plan":    "image/",
-    "gallery":       "image/",
-    "video":         "video/",
+    "image": "image/",
+    "floor_plan": "image/",
+    "gallery": "image/",
+    "video": "video/",
     "file_download": None,
 }
 
 # Fallback extensions when the uploaded filename has none
 _MIME_TO_EXT: dict[str, str] = {
-    "image/jpeg":  ".jpg",
-    "image/png":   ".png",
-    "image/gif":   ".gif",
-    "image/webp":  ".webp",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
     "image/svg+xml": ".svg",
-    "video/mp4":   ".mp4",
-    "video/webm":  ".webm",
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
     "application/pdf": ".pdf",
 }
 
 router = APIRouter(tags=["workspace"])
 
 # ── Auth helpers ─────────────────────────────────────────────────────────────
+
 
 async def _require_admin(request: Request) -> UserOut:
     user = await require_user(request)
@@ -105,7 +104,8 @@ def _flatten_service(svc: dict) -> dict:
 
 # ── Client workspace endpoints ───────────────────────────────────────────────
 
-@router.get("/projects/{project_slug}/services", response_model=List[ServiceOut])
+
+@router.get("/projects/{project_slug}/services", response_model=list[ServiceOut])
 async def list_services(project_slug: str, request: Request):
     user = await require_user(request)
     project = require_project_access(project_slug, user)
@@ -114,7 +114,9 @@ async def list_services(project_slug: str, request: Request):
         sb = get_supabase()
         result = (
             sb.table("project_services")
-            .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon), content_entries(updated_at, draft_content, published_content)")
+            .select(
+                "id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon), content_entries(updated_at, draft_content, published_content)"
+            )
             .eq("project_id", project["id"])
             .order("display_order")
             .execute()
@@ -133,7 +135,9 @@ async def get_service(project_slug: str, service_key: str, request: Request):
     sb = get_supabase()
     result = (
         sb.table("project_services")
-        .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema), content_entries(draft_content, published_content, updated_at)")
+        .select(
+            "id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema), content_entries(draft_content, published_content, updated_at)"
+        )
         .eq("project_id", project["id"])
         .eq("service_key", service_key)
         .single()
@@ -155,7 +159,9 @@ async def save_service(
 ):
     user = await require_user(request)
     if seed and not user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seed=true requires admin")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="seed=true requires admin"
+        )
     project = require_project_access(project_slug, user)
 
     sb = get_supabase()
@@ -163,7 +169,9 @@ async def save_service(
     # Resolve the project_service id
     svc_result = (
         sb.table("project_services")
-        .select("id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema)")
+        .select(
+            "id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema)"
+        )
         .eq("project_id", project["id"])
         .eq("service_key", service_key)
         .single()
@@ -173,7 +181,7 @@ async def save_service(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
 
     svc_id = svc_result.data["id"]
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Upsert draft only by default — production keeps serving published_content
     # until publish. When seed=true (admin-only, agent provisioning path), also
@@ -266,6 +274,7 @@ async def upload_file(
 
 # ── Admin-only endpoints ─────────────────────────────────────────────────────
 
+
 @router.post("/projects/{project_slug}/services", status_code=status.HTTP_201_CREATED)
 async def add_service(project_slug: str, body: ServiceCreateRequest, request: Request):
     user = await _require_admin(request)
@@ -273,12 +282,21 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
 
     # Validate service_type_slug exists
     sb = get_supabase()
-    st_check = sb.table("service_types").select("slug").eq("slug", body.service_type_slug).single().execute()
+    st_check = (
+        sb.table("service_types")
+        .select("slug")
+        .eq("slug", body.service_type_slug)
+        .single()
+        .execute()
+    )
     if not st_check.data:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown service type")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown service type"
+        )
 
     # Validate service_key is alphanumeric + underscores only
     import re
+
     if not re.match(r"^[a-z0-9_]+$", body.service_key):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -300,14 +318,16 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
                     detail=f"item_schema field type '{field.type}' is invalid. Must be one of: {', '.join(sorted(valid_field_types))}",
                 )
 
-    sb.table("project_services").insert({
-        "project_id": project["id"],
-        "service_type_slug": body.service_type_slug,
-        "service_key": body.service_key,
-        "label": body.label,
-        "display_order": body.display_order,
-        "page_name": body.page_name,
-    }).execute()
+    sb.table("project_services").insert(
+        {
+            "project_id": project["id"],
+            "service_type_slug": body.service_type_slug,
+            "service_key": body.service_key,
+            "label": body.label,
+            "display_order": body.display_order,
+            "page_name": body.page_name,
+        }
+    ).execute()
 
     # For repeater: seed the content_entries row with _schema + empty items
     if body.service_type_slug == "repeater" and body.item_schema:
@@ -321,27 +341,33 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
         )
         if svc_result.data:
             schema_payload = [f.model_dump() for f in body.item_schema]
-            sb.table("content_entries").insert({
-                "project_service_id": svc_result.data["id"],
-                "published_content": {"_schema": schema_payload, "items": []},
-                "draft_content": {"_schema": schema_payload, "items": []},
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "updated_by": user.id,
-            }).execute()
+            sb.table("content_entries").insert(
+                {
+                    "project_service_id": svc_result.data["id"],
+                    "published_content": {"_schema": schema_payload, "items": []},
+                    "draft_content": {"_schema": schema_payload, "items": []},
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "updated_by": user.id,
+                }
+            ).execute()
 
     return {"success": True, "service_key": body.service_key}
 
 
-@router.delete("/projects/{project_slug}/services/{service_key}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/projects/{project_slug}/services/{service_key}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def remove_service(project_slug: str, service_key: str, request: Request):
     user = await _require_admin(request)
     project = require_project_access(project_slug, user)
 
     sb = get_supabase()
-    sb.table("project_services").delete().eq("project_id", project["id"]).eq("service_key", service_key).execute()
+    sb.table("project_services").delete().eq("project_id", project["id"]).eq(
+        "service_key", service_key
+    ).execute()
 
 
-@router.get("/admin/projects", response_model=List[AdminProjectOut])
+@router.get("/admin/projects", response_model=list[AdminProjectOut])
 async def admin_list_projects(request: Request):
     await _require_admin(request)
 
@@ -354,18 +380,20 @@ async def admin_list_projects(request: Request):
     )
 
     out = []
-    for p in (result.data or []):
+    for p in result.data or []:
         user_row = p.get("users") or {}
-        out.append({
-            "id": p["id"],
-            "name": p["name"],
-            "slug": p["slug"],
-            "is_active": p["is_active"],
-            "created_at": p["created_at"],
-            "user_id": p["user_id"],
-            "user_email": user_row.get("email"),
-            "user_full_name": user_row.get("full_name"),
-        })
+        out.append(
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "slug": p["slug"],
+                "is_active": p["is_active"],
+                "created_at": p["created_at"],
+                "user_id": p["user_id"],
+                "user_email": user_row.get("email"),
+                "user_full_name": user_row.get("full_name"),
+            }
+        )
     return out
 
 
@@ -375,7 +403,9 @@ async def admin_get_project(project_slug: str, request: Request):
     sb = get_supabase()
     result = (
         sb.table("projects")
-        .select("slug, name, github_repo, vercel_project_id, production_url, preview_url, preview_token, last_published_at")
+        .select(
+            "slug, name, github_repo, vercel_project_id, production_url, preview_url, preview_token, last_published_at"
+        )
         .eq("slug", project_slug)
         .single()
         .execute()
@@ -393,13 +423,13 @@ async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, requ
     update_data = {k: v for k, v in body.model_dump().items() if v is not None}
     if not update_data:
         return {"updated": 0}
-    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_data["updated_at"] = datetime.now(UTC).isoformat()
 
     sb.table("projects").update(update_data).eq("slug", project_slug).execute()
     return {"updated": len(update_data)}
 
 
-@router.get("/admin/clients", response_model=List[UserAdminOut])
+@router.get("/admin/clients", response_model=list[UserAdminOut])
 async def admin_list_clients(request: Request):
     await _require_admin(request)
 
@@ -412,7 +442,7 @@ async def admin_list_clients(request: Request):
     )
 
     out = []
-    for u in (users_result.data or []):
+    for u in users_result.data or []:
         count_result = (
             sb.table("projects")
             .select("id", count="exact")
@@ -424,12 +454,17 @@ async def admin_list_clients(request: Request):
     return out
 
 
-@router.get("/admin/service-types", response_model=List[ServiceTypeOut])
+@router.get("/admin/service-types", response_model=list[ServiceTypeOut])
 async def admin_list_service_types(request: Request):
     await _require_admin(request)
 
     sb = get_supabase()
-    result = sb.table("service_types").select("slug, name, description, icon, schema").order("slug").execute()
+    result = (
+        sb.table("service_types")
+        .select("slug, name, description, icon, schema")
+        .order("slug")
+        .execute()
+    )
     return result.data or []
 
 
@@ -467,16 +502,19 @@ async def update_project_settings(
     website_url = body.website_url.strip() if body.website_url else None
 
     sb = get_supabase()
-    sb.table("projects").update({
-        "website_url": website_url,
-        "allowed_origins": origins,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("id", project["id"]).execute()
+    sb.table("projects").update(
+        {
+            "website_url": website_url,
+            "allowed_origins": origins,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    ).eq("id", project["id"]).execute()
 
     return {"website_url": website_url, "allowed_origins": origins}
 
 
 # ── Admin client management ──────────────────────────────────────────────────
+
 
 def _generate_password(length: int = 16) -> str:
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
@@ -523,11 +561,7 @@ async def create_client(body: CreateClientRequest, request: Request):
 
     # Check for existing user
     existing = (
-        sb.table("users")
-        .select("id, email, full_name")
-        .eq("email", email)
-        .limit(1)
-        .execute()
+        sb.table("users").select("id, email, full_name").eq("email", email).limit(1).execute()
     )
     if existing.data:
         u = existing.data[0]
@@ -541,12 +575,14 @@ async def create_client(body: CreateClientRequest, request: Request):
 
     # Create via Supabase Auth admin API
     password = _generate_password()
-    auth_resp = sb_admin.auth.admin.create_user({
-        "email": email,
-        "password": password,
-        "email_confirm": True,
-        "user_metadata": {"full_name": body.full_name or ""},
-    })
+    auth_resp = sb_admin.auth.admin.create_user(
+        {
+            "email": email,
+            "password": password,
+            "email_confirm": True,
+            "user_metadata": {"full_name": body.full_name or ""},
+        }
+    )
 
     if not auth_resp.user:
         raise HTTPException(status_code=500, detail="Failed to create auth user")
@@ -554,14 +590,16 @@ async def create_client(body: CreateClientRequest, request: Request):
     user_id = auth_resp.user.id
 
     # Insert into public users table
-    sb_admin.table("users").insert({
-        "id": user_id,
-        "email": email,
-        "full_name": body.full_name,
-        "is_admin": False,
-        "is_active": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }).execute()
+    sb_admin.table("users").insert(
+        {
+            "id": user_id,
+            "email": email,
+            "full_name": body.full_name,
+            "is_admin": False,
+            "is_active": True,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+    ).execute()
 
     return CreateClientOut(
         id=user_id,

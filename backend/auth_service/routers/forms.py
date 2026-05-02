@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -158,12 +158,7 @@ async def submit_form(
         )
 
     # ── 5. Build reply-to from common field names ─────────────────────────────
-    reply_to = (
-        fields.get("email")
-        or fields.get("Email")
-        or fields.get("email_address")
-        or None
-    )
+    reply_to = fields.get("email") or fields.get("Email") or fields.get("email_address") or None
 
     # ── 6. Send via Resend ────────────────────────────────────────────────────
     if not settings.RESEND_API_KEY:
@@ -176,7 +171,7 @@ async def submit_form(
 
     resend.api_key = settings.RESEND_API_KEY
 
-    submitted_at = datetime.now(timezone.utc).strftime("%d %b %Y at %H:%M UTC")
+    submitted_at = datetime.now(UTC).strftime("%d %b %Y at %H:%M UTC")
     html = _build_email_html(
         project_name=project["name"],
         form_key=form_key,
@@ -198,7 +193,7 @@ async def submit_form(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Email delivery failed: {exc}",
-        )
+        ) from exc
 
     return JSONResponse(
         content={"success": True},
