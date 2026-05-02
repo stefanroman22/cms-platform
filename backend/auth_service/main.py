@@ -40,15 +40,21 @@ def _prod_origin_regex() -> str:
     return vercel
 
 
+# CORS / PNA branch on ENVIRONMENT (Literal["development", "preview", "production"]):
+#   development → permissive regex (localhost, LAN, *.vercel.app); PNA enabled
+#   preview     → same regex (Vercel preview deployments behave like dev)
+#   production  → strict allowlist + *.vercel.app for client websites; PNA off
+IS_PROD = settings.ENVIRONMENT == "production"
+
 _cors_kwargs: dict = (
-    {
+    {"allow_origin_regex": _prod_origin_regex()}
+    if IS_PROD
+    else {
         "allow_origin_regex": (
             r"http://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?"
             r"|https://[a-zA-Z0-9.-]+\.vercel\.app"
         )
     }
-    if settings.ENVIRONMENT == "development"
-    else {"allow_origin_regex": _prod_origin_regex()}
 )
 
 app.add_middleware(
@@ -95,7 +101,7 @@ class _PrivateNetworkAccessMiddleware:
         await self.app(scope, receive, send_with_pna_header)
 
 
-if settings.ENVIRONMENT == "development":
+if not IS_PROD:
     app.add_middleware(_PrivateNetworkAccessMiddleware)
 
 app.add_middleware(SecurityHeadersMiddleware)
