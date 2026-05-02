@@ -26,15 +26,17 @@ def hash_password(plain: str) -> str:
 
 async def authenticate_user(email: str, password: str) -> Optional[dict]:
     sb = get_supabase()
+    # maybe_single() returns None on 0 rows (vs single() which raises PGRST116
+    # → 500). Wrong email must yield 401, not 500.
     result = (
         sb.table("users")
         .select("*")
         .eq("email", email)
         .eq("is_active", True)
-        .single()
+        .maybe_single()
         .execute()
     )
-    if not result.data:
+    if not result or not result.data:
         return None
     user = result.data
     if not verify_password(password, user["password_hash"]):
