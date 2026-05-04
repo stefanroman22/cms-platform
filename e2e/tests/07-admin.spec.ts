@@ -15,7 +15,7 @@ test.describe("Admin pages", () => {
     await login(page, process.env.E2E_ADMIN_EMAIL!, process.env.E2E_ADMIN_PASSWORD!);
     await page.goto("/dashboard/admin/projects");
     await expect(page.getByRole("heading", { name: /All Projects/i })).toBeVisible();
-    await expect(page.getByText(/E2E Test Project/i)).toBeVisible();
+    await expect(page.getByText(/E2E Test Project/i).first()).toBeVisible();
   });
 
   test("admin user — Service Types renders 8+ types", async ({ page }) => {

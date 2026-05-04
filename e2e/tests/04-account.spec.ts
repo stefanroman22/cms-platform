@@ -16,26 +16,19 @@ test.describe("Account page", () => {
     await expect(page.getByRole("heading", { name: /Change Password/i })).toBeVisible();
   });
 
-  test("theme toggle flips html class and persists across reload", async ({ page }) => {
-    const initial = await page.evaluate(() => document.documentElement.classList.contains("dark"));
+  test("theme toggle flips localStorage value and persists across reload", async ({ page }) => {
+    // ThemeShell applies the `dark` class to a wrapper <div>, not <html>,
+    // and the source of truth is localStorage("dashboard-theme"). Probe
+    // localStorage directly so the test doesn't couple to DOM placement.
+    const isDark = () =>
+      page.evaluate(() => localStorage.getItem("dashboard-theme") === "dark");
+    const initial = await isDark();
     const toggle = page.getByRole("switch", { name: /toggle theme/i });
     await toggle.click();
-    await expect
-      .poll(async () =>
-        page.evaluate(() => document.documentElement.classList.contains("dark")),
-      )
-      .toBe(!initial);
+    await expect.poll(isDark).toBe(!initial);
     await page.reload();
-    // The theme-init script runs in <head> before hydration but Playwright
-    // needs domcontentloaded before reading classList reliably.
     await page.waitForLoadState("domcontentloaded");
-    await expect
-      .poll(
-        async () =>
-          page.evaluate(() => document.documentElement.classList.contains("dark")),
-        { timeout: 5000 },
-      )
-      .toBe(!initial);
+    await expect.poll(isDark, { timeout: 5000 }).toBe(!initial);
     await page.getByRole("switch", { name: /toggle theme/i }).click();
   });
 });
