@@ -13,7 +13,7 @@ test.describe("Login flow", () => {
   test("wrong password — error shown, no cookie", async ({ page }) => {
     await page.goto("/log-in");
     await page.getByLabel("Email address or Username").fill(EMAIL);
-    await page.getByLabel("Password").fill("definitely-not-the-password");
+    await page.getByLabel("Password", { exact: true }).fill("definitely-not-the-password");
     await page.getByRole("button", { name: /sign in to dashboard/i }).click();
     await expect(page.getByText(/Invalid email or password/i)).toBeVisible();
     const cookies = await page.context().cookies();
