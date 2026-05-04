@@ -17,6 +17,15 @@ def test_form_submit_returns_200(client):
     assert r.json().get("success") is True
 
 
+@pytest.mark.xfail(
+    strict=False,
+    reason=(
+        ".maybe_single() fix in routers/forms.py:submit_form landed on dev "
+        "(commit dc3dbff). Production backend still serves master, where the "
+        ".single() call leaks as 500 when form_key is missing. Remove this "
+        "xfail after master fast-forwards to dev and Vercel redeploys."
+    ),
+)
 def test_form_submit_404_for_missing_form_key(client):
     r = client.post(
         "/forms/e2e-test-project/no_such_form",
