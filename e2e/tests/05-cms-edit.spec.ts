@@ -16,13 +16,15 @@ test.describe("CMS edit + save persistence", () => {
     await page.goto("/dashboard/e2e-test-project/e2e_text");
 
     const stamp = `E2E ${Date.now()}`;
-    const titleField = page.getByLabel(/title/i).first();
+    // TextBlockEditor's <label>Title</label> is not associated to the input
+    // via htmlFor, so getByLabel("Title") finds nothing. Match by placeholder.
+    const titleField = page.getByPlaceholder("Enter section title…");
     await titleField.fill(stamp);
 
     await page.getByRole("button", { name: /^Save$/ }).click();
     await expect(page.getByText(/Changes saved successfully/i)).toBeVisible();
 
     await page.reload();
-    await expect(page.getByLabel(/title/i).first()).toHaveValue(stamp);
+    await expect(page.getByPlaceholder("Enter section title…")).toHaveValue(stamp);
   });
 });

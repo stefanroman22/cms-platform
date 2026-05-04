@@ -16,7 +16,7 @@ test.describe("Publish flow", () => {
     await page.goto("/dashboard/e2e-test-project/e2e_text");
 
     const stamp = `Published ${Date.now()}`;
-    await page.getByLabel(/title/i).first().fill(stamp);
+    await page.getByPlaceholder("Enter section title…").fill(stamp);
     await page.getByRole("button", { name: /^Save$/ }).click();
     await expect(page.getByText(/Changes saved successfully/i)).toBeVisible();
 
