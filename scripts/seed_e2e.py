@@ -53,6 +53,7 @@ E2E_ALLOWED_ORIGIN = "https://cms-frontend-roman.vercel.app"
 
 def _http(method: str, url: str, headers: dict, body: dict | None = None) -> dict:
     data = json.dumps(body).encode() if body is not None else None
+    headers.setdefault("User-Agent", "cms-e2e-seed/1.0")
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req) as r:
