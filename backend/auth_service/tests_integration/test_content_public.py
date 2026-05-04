@@ -18,17 +18,14 @@ def test_public_content_returns_404_for_unknown_slug(client):
     assert r.status_code == 404
 
 
-def test_content_types_returns_8_types(client):
+def test_content_types_returns_typescript_dts(client):
+    """The /types endpoint emits an auto-generated TypeScript .d.ts string,
+    not a JSON service-type listing. Verify the shape and that all seeded
+    service keys are referenced."""
     r = client.get("/content/e2e-test-project/types")
     assert r.status_code == 200
-    slugs = {t["slug"] for t in r.json()}
-    assert {
-        "text_block",
-        "image",
-        "gallery",
-        "video",
-        "file_download",
-        "key_value",
-        "email_config",
-        "repeater",
-    } <= slugs
+    body = r.text
+    assert "export interface CMSContent" in body
+    assert 'project_slug: "e2e-test-project"' in body
+    assert "e2e_text" in body
+    assert "e2e_features" in body

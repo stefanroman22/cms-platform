@@ -28,5 +28,5 @@ def test_admin_can_list_clients(admin_client):
     r = admin_client.get("/admin/clients")
     assert r.status_code == 200
     emails = [c["email"] for c in r.json()]
-    assert "e2e-user@cms-test.local" in emails
-    assert "e2e-admin@cms-test.local" in emails
+    assert "e2e-user@cms-test.dev" in emails
+    assert "e2e-admin@cms-test.dev" in emails

@@ -32,7 +32,7 @@ def test_me_returns_401_without_sid(client):
 def test_login_with_wrong_email_returns_401(client):
     r = client.post(
         "/auth/login",
-        json={"email": "no-such-user@cms-test.local", "password": "x"},
+        json={"email": "no-such-user@cms-test.dev", "password": "x"},
     )
     assert r.status_code == 401
     assert "Invalid email or password" in r.text

@@ -90,10 +90,10 @@ async def submit_form(
         .select("id, name, allowed_origins")
         .eq("slug", project_slug)
         .eq("is_active", True)
-        .single()
+        .maybe_single()
         .execute()
     )
-    if not proj_result.data:
+    if not proj_result or not proj_result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     project = proj_result.data
@@ -114,10 +114,10 @@ async def submit_form(
         .eq("project_id", project["id"])
         .eq("service_key", form_key)
         .eq("service_type_slug", "email_config")
-        .single()
+        .maybe_single()
         .execute()
     )
-    if not svc_result.data:
+    if not svc_result or not svc_result.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No email_config service found with key '{form_key}'",

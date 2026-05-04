@@ -1,8 +1,8 @@
 """seed_e2e.py — idempotent seed for the E2E test environment.
 
 Creates (if missing):
-  • Regular user  e2e-user@cms-test.local
-  • Admin user    e2e-admin@cms-test.local
+  • Regular user  e2e-user@cms-test.dev
+  • Admin user    e2e-admin@cms-test.dev
   • Project       e2e-test-project (owned by regular user)
   • 3 services    e2e_text, e2e_features, e2e_contact_form
   • allowed_origins on the project (so forms CORS works)
@@ -38,8 +38,8 @@ SERVICE_ROLE = os.environ["SUPABASE_SERVICE_ROLE"]
 E2E_USER_PASSWORD = os.environ["E2E_USER_PASSWORD"]
 E2E_ADMIN_PASSWORD = os.environ["E2E_ADMIN_PASSWORD"]
 
-REGULAR_EMAIL = "e2e-user@cms-test.local"
-ADMIN_EMAIL = "e2e-admin@cms-test.local"
+REGULAR_EMAIL = "e2e-user@cms-test.dev"
+ADMIN_EMAIL = "e2e-admin@cms-test.dev"
 PROJECT_SLUG = "e2e-test-project"
 PROJECT_NAME = "E2E Test Project"
 E2E_ALLOWED_ORIGIN = "https://cms-frontend-roman.vercel.app"

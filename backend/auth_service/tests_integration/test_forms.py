@@ -8,7 +8,7 @@ def test_form_submit_returns_200(client):
         "/forms/e2e-test-project/e2e_contact_form",
         json={
             "name": "E2E test",
-            "email": "e2e-user@cms-test.local",
+            "email": "e2e-user@cms-test.dev",
             "message": "[E2E-TEST] integration test submission",
         },
         headers={"Origin": "https://cms-frontend-roman.vercel.app"},

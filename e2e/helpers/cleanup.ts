@@ -18,7 +18,7 @@ const SEED = {
       { label: "beta", detail: "second" },
     ],
   },
-  e2e_contact_form: { destination_email: "e2e-user@cms-test.local" },
+  e2e_contact_form: { destination_email: "e2e-user@cms-test.dev" },
 } as const;
 
 export async function resetSeedState(sid: string): Promise<void> {

@@ -32,10 +32,10 @@ def _resolve_project(project_slug: str) -> dict:
         .select("id, name, slug, is_active, preview_token")
         .eq("slug", project_slug)
         .eq("is_active", True)
-        .single()
+        .maybe_single()
         .execute()
     )
-    if not result.data:
+    if not result or not result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return result.data
 
