@@ -23,8 +23,10 @@ from ..models.schemas import (
     ServiceOut,
     ServiceTypeOut,
     UserAdminOut,
+    WelcomeEmailIn,
 )
 from ..services.supabase_client import get_supabase, get_supabase_admin
+from ..services.welcome_email import send_welcome_email
 from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
 
 logger = logging.getLogger(__name__)
@@ -488,6 +490,31 @@ async def admin_transfer_project(project_slug: str, body: ProjectTransferIn, req
     if not updated.data:
         raise HTTPException(404, f"No project with slug {project_slug!r}")
     return updated.data[0]
+
+
+@router.post("/admin/clients/{email}/welcome")
+async def admin_send_welcome(email: str, body: WelcomeEmailIn, request: Request):
+    await admin_user_via_bearer_or_sid(request)
+    sb = get_supabase()
+    user = (
+        sb.table("users")
+        .select("id, email, full_name")
+        .eq("email", email.lower().strip())
+        .maybe_single()
+        .execute()
+    )
+    if not (user and user.data):
+        raise HTTPException(404, f"No user with email {email!r}")
+    try:
+        result = send_welcome_email(
+            to_email=user.data["email"],
+            full_name=user.data.get("full_name"),
+            project_name=body.project_name,
+            website_url=body.website_url,
+        )
+    except RuntimeError as e:
+        raise HTTPException(502, f"Resend send failed: {e}") from e
+    return {"success": True, "resend_id": result.get("id")}
 
 
 @router.get("/admin/clients", response_model=list[UserAdminOut])
