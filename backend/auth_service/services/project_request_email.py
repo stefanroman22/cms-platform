@@ -67,60 +67,100 @@ def render_project_request_html(
     budget: str | None,
     timeline: str | None,
 ) -> str:
-    """Renders the HTML body. Inline styles only — no external CSS, no
-    remote images. Header uses a CSS text-mark for the brand."""
-    rows = [
-        (
-            "From",
-            f"{_escape_html(requester_name or 'Unnamed')} &lt;{_escape_html(requester_email)}&gt;",
-        ),
-        ("Project name", _escape_html(project_name)),
-        ("Type", _escape_html(_label(PROJECT_TYPE_LABELS, project_type))),
-        ("Budget", _escape_html(_label(BUDGET_LABELS, budget))),
-        ("Timeline", _escape_html(_label(TIMELINE_LABELS, timeline))),
-    ]
-    rows_html = "\n".join(
-        "<tr>"
-        f'<td style="padding:10px 14px;color:#6b7280;font-size:13px;width:140px;vertical-align:top;border-bottom:1px solid #f3f4f6">{label}</td>'
-        f'<td style="padding:10px 14px;color:#1f2937;font-size:14px;font-weight:500;border-bottom:1px solid #f3f4f6">{value}</td>'
-        "</tr>"
-        for label, value in rows
-    )
+    """Renders the HTML body. Matches the welcome-email template
+    (Resend id 758f9a34-4b5e-49d4-b464-fe92f7363a6f) — same zinc-900
+    header with the inline cube SVG, "Roman Technologies / Client
+    Portal" eyebrow, and #fafafa boxed sections."""
+    name_safe = _escape_html(requester_name or "Unnamed")
+    email_safe = _escape_html(requester_email)
+    project_safe = _escape_html(project_name)
+    type_safe = _escape_html(_label(PROJECT_TYPE_LABELS, project_type))
+    budget_safe = _escape_html(_label(BUDGET_LABELS, budget))
+    timeline_safe = _escape_html(_label(TIMELINE_LABELS, timeline))
     description_html = _escape_html(description).replace("\n", "<br>")
-    return f"""<!doctype html>
+
+    return f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><title>New project request</title></head>
-<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1f2937">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb;padding:32px 16px">
-  <tr><td align="center">
-    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-      <tr><td style="padding:24px 32px;background:#111827;border-bottom:3px solid #f59e0b">
-        <div style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;color:#ffffff;letter-spacing:0.02em;line-height:1">Roman Technologies</div>
-        <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.12em;margin-top:6px">CMS Platform</div>
-      </td></tr>
-      <tr><td style="padding:32px 32px 24px">
-        <h1 style="font-size:18px;color:#111827;margin:0 0 6px;font-weight:600">New project request</h1>
-        <p style="font-size:13px;color:#6b7280;margin:0;line-height:1.5">A client just submitted a project idea via the dashboard.</p>
-      </td></tr>
-      <tr><td style="padding:0 32px">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;background:#fafafa;border-radius:8px;overflow:hidden;border:1px solid #f3f4f6">
-          {rows_html}
-        </table>
-      </td></tr>
-      <tr><td style="padding:24px 32px 8px">
-        <h2 style="font-size:13px;color:#6b7280;margin:0 0 10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Description</h2>
-        <div style="font-size:14px;color:#374151;line-height:1.65;background:#fafafa;padding:16px 18px;border-radius:8px;border-left:3px solid #f59e0b">{description_html}</div>
-      </td></tr>
-      <tr><td style="padding:24px 32px 32px">
-        <p style="font-size:13px;color:#6b7280;margin:0;line-height:1.6">Hit <strong style="color:#374151">Reply</strong> to write back to <a href="mailto:{_escape_html(requester_email)}" style="color:#0369a1;text-decoration:none">{_escape_html(requester_email)}</a> directly.</p>
-      </td></tr>
-      <tr><td style="padding:14px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center">
-        Sent from <a href="https://roman-technologies.dev" style="color:#6b7280;text-decoration:none">roman-technologies.dev</a>
-      </td></tr>
-    </table>
-  </td></tr>
-</table>
-</body></html>"""
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#27272a">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f4;padding:40px 20px">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden">
+        <tr><td style="background:#18181b;padding:24px 32px">
+          <table cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="44" height="44" valign="middle" style="background:#18181b;border-radius:10px">
+                <img src="https://roman-technologies.dev/logo_dark.png" width="44" height="44" alt="" style="display:block;border:0;outline:none;text-decoration:none;border-radius:10px">
+              </td>
+              <td style="vertical-align:middle;padding-left:14px">
+                <p style="margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-0.01em">Roman Technologies</p>
+                <p style="margin:2px 0 0;color:#a1a1aa;font-size:12px">Client Portal</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:32px 32px 8px">
+          <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#18181b">New project request.</h1>
+          <p style="margin:0;font-size:15px;line-height:1.55;color:#52525b">
+            A new project request just came in from <strong>{name_safe}</strong>.
+            The full submission is below — hit Reply to respond directly to
+            the client and they will receive your message in their inbox.
+          </p>
+        </td></tr>
+        <tr><td style="padding:8px 32px">
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:#fafafa;border:1px solid #e4e4e7;border-radius:8px">
+            <tr><td style="padding:18px 22px">
+              <p style="margin:0 0 12px;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#71717a">Request details</p>
+              <table cellpadding="0" cellspacing="0" style="font-size:14px;line-height:1.5;width:100%">
+                <tr>
+                  <td style="padding:4px 12px 4px 0;color:#52525b;width:120px;vertical-align:top">From</td>
+                  <td style="color:#18181b;word-break:break-all"><a href="mailto:{email_safe}" style="color:#18181b;text-decoration:none">{name_safe} &lt;{email_safe}&gt;</a></td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 12px 4px 0;color:#52525b;vertical-align:top">Project name</td>
+                  <td style="color:#18181b;font-weight:600">{project_safe}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 12px 4px 0;color:#52525b;vertical-align:top">Type</td>
+                  <td style="color:#18181b">{type_safe}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 12px 4px 0;color:#52525b;vertical-align:top">Budget</td>
+                  <td style="color:#18181b">{budget_safe}</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 12px 4px 0;color:#52525b;vertical-align:top">Timeline</td>
+                  <td style="color:#18181b">{timeline_safe}</td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:8px 32px">
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:#fafafa;border:1px solid #e4e4e7;border-radius:8px">
+            <tr><td style="padding:18px 22px">
+              <p style="margin:0 0 10px;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#71717a">Description</p>
+              <p style="margin:0;font-size:14px;line-height:1.6;color:#27272a">{description_html}</p>
+            </td></tr>
+          </table>
+          <p style="margin:14px 0 0;font-size:13px;line-height:1.5;color:#92400e;background:#fef3c7;border-left:3px solid #f59e0b;padding:10px 14px;border-radius:0 6px 6px 0">
+            <strong>Reply directly</strong> to this email to write back to <a href="mailto:{email_safe}" style="color:#92400e;text-decoration:underline">{email_safe}</a>.
+          </p>
+        </td></tr>
+        <tr><td style="padding:24px 32px 8px" align="center">
+          <a href="mailto:{email_safe}" style="display:inline-block;background:#18181b;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px">Reply to {name_safe} &rarr;</a>
+        </td></tr>
+        <tr><td style="padding:32px 32px 28px;border-top:1px solid #f4f4f5">
+          <p style="margin:0;font-size:12px;color:#a1a1aa;line-height:1.5">
+            Sent from <a href="https://roman-technologies.dev" style="color:#71717a;text-decoration:none">roman-technologies.dev</a> &middot;
+            &copy; 2026 Roman Technologies &middot; Client Portal
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
 
 def render_project_request_text(
