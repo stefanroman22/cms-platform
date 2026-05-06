@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
 from ..models.schemas import (
+    AdminProjectCreateIn,
     AdminProjectDetailOut,
     AdminProjectOut,
     AdminProjectPatchIn,
@@ -419,6 +420,44 @@ async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, requ
 
     sb.table("projects").update(update_data).eq("slug", project_slug).execute()
     return {"updated": len(update_data)}
+
+
+@router.post("/admin/projects", status_code=status.HTTP_201_CREATED)
+async def admin_create_project(body: AdminProjectCreateIn, request: Request):
+    await admin_user_via_bearer_or_sid(request)
+    sb = get_supabase()
+
+    owner = (
+        sb.table("users")
+        .select("id, email")
+        .eq("email", body.owner_email.lower().strip())
+        .maybe_single()
+        .execute()
+    )
+    if not (owner and owner.data):
+        raise HTTPException(404, f"No user with email {body.owner_email!r}")
+
+    existing = (
+        sb.table("projects").select("id, slug").eq("slug", body.slug).maybe_single().execute()
+    )
+    if existing and existing.data:
+        raise HTTPException(409, f"Project slug {body.slug!r} already exists")
+
+    inserted = (
+        sb.table("projects")
+        .insert(
+            {
+                "user_id": owner.data["id"],
+                "slug": body.slug,
+                "name": body.name,
+                "is_active": True,
+                "github_repo": body.github_repo,
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        .execute()
+    )
+    return inserted.data[0] if inserted.data else {}
 
 
 @router.get("/admin/clients", response_model=list[UserAdminOut])

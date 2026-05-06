@@ -256,3 +256,20 @@ class AdminProjectDetailOut(BaseModel):
     preview_url: str | None = None
     preview_token: str | None = None
     last_published_at: str | None = None
+
+
+class AdminProjectCreateIn(BaseModel):
+    slug: str
+    name: str
+    owner_email: EmailStr
+    github_repo: str | None = None
+
+
+class ProjectTransferIn(BaseModel):
+    to_user_email: EmailStr
+
+
+class WelcomeEmailIn(BaseModel):
+    project_slug: str
+    project_name: str
+    website_url: str
