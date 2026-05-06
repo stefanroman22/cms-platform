@@ -61,6 +61,62 @@ def test_transfer_round_trip_on_e2e_test_project():
 
 
 @skip
+def test_create_client_writes_public_users_row():
+    """POST /admin/clients with a fresh email must create a public.users row
+    with a non-NULL password_hash (regression for the 500 caused by the
+    parallel sb_admin.auth.admin.create_user path that omitted password_hash).
+
+    Verification is HTTP-only — integration tests don't have direct Supabase
+    access. We prove the row + hash via two public endpoints:
+      1. GET /admin/clients/lookup → row exists.
+      2. POST /auth/login with the returned password → 200 means
+         password_hash was stored AND verifies (NULL → login would 401).
+    """
+    email = f"throwaway-create-{int(time.time())}@cms-test.dev"
+
+    # Create.
+    create = httpx.post(
+        f"{BACKEND}/admin/clients",
+        json={"email": email, "full_name": "Throwaway Create"},
+        headers=HEADERS,
+        timeout=15.0,
+    )
+    assert create.status_code == 201, create.text
+    body = create.json()
+    assert body["created"] is True
+    assert body["email"] == email
+    generated_password = body["generated_password"]
+    assert generated_password, "endpoint must return the generated password once"
+
+    try:
+        # Row exists in public.users (admin lookup hits the same table).
+        lookup = httpx.get(
+            f"{BACKEND}/admin/clients/lookup",
+            params={"email": email},
+            headers=HEADERS,
+            timeout=15.0,
+        )
+        assert lookup.status_code == 200, lookup.text
+        assert lookup.json()["email"] == email
+
+        # password_hash IS NOT NULL — login uses verify_password against the
+        # stored hash, so a successful login proves the hash was written
+        # correctly (NULL or wrong hash → 401).
+        login = httpx.post(
+            f"{BACKEND}/auth/login",
+            json={"email": email, "password": generated_password},
+            timeout=15.0,
+        )
+        assert login.status_code == 200, login.text
+        assert "sid" in login.cookies
+    finally:
+        # No public DELETE endpoint for users — leftover throwaway rows are
+        # acceptable (timestamped emails won't collide). Document for future
+        # cleanup tooling.
+        pass
+
+
+@skip
 def test_welcome_email_send():
     r = httpx.post(
         f"{BACKEND}/admin/clients/{USER_EMAIL}/welcome",
