@@ -352,6 +352,12 @@ def _vercel_setup(
         prod_branch = github.get_default_branch(github_token, github_repo)
         click.echo(f"  ✓ Created Vercel project: {project_id} (prod branch: {prod_branch})")
 
+    # Disable Vercel Authentication on every project we touch. Idempotent.
+    # Doing this BEFORE env vars + deployment trigger means the very first
+    # deployment is already public — no client ever sees the SSO gate.
+    vercel.disable_deployment_protection(vercel_token, project_id)
+    click.echo("  ✓ Vercel deployment protection disabled (public preview/production)")
+
     # 3. Set env vars (upserts). We use VITE_ prefix because the initial
     #    target framework is Vite — only VITE_*-prefixed env vars are exposed
     #    to client-side code by Vite's build. Future Next.js/Astro clients
