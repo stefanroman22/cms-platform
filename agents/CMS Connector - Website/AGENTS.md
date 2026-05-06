@@ -29,16 +29,28 @@ Each phase doc contains: goal, inputs, steps, outputs, failure messages, self-im
 
 ## Required credentials
 
-| Tool | Var | Used in |
-|------|-----|---------|
-| GitHub MCP | `GITHUB_TOKEN` | 1, 4 |
-| Anthropic Claude | `claude` CLI preferred; `ANTHROPIC_API_KEY` fallback | 2, 5 (failure analysis only) |
-| Vercel MCP | `VERCEL_TOKEN` | 4 |
-| Supabase Management | `SUPABASE_ACCESS_TOKEN` (PAT, `sbp_*`) | 4 (project-row insert), 6 (ownership transfer) |
-| Resend | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | 4 (email_config wiring; backend Vercel env), 6 (welcome email — agent calls Resend directly) |
-| CMS admin | `sid` cookie of an admin user, OR an admin API key once C is built | 4, 5, 6 |
+The four below live in `agents/CMS Connector - Website/.env` (copy
+from `.env.example`, gitignored, auto-loaded by `scan.py`).
 
-If a credential needed by a phase is missing, **halt that phase**, surface a clear remediation, do not silently skip.
+| Tool | Env var | Used in |
+|------|---------|---------|
+| GitHub | `GITHUB_TOKEN` | Phase 1, 4 |
+| Anthropic Claude | `claude` CLI preferred; `ANTHROPIC_API_KEY` fallback | Phase 2, 5 |
+| Vercel | `VERCEL_TOKEN` | Phase 4 |
+| CMS admin | `CMS_ADMIN_API_KEY` (cmsk_…) | Phase 4, 5, 6 |
+
+### Backend-only credentials
+
+These secrets live on the backend's Vercel env, NOT on the agent's
+host. The agent reaches them indirectly through admin endpoints.
+
+| Secret | Where | Why |
+|--------|-------|-----|
+| `RESEND_API_KEY` | backend Vercel env | welcome email send via `POST /admin/clients/{email}/welcome` |
+| `SUPABASE_SERVICE_ROLE_KEY` | backend Vercel env | project create + ownership transfer via admin endpoints |
+
+If a credential needed by a phase is missing, halt that phase and
+surface a clear remediation. Do not silently skip.
 
 ## Failure-mode taxonomy
 
