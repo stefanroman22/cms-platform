@@ -129,7 +129,7 @@ def _resolve_client(api_url: str, api_token: str, client_email: str | None) -> s
     base = api_url.rstrip("/")
     headers = {
         "Content-Type": "application/json",
-        "Cookie": f"access_token={api_token}",
+        "Authorization": f"Bearer {api_token}",
     }
 
     # Prompt if not provided
@@ -261,7 +261,7 @@ def _provision(manifest: dict, api_url: str, api_token: str) -> None:
     services = manifest.get("services", [])
     headers = {
         "Content-Type": "application/json",
-        "Cookie": f"access_token={api_token}",
+        "Authorization": f"Bearer {api_token}",
     }
     base = api_url.rstrip("/")
 
