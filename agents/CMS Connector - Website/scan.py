@@ -337,7 +337,7 @@ def _vercel_setup(
     click.echo(f"\n🚀 Vercel setup for {github_repo}…")
 
     base = cms_api_url.rstrip("/")
-    headers = {"Content-Type": "application/json", "Cookie": f"access_token={cms_api_token}"}
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {cms_api_token}"}
 
     # 0. Fetch existing project row from CMS to check for reusable state (idempotency)
     existing = _http("GET", f"{base}/admin/projects/{slug}", headers) or {}
