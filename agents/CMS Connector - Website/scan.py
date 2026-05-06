@@ -20,7 +20,7 @@ Options:
     --provision    After generating, call the CMS admin API to create services + seed content
     --client-email Client email for provisioning (interactive if omitted with --provision)
     --api-url      CMS API base URL (default: http://localhost:8001, required with --provision)
-    --api-token    Admin access token (required with --provision)
+    --admin-key    CMS admin API key (cmsk_…); env: CMS_ADMIN_API_KEY (required with --provision)
     --model        Claude model to use (default: claude-opus-4-7 — strongest available; scan accuracy drives every downstream phase, do not downgrade)
 
 Requirements:
@@ -467,9 +467,6 @@ def _vercel_setup(
     help="CMS API base URL (used with --provision).",
 )
 @click.option(
-    "--api-token", default=None, help="Admin access_token cookie value (required with --provision)."
-)
-@click.option(
     "--admin-key",
     "admin_key",
     default=None,
@@ -512,7 +509,6 @@ def main(
     provision: bool,
     client_email: str | None,
     api_url: str,
-    api_token: str | None,
     admin_key: str | None,
     model: str,
     github_repo: str | None,
@@ -533,7 +529,7 @@ def main(
       python "agents/CMS Connector - Website/scan.py" --scratch-dir ../../scratch
 
       # With provisioning and client account creation
-      python "agents/CMS Connector - Website/scan.py" --scratch-dir ../../scratch --provision --api-token <token>
+      python "agents/CMS Connector - Website/scan.py" --scratch-dir ../../scratch --provision --admin-key <cmsk_…>
     """
     # ── Resolve website directory ─────────────────────────────────────────────
     if scratch_dir:
@@ -557,14 +553,8 @@ def main(
         slug = _slugify(website_path.name)
         click.echo(f"  Auto-derived slug: {slug}")
 
-    if provision and not api_token:
-        raise click.ClickException("--api-token is required when using --provision.")
-
-    # Short-term shim: until Task 19 drops --api-token, allow --admin-key
-    # to be used as the auth value too. The agent's HTTP helpers still send
-    # `Cookie: access_token=…` until Task 13 swaps them to Bearer.
-    if admin_key and not api_token:
-        api_token = admin_key
+    if provision and not admin_key:
+        raise click.ClickException("--admin-key is required when using --provision.")
 
     output_path = Path(out_dir).resolve() if out_dir else website_path
 
@@ -574,7 +564,7 @@ def main(
 
     # ── Client account flow (before scanning, so the admin knows account state) ──
     if provision:
-        client_email = _resolve_client(api_url, api_token, client_email)
+        client_email = _resolve_client(api_url, admin_key, client_email)
         click.echo()
 
     # ── Read source files ─────────────────────────────────────────────────────
@@ -615,7 +605,7 @@ def main(
     # ── Optional provisioning ─────────────────────────────────────────────────
     if provision:
         click.echo(f"🚀 Provisioning services via {api_url}…")
-        _provision(manifest, api_url, api_token)
+        _provision(manifest, api_url, admin_key)
 
     # ── Optional Vercel setup ──────────────────────────────────────────────────
     if github_repo and not skip_vercel:
@@ -623,9 +613,9 @@ def main(
             raise click.ClickException(
                 "--vercel-token and --github-token (or env vars) required for Vercel setup."
             )
-        if not api_token:
+        if not admin_key:
             raise click.ClickException(
-                "--api-token required for Vercel setup (used to PATCH the project row)."
+                "--admin-key required for Vercel setup (used to PATCH the project row)."
             )
 
         # Derive CMS endpoint base from the existing --endpoint (strip any /content suffix)
@@ -636,7 +626,7 @@ def main(
             vercel_token=vercel_token,
             github_token=github_token,
             cms_api_url=api_url,
-            cms_api_token=api_token,
+            cms_api_token=admin_key,
             cms_endpoint_base=endpoint_base,
         )
 
