@@ -114,6 +114,9 @@ def disable_deployment_protection(token: str, project_id: str) -> None:
 
     Affects production AND preview deployments — Vercel does not
     expose a per-environment toggle for this setting.
+
+    Mirrors scripts/disable_vercel_auth.py::disable_protection. If
+    Vercel adds a new protection field, update both call sites.
     """
     _request(
         token,

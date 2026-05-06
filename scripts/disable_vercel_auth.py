@@ -76,6 +76,8 @@ def is_infra(project: dict) -> tuple[bool, str]:
 
 
 def disable_protection(token: str, project_id: str) -> None:
+    """Mirrors agents/CMS Connector - Website/vercel.py::disable_deployment_protection.
+    If Vercel adds a new protection field, update both call sites."""
     _request(
         token,
         "PATCH",
