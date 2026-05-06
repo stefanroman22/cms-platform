@@ -1,10 +1,15 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ..models.schemas import AccountOut, ProjectOut, ProjectRequestIn
+from ..services.project_request_email import send_project_request_email
 from ..services.sessions import validate_session
 from ..services.supabase_client import get_supabase
 
 router = APIRouter(prefix="", tags=["projects"])
+
+log = logging.getLogger(__name__)
 
 SESSION_COOKIE = "sid"
 
@@ -77,4 +82,20 @@ async def create_project_request(body: ProjectRequestIn, request: Request):
             "timeline": body.timeline or None,
         }
     ).execute()
+
+    # Notify the platform admin. Best-effort — DB row is already written,
+    # so a Resend hiccup must not surface as a 500 to the user.
+    try:
+        send_project_request_email(
+            requester_email=user.email,
+            requester_name=user.full_name,
+            project_name=body.name,
+            project_type=body.type,
+            description=body.description,
+            budget=body.budget_range,
+            timeline=body.timeline,
+        )
+    except Exception as e:  # noqa: BLE001 — intentional broad catch
+        log.warning("project_request email send failed: %s", e)
+
     return {"success": True}
