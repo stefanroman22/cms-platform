@@ -43,8 +43,11 @@ def mint_admin_api_key(
     The plain key is the only thing that can be used to authenticate;
     callers must hand it to the operator immediately and never log it.
     """
-    lookup = secrets.token_urlsafe(12)[:KEY_PREFIX_LEN]
-    secret = secrets.token_urlsafe(24)[:SECRET_LEN_TARGET]
+    # token_hex emits 0-9a-f only — never `_`, so the cmsk_<env>_<lookup>_<secret>
+    # split-on-underscore parser never desyncs. 8 bytes = 16 hex chars (lookup),
+    # 16 bytes = 32 hex chars (secret) — same lengths as the previous attempt.
+    lookup = secrets.token_hex(KEY_PREFIX_LEN // 2)
+    secret = secrets.token_hex(SECRET_LEN_TARGET // 2)
     plain = f"cmsk_{env}_{lookup}_{secret}"
     row = (
         get_supabase_admin()
