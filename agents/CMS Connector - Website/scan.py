@@ -342,6 +342,21 @@ def _vercel_setup(
     # 0. Fetch existing project row from CMS to check for reusable state (idempotency)
     existing = _http("GET", f"{base}/admin/projects/{slug}", headers) or {}
 
+    if not existing:
+        create = _http(
+            "POST",
+            f"{base}/admin/projects",
+            headers,
+            {
+                "slug": slug,
+                "name": manifest.get("project_name", slug),
+                "owner_email": manifest.get("developer_email", "stefanromanpers@gmail.com"),
+            },
+        )
+        if create:
+            existing = create
+            click.echo(f"  ✓ Created CMS project row: {slug}")
+
     # 1. Reuse preview_token if present, else generate a fresh one
     preview_token = existing.get("preview_token") or secrets.token_urlsafe(32)
 

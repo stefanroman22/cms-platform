@@ -13,6 +13,14 @@
 
 1. **Resolve client account** in the CMS (`_resolve_client`). Lookup by email; create if absent and surface generated password to the user once.
 2. **Write outputs** locally: `cms.config.json` (slim, for client repo) and `cms-provision.json` (full manifest, admin keeps).
+
+### 4.1.5 — Ensure CMS project row exists
+
+If `GET /admin/projects/<slug>` returns 404 (or empty), POST to
+`/admin/projects` with body `{slug, name, owner_email}` (use the
+developer's admin email — ownership transfers to the client in
+Phase 6). Otherwise reuse the existing row.
+
 3. **Provision services** via CMS admin API:
    - `POST /projects/<slug>/services` per service.
    - `PUT /projects/<slug>/services/<key>` to seed `initial_content`. Skip seeding for `email_config`.
