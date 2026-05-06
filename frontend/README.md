@@ -29,8 +29,10 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Production URL:** https://roman-technologies.dev (canonical)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Hosted on Vercel project `roman-technologies` (default URL `roman-technologies.vercel.app`, same project as the canonical domain).
+
+Legacy alias `cms-frontend-roman.vercel.app` may still resolve and 308-redirects to `roman-technologies.dev`. It is not a separate environment — always inspect the live frontend at `https://roman-technologies.dev`.
