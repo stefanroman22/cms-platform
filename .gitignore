@@ -73,3 +73,6 @@ backend/*.log
 backend/.pytest_cache/
 backend/.mypy_cache/
 backend/.ruff_cache/
+
+# Local MCP config — contains personal access tokens, must not be committed
+.mcp.json
