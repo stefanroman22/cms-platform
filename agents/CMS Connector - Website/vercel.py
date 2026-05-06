@@ -102,6 +102,27 @@ def set_env_var(
     )
 
 
+def disable_deployment_protection(token: str, project_id: str) -> None:
+    """Disables Vercel Authentication (ssoProtection) and Password
+    Protection on the given project.
+
+    Vercel applies "Standard Protection" by default to new projects,
+    which requires the visitor to log into a Vercel team to view the
+    deployment. CMS clients are not Vercel team members, so we strip
+    both protection types unconditionally. Idempotent — calling on a
+    project that already has neither is a no-op.
+
+    Affects production AND preview deployments — Vercel does not
+    expose a per-environment toggle for this setting.
+    """
+    _request(
+        token,
+        "PATCH",
+        f"/v9/projects/{project_id}",
+        {"ssoProtection": None, "passwordProtection": None},
+    )
+
+
 def trigger_deployment(
     token: str,
     project_id: str,

@@ -83,6 +83,22 @@ def test_set_env_var_creates_preview_scoped(fake_urlopen):
     assert body["target"] == ["preview"]
 
 
+def test_disable_deployment_protection_patches_with_null_fields(fake_urlopen):
+    """Both ssoProtection and passwordProtection must be sent as null
+    in the PATCH body. Vercel returns the updated project on success."""
+    fake_urlopen.return_value = _json_response(
+        {"id": "prj_xyz", "ssoProtection": None, "passwordProtection": None}
+    )
+
+    vercel.disable_deployment_protection(token="tok", project_id="prj_xyz")
+
+    call = fake_urlopen.call_args_list[0][0][0]
+    assert call.method == "PATCH"
+    assert call.full_url.endswith("/v9/projects/prj_xyz")
+    body = json.loads(call.data.decode())
+    assert body == {"ssoProtection": None, "passwordProtection": None}
+
+
 def test_trigger_deployment_returns_stable_alias_when_available(fake_urlopen):
     # First call: POST /deployments creates the deployment.
     # Second call: GET /deployments/{id} returns a populated alias array.
