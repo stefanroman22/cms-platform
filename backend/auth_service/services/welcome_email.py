@@ -65,6 +65,10 @@ def send_welcome_email(
         headers={
             "Authorization": f"Bearer {settings.RESEND_API_KEY}",
             "Content-Type": "application/json",
+            # api.resend.com sits behind Cloudflare, which 403s
+            # User-Agent-less requests with error code 1010. Setting a
+            # real-looking UA is the documented workaround.
+            "User-Agent": "roman-technologies-cms-backend/1.0",
         },
         method="POST",
     )
