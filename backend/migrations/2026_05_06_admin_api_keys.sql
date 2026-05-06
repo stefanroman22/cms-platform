@@ -20,3 +20,8 @@ CREATE TABLE IF NOT EXISTS admin_api_keys (
 CREATE INDEX IF NOT EXISTS admin_api_keys_active
   ON admin_api_keys (user_id)
   WHERE revoked_at IS NULL;
+
+-- Lock down: only the service-role key (bypasses RLS) is allowed to
+-- read/write this table. The mint script and the auth dep both use
+-- the service role. The frontend's anon key has no business here.
+ALTER TABLE admin_api_keys ENABLE ROW LEVEL SECURITY;
