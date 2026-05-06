@@ -23,13 +23,19 @@ Call `POST /admin/clients` with `{"email": "<client>", "full_name": "<optional>"
 
 ### 6.3 — Transfer project ownership
 
-UPDATE `projects.user_id` to the new client's user id, via Supabase Management API SQL:
+POST to the backend admin API (NOT Supabase Management):
 
-```sql
-UPDATE projects SET user_id = '<new_user_id>' WHERE slug = '<project_slug>' RETURNING id, slug, user_id;
+```http
+POST {CMS_API_URL}/admin/projects/{project_slug}/transfer
+Authorization: Bearer {CMS_ADMIN_API_KEY}
+Content-Type: application/json
+
+{"to_user_email": "<client_email>"}
 ```
 
-The previous owner (developer admin account) keeps access via `is_admin` — admin endpoints scope by admin flag, not ownership.
+200 = ownership transferred. The previous owner (developer admin
+account) keeps access via `is_admin` — admin endpoints scope by
+admin flag, not ownership.
 
 ### 6.4 — Send welcome email via Resend
 
