@@ -17,6 +17,7 @@ from ..models.schemas import (
     CreateClientRequest,
     ProjectSettingsIn,
     ProjectSettingsOut,
+    ProjectTransferIn,
     ServiceCreateRequest,
     ServiceDetailOut,
     ServiceOut,
@@ -458,6 +459,35 @@ async def admin_create_project(body: AdminProjectCreateIn, request: Request):
         .execute()
     )
     return inserted.data[0] if inserted.data else {}
+
+
+@router.post("/admin/projects/{project_slug}/transfer")
+async def admin_transfer_project(project_slug: str, body: ProjectTransferIn, request: Request):
+    await admin_user_via_bearer_or_sid(request)
+    sb = get_supabase()
+    target = (
+        sb.table("users")
+        .select("id, email")
+        .eq("email", body.to_user_email.lower().strip())
+        .maybe_single()
+        .execute()
+    )
+    if not (target and target.data):
+        raise HTTPException(404, f"No user with email {body.to_user_email!r}")
+    updated = (
+        sb.table("projects")
+        .update(
+            {
+                "user_id": target.data["id"],
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        .eq("slug", project_slug)
+        .execute()
+    )
+    if not updated.data:
+        raise HTTPException(404, f"No project with slug {project_slug!r}")
+    return updated.data[0]
 
 
 @router.get("/admin/clients", response_model=list[UserAdminOut])
