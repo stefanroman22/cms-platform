@@ -97,6 +97,10 @@ def auth_as(monkeypatch):
 
         # Patch every router's require_user import site
         monkeypatch.setattr("auth_service.routers.workspace.require_user", fake_require_user)
+        # The shared admin_user_via_bearer_or_sid dep calls require_user directly
+        # from the deps module — patch it there too so the fake user reaches the
+        # admin-gated routes refactored in Task 3.
+        monkeypatch.setattr("auth_service.routers.deps.require_user", fake_require_user)
         # projects.py uses a private _require_user that doesn't import from deps — skip safely
         try:
             monkeypatch.setattr("auth_service.routers.projects.require_user", fake_require_user)

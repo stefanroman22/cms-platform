@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from ..models.schemas import ProjectStatusOut, PublishResponse, RotateTokenResponse
 from ..services.supabase_client import get_supabase
-from .deps import require_project_access, require_user
+from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
 
 router = APIRouter(tags=["publish"])
 
@@ -174,18 +174,11 @@ def _update_vercel_preview_env_var(vercel_project_id: str, new_token: str) -> No
         pass
 
 
-async def _require_admin(request: Request):
-    user = await require_user(request)
-    if not user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return user
-
-
 @router.post(
     "/admin/projects/{project_slug}/rotate-preview-token", response_model=RotateTokenResponse
 )
 async def rotate_preview_token(project_slug: str, request: Request):
-    await _require_admin(request)
+    await admin_user_via_bearer_or_sid(request)
 
     sb = get_supabase()
     p_result = (

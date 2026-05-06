@@ -21,10 +21,9 @@ from ..models.schemas import (
     ServiceOut,
     ServiceTypeOut,
     UserAdminOut,
-    UserOut,
 )
 from ..services.supabase_client import get_supabase, get_supabase_admin
-from .deps import require_project_access, require_user
+from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
 
 logger = logging.getLogger(__name__)
 
@@ -55,13 +54,6 @@ _MIME_TO_EXT: dict[str, str] = {
 router = APIRouter(tags=["workspace"])
 
 # ── Auth helpers ─────────────────────────────────────────────────────────────
-
-
-async def _require_admin(request: Request) -> UserOut:
-    user = await require_user(request)
-    if not user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return user
 
 
 def _flatten_service(svc: dict) -> dict:
@@ -277,7 +269,7 @@ async def upload_file(
 
 @router.post("/projects/{project_slug}/services", status_code=status.HTTP_201_CREATED)
 async def add_service(project_slug: str, body: ServiceCreateRequest, request: Request):
-    user = await _require_admin(request)
+    user = await admin_user_via_bearer_or_sid(request)
     project = require_project_access(project_slug, user)
 
     # Validate service_type_slug exists
@@ -358,7 +350,7 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
     "/projects/{project_slug}/services/{service_key}", status_code=status.HTTP_204_NO_CONTENT
 )
 async def remove_service(project_slug: str, service_key: str, request: Request):
-    user = await _require_admin(request)
+    user = await admin_user_via_bearer_or_sid(request)
     project = require_project_access(project_slug, user)
 
     sb = get_supabase()
@@ -369,7 +361,7 @@ async def remove_service(project_slug: str, service_key: str, request: Request):
 
 @router.get("/admin/projects", response_model=list[AdminProjectOut])
 async def admin_list_projects(request: Request):
-    await _require_admin(request)
+    await admin_user_via_bearer_or_sid(request)
 
     sb = get_supabase()
     result = (
@@ -399,7 +391,7 @@ async def admin_list_projects(request: Request):
 
 @router.get("/admin/projects/{project_slug}", response_model=AdminProjectDetailOut)
 async def admin_get_project(project_slug: str, request: Request):
-    await _require_admin(request)
+    await admin_user_via_bearer_or_sid(request)
     sb = get_supabase()
     result = (
         sb.table("projects")
@@ -417,7 +409,7 @@ async def admin_get_project(project_slug: str, request: Request):
 
 @router.patch("/admin/projects/{project_slug}")
 async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, request: Request):
-    await _require_admin(request)
+    await admin_user_via_bearer_or_sid(request)
 
     sb = get_supabase()
     update_data = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -431,7 +423,7 @@ async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, requ
 
 @router.get("/admin/clients", response_model=list[UserAdminOut])
 async def admin_list_clients(request: Request):
-    await _require_admin(request)
+    await admin_user_via_bearer_or_sid(request)
 
     sb = get_supabase()
     users_result = (
@@ -456,7 +448,7 @@ async def admin_list_clients(request: Request):
 
 @router.get("/admin/service-types", response_model=list[ServiceTypeOut])
 async def admin_list_service_types(request: Request):
-    await _require_admin(request)
+    await admin_user_via_bearer_or_sid(request)
 
     sb = get_supabase()
     result = (
@@ -470,7 +462,7 @@ async def admin_list_service_types(request: Request):
 
 @router.get("/projects/{project_slug}/settings", response_model=ProjectSettingsOut)
 async def get_project_settings(project_slug: str, request: Request):
-    user = await _require_admin(request)
+    user = await admin_user_via_bearer_or_sid(request)
     project = require_project_access(project_slug, user)
 
     sb = get_supabase()
@@ -494,7 +486,7 @@ async def update_project_settings(
     body: ProjectSettingsIn,
     request: Request,
 ):
-    user = await _require_admin(request)
+    user = await admin_user_via_bearer_or_sid(request)
     project = require_project_access(project_slug, user)
 
     # Normalise: strip whitespace, remove empty strings
@@ -524,7 +516,7 @@ def _generate_password(length: int = 16) -> str:
 @router.get("/admin/clients/lookup", response_model=CreateClientOut)
 async def lookup_client(email: str, request: Request):
     """Check whether an email already has an account. Returns account info (no password)."""
-    await _require_admin(request)
+    await admin_user_via_bearer_or_sid(request)
 
     sb = get_supabase()
     result = (
@@ -553,7 +545,7 @@ async def create_client(body: CreateClientRequest, request: Request):
     Create a new client account (if email not found) or return the existing one.
     When a new account is created, a random password is generated and returned once.
     """
-    await _require_admin(request)
+    await admin_user_via_bearer_or_sid(request)
 
     email = body.email.lower().strip()
     sb = get_supabase()
