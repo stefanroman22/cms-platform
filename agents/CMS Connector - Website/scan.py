@@ -454,6 +454,13 @@ def _vercel_setup(
 @click.option(
     "--api-token", default=None, help="Admin access_token cookie value (required with --provision)."
 )
+@click.option(
+    "--admin-key",
+    "admin_key",
+    default=None,
+    envvar="CMS_ADMIN_API_KEY",
+    help="CMS admin API key (cmsk_…). env: CMS_ADMIN_API_KEY.",
+)
 @click.option("--model", default=DEFAULT_MODEL, show_default=True, help="Claude model ID.")
 @click.option(
     "--github-repo",
@@ -491,6 +498,7 @@ def main(
     client_email: str | None,
     api_url: str,
     api_token: str | None,
+    admin_key: str | None,
     model: str,
     github_repo: str | None,
     vercel_token: str | None,
@@ -536,6 +544,12 @@ def main(
 
     if provision and not api_token:
         raise click.ClickException("--api-token is required when using --provision.")
+
+    # Short-term shim: until Task 19 drops --api-token, allow --admin-key
+    # to be used as the auth value too. The agent's HTTP helpers still send
+    # `Cookie: access_token=…` until Task 13 swaps them to Bearer.
+    if admin_key and not api_token:
+        api_token = admin_key
 
     output_path = Path(out_dir).resolve() if out_dir else website_path
 
