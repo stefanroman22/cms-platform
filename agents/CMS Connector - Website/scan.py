@@ -40,6 +40,14 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load per-agent .env (gitignored, sibling of this file). Click's
+# envvar lookup happens at decoration time, so this MUST run before
+# any @click.option(envvar=...) is imported. Module-top is the only
+# safe location.
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
 # The folder name "CMS Connector - Website" contains spaces and a hyphen so
 # it cannot be a Python package. Add the script's directory to sys.path so
 # the flat imports below resolve. Use append (not insert(0)) so installed
