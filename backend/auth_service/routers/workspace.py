@@ -25,6 +25,7 @@ from ..models.schemas import (
     UserAdminOut,
     WelcomeEmailIn,
 )
+from ..services.auth_service import hash_password
 from ..services.supabase_client import get_supabase, get_supabase_admin
 from ..services.welcome_email import send_welcome_email
 from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
@@ -645,7 +646,6 @@ async def create_client(body: CreateClientRequest, request: Request):
 
     email = body.email.lower().strip()
     sb = get_supabase()
-    sb_admin = get_supabase_admin()
 
     # Check for existing user
     existing = (
@@ -661,28 +661,21 @@ async def create_client(body: CreateClientRequest, request: Request):
             generated_password=None,
         )
 
-    # Create via Supabase Auth admin API
+    # Generate id + password locally and hash with the same argon2 helper that
+    # /auth/login uses (auth_service.services.auth_service). Writing
+    # password_hash satisfies the NOT NULL constraint on public.users.
+    user_id = str(uuid.uuid4())
     password = _generate_password()
-    auth_resp = sb_admin.auth.admin.create_user(
-        {
-            "email": email,
-            "password": password,
-            "email_confirm": True,
-            "user_metadata": {"full_name": body.full_name or ""},
-        }
-    )
+    password_hash = hash_password(password)
 
-    if not auth_resp.user:
-        raise HTTPException(status_code=500, detail="Failed to create auth user")
-
-    user_id = auth_resp.user.id
-
-    # Insert into public users table
+    # Insert into public users table (service-role client to bypass RLS).
+    sb_admin = get_supabase_admin()
     sb_admin.table("users").insert(
         {
             "id": user_id,
             "email": email,
             "full_name": body.full_name,
+            "password_hash": password_hash,
             "is_admin": False,
             "is_active": True,
             "created_at": datetime.now(UTC).isoformat(),
