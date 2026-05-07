@@ -22,9 +22,11 @@
 BEGIN;
 
 -- 1. Bulk delete throwaway projects (FK cascade handles services).
+-- IMPORTANT: do NOT include `e2e-test-project` here. The integration
+-- suite (and `scripts/seed_e2e.py`) expects it to exist persistently.
+-- Wiping it broke E2E on master push and required a manual rebuild.
 DELETE FROM public.projects
-WHERE slug LIKE 'throwaway-%'
-   OR slug = 'e2e-test-project';
+WHERE slug LIKE 'throwaway-%';
 
 -- 2. Bulk delete throwaway clients. Excludes the seed users so the
 --    integration suite still runs.
