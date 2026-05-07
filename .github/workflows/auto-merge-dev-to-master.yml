@@ -31,8 +31,13 @@ on:
 
 # Needs write to push master. Status-check guard above ensures we only
 # push when CI+E2E for the SHA are green.
+# `actions: write` lets the final step `gh workflow run …` dispatch
+# the master-only follow-on workflows (E2E full suite, post-deploy
+# smoke, CodeQL). GITHUB_TOKEN-authenticated pushes do NOT trigger
+# `push:` workflows; `workflow_dispatch` is allowed.
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: auto-merge-dev-to-master
@@ -115,3 +120,22 @@ jobs:
           git merge --ff-only "$DEV_SHA"
           git push origin master
           echo "🎉 master fast-forwarded to $DEV_SHA"
+
+      # Master push above is authenticated via GITHUB_TOKEN. GitHub
+      # explicitly does NOT trigger child workflows from such pushes
+      # (loop-prevention rule). To get E2E full-suite + post-deploy
+      # smoke + CodeQL running on the new master tip, we dispatch
+      # them manually via `workflow_dispatch` — which IS allowed under
+      # GITHUB_TOKEN per the same docs.
+      - name: Dispatch master-only workflows
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for wf in "E2E" "Post-deploy smoke + auto-rollback" "CodeQL"; do
+            echo "→ dispatching '$wf' on master"
+            gh workflow run "$wf" --ref master || {
+              echo "::warning::failed to dispatch $wf — likely missing workflow_dispatch trigger"
+            }
+          done
