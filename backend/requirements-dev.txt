@@ -5,7 +5,12 @@
 # Test framework
 pytest==8.3.3
 pytest-asyncio==0.24.0
-httpx==0.27.2
+# httpx intentionally NOT pinned here — runtime (`requirements.txt`)
+# pulls it transitively via supabase 2.29.0 and resolves a different
+# version than the standalone pin we used to have. CI installs both
+# files together, so leaving httpx unpinned in dev avoids the
+# `--require-hashes` conflict (CI-004) while keeping the runtime
+# version authoritative.
 
 # Lint + format
 ruff==0.7.4
