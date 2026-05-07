@@ -1,6 +1,12 @@
 # Runtime dependencies for the CMS Connector — Website agent CLI.
 # Pinned to exact versions for reproducibility.
+#
+# CI-004 / DEP-009 — CI installs from `requirements.lock` (generated
+# via `pip-compile --generate-hashes`) using `--require-hashes`.
+# Whenever you edit this file, regenerate the lock:
+#   cd agents/CMS\ Connector\ -\ Website
+#   pip-compile --generate-hashes --output-file=requirements.lock requirements.txt
 
 anthropic==0.97.0
 click==8.3.1
-python-dotenv>=1.0.0
+python-dotenv==1.2.2

@@ -214,6 +214,12 @@ def send_project_request_email(
     Caller is expected to wrap this in try/except and treat email
     failure as non-fatal — the project_request DB row has already
     been written."""
+    # TEST-002 — preview-tier short-circuit on E2E marker.
+    from .e2e_email_guard import short_circuit_response, should_short_circuit
+
+    if should_short_circuit(requester_email, requester_name or "", project_name, description):
+        return short_circuit_response(f"project_request:{requester_email}")
+
     if not settings.RESEND_API_KEY:
         raise RuntimeError("RESEND_API_KEY not configured on this backend")
 

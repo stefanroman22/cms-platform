@@ -3,7 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 // Server-side only — not exposed to the browser
 const FASTAPI_URL = process.env.FASTAPI_URL ?? "http://localhost:8001";
 
+// FE-002 — explicit method allow-list. The named exports below
+// (GET/POST/PUT/PATCH/DELETE) already serve as a route-level allow-list
+// since Next.js returns 405 for any method without an export, but we
+// keep this defensive guard so a future refactor that goes through a
+// more permissive router (or removes the named exports in favour of a
+// catch-all) doesn't silently lose the constraint.
+const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+
 async function handler(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  if (!ALLOWED_METHODS.has(request.method)) {
+    return NextResponse.json({ detail: "Method not allowed" }, { status: 405 });
+  }
   const { path } = await params;
   const targetPath = "/" + path.join("/");
   const search = request.nextUrl.search;

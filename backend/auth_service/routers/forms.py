@@ -4,10 +4,18 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from ..core.config import settings
-from ..core.limiter import limiter
+from ..core.limiter import client_ip, limiter
 from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(tags=["forms"])
+
+
+def _form_bucket(request: Request) -> str:
+    """Per-(project, form, ip) bucket so an attacker hammering one
+    project's form can't burn another project's quota. Closes BE-001."""
+    slug = request.path_params.get("project_slug", "?")
+    form = request.path_params.get("form_key", "?")
+    return f"{slug}:{form}:{client_ip(request)}"
 
 
 def _build_email_html(
@@ -16,8 +24,7 @@ def _build_email_html(
     fields: dict[str, str],
     submitted_at: str,
 ) -> str:
-    rows = "".join(
-        f"""
+    rows = "".join(f"""
         <tr>
           <td style="padding:8px 12px;font-weight:600;color:#52525b;
                      border-bottom:1px solid #f4f4f5;white-space:nowrap;
@@ -25,9 +32,7 @@ def _build_email_html(
           <td style="padding:8px 12px;color:#18181b;
                      border-bottom:1px solid #f4f4f5;word-break:break-word">{value}</td>
         </tr>
-        """
-        for key, value in fields.items()
-    )
+        """ for key, value in fields.items())
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -76,7 +81,7 @@ def _build_email_html(
 
 
 @router.post("/{project_slug}/{form_key}")
-@limiter.limit("5/10minutes")
+@limiter.limit("5/10minutes", key_func=_form_bucket)
 async def submit_form(
     project_slug: str,
     form_key: str,
@@ -99,9 +104,18 @@ async def submit_form(
     project = proj_result.data
     allowed_origins: list[str] = project.get("allowed_origins") or []
 
-    # ── 2. Origin check ───────────────────────────────────────────────────────
+    # ── 2. Origin check (fail-closed — INFRA-008) ─────────────────────────────
+    # Empty allowed_origins used to skip the check entirely, which meant any
+    # cross-origin caller could submit. Now: no allowed_origins ⇒ no
+    # submissions accepted. Operators must add at least one origin in the
+    # CMS project settings to enable forms.
+    if not allowed_origins:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Form submissions are disabled for this project (no allowed_origins configured)",
+        )
     origin = request.headers.get("origin", "")
-    if allowed_origins and origin not in allowed_origins:
+    if origin not in allowed_origins:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Origin not allowed for this project",
@@ -161,6 +175,17 @@ async def submit_form(
     reply_to = fields.get("email") or fields.get("Email") or fields.get("email_address") or None
 
     # ── 6. Send via Resend ────────────────────────────────────────────────────
+    # TEST-002 — skip the Resend hop in preview when the body carries
+    # the E2E marker. Production always sends.
+    from ..services.e2e_email_guard import short_circuit_response, should_short_circuit
+
+    if should_short_circuit(*fields.values(), destination, project["name"]):
+        short_circuit_response(f"forms:{project_slug}:{form_key}")
+        return JSONResponse(
+            content={"success": True, "e2e_short_circuit": True},
+            headers={"Access-Control-Allow-Origin": origin or "*"},
+        )
+
     if not settings.RESEND_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

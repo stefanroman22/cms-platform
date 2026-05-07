@@ -14,7 +14,17 @@ from .routers.issues import router as issues_router
 
 # ── Main app ──────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="CMS Auth Service", version="1.0.0")
+# Docs/OpenAPI surface only exposed in development. In preview/production
+# they are an info-disclosure surface (route inventory, request schemas,
+# rate-limit shape) and conflict with the strict CSP set in vercel.json.
+_DOCS_ENABLED = settings.ENVIRONMENT == "development"
+app = FastAPI(
+    title="CMS Auth Service",
+    version="1.0.0",
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

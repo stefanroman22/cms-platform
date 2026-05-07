@@ -88,6 +88,7 @@ async def me(request: Request):
 
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("3/minute")
 async def change_password(body: ChangePasswordRequest, request: Request, response: Response):
     sid = request.cookies.get(SESSION_COOKIE)
     user = await validate_session(sid)

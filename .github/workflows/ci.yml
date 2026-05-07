@@ -5,6 +5,10 @@ on:
     branches: [master, dev]
   workflow_dispatch:
 
+# Default-deny token scope. Jobs that need write must opt in explicitly.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -14,10 +18,10 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0   # gitleaks scans full history on the pushed branch
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@83373cf2f8c4db6e24b41c1a9b086bb9619e9cd3 # v2.3.7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
@@ -38,15 +42,19 @@ jobs:
       RESEND_FROM_EMAIL: noreply@example.com
       ENVIRONMENT: development
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version-file: .python-version
           cache: pip
           cache-dependency-path: |
-            backend/requirements.txt
-            backend/requirements-dev.txt
-      - run: pip install -r requirements.txt -r requirements-dev.txt
+            backend/requirements.lock
+            backend/requirements-dev.lock
+      # CI-004 / DEP-009 — `--require-hashes` blocks a poisoned upstream
+      # PyPI artefact from being installed even when the version pin
+      # matches. Generated via `pip-compile --generate-hashes`; refresh
+      # whenever requirements{,-dev}.txt change.
+      - run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
       - name: Lint (ruff)
         run: ruff check .
         working-directory: .
@@ -63,15 +71,16 @@ jobs:
       run:
         working-directory: agents/CMS Connector - Website
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version-file: .python-version
           cache: pip
           cache-dependency-path: |
-            agents/CMS Connector - Website/requirements.txt
-            agents/CMS Connector - Website/requirements-dev.txt
-      - run: pip install -r requirements.txt -r requirements-dev.txt
+            agents/CMS Connector - Website/requirements.lock
+            agents/CMS Connector - Website/requirements-dev.lock
+      # CI-004 / DEP-009 — see backend job comment.
+      - run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
       - name: Tests (pytest)
         run: python -m pytest tests/ -q
 
@@ -82,13 +91,16 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
+      # `--ignore-scripts` blocks postinstall hooks in a compromised
+      # transitive dep (CI-005). The frontend's own `prepare` / `build`
+      # scripts are invoked explicitly via `npm run` below.
+      - run: npm ci --ignore-scripts
       - name: Type check
         run: npm run typecheck
       - name: Lint

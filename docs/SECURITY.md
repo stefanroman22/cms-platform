@@ -33,3 +33,160 @@ are the audit trail when a leak is suspected.
   the operator. Example: `re_cENrXnX5_*REDACTED*` not `re_cENrXnX5_25Ek...`.
 - See [`docs/ENVIRONMENTS.md`](./ENVIRONMENTS.md) for the per-tier env-var
   contract.
+
+## Vercel deployment-protection invariants
+
+The Vercel projects are split into two categories with **opposite**
+deployment-protection requirements. Audit quarterly that both still
+hold.
+
+### Backend / CMS infra projects (`cms-backend-roman`, `cms-frontend-roman`)
+
+These run our own infrastructure and must be reachable from the public
+internet (CMS clients call `cms-backend-roman` from their own websites,
+and the operator and clients use `cms-frontend-roman` directly):
+
+- **Vercel Authentication / SSO Protection: OFF** for production.
+- **Preview deployments**: optional SSO is fine since previews are not
+  client-facing.
+- **DDoS / Trusted IPs**: not currently enforced. Future work
+  (CI-allowlist for `/admin/*`) tracked as open audit item.
+
+### Client website projects (e.g. `it-global-services`)
+
+These are client-facing sites provisioned by the CMS Connector agent.
+The client's visitors must reach the preview URL without an SSO gate,
+because that's the URL the CMS dashboard's "See Preview" link opens.
+
+- **Vercel Authentication / SSO Protection: OFF** for both production
+  AND preview.
+- This is set by `agents/CMS Connector - Website` during Phase 4
+  provisioning (per the
+  [`zero-prompt-agent design`](./superpowers/specs/2026-05-06-zero-prompt-agent-design.md)).
+- The retrofit script for existing client projects lives at
+  `scripts/admin/disable_vercel_auth.py` (planned — see audit item
+  INFRA-009 for fail-closed guard).
+
+### Quarterly verification
+
+Open the Vercel dashboard, navigate to each project's
+**Settings → Deployment Protection**, and confirm:
+
+| Project | Production | Preview |
+|---|---|---|
+| `cms-backend-roman` | OFF | optional SSO OK |
+| `cms-frontend-roman` | OFF | optional SSO OK |
+| any `client-*` project | OFF | OFF |
+
+If the agent stops correctly disabling SSO for new client projects, fix
+it before onboarding the next client — a gated preview link is a
+broken-onboarding bug for the client.
+
+## Supabase Storage hardening
+
+The `cms-files` bucket should have these defenses both in the
+application layer (`backend/auth_service/routers/workspace.py`) AND
+the bucket configuration. The application layer is the primary gate;
+bucket-level limits are defense-in-depth for a future code path that
+goes around the upload route (signed URL upload, direct REST call).
+
+**Required bucket settings (Supabase dashboard → Storage → cms-files
+→ Configuration):**
+
+| Setting | Value | Why |
+|---|---|---|
+| `file_size_limit` | `52428800` (50 MB) | Mirror `MAX_FILE_SIZE` in [`backend/auth_service/routers/workspace.py`](../backend/auth_service/routers/workspace.py). |
+| `allowed_mime_types` | `image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,application/pdf` | Mirror `_MIME_TO_EXT`. **Do not include `image/svg+xml`** — XML payload can carry inline `<script>` and turns any public-URL render into a stored-XSS sink. |
+| `public` | `true` | Required for public-URL serving on client websites. |
+
+If a client genuinely needs SVG, the bucket must additionally serve
+the file with `Content-Disposition: attachment` AND apply a CSP that
+blocks scripts on the bucket origin. Until that work lands, SVG is
+denied at the application layer (`_DENIED_MIME` set).
+
+## Disclosure policy
+
+This is a single-operator project. There is no bug-bounty programme and no
+SLA. The expectations are:
+
+- **Eligible findings**: any flaw that could compromise CMS clients
+  (account takeover, cross-tenant data leak, RCE, credential exposure,
+  privilege escalation, persistent XSS, RLS bypass).
+- **Out of scope**: best-practice nits without a concrete impact path,
+  rate-limit fuzzing without a working bypass, social engineering of the
+  operator, anything requiring physical access.
+- **Coordinated disclosure window**: 90 days from acknowledgement, or
+  immediately upon public deployment of a fix — whichever is sooner.
+- **Acknowledgement**: best-effort within 7 days. Reporters who follow
+  the process get a public credit in the rotation log if they want one.
+
+## Threat model (scope)
+
+What the platform is defending:
+
+- **Tenant isolation** — one client's CMS content / form submissions /
+  service config must never leak into another client's frontend or
+  another client's API responses. Boundary: `projects.user_id` +
+  `project_services.project_id` chain, enforced by application-layer
+  filters today and (planned, BE-010) Postgres RLS.
+- **Admin endpoint authority** — `/admin/*` and the `cmsk_*` Bearer key
+  path must only run for the operator. Boundary: `users.is_admin = true`
+  *and* admin-API-key match. Scope-restricted Bearer keys (e.g. agent
+  scope) can only call the endpoints listed in their `scopes` array.
+- **Credential confidentiality** — Supabase service-role key, Resend API
+  key, Vercel PAT, Supabase PAT must never be logged, returned in API
+  responses, embedded in client bundles, or written to commit history.
+- **Session integrity** — session cookies are httponly, samesite=strict
+  in production, rotated on password change, revocable per-device, and
+  bound to user-agent + IP for audit.
+
+What is **explicitly out of scope** for the threat model:
+
+- Compromise of the operator's laptop or GitHub account (defended at the
+  GitHub layer: 2FA, branch protection, push protection — see CI-009).
+- Supply-chain attacks on transitive npm/pypi packages (mitigated by
+  `--ignore-scripts` on `npm ci` + Dependabot + gitleaks, but not zero).
+- Vercel platform compromise (vendor-trust boundary).
+- Physical / coercive attack on the operator.
+
+## Incident response runbook
+
+Trigger: suspected leak, observed unauthorized access, anomalous traffic,
+externally-reported finding.
+
+1. **Contain (≤15 min)**
+   - Rotate the suspected credential at the provider (Supabase / Resend /
+     Vercel / GitHub PAT). Use the procedure in
+     [`docs/ENVIRONMENTS.md`](./ENVIRONMENTS.md).
+   - For Bearer admin keys (`cmsk_*`): regenerate via `scripts/auth/`
+     helpers — old key invalidates immediately.
+   - For session compromise: call `revoke_all_for_user(user.id)` directly
+     against the database via Supabase SQL editor.
+
+2. **Assess (≤1 h)**
+   - Pull Supabase auth logs + Vercel runtime logs for the suspected
+     window. Match against `users.last_seen_at` + `sessions.created_at`.
+   - For data-exposure suspicions: query `content_entries` /
+     `project_services` / `users` for rows touched in the window.
+   - Document IPs, user-agents, affected `project_id`s in the incident
+     ticket (private).
+
+3. **Notify (≤24 h)**
+   - If a CMS client's data was affected: email the client directly with
+     the scope, what was exposed, what was rotated.
+   - If only operator credentials were affected and no client data was
+     touched: log in the rotation table above; no client notification.
+
+4. **Remediate**
+   - Open a private fix branch. Land the patch on `dev` first, run the
+     full E2E + integration suite, then scheduled-merge to `master`.
+   - Never disable hooks (`--no-verify`) during incident response —
+     gitleaks pre-commit is what stops the hot-fix from re-leaking.
+
+5. **Post-mortem (≤7 days)**
+   - Write up the incident in `docs/superpowers/post-mortems/YYYY-MM-DD-<slug>.md`.
+   - Redact secret values (≤12-char prefix + `*`) per the standing rule
+     above, even though the credential is already rotated.
+   - Add a row to the rotation log if a credential was rotated.
+   - Add a finding to the next security audit if the incident exposed a
+     class of vulnerability not previously tracked.

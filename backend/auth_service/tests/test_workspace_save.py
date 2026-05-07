@@ -198,6 +198,8 @@ def test_admin_get_project_requires_admin(mock_supabase, client, auth_as, client
 
 
 def test_admin_patch_project_updates_vercel_fields(mock_supabase, client, auth_as, admin_user):
+    """preview_token is intentionally NOT in the patch schema (BE-004 — token
+    fixation prevention). Rotation has its own dedicated endpoint."""
     auth_as(admin_user)
     mock_supabase.execute.return_value = MagicMock(data=[{"slug": "demo"}])
 
@@ -207,19 +209,33 @@ def test_admin_patch_project_updates_vercel_fields(mock_supabase, client, auth_a
             "vercel_project_id": "prj_abc",
             "production_url": "https://x.vercel.app",
             "preview_url": "https://x-preview.vercel.app",
-            "preview_token": "tok",
         },
     )
-    assert res.status_code == 200
+    assert res.status_code == 200, res.text
 
     updated = mock_supabase.update.call_args_list[0].args[0]
     assert updated["vercel_project_id"] == "prj_abc"
     assert updated["production_url"] == "https://x.vercel.app"
     assert updated["preview_url"] == "https://x-preview.vercel.app"
-    assert updated["preview_token"] == "tok"
+    # preview_token must NOT be in the update payload — schema drops it.
+    assert "preview_token" not in updated
+
+
+def test_admin_patch_project_rejects_non_http_url(
+    mock_supabase, client, auth_as, admin_user
+):  # noqa: ARG001
+    """BE-004 / BE-006 — javascript: + data: URLs are blocked at schema
+    layer so an admin (or stolen Bearer key) can't fixate the welcome
+    email's CTA on a phishing target."""
+    auth_as(admin_user)
+    res = client.patch(
+        "/admin/projects/demo",
+        json={"production_url": "javascript:alert(1)"},
+    )
+    assert res.status_code == 422
 
 
 def test_admin_patch_project_requires_admin(mock_supabase, client, auth_as, client_user):
     auth_as(client_user)
-    res = client.patch("/admin/projects/demo", json={"preview_token": "x"})
+    res = client.patch("/admin/projects/demo", json={"vercel_project_id": "x"})
     assert res.status_code == 403

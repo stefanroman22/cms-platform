@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
 
+from ..core.limiter import limiter
 from ..models.schemas import AccountOut, ProjectOut, ProjectRequestIn
 from ..services.project_request_email import send_project_request_email
 from ..services.sessions import validate_session
@@ -64,6 +65,7 @@ async def get_account(request: Request):
 
 
 @router.post("/project-requests", status_code=status.HTTP_201_CREATED)
+@limiter.limit("3/minute")
 async def create_project_request(body: ProjectRequestIn, request: Request):
     if body.type not in PROJECT_TYPES:
         raise HTTPException(

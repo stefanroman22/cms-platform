@@ -5,9 +5,23 @@
 ## Inputs (collected at the start of this phase)
 
 - **Client email** — prompt the user once. The agent has been running with the developer's account as the project owner; this phase reassigns ownership.
-- **`RESEND_API_KEY`** — required for the welcome email. If not set in env, prompt for it. (Future: replace with a backend `POST /admin/clients/{email}/welcome` endpoint that uses the backend's existing `RESEND_API_KEY` env var so the agent never sees the secret.)
+- **`CMS_ADMIN_API_KEY`** — agent's own Bearer key, already loaded from the per-agent `.env` (see Phase 0 / agent bootstrap). The welcome email is sent **server-side** by the backend's `POST /admin/clients/{email}/welcome` endpoint, which uses its own `RESEND_API_KEY` env. **The agent never holds Resend credentials and must never prompt for them.** If a future revision of this doc adds a Resend prompt, that is a regression — reject the change.
 
-If either is missing, halt this phase. Do not invent emails. Do not skip the welcome email.
+If the email is missing, halt this phase. Do not invent emails. Do not skip the welcome email.
+
+## Secret handling rules (apply throughout this phase)
+
+- **Never prompt the user inline for `RESEND_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VERCEL_TOKEN`, or any other backend secret.** They live in the backend Vercel project, not in the agent. If a step appears to need one, it is wrong — halt and ask the operator to add the missing endpoint to the backend instead.
+- **`generated_password` from `POST /admin/clients`** is sensitive and read-once. Display it to the operator in the terminal output, but do **not**:
+  - Write it to `agents/CMS Connector - Website/.last-llm-output.txt`.
+  - Write it to `cms-integration-report.md`.
+  - Write it to any file under `/tmp/`, `agents/`, or the project repo.
+  - Echo it back into chat after the initial create response.
+  - Pass it as a CLI flag (process listings leak args).
+  After the welcome email is sent (Phase 6.4), the password reaches the
+  client via Resend; the operator no longer needs it. Treat it as
+  one-shot.
+- **Temp files** — if a step writes scratch state to `/tmp/`, use `tempfile.NamedTemporaryFile(mode="w", delete=False)` with `os.fchmod(fp.fileno(), 0o600)` and explicitly `os.unlink()` in the cleanup step (6.5). Never use predictable paths like `/tmp/cms-provision-state.json` — race-prone on multi-tenant boxes.
 
 ## Steps
 

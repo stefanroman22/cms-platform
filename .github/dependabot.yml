@@ -1,0 +1,65 @@
+# Dependabot config — weekly security + minor-version PRs across all 5
+# ecosystems used in the repo. Auto-rebase keeps the PR train moving;
+# group filters batch low-risk minor/patch bumps so the inbox stays
+# manageable.
+
+version: 2
+
+updates:
+  # Backend (FastAPI + supabase + Resend + slowapi).
+  - package-ecosystem: pip
+    directory: "/backend"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    rebase-strategy: auto
+    groups:
+      backend-minor-and-patch:
+        update-types: [minor, patch]
+
+  # Agent (CMS Connector — Website).
+  - package-ecosystem: pip
+    directory: "/agents/CMS Connector - Website"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    rebase-strategy: auto
+    groups:
+      agent-minor-and-patch:
+        update-types: [minor, patch]
+
+  # Frontend (Next.js + React + Tailwind + Vitest).
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    rebase-strategy: auto
+    groups:
+      frontend-minor-and-patch:
+        update-types: [minor, patch]
+
+  # E2E suite (Playwright).
+  - package-ecosystem: npm
+    directory: "/e2e"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    rebase-strategy: auto
+    groups:
+      e2e-minor-and-patch:
+        update-types: [minor, patch]
+
+  # GitHub Actions (paired with CI-002 SHA-pinning so SHA bumps still
+  # land via PR review).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    rebase-strategy: auto

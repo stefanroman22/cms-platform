@@ -1,0 +1,25 @@
+Copyright (c) 2026 Stefan Roman / Roman Technologies. All rights reserved.
+
+This source code is made publicly viewable for transparency, review, and
+educational reference. It is not open-source software. No license is
+granted to use, copy, modify, distribute, sublicense, or create
+derivative works of this code, in whole or in part, without the prior
+written permission of the copyright holder.
+
+The names "Roman Technologies" and "Roman Technologies CMS", and any
+associated logos, are trademarks of the copyright holder and may not be
+used without permission.
+
+Third-party dependencies retain their own licenses, which are listed in
+the dependency manifests (`backend/requirements.txt`,
+`frontend/package.json`, `agent/requirements.txt`).
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES
+OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For licensing inquiries: stefanromanpers@gmail.com.

@@ -24,6 +24,7 @@ def _baseline_env(monkeypatch) -> None:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "dummy-anon")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "dummy-service-role")
 
 
 def test_resend_from_email_default_uses_verified_domain(monkeypatch):
@@ -80,3 +81,38 @@ def test_frontend_origins_optional_in_development(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "development")
     s = Settings(_env_file=None)
     assert "localhost" in s.FRONTEND_ORIGINS
+
+
+# ── SUPABASE_SERVICE_ROLE_KEY must be set in preview/production (INFRA-007) ──
+
+
+def test_service_role_required_in_production(monkeypatch):
+    """Closes INFRA-007. Production without service-role key would silently
+    fall back to the anon client — every admin endpoint returns zero rows
+    (RLS-enabled tables) with an opaque 200 response. Fail-loud at startup."""
+    _baseline_env(monkeypatch)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("FRONTEND_ORIGINS", "https://example.com")
+    with pytest.raises(ValidationError, match="SUPABASE_SERVICE_ROLE_KEY"):
+        Settings(_env_file=None)
+
+
+def test_service_role_required_in_preview(monkeypatch):
+    """Preview tier shares the production code path for backend → Supabase
+    auth, so it must also fail loudly without a service-role key."""
+    _baseline_env(monkeypatch)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "preview")
+    with pytest.raises(ValidationError, match="SUPABASE_SERVICE_ROLE_KEY"):
+        Settings(_env_file=None)
+
+
+def test_service_role_optional_in_development(monkeypatch):
+    """Dev keeps service role optional — local supabase / mock setups
+    don't always have it wired."""
+    _baseline_env(monkeypatch)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    s = Settings(_env_file=None)
+    assert s.SUPABASE_SERVICE_ROLE_KEY == ""

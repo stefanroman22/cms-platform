@@ -1,9 +1,32 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+# ── Shared validators ────────────────────────────────────────────────────────
+
+# Slug pattern used by every project / service slug field. Lowercase
+# letters, digits, hyphens; 1-64 chars. Closes BE-005 path-traversal
+# concern when slugs are interpolated into Supabase storage keys
+# (e.g. `{project_slug}/{service_key}/file.png`).
+_SLUG_PATTERN = r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+# Generic short-text pattern: any printable except control characters.
+_NO_CTRL_PATTERN = r"^[^\x00-\x1f\x7f]*$"
+
+
+def _http_url_validator(v: str | None) -> str | None:
+    """Reused by every model that accepts a URL field. Rejects
+    `javascript:`, `data:`, `file:`, etc.  (BE-005 / BE-006)."""
+    if v is None:
+        return None
+    v = v.strip()
+    if not v:
+        return None
+    if not (v.startswith("http://") or v.startswith("https://")):
+        raise ValueError("URL must start with http:// or https://")
+    return v
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=256)
     remember_me: bool = False
 
 
@@ -20,12 +43,12 @@ class UserOut(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
 
 
 class ChangeNameRequest(BaseModel):
-    full_name: str
+    full_name: str = Field(min_length=1, max_length=100, pattern=_NO_CTRL_PATTERN)
 
 
 # ── Projects / Account ──────────────────────────────────────────────────────
@@ -52,11 +75,12 @@ class AccountOut(BaseModel):
 
 
 class ProjectRequestIn(BaseModel):
-    name: str
-    type: str
-    description: str
-    budget_range: str | None = None
-    timeline: str | None = None
+    name: str = Field(min_length=1, max_length=200, pattern=_NO_CTRL_PATTERN)
+    # `type` is checked against `PROJECT_TYPES` set in the route handler.
+    type: str = Field(min_length=1, max_length=40)
+    description: str = Field(min_length=1, max_length=10_000)
+    budget_range: str | None = Field(default=None, max_length=40)
+    timeline: str | None = Field(default=None, max_length=40)
 
 
 # ── Workspace / Services ─────────────────────────────────────────────────────
@@ -99,11 +123,14 @@ class RepeaterItemField(BaseModel):
 
 
 class ServiceCreateRequest(BaseModel):
-    service_type_slug: str
-    service_key: str
-    label: str | None = None
-    display_order: int = 0
-    page_name: str = "General"
+    # service_type_slug is one of a fixed set; route still validates
+    # against the DB. Length cap blocks DoS via huge strings.
+    service_type_slug: str = Field(min_length=1, max_length=64, pattern=_SLUG_PATTERN)
+    # Used as a Supabase storage path component — must be slug-safe.
+    service_key: str = Field(min_length=1, max_length=64, pattern=_SLUG_PATTERN)
+    label: str | None = Field(default=None, max_length=120, pattern=_NO_CTRL_PATTERN)
+    display_order: int = Field(default=0, ge=0, le=10_000)
+    page_name: str = Field(default="General", min_length=1, max_length=80, pattern=_NO_CTRL_PATTERN)
     item_schema: list[RepeaterItemField] | None = (
         None  # required when service_type_slug == "repeater"
     )
@@ -147,8 +174,26 @@ class ProjectSettingsOut(BaseModel):
 
 
 class ProjectSettingsIn(BaseModel):
-    website_url: str | None = None
-    allowed_origins: list[str] = []
+    website_url: str | None = Field(default=None, max_length=2000)
+    allowed_origins: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("website_url", mode="after")
+    @classmethod
+    def _website_url_http(cls, v: str | None) -> str | None:
+        return _http_url_validator(v)
+
+    @field_validator("allowed_origins", mode="after")
+    @classmethod
+    def _origins_http(cls, v: list[str]) -> list[str]:
+        out: list[str] = []
+        for origin in v:
+            checked = _http_url_validator(origin)
+            if checked is None:
+                raise ValueError("allowed_origins entries must be http(s) URLs")
+            if len(checked) > 200:
+                raise ValueError("allowed_origins entry too long")
+            out.append(checked)
+        return out
 
 
 # ── Admin client management ──────────────────────────────────────────────────
@@ -156,7 +201,7 @@ class ProjectSettingsIn(BaseModel):
 
 class CreateClientRequest(BaseModel):
     email: EmailStr
-    full_name: str | None = None
+    full_name: str | None = Field(default=None, max_length=100, pattern=_NO_CTRL_PATTERN)
 
 
 class CreateClientOut(BaseModel):
@@ -239,12 +284,33 @@ class RotateTokenResponse(BaseModel):
 
 
 class AdminProjectPatchIn(BaseModel):
-    github_repo: str | None = None
-    vercel_project_id: str | None = None
-    production_url: str | None = None
-    preview_url: str | None = None
-    preview_token: str | None = None
-    website_url: str | None = None
+    github_repo: str | None = Field(default=None, max_length=200)
+    vercel_project_id: str | None = Field(default=None, max_length=80)
+    # URL fields stored as str (mocks + supabase serialisation need str
+    # not pydantic Url objects) but validated as http(s) so admin / agent
+    # can't inject `javascript:` or other non-web schemes that the
+    # welcome email renders as a clickable CTA. Audit BE-004 / BE-006.
+    production_url: str | None = Field(default=None, max_length=2000)
+    preview_url: str | None = Field(default=None, max_length=2000)
+    website_url: str | None = Field(default=None, max_length=2000)
+    # `preview_token` deliberately omitted: rotation must go through
+    # the dedicated POST /admin/projects/{slug}/rotate-preview-token
+    # endpoint, which logs + cycles the token. Patching it here would
+    # let an admin (or stolen Bearer key) fix the token to a value
+    # they already know — token-fixation against /content/{slug}/draft.
+    # Audit finding BE-004.
+
+    @field_validator("production_url", "preview_url", "website_url", mode="after")
+    @classmethod
+    def _http_only(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return None
+        if not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v
 
 
 class AdminProjectDetailOut(BaseModel):
@@ -259,10 +325,12 @@ class AdminProjectDetailOut(BaseModel):
 
 
 class AdminProjectCreateIn(BaseModel):
-    slug: str
-    name: str
+    # Used as URL component AND Supabase storage path component, so
+    # slug-safe pattern is mandatory.
+    slug: str = Field(min_length=1, max_length=64, pattern=_SLUG_PATTERN)
+    name: str = Field(min_length=1, max_length=200, pattern=_NO_CTRL_PATTERN)
     owner_email: EmailStr
-    github_repo: str | None = None
+    github_repo: str | None = Field(default=None, max_length=200)
 
 
 class ProjectTransferIn(BaseModel):
@@ -270,6 +338,14 @@ class ProjectTransferIn(BaseModel):
 
 
 class WelcomeEmailIn(BaseModel):
-    project_slug: str
-    project_name: str
-    website_url: str
+    project_slug: str = Field(min_length=1, max_length=64, pattern=_SLUG_PATTERN)
+    project_name: str = Field(min_length=1, max_length=200, pattern=_NO_CTRL_PATTERN)
+    website_url: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("website_url", mode="after")
+    @classmethod
+    def _website_url_http(cls, v: str) -> str:
+        checked = _http_url_validator(v)
+        if checked is None:
+            raise ValueError("website_url must be a non-empty http(s) URL")
+        return checked

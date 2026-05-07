@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
+from ..core.limiter import limiter
 from ..models.schemas import (
     AdminProjectCreateIn,
     AdminProjectDetailOut,
@@ -44,13 +45,29 @@ _ALLOWED_MIME: dict[str, str | None] = {
     "file_download": None,
 }
 
-# Fallback extensions when the uploaded filename has none
+# Explicit deny — INFRA-004. Even though the type prefix matches
+# (image/* for SVG), the file is XML and can carry inline <script>,
+# making any public-URL render a stored-XSS sink. Reject at upload.
+# If a client genuinely needs SVG support, configure the bucket to
+# serve it with `Content-Disposition: attachment` AND a CSP that
+# blocks scripts on the bucket origin first.
+_DENIED_MIME: frozenset[str] = frozenset(
+    {
+        "image/svg+xml",
+        "text/html",
+        "application/xhtml+xml",
+        "application/x-shockwave-flash",
+    }
+)
+
+# Fallback extensions when the uploaded filename has none.
+# Note: no entry for image/svg+xml — it is denied at the MIME check
+# above before this map is consulted.
 _MIME_TO_EXT: dict[str, str] = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/gif": ".gif",
     "image/webp": ".webp",
-    "image/svg+xml": ".svg",
     "video/mp4": ".mp4",
     "video/webm": ".webm",
     "application/pdf": ".pdf",
@@ -120,8 +137,10 @@ async def list_services(project_slug: str, request: Request):
         )
         return [_flatten_service(s) for s in (result.data or [])]
     except Exception as exc:
+        # BE-007: don't leak internal exception text to the caller — it
+        # surfaces table names, SQL constraints, supabase URLs.
         logger.exception("list_services failed for project %s: %s", project_slug, exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Failed to list services") from exc
 
 
 @router.get("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
@@ -231,6 +250,11 @@ async def upload_file(
 
     # MIME type validation
     mime = file.content_type or "application/octet-stream"
+    if mime in _DENIED_MIME:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"File type '{mime}' is not allowed (potential stored-XSS vector).",
+        )
     allowed_prefix = _ALLOWED_MIME[service_type]
     if allowed_prefix is not None and not mime.startswith(allowed_prefix):
         raise HTTPException(
@@ -427,6 +451,7 @@ async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, requ
 
 
 @router.post("/admin/projects", status_code=status.HTTP_201_CREATED)
+@limiter.limit("3/minute")
 async def admin_create_project(body: AdminProjectCreateIn, request: Request):
     await admin_user_via_bearer_or_sid(request)
     sb = get_supabase_admin()
@@ -465,6 +490,7 @@ async def admin_create_project(body: AdminProjectCreateIn, request: Request):
 
 
 @router.post("/admin/projects/{project_slug}/transfer")
+@limiter.limit("3/minute")
 async def admin_transfer_project(project_slug: str, body: ProjectTransferIn, request: Request):
     await admin_user_via_bearer_or_sid(request)
     sb = get_supabase_admin()
@@ -494,6 +520,7 @@ async def admin_transfer_project(project_slug: str, body: ProjectTransferIn, req
 
 
 @router.post("/admin/clients/{email}/welcome")
+@limiter.limit("3/minute")
 async def admin_send_welcome(email: str, body: WelcomeEmailIn, request: Request):
     await admin_user_via_bearer_or_sid(request)
     sb = get_supabase_admin()
@@ -637,6 +664,7 @@ async def lookup_client(email: str, request: Request):
 
 
 @router.post("/admin/clients", response_model=CreateClientOut, status_code=status.HTTP_201_CREATED)
+@limiter.limit("3/minute")
 async def create_client(body: CreateClientRequest, request: Request):
     """
     Create a new client account (if email not found) or return the existing one.
@@ -692,6 +720,7 @@ async def create_client(body: CreateClientRequest, request: Request):
 
 
 @router.delete("/admin/clients/{email}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("3/minute")
 async def delete_client(email: str, request: Request):
     """Hard-delete a client account.
 
