@@ -44,7 +44,35 @@ jobs:
       # CI-004 / DEP-009 — `--require-hashes` blocks a poisoned upstream
       # PyPI artefact from being installed.
       - run: pip install --require-hashes -r requirements.lock -r requirements-dev.lock
-      - name: Run integration tests
+
+      # `deployed_state` tests assert that the freshly-pushed code is
+      # already running on the prod URL. Vercel only deploys to prod
+      # from master, and even then with ~2-min build lag. So:
+      #   • dev push: skip them (`-m "integration and not deployed_state"`).
+      #   • master push: poll the deployed `/health` until it answers,
+      #     then run the full set.
+      - name: Wait for backend deploy (master only)
+        if: github.ref == 'refs/heads/master'
+        env:
+          E2E_BASE_URL_BACKEND: ${{ secrets.E2E_BASE_URL_BACKEND }}
+        run: |
+          # Allow up to 4 min for Vercel to roll the new build.
+          deadline=$(( $(date +%s) + 240 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            if curl -fsS "${E2E_BASE_URL_BACKEND:-https://cms-backend-roman.vercel.app}/health" >/dev/null; then
+              echo "✅ backend /health responding"
+              # Cushion for the frontend deploy + edge-cache propagation.
+              sleep 60
+              exit 0
+            fi
+            echo "waiting for backend /health…"
+            sleep 10
+          done
+          echo "::error::backend deploy did not become healthy within 4 minutes"
+          exit 1
+
+      - name: Run integration tests (dev — skip deployed_state)
+        if: github.ref != 'refs/heads/master'
         # Secrets only injected at the test step. CI-014 + CI-013.
         env:
           E2E_BASE_URL_BACKEND: ${{ secrets.E2E_BASE_URL_BACKEND }}
@@ -52,8 +80,17 @@ jobs:
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-          # Used by tests_integration/test_admin_keys.py + test_admin_delegation.py.
-          # Without this, the admin Bearer integration suite skips.
+          E2E_ADMIN_API_KEY: ${{ secrets.E2E_ADMIN_API_KEY }}
+        run: python -m pytest auth_service/tests_integration/ -v -m "integration and not deployed_state"
+
+      - name: Run integration tests (master — full suite)
+        if: github.ref == 'refs/heads/master'
+        env:
+          E2E_BASE_URL_BACKEND: ${{ secrets.E2E_BASE_URL_BACKEND }}
+          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
           E2E_ADMIN_API_KEY: ${{ secrets.E2E_ADMIN_API_KEY }}
         run: python -m pytest auth_service/tests_integration/ -v -m integration
 

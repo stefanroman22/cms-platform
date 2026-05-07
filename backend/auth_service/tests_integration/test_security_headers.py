@@ -2,8 +2,15 @@
 
 Probes the deployed frontend (Next.js) and backend (FastAPI) and asserts
 the headers required by FE-001 / INFRA-001 / INFRA-002 are present.
-Runs on every push to dev/master so a future config change that drops
-a header fails CI before reaching production.
+
+Marked `deployed_state` because the headers come from a Vercel deploy
+that lags behind a `dev` push by ~2 minutes (and does not happen at all
+for branches other than master). Running on dev push always sees the
+PREVIOUS deploy's headers, drowning real regressions in noise.
+
+Run path:
+- dev push: skipped via `-m "integration and not deployed_state"`.
+- master push: runs after a deploy-wait gate in e2e.yml.
 """
 
 import os
@@ -11,7 +18,8 @@ import os
 import httpx
 import pytest
 
-pytestmark = pytest.mark.integration
+# `deployed_state` because Vercel deploys prod only on master push.
+pytestmark = [pytest.mark.integration, pytest.mark.deployed_state]
 
 FRONTEND_URL = os.environ.get("E2E_BASE_URL_FRONTEND", "https://roman-technologies.dev")
 BACKEND_URL = os.environ.get("E2E_BASE_URL_BACKEND", "https://cms-backend-roman.vercel.app")

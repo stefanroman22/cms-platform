@@ -15,7 +15,11 @@ import secrets
 import httpx
 import pytest
 
-pytestmark = pytest.mark.integration
+# `deployed_state` because the rate-limit decorator only takes effect
+# once the new backend code is deployed (Vercel deploys prod from master
+# only). Running on dev push always 401s instead of 429ing — drowns
+# real failures.
+pytestmark = [pytest.mark.integration, pytest.mark.deployed_state]
 
 BACKEND_URL = os.environ.get("E2E_BASE_URL_BACKEND", "https://cms-backend-roman.vercel.app")
 
