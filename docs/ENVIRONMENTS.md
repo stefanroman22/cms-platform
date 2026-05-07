@@ -43,6 +43,15 @@ startup.
 - **Production secrets**: Vercel dashboard → project → Settings → Environment Variables.
 - **Examples**: `backend/.env.example` + `frontend/.env.example`. Both committed,
   both contain only placeholder values.
+- **Per-developer MCP secrets**: `.mcp.json` at the repo root. Contains a
+  Supabase Personal Access Token (`sbp_*`) for the Supabase MCP server.
+  Gitignored — never commit. Rotate every 90 days; log in `docs/SECURITY.md`.
+  Procedure:
+  1. Supabase dashboard → Account → Access tokens → Generate new token (name `claude-code-<YYYYMMDD>`).
+  2. Replace the value in `.mcp.json:9` (`--access-token`).
+  3. Restart any tool that reads `.mcp.json` (Claude Code session reload).
+  4. Revoke the previous token in the dashboard.
+  5. Log the rotation in `docs/SECURITY.md` rotation log.
 
 ## Adding a new env var
 

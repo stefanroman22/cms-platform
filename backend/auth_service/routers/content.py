@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from ..services.supabase_client import get_supabase
+from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/content", tags=["content"])
 
@@ -26,7 +26,7 @@ _TS_TYPE_MAP: dict[str, str] = {
 
 
 def _resolve_project(project_slug: str) -> dict:
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("projects")
         .select("id, name, slug, is_active, preview_token")
@@ -55,7 +55,7 @@ def _resolve_content_entry(svc: dict) -> dict | None:
 async def get_project_content(project_slug: str, request: Request):
     project = _resolve_project(project_slug)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     services_result = (
         sb.table("project_services")
         .select(
@@ -134,7 +134,7 @@ async def get_project_draft_content(project_slug: str, request: Request):
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing preview token"
         )
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     services_result = (
         sb.table("project_services")
         .select(
@@ -195,7 +195,7 @@ async def get_project_types(project_slug: str):
     """Returns a TypeScript .d.ts interface for the project's public content shape."""
     project = _resolve_project(project_slug)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     services_result = (
         sb.table("project_services")
         .select("service_key, service_type_slug, label")

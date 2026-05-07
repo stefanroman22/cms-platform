@@ -3,7 +3,7 @@ from fastapi import HTTPException, Request, status
 from ..models.schemas import UserOut
 from ..services.admin_keys import verify_admin_api_key
 from ..services.sessions import validate_session
-from ..services.supabase_client import get_supabase
+from ..services.supabase_client import get_supabase_admin
 
 SESSION_COOKIE = "sid"
 
@@ -18,7 +18,7 @@ async def require_user(request: Request) -> UserOut:
 
 def require_project_access(project_slug: str, user: UserOut) -> dict:
     """Resolves project and checks ownership or admin. Returns project row."""
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("projects")
         .select("id, name, slug, user_id, is_active")

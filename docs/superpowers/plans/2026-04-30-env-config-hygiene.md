@@ -16,11 +16,11 @@ These keys are visible in committed files at `HEAD`:
 
 | Where | Secret | Blast radius |
 |-------|--------|--------------|
-| `backend/.env.example:12` | `DB_PASSWORD=Stefanbaschet1722!` | Full Postgres write access |
-| `backend/auth_service/.env.example:5` | `SUPABASE_DB_URL=...[Stefanbaschet1722!]@db...` | Same DB password (URL-embedded) |
+| `backend/.env.example:12` | `DB_PASSWORD=Stefanb***********!` | Full Postgres write access |
+| `backend/auth_service/.env.example:5` | `SUPABASE_DB_URL=...[Stefanb***********!]@db...` | Same DB password (URL-embedded) |
 | `backend/auth_service/.env.example:2` | `SUPABASE_ANON_KEY=eyJ...wsm-_...` | Public-facing anon key (lower risk, but still rotate) |
 | `backend/auth_service/.env.example:4` | `SUPABASE_SERVICE_ROLE_KEY=eyJ...ghteW...` | **Bypasses RLS.** Highest impact. |
-| `backend/auth_service/.env.example:11` | `RESEND_API_KEY=re_cENrXnX5_25Ekfas3oNypHTLNw3eJv7Ey` | Send email from `roman-technologies.dev` as anyone |
+| `backend/auth_service/.env.example:11` | `RESEND_API_KEY=re_cENrXnX5_*REDACTED*` | Send email from `roman-technologies.dev` as anyone |
 
 These keys exist in **earlier git commits** as well. Sanitizing the current files does **not** remove them from history. Rotation at the provider is the only remediation. We are intentionally not rewriting git history (force-push to `master` would invalidate everyone's clones and isn't worth it for a project at this stage).
 
@@ -131,7 +131,7 @@ These tasks are operational, not coded. Each must be confirmed complete before m
 - [ ] **Step 3: Confirm no service depends on the OLD password**
 
   ```bash
-  grep -rn "Stefanbaschet1722" "C:/Users/stefa/.gemini/antigravity/scratch/CMS - websites" 2>/dev/null
+  grep -rn "Stefanb*****" "C:/Users/stefa/.gemini/antigravity/scratch/CMS - websites" 2>/dev/null
   ```
   Expected: matches in `.env.example` files only (those get sanitized in Pass B). No matches in source code.
 
@@ -150,7 +150,7 @@ These tasks are operational, not coded. Each must be confirmed complete before m
 
 - [ ] **Step 1: Revoke the leaked key**
 
-  https://resend.com/api-keys → click `re_cENrXnX5_25Ekfas3oNypHTLNw3eJv7Ey` → Delete.
+  https://resend.com/api-keys → click `re_cENrXnX5_*REDACTED*` → Delete.
 
 - [ ] **Step 2: Create a new restricted-scope key**
 
@@ -179,7 +179,7 @@ These tasks are operational, not coded. Each must be confirmed complete before m
   | Date | What was rotated | Why | Operator |
   |------|------------------|-----|----------|
   | 2026-04-30 | Supabase `service_role` JWT secret (rolls both anon and service_role) | Old key was committed in `backend/auth_service/.env.example` and visible in git history | Stefan |
-  | 2026-04-30 | Supabase database password | Old password (`Stefanbaschet1722!`) was embedded in `SUPABASE_DB_URL` in committed `.env.example` files | Stefan |
+  | 2026-04-30 | Supabase database password | Old password (`Stefanb***********!`) was embedded in `SUPABASE_DB_URL` in committed `.env.example` files | Stefan |
   | 2026-04-30 | Resend API key `re_cENrXnX5_*` | Old key was committed in `backend/auth_service/.env.example` and visible in git history | Stefan |
 
   ## Reporting a suspected leak

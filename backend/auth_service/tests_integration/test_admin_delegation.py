@@ -110,10 +110,17 @@ def test_create_client_writes_public_users_row():
         assert login.status_code == 200, login.text
         assert "sid" in login.cookies
     finally:
-        # No public DELETE endpoint for users — leftover throwaway rows are
-        # acceptable (timestamped emails won't collide). Document for future
-        # cleanup tooling.
-        pass
+        # Cleanup so CI runs don't accumulate throwaway-create-*@cms-test.dev
+        # rows in production Supabase. Best-effort — a 404 (already gone) or
+        # a 5xx is logged via assert message but doesn't fail the test.
+        try:
+            httpx.delete(
+                f"{BACKEND}/admin/clients/{email}",
+                headers=HEADERS,
+                timeout=15.0,
+            )
+        except Exception:
+            pass
 
 
 @skip

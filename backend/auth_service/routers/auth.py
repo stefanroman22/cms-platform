@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from ..core.config import settings
+from ..core.limiter import limiter
 from ..models.schemas import (
     ChangeNameRequest,
     ChangePasswordRequest,
@@ -51,6 +52,7 @@ def _client_meta(request: Request) -> tuple[str | None, str | None]:
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def login(body: LoginRequest, request: Request, response: Response):
     user = await authenticate_user(body.email, body.password)
     if not user:
@@ -106,9 +108,9 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
 
     # Revoke ALL sessions (including this one) and mint a fresh session
     await revoke_all_for_user(user.id)
-    from ..services.supabase_client import get_supabase
+    from ..services.supabase_client import get_supabase_admin
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     fresh_user = sb.table("users").select("*").eq("id", user.id).single().execute().data
     user_agent, ip = _client_meta(request)
     raw_sid, _ = await create_session(fresh_user, remember_me=False, user_agent=user_agent, ip=ip)
@@ -133,9 +135,9 @@ async def update_profile(body: ChangeNameRequest, request: Request):
             detail="Full name must be 100 characters or fewer.",
         )
 
-    from ..services.supabase_client import get_supabase
+    from ..services.supabase_client import get_supabase_admin
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     sb.table("users").update(
         {
             "full_name": name,

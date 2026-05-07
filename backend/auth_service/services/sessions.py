@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from ..core.security import generate_session_id, hash_token
 from ..models.schemas import UserOut
-from .supabase_client import get_supabase
+from .supabase_client import get_supabase_admin
 
 DEFAULT_DAYS = 30
 REMEMBER_ME_DAYS = 60
@@ -26,7 +26,7 @@ async def create_session(
     now = datetime.now(UTC)
     expires_at = now + timedelta(days=days)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
 
     # Enforce session cap: revoke oldest if over limit
     active = (
@@ -65,7 +65,7 @@ async def validate_session(raw_sid: str | None) -> UserOut | None:
     if not raw_sid:
         return None
     token_hash = hash_token(raw_sid)
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("sessions")
         .select("id, expires_at, remember_me, users(id, email, full_name, is_admin, is_active)")
@@ -111,13 +111,13 @@ async def revoke_session(raw_sid: str) -> None:
     """Marks the single session for this sid as revoked. No-op on unknown sid."""
     if not raw_sid:
         return
-    sb = get_supabase()
+    sb = get_supabase_admin()
     sb.table("sessions").update({"revoked": True}).eq("token_hash", hash_token(raw_sid)).execute()
 
 
 async def revoke_all_for_user(user_id: str) -> None:
     """Marks every active session for this user as revoked. Used on password change."""
-    sb = get_supabase()
+    sb = get_supabase_admin()
     sb.table("sessions").update({"revoked": True}).eq("user_id", user_id).eq(
         "revoked", False
     ).execute()

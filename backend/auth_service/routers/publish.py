@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ..models.schemas import ProjectStatusOut, PublishResponse, RotateTokenResponse
-from ..services.supabase_client import get_supabase
+from ..services.supabase_client import get_supabase_admin
 from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
 
 router = APIRouter(tags=["publish"])
@@ -22,7 +22,7 @@ async def publish_project(project_slug: str, request: Request):
     user = await require_user(request)
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
 
     # Resolve service IDs for this project
     svc_result = sb.table("project_services").select("id").eq("project_id", project["id"]).execute()
@@ -69,7 +69,7 @@ async def project_status(project_slug: str, request: Request):
     user = await require_user(request)
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
 
     # Fetch URLs + last_published_at
     p_result = (
@@ -180,7 +180,7 @@ def _update_vercel_preview_env_var(vercel_project_id: str, new_token: str) -> No
 async def rotate_preview_token(project_slug: str, request: Request):
     await admin_user_via_bearer_or_sid(request)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     p_result = (
         sb.table("projects")
         .select("id, vercel_project_id")

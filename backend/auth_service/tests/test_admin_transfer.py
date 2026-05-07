@@ -20,7 +20,7 @@ def _r(data):
 
 
 def test_transfers_ownership(client_with_admin):
-    with patch("auth_service.routers.workspace.get_supabase") as mock_sb:
+    with patch("auth_service.routers.workspace.get_supabase_admin") as mock_sb:
         sb = mock_sb.return_value
         sb.table.return_value = sb
         sb.select.return_value = sb
@@ -40,7 +40,7 @@ def test_transfers_ownership(client_with_admin):
 
 
 def test_404_when_target_user_missing(client_with_admin):
-    with patch("auth_service.routers.workspace.get_supabase") as mock_sb:
+    with patch("auth_service.routers.workspace.get_supabase_admin") as mock_sb:
         sb = mock_sb.return_value
         sb.table.return_value = sb
         sb.select.return_value = sb

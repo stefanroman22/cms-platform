@@ -26,7 +26,7 @@ from ..models.schemas import (
     WelcomeEmailIn,
 )
 from ..services.auth_service import hash_password
-from ..services.supabase_client import get_supabase, get_supabase_admin
+from ..services.supabase_client import get_supabase_admin
 from ..services.welcome_email import send_welcome_email
 from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
 
@@ -108,7 +108,7 @@ async def list_services(project_slug: str, request: Request):
     project = require_project_access(project_slug, user)
 
     try:
-        sb = get_supabase()
+        sb = get_supabase_admin()
         result = (
             sb.table("project_services")
             .select(
@@ -129,7 +129,7 @@ async def get_service(project_slug: str, service_key: str, request: Request):
     user = await require_user(request)
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("project_services")
         .select(
@@ -161,7 +161,7 @@ async def save_service(
         )
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
 
     # Resolve the project_service id
     svc_result = (
@@ -209,7 +209,7 @@ async def upload_file(
     project = require_project_access(project_slug, user)
 
     # Resolve service + type
-    sb = get_supabase()
+    sb = get_supabase_admin()
     svc_result = (
         sb.table("project_services")
         .select("service_type_slug")
@@ -278,7 +278,7 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
     project = require_project_access(project_slug, user)
 
     # Validate service_type_slug exists
-    sb = get_supabase()
+    sb = get_supabase_admin()
     st_check = (
         sb.table("service_types")
         .select("slug")
@@ -358,7 +358,7 @@ async def remove_service(project_slug: str, service_key: str, request: Request):
     user = await admin_user_via_bearer_or_sid(request)
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     sb.table("project_services").delete().eq("project_id", project["id"]).eq(
         "service_key", service_key
     ).execute()
@@ -368,7 +368,7 @@ async def remove_service(project_slug: str, service_key: str, request: Request):
 async def admin_list_projects(request: Request):
     await admin_user_via_bearer_or_sid(request)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("projects")
         .select("id, name, slug, is_active, created_at, user_id, users(email, full_name)")
@@ -397,7 +397,7 @@ async def admin_list_projects(request: Request):
 @router.get("/admin/projects/{project_slug}", response_model=AdminProjectDetailOut)
 async def admin_get_project(project_slug: str, request: Request):
     await admin_user_via_bearer_or_sid(request)
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("projects")
         .select(
@@ -416,7 +416,7 @@ async def admin_get_project(project_slug: str, request: Request):
 async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, request: Request):
     await admin_user_via_bearer_or_sid(request)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     update_data = {k: v for k, v in body.model_dump().items() if v is not None}
     if not update_data:
         return {"updated": 0}
@@ -429,7 +429,7 @@ async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, requ
 @router.post("/admin/projects", status_code=status.HTTP_201_CREATED)
 async def admin_create_project(body: AdminProjectCreateIn, request: Request):
     await admin_user_via_bearer_or_sid(request)
-    sb = get_supabase()
+    sb = get_supabase_admin()
 
     owner = (
         sb.table("users")
@@ -467,7 +467,7 @@ async def admin_create_project(body: AdminProjectCreateIn, request: Request):
 @router.post("/admin/projects/{project_slug}/transfer")
 async def admin_transfer_project(project_slug: str, body: ProjectTransferIn, request: Request):
     await admin_user_via_bearer_or_sid(request)
-    sb = get_supabase()
+    sb = get_supabase_admin()
     target = (
         sb.table("users")
         .select("id, email")
@@ -496,7 +496,7 @@ async def admin_transfer_project(project_slug: str, body: ProjectTransferIn, req
 @router.post("/admin/clients/{email}/welcome")
 async def admin_send_welcome(email: str, body: WelcomeEmailIn, request: Request):
     await admin_user_via_bearer_or_sid(request)
-    sb = get_supabase()
+    sb = get_supabase_admin()
     user = (
         sb.table("users")
         .select("id, email, full_name")
@@ -522,7 +522,7 @@ async def admin_send_welcome(email: str, body: WelcomeEmailIn, request: Request)
 async def admin_list_clients(request: Request):
     await admin_user_via_bearer_or_sid(request)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     users_result = (
         sb.table("users")
         .select("id, email, full_name, is_admin, is_active, created_at")
@@ -547,7 +547,7 @@ async def admin_list_clients(request: Request):
 async def admin_list_service_types(request: Request):
     await admin_user_via_bearer_or_sid(request)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("service_types")
         .select("slug, name, description, icon, schema")
@@ -562,7 +562,7 @@ async def get_project_settings(project_slug: str, request: Request):
     user = await admin_user_via_bearer_or_sid(request)
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("projects")
         .select("website_url, allowed_origins")
@@ -590,7 +590,7 @@ async def update_project_settings(
     origins = [o.strip() for o in body.allowed_origins if o.strip()]
     website_url = body.website_url.strip() if body.website_url else None
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     sb.table("projects").update(
         {
             "website_url": website_url,
@@ -615,7 +615,7 @@ async def lookup_client(email: str, request: Request):
     """Check whether an email already has an account. Returns account info (no password)."""
     await admin_user_via_bearer_or_sid(request)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("users")
         .select("id, email, full_name")
@@ -645,7 +645,7 @@ async def create_client(body: CreateClientRequest, request: Request):
     await admin_user_via_bearer_or_sid(request)
 
     email = body.email.lower().strip()
-    sb = get_supabase()
+    sb = get_supabase_admin()
 
     # Check for existing user
     existing = (
@@ -689,3 +689,33 @@ async def create_client(body: CreateClientRequest, request: Request):
         created=True,
         generated_password=password,
     )
+
+
+@router.delete("/admin/clients/{email}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_client(email: str, request: Request):
+    """Hard-delete a client account.
+
+    Removes both the Supabase Auth user and the `public.users` row
+    (FK CASCADE handles sessions, admin_api_keys, project ownership
+    is reassigned to the deleting admin via Supabase ON DELETE rules).
+
+    Primary use case: integration-test cleanup so CI runs don't leak
+    `throwaway-create-*@cms-test.dev` rows. Only an admin key can
+    invoke this; the dashboard does not expose it.
+    """
+    await admin_user_via_bearer_or_sid(request)
+    sb = get_supabase_admin()
+    sb_admin = get_supabase_admin()
+
+    target_email = email.lower().strip()
+    row = sb.table("users").select("id, email").eq("email", target_email).maybe_single().execute()
+    if not (row and row.data):
+        raise HTTPException(404, f"No user with email {email!r}")
+
+    user_id = row.data["id"]
+    # Supabase auth admin delete first (cascades to public.users via FK
+    # ON DELETE CASCADE on the public.users.id reference).
+    sb_admin.auth.admin.delete_user(user_id)
+    # Defensive: also direct-delete from public.users in case the schema's
+    # FK isn't in CASCADE mode. Idempotent — already-gone is fine.
+    sb_admin.table("users").delete().eq("id", user_id).execute()

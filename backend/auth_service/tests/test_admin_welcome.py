@@ -21,7 +21,7 @@ def _r(data):
 
 def test_sends_welcome_when_user_exists(client_with_admin):
     with (
-        patch("auth_service.routers.workspace.get_supabase") as mock_sb,
+        patch("auth_service.routers.workspace.get_supabase_admin") as mock_sb,
         patch("auth_service.routers.workspace.send_welcome_email") as mock_send,
     ):
         sb = mock_sb.return_value
@@ -47,7 +47,7 @@ def test_sends_welcome_when_user_exists(client_with_admin):
 
 
 def test_returns_404_when_user_missing(client_with_admin):
-    with patch("auth_service.routers.workspace.get_supabase") as mock_sb:
+    with patch("auth_service.routers.workspace.get_supabase_admin") as mock_sb:
         sb = mock_sb.return_value
         sb.table.return_value = sb
         sb.select.return_value = sb
@@ -63,7 +63,7 @@ def test_returns_404_when_user_missing(client_with_admin):
 
 def test_returns_502_on_resend_failure(client_with_admin):
     with (
-        patch("auth_service.routers.workspace.get_supabase") as mock_sb,
+        patch("auth_service.routers.workspace.get_supabase_admin") as mock_sb,
         patch("auth_service.routers.workspace.send_welcome_email") as mock_send,
     ):
         sb = mock_sb.return_value

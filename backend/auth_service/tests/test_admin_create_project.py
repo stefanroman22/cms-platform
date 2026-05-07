@@ -25,7 +25,7 @@ def client_with_admin(admin_user, monkeypatch):
 
 
 def test_creates_project_row_when_owner_exists(client_with_admin):
-    with patch("auth_service.routers.workspace.get_supabase") as mock_sb:
+    with patch("auth_service.routers.workspace.get_supabase_admin") as mock_sb:
         sb = mock_sb.return_value
         sb.table.return_value = sb
         sb.select.return_value = sb
@@ -49,7 +49,7 @@ def test_creates_project_row_when_owner_exists(client_with_admin):
 
 
 def test_returns_404_when_owner_missing(client_with_admin):
-    with patch("auth_service.routers.workspace.get_supabase") as mock_sb:
+    with patch("auth_service.routers.workspace.get_supabase_admin") as mock_sb:
         sb = mock_sb.return_value
         sb.table.return_value = sb
         sb.select.return_value = sb
@@ -64,7 +64,7 @@ def test_returns_404_when_owner_missing(client_with_admin):
 
 
 def test_returns_409_when_slug_exists(client_with_admin):
-    with patch("auth_service.routers.workspace.get_supabase") as mock_sb:
+    with patch("auth_service.routers.workspace.get_supabase_admin") as mock_sb:
         sb = mock_sb.return_value
         sb.table.return_value = sb
         sb.select.return_value = sb

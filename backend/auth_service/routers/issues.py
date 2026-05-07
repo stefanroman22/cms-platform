@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ..models.schemas import IssueCreateRequest, IssueOut, IssueStatusRequest, IssueUpdateRequest
-from ..services.supabase_client import get_supabase
+from ..services.supabase_client import get_supabase_admin
 from .deps import require_project_access, require_user
 
 router = APIRouter(tags=["issues"])
@@ -14,7 +14,7 @@ async def list_issues(project_slug: str, request: Request):
     user = await require_user(request)
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("project_issues")
         .select(
@@ -51,7 +51,7 @@ async def create_issue(project_slug: str, body: IssueCreateRequest, request: Req
     user = await require_user(request)
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     now = datetime.now(UTC).isoformat()
 
     result = (
@@ -95,7 +95,7 @@ async def update_issue(
     user = await require_user(request)
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     issue_result = (
         sb.table("project_issues")
         .select("id, project_id, created_by")
@@ -160,7 +160,7 @@ async def delete_issue(project_slug: str, issue_id: str, request: Request):
     user = await require_user(request)
     project = require_project_access(project_slug, user)
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     issue_result = (
         sb.table("project_issues")
         .select("id, created_by")
@@ -200,7 +200,7 @@ async def update_issue_status(
             detail="Only admins can update issue status.",
         )
 
-    sb = get_supabase()
+    sb = get_supabase_admin()
     issue_result = (
         sb.table("project_issues")
         .select("id, project_id")

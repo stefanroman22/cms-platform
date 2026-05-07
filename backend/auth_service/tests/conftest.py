@@ -8,7 +8,7 @@ from ..models.schemas import UserOut
 
 @pytest.fixture
 def mock_supabase():
-    """Patches get_supabase() everywhere it's imported.
+    """Patches get_supabase_admin() everywhere it's imported.
 
     The returned MagicMock mimics the chained supabase-py builder; individual
     tests override .execute() return values per-call.
@@ -39,15 +39,15 @@ def mock_supabase():
     # because workspace.py uses it for file upload + client account creation —
     # an untrapped admin call would silently hit a real DB in tests.
     targets = [
-        "auth_service.routers.content.get_supabase",
-        "auth_service.routers.workspace.get_supabase",
+        "auth_service.routers.content.get_supabase_admin",
         "auth_service.routers.workspace.get_supabase_admin",
-        "auth_service.routers.projects.get_supabase",
-        "auth_service.routers.publish.get_supabase",  # created in Task 7
-        "auth_service.services.sessions.get_supabase",
-        # auth.change_password does `from ..services.supabase_client import get_supabase`
+        "auth_service.routers.workspace.get_supabase_admin",
+        "auth_service.routers.projects.get_supabase_admin",
+        "auth_service.routers.publish.get_supabase_admin",  # created in Task 7
+        "auth_service.services.sessions.get_supabase_admin",
+        # auth.change_password does `from ..services.supabase_client import get_supabase_admin`
         # inline — patch the source so the late import sees the mock.
-        "auth_service.services.supabase_client.get_supabase",
+        "auth_service.services.supabase_client.get_supabase_admin",
     ]
     started = []
     try:

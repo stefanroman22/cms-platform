@@ -27,5 +27,9 @@ are the audit trail when a leak is suspected.
   the file in a follow-up commit.
 - Past commits cannot be sanitized without rewriting git history (which is
   out of scope). Rotation at the provider is the only valid remediation.
+- **Plans, RFCs, post-mortems must redact secret values to ≤12-char
+  prefix + `*` even after rotation.** Rotated keys still serve as
+  patterns scanners flag and reveal credential-style information about
+  the operator. Example: `re_cENrXnX5_*REDACTED*` not `re_cENrXnX5_25Ek...`.
 - See [`docs/ENVIRONMENTS.md`](./ENVIRONMENTS.md) for the per-tier env-var
   contract.

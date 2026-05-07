@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from ..models.schemas import AccountOut, ProjectOut, ProjectRequestIn
 from ..services.project_request_email import send_project_request_email
 from ..services.sessions import validate_session
-from ..services.supabase_client import get_supabase
+from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="", tags=["projects"])
 
@@ -27,7 +27,7 @@ async def _require_user(request: Request):
 @router.get("/projects", response_model=list[ProjectOut])
 async def list_projects(request: Request):
     user = await _require_user(request)
-    sb = get_supabase()
+    sb = get_supabase_admin()
     result = (
         sb.table("projects")
         .select("id, name, description, slug, is_active, website_url, created_at, updated_at")
@@ -42,7 +42,7 @@ async def list_projects(request: Request):
 @router.get("/account", response_model=AccountOut)
 async def get_account(request: Request):
     user = await _require_user(request)
-    sb = get_supabase()
+    sb = get_supabase_admin()
     user_result = (
         sb.table("users")
         .select("id, email, full_name, is_admin, created_at")
@@ -71,7 +71,7 @@ async def create_project_request(body: ProjectRequestIn, request: Request):
             detail=f"type must be one of: {', '.join(PROJECT_TYPES)}",
         )
     user = await _require_user(request)
-    sb = get_supabase()
+    sb = get_supabase_admin()
     sb.table("project_requests").insert(
         {
             "user_id": user.id,

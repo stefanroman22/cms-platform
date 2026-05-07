@@ -1,0 +1,85 @@
+# gitleaks config — extends the default ruleset with project-internal
+# secret formats and allowlists for known-safe sentinel values used in
+# tests + audit docs.
+#
+# Run locally:
+#   pre-commit run gitleaks --all-files
+# CI run is wired into .github/workflows/ci.yml.
+
+title = "Roman Technologies CMS — gitleaks rules"
+
+[extend]
+# Inherit the upstream default ruleset (covers AWS, GCP, GitHub PATs,
+# Stripe, Slack, JWTs, SSH keys, etc.).
+useDefault = true
+
+# ── Project-internal rules ─────────────────────────────────────────
+
+[[rules]]
+id = "cms-admin-api-key"
+description = "CMS admin API key (cmsk_<env>_<lookup>_<secret>)"
+regex = '''cmsk_(dev|prod)_[a-z0-9]{16}_[a-z0-9]{32,}'''
+tags = ["secret", "cms"]
+
+[[rules]]
+id = "supabase-publishable-key"
+description = "Supabase publishable key (sb_publishable_*)"
+regex = '''sb_publishable_[A-Za-z0-9_]{20,}'''
+tags = ["secret", "supabase"]
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase secret key (sb_secret_*)"
+regex = '''sb_secret_[A-Za-z0-9_]{20,}'''
+tags = ["secret", "supabase"]
+
+[[rules]]
+id = "supabase-pat"
+description = "Supabase Personal Access Token (sbp_*)"
+regex = '''sbp_[A-Za-z0-9]{20,}'''
+tags = ["secret", "supabase"]
+
+[[rules]]
+id = "resend-api-key"
+description = "Resend API key (re_<8+alnum>_<16+alnum>)"
+# Tightened to match the real key shape (e.g. `re_cENrXnX5_25Ekfas3oNypHTL...`)
+# while skipping innocuous Python identifiers like `_require_*`.
+regex = '''re_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}'''
+tags = ["secret", "resend"]
+
+[[rules]]
+id = "vercel-token"
+description = "Vercel personal access token"
+regex = '''vcp_[A-Za-z0-9_]{20,}'''
+tags = ["secret", "vercel"]
+
+# ── Allowlist ──────────────────────────────────────────────────────
+
+[allowlist]
+description = "Sentinel values, redacted historical leaks, test fixtures"
+
+# Test fixtures using deterministic all-`a`/all-`z` sentinels.
+regexTarget = "match"
+regexes = [
+  '''cmsk_dev_a{16}_z{32}''',
+  '''cmsk_dev_abcdefghijklmnop_[a-z0-9]+''',
+  '''sb_publishable_(REPLACE|YOUR|<)''',
+  '''sb_secret_(REPLACE|YOUR|<)''',
+  '''sbp_(REPLACE|YOUR|<)''',
+  '''re_(REPLACE|YOUR|<)''',
+  # Already-redacted historical literals in plan docs.
+  '''re_cENrXnX5_\*REDACTED\*''',
+  '''Stefanb\*+!?''',
+]
+
+# Files where pattern-only / docs / examples live.
+paths = [
+  '''(.*/)?\.env\.example$''',
+  '''docs/SECURITY\.md''',
+  '''docs/ENVIRONMENTS\.md''',
+  '''docs/superpowers/specs/.+-security-audit\.md''',
+  '''.*\.gitleaks\.toml''',
+  # Tests use sentinel keys that don't authenticate.
+  '''backend/auth_service/tests/test_admin_keys\.py''',
+  '''backend/auth_service/tests_integration/test_admin_keys\.py''',
+]

@@ -46,6 +46,20 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _require_service_role_in_prod(self) -> "Settings":
+        """Preview and production require the Supabase service-role key.
+        Falling back to anon in those tiers means RLS-enabled tables
+        silently return zero rows — every admin endpoint breaks with
+        an opaque empty response. Fail-loud at startup instead.
+        Closes audit finding INFRA-007."""
+        if self.ENVIRONMENT in ("preview", "production") and not self.SUPABASE_SERVICE_ROLE_KEY:
+            raise ValueError(
+                "SUPABASE_SERVICE_ROLE_KEY must be set when ENVIRONMENT=preview "
+                "or ENVIRONMENT=production. Define it in the Vercel dashboard."
+            )
+        return self
+
     model_config = {
         # Single source of truth: backend/.env (sibling of vercel_entry.py).
         # Pass B of the env-hygiene plan moved it up from auth_service/.

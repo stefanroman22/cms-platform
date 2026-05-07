@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from ..core.config import settings
 from ..core.limiter import limiter
-from ..services.supabase_client import get_supabase
+from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(tags=["forms"])
 
@@ -84,7 +84,7 @@ async def submit_form(
     body: dict,
 ) -> JSONResponse:
     # ── 1. Resolve project ────────────────────────────────────────────────────
-    sb = get_supabase()
+    sb = get_supabase_admin()
     proj_result = (
         sb.table("projects")
         .select("id, name, allowed_origins")
