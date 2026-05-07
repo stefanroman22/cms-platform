@@ -1,3 +1,3 @@
 # Test dependencies for the agent. Install locally with:
 #   pip install -r requirements.txt -r requirements-dev.txt
-pytest==8.3.3
+pytest==9.0.3
