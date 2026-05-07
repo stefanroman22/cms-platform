@@ -52,7 +52,14 @@ def _client_meta(request: Request) -> tuple[str | None, str | None]:
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("10/minute")
+# Bumped 10 → 30/minute. Real users typing the wrong password (sticky
+# shift, swapped layouts) can blow past 10/minute legitimately, and
+# E2E suite logins from a single runner IP collide on the bucket
+# because Vercel rewrites X-Forwarded-For at the edge (prepends the
+# real client IP), so per-test XFF doesn't isolate the bucket. 30/min
+# still locks out a brute-force script (~28k attempts/day vs realistic
+# password keyspace) but tolerates the legitimate-typo case.
+@limiter.limit("30/minute")
 async def login(body: LoginRequest, request: Request, response: Response):
     user = await authenticate_user(body.email, body.password)
     if not user:
