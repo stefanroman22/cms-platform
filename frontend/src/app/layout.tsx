@@ -58,10 +58,7 @@ export default function RootLayout({
             already run during initial parse, so the rewrite is
             cosmetic; suppress the warning to keep the dev console
             clean. */}
-        <script
-          suppressHydrationWarning
-          dangerouslySetInnerHTML={{ __html: themeBootScript }}
-        />
+        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers>

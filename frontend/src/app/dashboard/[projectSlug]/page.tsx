@@ -251,8 +251,7 @@ export default function ProjectWorkspacePage({
           const projectInList = project !== undefined;
           const liveUrl = project?.website_url || settings?.website_url || null;
           const adminFallbackPending = isAdmin && !projectInList && settings === null;
-          const liveUrlLoading =
-            (projectsLoading && !projectInList) || adminFallbackPending;
+          const liveUrlLoading = (projectsLoading && !projectInList) || adminFallbackPending;
           if (!liveUrlLoading && !liveUrl) return null;
 
           return (
@@ -376,64 +375,64 @@ export default function ProjectWorkspacePage({
             </div>
           )}
           {!settingsLoading && settingsDraft !== null && (
-          <div className={`${dashboardSectionCardCn} p-6`}>
-            <form onSubmit={handleSaveSettings} className="space-y-4">
-              {settingsMsg && (
-                <div
-                  className={
-                    settingsMsg.type === "ok"
-                      ? "rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 px-4 py-2.5 text-sm text-green-700 dark:text-green-300"
-                      : dashboardErrorBannerCn
-                  }
-                >
-                  {settingsMsg.text}
+            <div className={`${dashboardSectionCardCn} p-6`}>
+              <form onSubmit={handleSaveSettings} className="space-y-4">
+                {settingsMsg && (
+                  <div
+                    className={
+                      settingsMsg.type === "ok"
+                        ? "rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 px-4 py-2.5 text-sm text-green-700 dark:text-green-300"
+                        : dashboardErrorBannerCn
+                    }
+                  >
+                    {settingsMsg.text}
+                  </div>
+                )}
+
+                <div>
+                  <label className={dashboardFieldLabelCn}>Website URL</label>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1.5">
+                    The production URL of the client&apos;s website.
+                  </p>
+                  <input
+                    type="url"
+                    value={settingsDraft.website_url}
+                    onChange={(e) =>
+                      setSettingsDraft((s) => s && { ...s, website_url: e.target.value })
+                    }
+                    placeholder="https://example.com"
+                    className={dashboardInputCn}
+                  />
                 </div>
-              )}
 
-              <div>
-                <label className={dashboardFieldLabelCn}>Website URL</label>
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1.5">
-                  The production URL of the client&apos;s website.
-                </p>
-                <input
-                  type="url"
-                  value={settingsDraft.website_url}
-                  onChange={(e) =>
-                    setSettingsDraft((s) => s && { ...s, website_url: e.target.value })
-                  }
-                  placeholder="https://example.com"
-                  className={dashboardInputCn}
-                />
-              </div>
+                <div>
+                  <label className={dashboardFieldLabelCn}>Allowed origins</label>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1.5">
+                    One origin per line. Form submissions from unlisted origins will be rejected.
+                    Leave empty to allow any origin.
+                  </p>
+                  <textarea
+                    rows={4}
+                    value={settingsDraft.allowed_origins}
+                    onChange={(e) =>
+                      setSettingsDraft((s) => s && { ...s, allowed_origins: e.target.value })
+                    }
+                    placeholder={"https://example.com\nhttps://www.example.com"}
+                    className={`${dashboardInputCn} font-mono text-xs resize-y`}
+                  />
+                </div>
 
-              <div>
-                <label className={dashboardFieldLabelCn}>Allowed origins</label>
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1.5">
-                  One origin per line. Form submissions from unlisted origins will be rejected.
-                  Leave empty to allow any origin.
-                </p>
-                <textarea
-                  rows={4}
-                  value={settingsDraft.allowed_origins}
-                  onChange={(e) =>
-                    setSettingsDraft((s) => s && { ...s, allowed_origins: e.target.value })
-                  }
-                  placeholder={"https://example.com\nhttps://www.example.com"}
-                  className={`${dashboardInputCn} font-mono text-xs resize-y`}
-                />
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <button
-                  type="submit"
-                  disabled={settingsSaving}
-                  className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-700 dark:hover:bg-zinc-600 cursor-pointer"
-                >
-                  {settingsSaving ? "Saving…" : "Save settings"}
-                </button>
-              </div>
-            </form>
-          </div>
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={settingsSaving}
+                    className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-700 dark:hover:bg-zinc-600 cursor-pointer"
+                  >
+                    {settingsSaving ? "Saving…" : "Save settings"}
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
         </div>
       )}

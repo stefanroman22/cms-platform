@@ -1,5 +1,19 @@
 """End-to-end test: create + transfer + welcome roundtrip against the
-deployed backend, using the admin Bearer key."""
+deployed backend, using the admin Bearer key.
+
+Marked `deployed_state` because:
+  • `test_create_then_delete_throwaway_project` calls the new
+    `DELETE /admin/projects/{slug}` endpoint, which doesn't exist on
+    master until this branch lands.
+  • `test_create_client_writes_public_users_row` now asserts the
+    cleanup DELETE returns 204/404 instead of silently swallowing
+    errors. The strict assertion only makes sense once the backend
+    fixes that surfaced the previous silent failures are deployed.
+
+`e2e.yml` skips `deployed_state` on dev push (`-m "integration and not
+deployed_state"`) and runs the full set on master push after the
+deploy-readiness curl loop.
+"""
 
 import os
 import time
@@ -7,7 +21,7 @@ import time
 import httpx
 import pytest
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.deployed_state]
 
 BACKEND = os.environ.get("E2E_BASE_URL_BACKEND", "https://cms-backend-roman.vercel.app")
 ADMIN_KEY = os.environ.get("E2E_ADMIN_API_KEY")
