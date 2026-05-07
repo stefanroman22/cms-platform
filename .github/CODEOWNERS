@@ -1,0 +1,8 @@
+# GitHub auto-assigns the listed owners as reviewers on every PR
+# touching matching paths. Used by Dependabot and any future
+# contributor PRs to surface the right reviewer without manual
+# tagging. Single-operator project — Stefan owns everything.
+#
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+
+* @stefanroman22
