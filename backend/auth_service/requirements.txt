@@ -6,7 +6,7 @@ pydantic[email]==2.10.3
 pydantic-settings==2.7.0
 slowapi==0.1.9
 python-dotenv==1.0.1
-python-multipart==0.0.20
+python-multipart==0.0.27
 resend==2.7.0
 pytest==8.3.3
 pytest-asyncio==0.24.0
