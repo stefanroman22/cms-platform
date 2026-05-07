@@ -65,22 +65,32 @@ export function useQuery<T>(
     [key]
   );
 
-  // Mount effect: serve cache or fetch
+  // Mount effect: serve cache or fetch.
+  //
+  // Order matters: we first try to promote any persisted sessionStorage
+  // copy into the in-memory cache (only happens for keys whitelisted in
+  // `cache.PERSIST_KEYS`). This MUST live in `useEffect`, never in a
+  // lazy useState initializer, so the client's first render renders the
+  // same null state the server emitted. After mount, the effect promotes
+  // and immediately calls `setData`, producing one extra render with the
+  // cached data — far cheaper than the network round-trip.
   useEffect(() => {
     if (!enabled) return;
 
+    // Try sessionStorage first (no-op for non-persisted keys).
+    cache.promotePersisted<T>(key);
     const cached = cache.get<T>(key);
 
     if (cached !== null) {
-      // Serve immediately from cache
+      // Serve immediately from cache.
       setData(cached);
       setLoading(false);
-      // If stale, revalidate silently in the background
+      // If stale, revalidate silently in the background.
       if (cache.isStale(key, ttl)) {
         doFetch(true);
       }
     } else {
-      // Nothing cached — must fetch (shows loading)
+      // Nothing cached — must fetch (shows loading).
       doFetch(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,6 +107,22 @@ export function useQuery<T>(
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled, refetchInterval, ttl]);
+
+  // Subscribe to cache mutations so external `cache.set(key, …)` /
+  // `cache.invalidate(key)` calls propagate to this hook's state. Without
+  // this, an optimistic update written through `cache.set` (e.g. the
+  // user-context `updateFullName` after editing the name in Account
+  // Settings) would land in the cache but never reach the sidebar's
+  // `useUser()` consumer until the next mount or revalidation.
+  useEffect(() => {
+    const unsub = cache.subscribe(key, () => {
+      const fresh = cache.get<T>(key);
+      // setData unconditionally — `null` after invalidate is a valid
+      // signal that the entry is gone; consumers should refetch.
+      setData(fresh);
+    });
+    return unsub;
+  }, [key]);
 
   const refresh = useCallback(() => {
     cache.invalidate(key);

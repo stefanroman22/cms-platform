@@ -146,11 +146,26 @@ async def update_profile(body: ChangeNameRequest, request: Request):
     from ..services.supabase_client import get_supabase_admin
 
     sb = get_supabase_admin()
-    sb.table("users").update(
-        {
-            "full_name": name,
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-    ).eq("id", user.id).execute()
+    # Verify the update actually hit a row. If the eq filter matched
+    # zero rows (e.g. user.id mismatch between auth and public schemas)
+    # supabase silently returns 200 with `data=[]`. Without this guard
+    # the dashboard's optimistic update would say "saved" while the DB
+    # still holds the old value — exactly the bug we're closing.
+    res = (
+        sb.table("users")
+        .update(
+            {
+                "full_name": name,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        .eq("id", user.id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Profile update did not persist (no matching user row).",
+        )
 
     return {"full_name": name}

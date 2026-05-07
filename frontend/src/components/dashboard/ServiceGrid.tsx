@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { BoxSelect, Mail } from "lucide-react";
 import { PageTabs } from "@/components/dashboard/PageTabs";
 import { ServiceCard, type ServiceCardService } from "@/components/dashboard/ServiceCard";
@@ -86,25 +87,40 @@ export function ServiceGrid({
         <>
           <PageTabs pages={pages} activePage={effectivePage} onSelect={setActivePage} />
 
-          {visibleServices.length === 0 ? (
-            <p className="text-sm text-zinc-400 dark:text-zinc-500 py-8 text-center">
-              No services on this page yet.
-            </p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleServices.map((svc) => (
-                <ServiceCard
-                  key={svc.id}
-                  service={svc}
-                  projectSlug={projectSlug}
-                  isAdmin={isAdmin}
-                  removing={removingKey === svc.service_key}
-                  onRemove={onRemove}
-                  variant="content"
-                />
-              ))}
-            </div>
-          )}
+          {/* AnimatePresence + key=page swaps the grid with a tiny
+              fade + lift on tab change. `mode="wait"` makes the new
+              tab wait for the old one to leave so cards never
+              overlap mid-transition. Duration kept short (~180ms)
+              to feel responsive, not theatrical. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={effectivePage}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
+            >
+              {visibleServices.length === 0 ? (
+                <p className="text-sm text-zinc-400 dark:text-zinc-500 py-8 text-center">
+                  No services on this page yet.
+                </p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {visibleServices.map((svc) => (
+                    <ServiceCard
+                      key={svc.id}
+                      service={svc}
+                      projectSlug={projectSlug}
+                      isAdmin={isAdmin}
+                      removing={removingKey === svc.service_key}
+                      onRemove={onRemove}
+                      variant="content"
+                    />
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </>
       )}
 

@@ -32,14 +32,30 @@ def test_create_then_delete_throwaway_project():
         timeout=15.0,
     )
     assert create.status_code == 201, create.text
-    # Cleanup: PATCH is_active=false (soft-delete on this schema).
-    httpx.request(
-        "PATCH",
-        f"{BACKEND}/admin/projects/{slug}",
-        json={"is_active": False},
-        headers=HEADERS,
-        timeout=15.0,
-    )
+    try:
+        # Round-trip the patch to verify is_active toggling works (was the
+        # original soft-delete path; some callers still rely on it).
+        patch = httpx.request(
+            "PATCH",
+            f"{BACKEND}/admin/projects/{slug}",
+            json={"is_active": False},
+            headers=HEADERS,
+            timeout=15.0,
+        )
+        assert patch.status_code == 200, patch.text
+    finally:
+        # Hard delete so the row never lingers in the dashboard. Asserts
+        # 204 — silent failures here are what produced the "Throwaway
+        # E2E" pollution we just cleaned up.
+        delete = httpx.delete(
+            f"{BACKEND}/admin/projects/{slug}",
+            headers=HEADERS,
+            timeout=15.0,
+        )
+        assert delete.status_code in (
+            204,
+            404,
+        ), f"throwaway project cleanup failed: {delete.status_code} {delete.text}"
 
 
 @skip
@@ -111,16 +127,18 @@ def test_create_client_writes_public_users_row():
         assert "sid" in login.cookies
     finally:
         # Cleanup so CI runs don't accumulate throwaway-create-*@cms-test.dev
-        # rows in production Supabase. Best-effort — a 404 (already gone) or
-        # a 5xx is logged via assert message but doesn't fail the test.
-        try:
-            httpx.delete(
-                f"{BACKEND}/admin/clients/{email}",
-                headers=HEADERS,
-                timeout=15.0,
-            )
-        except Exception:
-            pass
+        # rows in production Supabase. Asserts a known-good status — silent
+        # except (the original code) is what produced the dashboard pollution
+        # we just cleaned up. 404 means cleanup already happened (idempotent).
+        delete = httpx.delete(
+            f"{BACKEND}/admin/clients/{email}",
+            headers=HEADERS,
+            timeout=15.0,
+        )
+        assert delete.status_code in (
+            204,
+            404,
+        ), f"throwaway client cleanup failed: {delete.status_code} {delete.text}"
 
 
 @skip

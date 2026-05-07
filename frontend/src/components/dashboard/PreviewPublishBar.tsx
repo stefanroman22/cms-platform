@@ -94,7 +94,13 @@ export function PreviewPublishBar({
   }
 
   const count = status?.unpublished_count ?? 0;
-  const hasPreview = !!status?.preview_url;
+  // Strict: only the dedicated `preview_url` (Vercel preview branch
+  // with `CMS_PREVIEW_TOKEN` so unpublished changes render). Never
+  // fall back to production — opening the live site under a "See
+  // Preview" label would mislead the operator into thinking they
+  // were viewing unpublished drafts when they weren't.
+  const previewTarget = status?.preview_url ?? null;
+  const hasPreview = !!previewTarget;
   const isClean = !loading && count === 0;
 
   // Count-tag popover ("You have X unpublished changes"). Hover opens it
@@ -127,19 +133,30 @@ export function PreviewPublishBar({
                 this h-16 container) so it doesn't push the buttons off-
                 center vs. the logo. */}
       <div className="sticky top-0 z-30 -mx-4 -mt-4 md:-mx-8 md:-mt-8 mb-6 flex h-16 items-center justify-between gap-3 border-b border-zinc-200 bg-white/90 px-4 md:px-8 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
-        <button
-          type="button"
-          disabled={!hasPreview || loading}
-          onClick={() =>
-            status?.preview_url && window.open(status.preview_url, "_blank", "noopener,noreferrer")
-          }
-          title={hasPreview ? "Open preview in a new tab" : "Preview not set up — contact admin"}
-          className="cursor-pointer inline-flex shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-        >
-          <ExternalLink className="h-4 w-4" />
-          <span className="hidden sm:inline">See Preview</span>
-          <span className="sm:hidden">Preview</span>
-        </button>
+        {hasPreview && previewTarget ? (
+          <a
+            href={previewTarget}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open preview in a new tab"
+            className="cursor-pointer inline-flex shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            <ExternalLink className="h-4 w-4" />
+            <span className="hidden sm:inline">See Preview</span>
+            <span className="sm:hidden">Preview</span>
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            title={loading ? "Loading…" : "Preview not set up — contact admin"}
+            className="cursor-not-allowed inline-flex shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+          >
+            <ExternalLink className="h-4 w-4" />
+            <span className="hidden sm:inline">See Preview</span>
+            <span className="sm:hidden">Preview</span>
+          </button>
+        )}
 
         <div className="flex items-center gap-2">
           {!loading && (

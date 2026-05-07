@@ -28,6 +28,7 @@ from ..models.schemas import (
 )
 from ..services.auth_service import hash_password
 from ..services.supabase_client import get_supabase_admin
+from ..services.test_data import is_test_email, is_test_slug
 from ..services.welcome_email import send_welcome_email
 from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
 
@@ -389,7 +390,17 @@ async def remove_service(project_slug: str, service_key: str, request: Request):
 
 
 @router.get("/admin/projects", response_model=list[AdminProjectOut])
-async def admin_list_projects(request: Request):
+async def admin_list_projects(request: Request, include_test: bool = False):
+    """List every project across all clients.
+
+    By default filters out:
+      - inactive (soft-deleted) projects
+      - E2E test fixtures (slugs matching `services.test_data.is_test_slug`,
+        and projects owned by E2E test users matching `is_test_email`)
+
+    Pass `?include_test=true` to see them too — useful when debugging
+    a flaky CI run that may have left orphans.
+    """
     await admin_user_via_bearer_or_sid(request)
 
     sb = get_supabase_admin()
@@ -403,6 +414,13 @@ async def admin_list_projects(request: Request):
     out = []
     for p in result.data or []:
         user_row = p.get("users") or {}
+        if not include_test:
+            if not p.get("is_active"):
+                continue
+            if is_test_slug(p["slug"]):
+                continue
+            if is_test_email(user_row.get("email")):
+                continue
         out.append(
             {
                 "id": p["id"],
@@ -448,6 +466,25 @@ async def admin_patch_project(project_slug: str, body: AdminProjectPatchIn, requ
 
     sb.table("projects").update(update_data).eq("slug", project_slug).execute()
     return {"updated": len(update_data)}
+
+
+@router.delete("/admin/projects/{project_slug}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("3/minute")
+async def admin_delete_project(project_slug: str, request: Request):
+    """Hard-delete a project + cascade (services, content_entries, etc.).
+
+    Primary use case: integration-test cleanup so CI runs don't leak
+    `throwaway-*` slugs into the dashboard. The dashboard does NOT
+    expose this; only an admin Bearer key (or admin sid cookie) can
+    invoke. PATCH `is_active=false` remains the soft-delete path for
+    the dashboard's own deactivate flow.
+    """
+    await admin_user_via_bearer_or_sid(request)
+    sb = get_supabase_admin()
+    row = sb.table("projects").select("id").eq("slug", project_slug).maybe_single().execute()
+    if not (row and row.data):
+        raise HTTPException(404, f"Project {project_slug!r} not found")
+    sb.table("projects").delete().eq("id", row.data["id"]).execute()
 
 
 @router.post("/admin/projects", status_code=status.HTTP_201_CREATED)
@@ -546,7 +583,14 @@ async def admin_send_welcome(email: str, body: WelcomeEmailIn, request: Request)
 
 
 @router.get("/admin/clients", response_model=list[UserAdminOut])
-async def admin_list_clients(request: Request):
+async def admin_list_clients(request: Request, include_test: bool = False):
+    """List every registered user.
+
+    By default hides E2E test accounts (emails matching
+    `services.test_data.is_test_email` — e2e-*, throwaway-*, *@cms-test.dev,
+    *@cms-test.local). Pass `?include_test=true` to see them — useful
+    when an integration test cleanup looks suspicious.
+    """
     await admin_user_via_bearer_or_sid(request)
 
     sb = get_supabase_admin()
@@ -559,6 +603,8 @@ async def admin_list_clients(request: Request):
 
     out = []
     for u in users_result.data or []:
+        if not include_test and is_test_email(u.get("email")):
+            continue
         count_result = (
             sb.table("projects")
             .select("id", count="exact")

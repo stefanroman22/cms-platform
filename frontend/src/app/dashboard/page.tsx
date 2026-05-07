@@ -29,8 +29,12 @@ export default function ProjectsOverviewPage() {
     loading,
     error,
   } = useQuery<Project[]>("projects", fetchProjects, {
-    ttl: 2 * 60 * 1000,
-    refetchInterval: 2 * 60 * 1000,
+    // 5-min TTL — projects-list rarely changes outside a manual create.
+    // Staleness here just means a brand-new project takes up to 5 min
+    // to show up unless we explicitly invalidate (which the create
+    // flow already does).
+    ttl: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const [search, setSearch] = useState("");

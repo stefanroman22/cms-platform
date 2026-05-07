@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Pencil, Trash2, X, Save } from "lucide-react";
+import { useQuery } from "@/hooks/useQuery";
+import * as cache from "@/lib/cache";
 import {
   dashboardSectionCardCn,
   dashboardInputCn,
@@ -93,10 +95,65 @@ function formatDate(iso: string): string {
   });
 }
 
+// Module-level fetcher so the same function reference is reused across
+// renders (lets useQuery dedupe correctly) and keeps the cache key
+// generator centralised.
+const issuesKey = (slug: string) => `issues:${slug}`;
+function fetchIssues(slug: string): Promise<Issue[]> {
+  return fetch(`/api/projects/${slug}/issues`, {
+    credentials: "include",
+    cache: "no-store",
+  }).then(async (r) => {
+    if (!r.ok) throw new Error(`Failed to load issues (${r.status})`);
+    return r.json();
+  });
+}
+
 export function IssueList({ projectSlug, refreshTrigger, isAdmin, currentUserId }: IssueListProps) {
-  const [issues, setIssues] = useState<Issue[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Cached + SWR via useQuery — 30 s freshness window. Issues update
+  // less than once a minute on real workloads; staleness is acceptable
+  // and a stale-while-revalidate flicker is far better than a blank
+  // loading skeleton on every project visit. `refreshTrigger` (bumped
+  // by IssueForm on submit) forces an immediate refetch via the effect
+  // below so a freshly-created issue shows up without lag.
+  const {
+    data: issuesData,
+    loading,
+    error: queryError,
+    refresh,
+  } = useQuery<Issue[]>(issuesKey(projectSlug), () => fetchIssues(projectSlug), {
+    ttl: 30 * 1000,
+  });
+
+  // Local mirror so optimistic edits / deletes / status changes can
+  // mutate without round-tripping through the cache. The cache stays
+  // in sync via the helper below.
+  const [issuesOverride, setIssuesOverride] = useState<Issue[] | null>(null);
+  const issues = issuesOverride ?? issuesData ?? [];
+
+  // Reset the override whenever fresh data lands so we don't pin a
+  // stale optimistic state forever.
+  useEffect(() => {
+    setIssuesOverride(null);
+  }, [issuesData]);
+
+  // Refresh on parent's refreshTrigger bump (new issue submitted).
+  const triggerRef = useRef(refreshTrigger);
+  useEffect(() => {
+    if (triggerRef.current !== refreshTrigger) {
+      triggerRef.current = refreshTrigger;
+      cache.invalidate(issuesKey(projectSlug));
+      refresh();
+    }
+  }, [refreshTrigger, projectSlug, refresh]);
+
+  function setIssues(updater: (prev: Issue[]) => Issue[]) {
+    const next = updater(issues);
+    setIssuesOverride(next);
+    cache.set(issuesKey(projectSlug), next);
+  }
+
+  const error = queryError;
   const [sortMode, setSortMode] = useState<SortMode>("priority");
 
   // Inline edit state
@@ -110,33 +167,6 @@ export function IssueList({ projectSlug, refreshTrigger, isAdmin, currentUserId 
   // Action states
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchIssues() {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/projects/${projectSlug}/issues`, {
-          credentials: "include",
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`Failed to load issues (${res.status})`);
-        const data: Issue[] = await res.json();
-        if (!cancelled) setIssues(data);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load issues.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchIssues();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectSlug, refreshTrigger]);
 
   function startEdit(issue: Issue) {
     setEditingId(issue.id);

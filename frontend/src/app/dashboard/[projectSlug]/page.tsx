@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { use, useState, useEffect } from "react";
+import { use, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ChevronRight, Settings, Globe, ExternalLink } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { useUser } from "@/context/user";
@@ -10,6 +11,7 @@ import type { ServiceCardService } from "@/components/dashboard/ServiceCard";
 import { IssueForm } from "@/components/dashboard/IssueForm";
 import { IssueList } from "@/components/dashboard/IssueList";
 import { PreviewPublishBar } from "@/components/dashboard/PreviewPublishBar";
+import { ArcSpinner } from "@/components/ui/ArcSpinner";
 import {
   dashboardInputCn,
   dashboardFieldLabelCn,
@@ -66,9 +68,14 @@ export default function ProjectWorkspacePage({
   // same array; this page derives its single project locally. Storing a
   // single object under "projects" used to overwrite the overview's array
   // and crash `.filter()` on next navigation.
-  const { data: projectsList } = useQuery<ProjectInfo[]>("projects", fetchProjects, {
-    ttl: 2 * 60 * 1000,
-  });
+  // 5-min TTL — projects-list rate of change is near zero on real
+  // workloads; bumping from 2 → 5 min cuts redundant refetches in half
+  // when a user pages between projects.
+  const { data: projectsList, loading: projectsLoading } = useQuery<ProjectInfo[]>(
+    "projects",
+    fetchProjects,
+    { ttl: 5 * 60 * 1000 }
+  );
 
   const project = Array.isArray(projectsList)
     ? projectsList.find((p) => p.slug === projectSlug)
@@ -76,28 +83,71 @@ export default function ProjectWorkspacePage({
   const projectName = project?.name ?? projectSlug;
 
   // ── Project settings (admin only) ────────────────────────────────────────
-  const [settings, setSettings] = useState<{ website_url: string; allowed_origins: string } | null>(
-    null
-  );
+  //
+  // Backed by the shared `useQuery` cache so navigating Project A → B → A
+  // returns instantly from cache (5-min TTL, key `settings:<slug>`). The
+  // hook only fetches when `enabled = true`, gated by:
+  //   • admin && open settings drawer (manual edit), OR
+  //   • admin && cross-owner case (project missing from /projects list,
+  //     so we need the URL for the live-website card).
+  //
+  // Saving the form invalidates the cache so the next visit revalidates.
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
+  const isCrossOwnerAdmin = isAdmin && !projectsLoading && project === undefined;
+  const settingsEnabled = isAdmin && (settingsOpen || isCrossOwnerAdmin);
+  const settingsKey = `settings:${projectSlug}`;
+
+  type SettingsFromApi = { website_url: string | null; allowed_origins: string[] | null };
+  const { data: settingsRaw, loading: settingsQueryLoading } = useQuery<SettingsFromApi>(
+    settingsKey,
+    () =>
+      fetch(`/api/projects/${projectSlug}/settings`, { credentials: "include" }).then((r) =>
+        r.json()
+      ),
+    { ttl: 5 * 60 * 1000, enabled: settingsEnabled }
+  );
+
+  // Editable form mirror — populated from the cached/fetched API data,
+  // mutated locally as the admin types, written back on save.
+  const [settingsDraft, setSettingsDraft] = useState<{
+    website_url: string;
+    allowed_origins: string;
+  } | null>(null);
+
+  // Re-sync draft whenever the underlying cached data changes (initial
+  // load, or revalidation after TTL expires). Don't clobber an
+  // in-progress edit; the draft only re-syncs from null.
   useEffect(() => {
-    if (!isAdmin) return;
-    fetch(`/api/projects/${projectSlug}/settings`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) =>
-        setSettings({
-          website_url: d.website_url ?? "",
-          allowed_origins: (d.allowed_origins ?? []).join("\n"),
-        })
-      )
-      .catch(() => {});
-  }, [isAdmin, projectSlug]);
+    if (settingsRaw && settingsDraft === null) {
+      setSettingsDraft({
+        website_url: settingsRaw.website_url ?? "",
+        allowed_origins: (settingsRaw.allowed_origins ?? []).join("\n"),
+      });
+    }
+  }, [settingsRaw, settingsDraft]);
+
+  // Loading state used by the "Loading project settings…" placeholder.
+  const settingsLoading = settingsQueryLoading && settingsDraft === null;
+
+  // Convenience: live-website fallback consults the same cached data.
+  const settings = settingsRaw
+    ? {
+        website_url: settingsRaw.website_url ?? "",
+        allowed_origins: (settingsRaw.allowed_origins ?? []).join("\n"),
+      }
+    : null;
+
+  function openSettings() {
+    setSettingsOpen(true);
+  }
 
   async function handleSaveSettings(e: React.FormEvent) {
     e.preventDefault();
-    if (!settings) return;
+    if (!settingsDraft) return;
     setSettingsSaving(true);
     setSettingsMsg(null);
     try {
@@ -106,8 +156,8 @@ export default function ProjectWorkspacePage({
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          website_url: settings.website_url.trim() || null,
-          allowed_origins: settings.allowed_origins
+          website_url: settingsDraft.website_url.trim() || null,
+          allowed_origins: settingsDraft.allowed_origins
             .split("\n")
             .map((s) => s.trim())
             .filter(Boolean),
@@ -117,6 +167,19 @@ export default function ProjectWorkspacePage({
         const body = await r.json().catch(() => ({}));
         throw new Error(body.detail ?? "Failed to save settings.");
       }
+      // Push the just-saved values back into the cache so the next read
+      // (or the live-website card sharing this key) reflects them
+      // immediately, no round-trip needed. Also invalidate the projects
+      // list — `website_url` is denormalised there, so a stale list
+      // would show the old URL on the dashboard until TTL expires.
+      cache.set(settingsKey, {
+        website_url: settingsDraft.website_url.trim() || null,
+        allowed_origins: settingsDraft.allowed_origins
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      });
+      cache.invalidate("projects");
       setSettingsMsg({ type: "ok", text: "Settings saved." });
     } catch (err) {
       setSettingsMsg({ type: "err", text: err instanceof Error ? err.message : "Save failed." });
@@ -166,33 +229,87 @@ export default function ProjectWorkspacePage({
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Manage content and settings for this project.
         </p>
-        {(project?.website_url || settings?.website_url) && (
-          <a
-            href={(project?.website_url || settings?.website_url) as string}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 flex w-full max-w-xl items-start gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-zinc-800 dark:bg-zinc-900/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/30"
-          >
-            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
-              <Globe className="h-3.5 w-3.5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                Live website
-              </p>
-              <p className="mt-0.5 truncate font-mono text-sm text-zinc-900 dark:text-zinc-100">
-                {((project?.website_url || settings?.website_url) as string).replace(
-                  /^https?:\/\//,
-                  ""
+        {/* Live website card.
+            Loading rule: while we don't yet know if a URL exists for this
+            project (project list still loading, OR admin's settings fetch
+            still in flight), reserve the space + show a small inline arc
+            spinner matching the post-login `LoadingScreen` design.
+            When data arrives:
+              • URL present → fade the card in.
+              • URL absent  → fade the placeholder out cleanly, render nothing.
+            `AnimatePresence mode="wait"` ensures the spinner exits before the
+            card enters so the column never has two boxes at once. */}
+        {(() => {
+          // URL resolution rules:
+          //   • Owner / admin-on-own-project: `/projects` is canonical.
+          //     `project` is defined; `project.website_url` is the answer.
+          //     If null → no URL → render nothing, NEVER show spinner
+          //     (we already know the answer; spinner would be a lie).
+          //   • Admin-on-other-owner's-project: `project` is undefined;
+          //     fall back to settings (fetched by effect above). Spinner
+          //     during that fetch only.
+          const projectInList = project !== undefined;
+          const liveUrl = project?.website_url || settings?.website_url || null;
+          const adminFallbackPending = isAdmin && !projectInList && settings === null;
+          const liveUrlLoading =
+            (projectsLoading && !projectInList) || adminFallbackPending;
+          if (!liveUrlLoading && !liveUrl) return null;
+
+          return (
+            <div className="mt-4 w-full max-w-xl">
+              <AnimatePresence mode="wait" initial={false}>
+                {liveUrlLoading ? (
+                  <motion.div
+                    key="live-url-loading"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    role="status"
+                    aria-busy="true"
+                    aria-label="Loading live website URL"
+                    className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white/40 px-4 py-3 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-200"
+                  >
+                    <ArcSpinner size={22} />
+                    <p className="text-xs font-medium tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Loading live website…
+                    </p>
+                  </motion.div>
+                ) : (
+                  liveUrl && (
+                    <motion.a
+                      key="live-url-card"
+                      href={liveUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+                      className="flex items-start gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-zinc-800 dark:bg-zinc-900/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/30"
+                    >
+                      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                        <Globe className="h-3.5 w-3.5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                          Live website
+                        </p>
+                        <p className="mt-0.5 truncate font-mono text-sm text-zinc-900 dark:text-zinc-100">
+                          {liveUrl.replace(/^https?:\/\//, "")}
+                        </p>
+                        <p className="mt-1 text-xs leading-snug text-zinc-500 dark:text-zinc-400">
+                          This is the public website your visitors see.
+                        </p>
+                      </div>
+                      <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" />
+                    </motion.a>
+                  )
                 )}
-              </p>
-              <p className="mt-1 text-xs leading-snug text-zinc-500 dark:text-zinc-400">
-                This is the public website your visitors see.
-              </p>
+              </AnimatePresence>
             </div>
-            <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-500" />
-          </a>
-        )}
+          );
+        })()}
       </div>
 
       {error && <p className="mb-6 text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -231,14 +348,35 @@ export default function ProjectWorkspacePage({
         />
       </div>
 
-      {/* ── Admin: Project Settings ───────────────────────────────────── */}
-      {isAdmin && settings !== null && (
-        <div className="mt-12">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-4">
-            <Settings className="h-4 w-4" />
-            Project Settings
-          </h2>
-          <div className={`${dashboardSectionCardCn} p-6 max-w-lg`}>
+      {/* ── Admin: Project Settings (lazy) ────────────────────────────── */}
+      {isAdmin && (
+        <div className="mt-12 max-w-lg">
+          <button
+            type="button"
+            onClick={() => (settingsOpen ? setSettingsOpen(false) : openSettings())}
+            className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-4 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+            aria-expanded={settingsOpen}
+          >
+            <span className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Project Settings
+            </span>
+            <span className="text-xs font-normal text-zinc-400 dark:text-zinc-500">
+              {settingsOpen ? "Hide" : "Edit"}
+            </span>
+          </button>
+        </div>
+      )}
+      {isAdmin && settingsOpen && (
+        <div className="max-w-lg">
+          {settingsLoading && (
+            <div className="rounded-xl border border-zinc-200 bg-white/40 px-6 py-8 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400 flex items-center gap-3">
+              <ArcSpinner size={20} />
+              Loading project settings…
+            </div>
+          )}
+          {!settingsLoading && settingsDraft !== null && (
+          <div className={`${dashboardSectionCardCn} p-6`}>
             <form onSubmit={handleSaveSettings} className="space-y-4">
               {settingsMsg && (
                 <div
@@ -259,8 +397,10 @@ export default function ProjectWorkspacePage({
                 </p>
                 <input
                   type="url"
-                  value={settings.website_url}
-                  onChange={(e) => setSettings((s) => s && { ...s, website_url: e.target.value })}
+                  value={settingsDraft.website_url}
+                  onChange={(e) =>
+                    setSettingsDraft((s) => s && { ...s, website_url: e.target.value })
+                  }
                   placeholder="https://example.com"
                   className={dashboardInputCn}
                 />
@@ -274,9 +414,9 @@ export default function ProjectWorkspacePage({
                 </p>
                 <textarea
                   rows={4}
-                  value={settings.allowed_origins}
+                  value={settingsDraft.allowed_origins}
                   onChange={(e) =>
-                    setSettings((s) => s && { ...s, allowed_origins: e.target.value })
+                    setSettingsDraft((s) => s && { ...s, allowed_origins: e.target.value })
                   }
                   placeholder={"https://example.com\nhttps://www.example.com"}
                   className={`${dashboardInputCn} font-mono text-xs resize-y`}
@@ -294,6 +434,7 @@ export default function ProjectWorkspacePage({
               </div>
             </form>
           </div>
+          )}
         </div>
       )}
     </div>
