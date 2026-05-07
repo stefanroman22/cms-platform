@@ -163,14 +163,68 @@ This is a controlled escape hatch. Never use it because "tests are flaky and I'm
 
 The post-mortem template lives at `docs/superpowers/post-mortems/YYYY-MM-DD-<slug>.md`.
 
-## Roadmap
+## Automation pipeline (active)
 
-The lifecycle described above is the **current** state (post-PR-1/2/3). Open items that further reduce friction without losing safety:
+The full path from `git push origin dev` to prod is:
 
-- **PR-4** — E2E targets the dev-branch Vercel preview URL (auto-discovered via `deployment_status` event). Eliminates the catch-22 where `deployed_state` tests can only pass after merge.
-- **PR-5** — Auto-merge dev → master on every green push (replacing the weekly cron).
-- **PR-6** — Post-deploy smoke probe + auto-rollback on master.
-- **PR-7** — Dependabot auto-merge for patch + minor bumps when CI green.
-- **PR-8** — Coverage (Codecov) + mypy seed + CodeQL workflow.
+```
+push to dev
+   ↓
+[CI]   ruff + black + tsc + ESLint + vitest + pytest (path-filtered, ~2-3 min)
+   ↓
+[E2E]  pytest -m "integration and not deployed_state" (against deployed prod, ~3-4 min)
+   ↓
+[Auto-merge dev → master]  workflow_run trigger after CI + E2E both green
+   ↓
+[Vercel auto-deploys]  master push → backend + frontend rebuild (~2 min)
+   ↓
+[Post-deploy smoke]
+   • probe backend /health, /auth/me-unauth (=401)
+   • probe frontend /log-in (200 + CSP frame-ancestors 'none')
+   ↓
+   pass → done; routine code change is in prod ~6-10 min after push
+   fail → auto-revert master + open P0 incident issue, you get pinged
+```
 
-After PR-4 + PR-5: average code-to-prod latency drops from "next scheduled cron" to "~6-10 minutes from push". Manual interventions disappear unless something genuinely breaks.
+### Quality + safety gates baked in
+
+| Gate | Catches | Runs in |
+|---|---|---|
+| Pre-commit (local) | lint, format, secrets | every commit |
+| CI (path-filtered) | type errors, lint, unit tests | every push, ~2-3 min |
+| E2E backend integration | API contract regressions | every push, ~3 min |
+| E2E frontend (Playwright) | broken user journeys | every push, ~2 min |
+| Auto-merge gate | only fires when CI + E2E both green | every dev workflow_run |
+| Post-deploy smoke | broken Vercel deploy, missing CSP, 5xx | every master push |
+| Auto-rollback | reverts master + opens P0 issue | smoke fails |
+| CodeQL | static-analysis findings (auth, crypto, injection) | every push + Sundays |
+| Dependabot auto-merge | patch + minor bumps land hands-free | every Dependabot PR |
+| `deployed_state` tests | regressions in *deployed* behavior (headers, RLS) | master push only |
+
+### Where you still get pinged
+
+- Major Dependabot PR — left open for review (~1/month).
+- CodeQL high finding — issue auto-opened.
+- Post-deploy smoke fail — auto-rollback already happened; incident issue tags you.
+- Coverage drop > 2pp (when PR-8 ships) — auto-merge skipped, you decide.
+
+### Where you don't get pinged
+
+- Routine green push → ~6-10 min later it's in prod.
+- Patch / minor Dependabot bumps land themselves.
+- Path-skipped CI jobs (docs-only changes don't run code jobs).
+
+## Bootstrap notes
+
+Workflows triggered by `workflow_run` (auto-merge) or by `deployment_status` only fire when the workflow file exists on the **default branch** (master). After this batch first lands on `dev`:
+
+1. `master` does NOT have the new workflow files yet — auto-merge won't fire on the first dev push.
+2. One-time: manually FF-merge `dev → master` (`make` ... or `gh api` admin override) to plant the workflow files on master.
+3. From then on, every subsequent dev push auto-promotes itself.
+
+The same applies to `post-deploy-smoke.yml` — first push to master after this batch lands runs the smoke check against itself.
+
+## Future-work roadmap
+
+- **PR-4** — Vercel preview-URL E2E (point `deployed_state` tests at the per-branch preview deployment instead of prod). Currently `deployed_state` only runs on master post-deploy; PR-4 would let those tests run pre-merge too. Requires `VERCEL_TOKEN` as a repo secret.
+- **PR-8 — coverage + mypy** — pytest-cov + Codecov upload + mypy seed (`auth_service/services/*` first). Out of scope for the auto-pipeline batch; track in audit doc.

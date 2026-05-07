@@ -1,0 +1,65 @@
+# .github/workflows/dependabot-auto-merge.yml
+# PR-7 — Auto-merge Dependabot PRs for low-risk version bumps.
+#
+# Rules:
+#   • Only fires on PRs opened by `dependabot[bot]`.
+#   • Reads the bump type via `dependabot/fetch-metadata`.
+#   • Auto-approves + auto-merges semver-patch and semver-minor only.
+#   • Major bumps stay open for human review (~1/quarter typical).
+#   • `gh pr merge --auto` queues the merge; GitHub releases when CI
+#     turns green. If CI fails, PR stays open until Dependabot rebases
+#     or a human intervenes.
+#
+# Result: ~90% of dep PRs land without operator action; security
+# patches reach prod within hours of release without click load.
+
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot PR metadata
+        id: meta
+        uses: dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7 # v2.3.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Only auto-merge patch/minor — major bumps need eyes on changelog.
+      - name: Approve PR (patch + minor only)
+        if: |
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr review --approve "${{ github.event.pull_request.html_url }}"
+
+      - name: Enable auto-merge (patch + minor only)
+        if: |
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --merge "${{ github.event.pull_request.html_url }}"
+
+      - name: Comment on major bumps
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.html_url }}" --body "$(cat <<'EOF'
+          🛑 **Major version bump** — held for review.
+
+          Auto-merge is enabled for **patch** and **minor** bumps only. Majors typically carry breaking changes; please skim the dependency's changelog and merge manually if the change is acceptable.
+
+          - Update type: \`${{ steps.meta.outputs.update-type }}\`
+          - Dependency: \`${{ steps.meta.outputs.dependency-names }}\`
+          EOF
+          )"
