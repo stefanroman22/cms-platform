@@ -51,6 +51,36 @@ def _resolve_content_entry(svc: dict) -> dict | None:
     return None
 
 
+def _normalise_published(service_type: str, payload: dict) -> dict:
+    """Massage published content into the shape the public website
+    selectors expect.
+
+    Currently handles `key_value`, where historic data was stored as
+    `entries: [{key, value}, ...]` (array of pairs) but every consuming
+    website's `keyValue(...).entries.<field>` access pattern assumes
+    `entries: {key: value, ...}` (object). New saves from
+    `KeyValueEditor.tsx:emit()` already write the object shape; this
+    function lets old projects render correctly without a data
+    migration AND keeps the new shape working unchanged.
+
+    No-op for any other service type.
+    """
+    if service_type != "key_value":
+        return payload
+    entries = payload.get("entries")
+    if isinstance(entries, list):
+        flattened: dict = {}
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            key = item.get("key")
+            if not isinstance(key, str) or not key.strip():
+                continue
+            flattened[key.strip()] = item.get("value")
+        return {**payload, "entries": flattened}
+    return payload
+
+
 @router.get("/{project_slug}")
 async def get_project_content(project_slug: str, request: Request):
     project = _resolve_project(project_slug)
@@ -83,10 +113,11 @@ async def get_project_content(project_slug: str, request: Request):
         if updated_at and (last_updated is None or updated_at > last_updated):
             last_updated = updated_at
 
+        normalised = _normalise_published(svc["service_type_slug"], raw_published)
         content_map[svc["service_key"]] = {
             "_type": svc["service_type_slug"],
             "_label": svc.get("label") or svc["service_key"],
-            **raw_published,
+            **normalised,
         }
 
     payload = {
@@ -168,10 +199,11 @@ async def get_project_draft_content(project_slug: str, request: Request):
         if updated_at and (last_updated is None or updated_at > last_updated):
             last_updated = updated_at
 
+        normalised = _normalise_published(svc["service_type_slug"], raw)
         content_map[svc["service_key"]] = {
             "_type": svc["service_type_slug"],
             "_label": svc.get("label") or svc["service_key"],
-            **raw,
+            **normalised,
         }
 
     payload = {
