@@ -788,9 +788,26 @@ async def delete_client(email: str, request: Request):
         raise HTTPException(404, f"No user with email {email!r}")
 
     user_id = row.data["id"]
-    # Supabase auth admin delete first (cascades to public.users via FK
-    # ON DELETE CASCADE on the public.users.id reference).
-    sb_admin.auth.admin.delete_user(user_id)
-    # Defensive: also direct-delete from public.users in case the schema's
-    # FK isn't in CASCADE mode. Idempotent — already-gone is fine.
+    # Try the Supabase auth admin delete (cascades to public.users via
+    # FK ON DELETE CASCADE on the public.users.id reference). Most
+    # records have a parallel auth.users row from the original
+    # provisioning flow.
+    #
+    # `create_client` (the dashboard create-flow) writes ONLY to
+    # public.users — no auth.users row. Calling auth.admin.delete_user
+    # on a non-auth user raises and would 500 the entire request,
+    # leaving the public.users row alive AND blocking integration-
+    # test cleanup. Catch and continue; the explicit table delete
+    # below covers both cases idempotently.
+    try:
+        sb_admin.auth.admin.delete_user(user_id)
+    except Exception as exc:  # noqa: BLE001 — broad on purpose
+        logger.warning(
+            "auth admin delete skipped for user %s (%s): %s",
+            user_id,
+            email,
+            exc,
+        )
+    # Authoritative delete from public.users. Idempotent — already-gone
+    # is fine.
     sb_admin.table("users").delete().eq("id", user_id).execute()

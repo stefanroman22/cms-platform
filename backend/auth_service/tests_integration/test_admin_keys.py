@@ -20,8 +20,11 @@ skip_if_no_key = pytest.mark.skipif(
 
 @skip_if_no_key
 def test_bearer_admin_lists_projects():
+    # `?include_test=true` to see the `e2e-test-project` seed fixture,
+    # which is otherwise hidden by the test-data dashboard filter
+    # (services/test_data.py).
     r = httpx.get(
-        f"{BACKEND_URL}/admin/projects",
+        f"{BACKEND_URL}/admin/projects?include_test=true",
         headers={"Authorization": f"Bearer {ADMIN_KEY}"},
         timeout=15.0,
     )
