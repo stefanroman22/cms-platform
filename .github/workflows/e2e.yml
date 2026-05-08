@@ -94,25 +94,42 @@ jobs:
       #   • dev push: skip them (`-m "integration and not deployed_state"`).
       #   • master push: poll the deployed `/health` until it answers,
       #     then run the full set.
-      - name: Wait for backend deploy (master only)
+      - name: Wait for backend + frontend deploys (master only)
         if: github.ref == 'refs/heads/master'
         env:
           E2E_BASE_URL_BACKEND: ${{ secrets.E2E_BASE_URL_BACKEND }}
+          E2E_BASE_URL_FRONTEND: ${{ secrets.E2E_BASE_URL_FRONTEND }}
         run: |
-          # Allow up to 4 min for Vercel to roll the new build.
-          deadline=$(( $(date +%s) + 240 ))
-          while [ "$(date +%s)" -lt "$deadline" ]; do
-            if curl -fsS "${E2E_BASE_URL_BACKEND:-https://cms-backend-roman.vercel.app}/health" >/dev/null; then
-              echo "✅ backend /health responding"
-              # Cushion for the frontend deploy + edge-cache propagation.
-              sleep 60
-              exit 0
-            fi
-            echo "waiting for backend /health…"
-            sleep 10
-          done
-          echo "::error::backend deploy did not become healthy within 4 minutes"
-          exit 1
+          # Allow up to 4 min PER target for Vercel to roll the new
+          # build. Backend usually leads frontend; the frontend probe
+          # in this same step (rather than a generic sleep) is what
+          # fixed the Playwright admin-spec flakes that hit the still-
+          # old frontend.
+          backend_url="${E2E_BASE_URL_BACKEND:-https://cms-backend-roman.vercel.app}"
+          frontend_url="${E2E_BASE_URL_FRONTEND:-https://roman-technologies.dev}"
+
+          wait_for() {
+            local label=$1 url=$2
+            local deadline=$(( $(date +%s) + 240 ))
+            while [ "$(date +%s)" -lt "$deadline" ]; do
+              if curl -fsS -o /dev/null "$url"; then
+                echo "✅ $label responding ($url)"
+                return 0
+              fi
+              echo "waiting for $label ($url)…"
+              sleep 10
+            done
+            echo "::error::$label did not become healthy within 4 minutes"
+            return 1
+          }
+
+          wait_for "backend /health"    "$backend_url/health" || exit 1
+          wait_for "frontend /log-in"   "$frontend_url/log-in" || exit 1
+
+          # Final cushion for Vercel's edge cache to repopulate after
+          # the new origin response is live.
+          sleep 30
+          echo "✅ both targets ready"
 
       - name: Run integration tests (dev — skip deployed_state)
         if: github.ref != 'refs/heads/master'
