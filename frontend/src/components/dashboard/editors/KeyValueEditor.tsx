@@ -27,7 +27,12 @@ export function KeyValueEditor({ initialContent, onChange }: EditorProps) {
 
   function emit(next: KVRow[]) {
     setRows(next);
-    onChange({ entries: next });
+    const entries: Record<string, string> = {};
+    for (const { key, value } of next) {
+      const k = key.trim();
+      if (k) entries[k] = value;
+    }
+    onChange({ entries });
   }
 
   function updateRow(index: number, field: "key" | "value", val: string) {
@@ -50,7 +55,7 @@ export function KeyValueEditor({ initialContent, onChange }: EditorProps) {
         <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Key-Value Entries</p>
         <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
           Arbitrary named fields accessible as{" "}
-          <span className="font-mono">content.entries[n].key</span>.
+          <span className="font-mono">content.entries.&lt;key&gt;</span>.
         </p>
       </div>
 
