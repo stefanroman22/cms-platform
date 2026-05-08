@@ -164,6 +164,11 @@ jobs:
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+          # Mirrors the pytest `deployed_state` marker. Tests that
+          # assert behaviour of *just-deployed* frontend code (e.g.
+          # the admin pages' `?include_test=true` URL handler) skip
+          # themselves unless this env is "true". Master push only.
+          PLAYWRIGHT_DEPLOYED_STATE: ${{ github.ref == 'refs/heads/master' && 'true' || 'false' }}
         run: npm test
       - name: Upload Playwright report on failure
         if: failure()
