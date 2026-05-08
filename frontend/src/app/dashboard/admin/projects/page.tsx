@@ -18,8 +18,9 @@ interface AdminProject {
   user_full_name: string | null;
 }
 
-function fetchAdminProjects(): Promise<AdminProject[]> {
-  return fetch("/api/admin/projects", { credentials: "include", cache: "no-store" }).then((r) => {
+function fetchAdminProjects(includeTest: boolean): Promise<AdminProject[]> {
+  const url = includeTest ? "/api/admin/projects?include_test=true" : "/api/admin/projects";
+  return fetch(url, { credentials: "include", cache: "no-store" }).then((r) => {
     if (!r.ok) throw new Error("Failed to load projects.");
     return r.json();
   });
@@ -28,15 +29,22 @@ function fetchAdminProjects(): Promise<AdminProject[]> {
 export default function AdminProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ user?: string }>;
+  searchParams: Promise<{ user?: string; include_test?: string }>;
 }) {
-  const { user: filterUserId } = use(searchParams);
+  const { user: filterUserId, include_test } = use(searchParams);
+  // `?include_test=true` flips the test-data filter off — used by the
+  // Playwright admin spec to verify the e2e seed project renders.
+  const includeTest = include_test === "true";
 
   const {
     data: projects,
     loading,
     error,
-  } = useQuery<AdminProject[]>("admin:projects", fetchAdminProjects, { ttl: 60 * 1000 });
+  } = useQuery<AdminProject[]>(
+    includeTest ? "admin:projects:all" : "admin:projects",
+    () => fetchAdminProjects(includeTest),
+    { ttl: 60 * 1000 }
+  );
 
   const filtered = filterUserId
     ? (projects ?? []).filter((p) => p.user_id === filterUserId)

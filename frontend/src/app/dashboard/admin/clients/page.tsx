@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Users, ShieldCheck, ExternalLink } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -16,19 +17,30 @@ interface Client {
   projects_count: number;
 }
 
-function fetchClients(): Promise<Client[]> {
-  return fetch("/api/admin/clients", { credentials: "include", cache: "no-store" }).then((r) => {
+function fetchClients(includeTest: boolean): Promise<Client[]> {
+  const url = includeTest ? "/api/admin/clients?include_test=true" : "/api/admin/clients";
+  return fetch(url, { credentials: "include", cache: "no-store" }).then((r) => {
     if (!r.ok) throw new Error("Failed to load clients.");
     return r.json();
   });
 }
 
 export default function AdminClientsPage() {
+  // `?include_test=true` flips the test-data filter off — used by the
+  // Playwright admin spec to verify the e2e seed users render, and by
+  // the operator when debugging E2E pollution. Default keeps the
+  // dashboard clean of throwaway-* / e2e-* rows.
+  const searchParams = useSearchParams();
+  const includeTest = searchParams.get("include_test") === "true";
   const {
     data: clients,
     loading,
     error,
-  } = useQuery<Client[]>("admin:clients", fetchClients, { ttl: 60 * 1000 });
+  } = useQuery<Client[]>(
+    includeTest ? "admin:clients:all" : "admin:clients",
+    () => fetchClients(includeTest),
+    { ttl: 60 * 1000 }
+  );
 
   return (
     <div className="p-4 md:p-8">
