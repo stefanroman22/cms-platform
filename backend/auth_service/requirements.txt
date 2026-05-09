@@ -5,7 +5,7 @@ supabase==2.10.0
 pydantic[email]==2.10.3
 pydantic-settings==2.7.0
 slowapi==0.1.9
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 python-multipart==0.0.20
 resend==2.7.0
 pytest==8.3.3
