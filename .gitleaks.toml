@@ -81,5 +81,9 @@ paths = [
   '''.*\.gitleaks\.toml''',
   # Tests use sentinel keys that don't authenticate.
   '''backend/auth_service/tests/test_admin_keys\.py''',
+  '''backend/auth_service/tests/test_admin_keys_timing\.py''',
+  '''backend/auth_service/tests/test_admin_auth_dep\.py''',
   '''backend/auth_service/tests_integration/test_admin_keys\.py''',
+  # Plan docs may contain sentinel example tokens in code blocks.
+  '''docs/superpowers/plans/.+\.md''',
 ]
