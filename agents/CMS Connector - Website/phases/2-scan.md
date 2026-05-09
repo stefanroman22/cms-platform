@@ -34,10 +34,37 @@ Repo: <github_repo>
 
 ## Section 2 — Contact (only if contact info detected)
 
-- Email → key_value entry `email`
-- Phone → key_value entry `phone`
-- Location / address → key_value entry `address`
-- Schedule (opening hours) → repeater `schedule_hours` with item_schema `[day, open, close]` (only if business has hours)
+Single `key_value` service named `contact_info`. Add ONE entry per
+contact channel detected — pick keys that match the operator's mental
+model (their language, their convention), not ours. The website's
+contact resolver is heuristic-driven (see "Generated client website
+contracts" in [`AGENTS.md`](../AGENTS.md)) — it picks an icon/label/
+href automatically based on:
+
+- **Value shape**: anything containing `@` renders as Email; anything
+  matching a phone-number pattern renders as Phone — regardless of
+  the key the operator chose.
+- **Key family**: keys containing stems like `address` / `location`,
+  `hour` / `schedule` / `program` / `time`, `website` / `site` /
+  `url` resolve to address / business-hours / website cards.
+- **Fallback**: any unrecognised key still renders, with the key
+  itself humanised as the label.
+
+Examples (any of these work):
+- Email → entry `email`, `mail`, `correo`, `email_office`, …
+- Phone → entry `phone`, `mobile`, `telefon`, `phone_secondary`, …
+- Address → entry `address`, `location`, `office_address`, `adresa`, …
+- Hours → entry `hours`, `schedule`, `program`, `working_hours`, `orar`, …
+- Custom → e.g. `whatsapp`, `linkedin`, `vat_number` — render as
+  generic info cards.
+
+**Do not** invent a fixed schema or normalise the operator's keys.
+Capture them verbatim from the source (or as the operator dictates
+during review). The website handles every case.
+
+For multi-day opening hours that need granular structure, prefer a
+separate `repeater` service `schedule_hours` with `item_schema`
+`[day, open, close]` instead of stuffing them into key_value.
 
 ## Section 3+ — Domain-specific (one per detected category)
 

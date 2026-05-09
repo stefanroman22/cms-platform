@@ -49,8 +49,13 @@ Repeater field types: `string`, `richtext`, `url`, `tags`.
   every per-item field and ensure the `item_schema` for the corresponding `repeater` \
   service has a field for each. A missing field is the most common bug — be \
   exhaustive.
-- For contact info (email / phone / address), prefer ONE `key_value` service with \
-  named entries (`email`, `phone`, `address`) over multiple `text_block` services.
+- For contact info, use ONE `key_value` service named `contact_info`. Add one entry per \
+  channel detected, naming each entry however the operator's source suggests \
+  (`email`, `mail`, `correo`, `telefon`, `mobile`, `whatsapp`, `program`, `orar`, etc.). \
+  Do NOT enforce a fixed set of keys. The website's contact resolver picks an \
+  icon/label/href automatically based on value shape (`@` → email; digit pattern → \
+  phone) and key-family stems (address/hour/website/etc.). \
+  Reference implementation: `lib/contactFields.ts → resolveContactCards`.
 - For business opening hours, use a `repeater` with item schema \
   `[day:string, open:string, close:string]`.
 

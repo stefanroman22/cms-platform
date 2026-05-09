@@ -1,0 +1,28 @@
+# backend/.coveragerc
+#
+# Coverage configuration. Lives here (not in repo-root pyproject.toml)
+# because coverage.py only auto-discovers config in the directory
+# pytest is invoked from. CI runs pytest from `backend/` so this is
+# the right home.
+#
+# See `pyproject.toml [tool.coverage.run]` for the same settings — kept
+# in sync because IDEs / contributors running from the repo root will
+# read pyproject.toml. If you change one, change both.
+
+[run]
+source = auth_service
+omit =
+    auth_service/tests/*
+    auth_service/tests_integration/*
+    */venv/*
+    */__pycache__/*
+    */migrations/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    raise HTTPException
+show_missing = True
+skip_covered = False

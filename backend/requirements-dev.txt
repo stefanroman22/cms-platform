@@ -5,6 +5,7 @@
 # Test framework
 pytest==8.3.3
 pytest-asyncio==0.24.0
+pytest-cov==6.0.0
 # httpx intentionally NOT pinned here — runtime (`requirements.txt`)
 # pulls it transitively via supabase 2.29.0 and resolves a different
 # version than the standalone pin we used to have. CI installs both

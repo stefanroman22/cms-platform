@@ -86,19 +86,15 @@ export default function ProjectWorkspacePage({
   //
   // Backed by the shared `useQuery` cache so navigating Project A → B → A
   // returns instantly from cache (5-min TTL, key `settings:<slug>`). The
-  // hook only fetches when `enabled = true`, gated by:
-  //   • admin && open settings drawer (manual edit), OR
-  //   • admin && cross-owner case (project missing from /projects list,
-  //     so we need the URL for the live-website card).
+  // hook fetches whenever the user is admin — settings are now always
+  // visible (no toggle drawer) so we always need the data on hand.
   //
   // Saving the form invalidates the cache so the next visit revalidates.
 
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
-  const isCrossOwnerAdmin = isAdmin && !projectsLoading && project === undefined;
-  const settingsEnabled = isAdmin && (settingsOpen || isCrossOwnerAdmin);
+  const settingsEnabled = isAdmin;
   const settingsKey = `settings:${projectSlug}`;
 
   type SettingsFromApi = { website_url: string | null; allowed_origins: string[] | null };
@@ -140,10 +136,6 @@ export default function ProjectWorkspacePage({
         allowed_origins: (settingsRaw.allowed_origins ?? []).join("\n"),
       }
     : null;
-
-  function openSettings() {
-    setSettingsOpen(true);
-  }
 
   async function handleSaveSettings(e: React.FormEvent) {
     e.preventDefault();
@@ -347,27 +339,13 @@ export default function ProjectWorkspacePage({
         />
       </div>
 
-      {/* ── Admin: Project Settings (lazy) ────────────────────────────── */}
+      {/* ── Admin: Project Settings (always visible) ──────────────────── */}
       {isAdmin && (
         <div className="mt-12 max-w-lg">
-          <button
-            type="button"
-            onClick={() => (settingsOpen ? setSettingsOpen(false) : openSettings())}
-            className="flex w-full items-center justify-between gap-2 text-left text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-4 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-            aria-expanded={settingsOpen}
-          >
-            <span className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Project Settings
-            </span>
-            <span className="text-xs font-normal text-zinc-400 dark:text-zinc-500">
-              {settingsOpen ? "Hide" : "Edit"}
-            </span>
-          </button>
-        </div>
-      )}
-      {isAdmin && settingsOpen && (
-        <div className="max-w-lg">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-4">
+            <Settings className="h-4 w-4" />
+            Project Settings
+          </h2>
           {settingsLoading && (
             <div className="rounded-xl border border-zinc-200 bg-white/40 px-6 py-8 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400 flex items-center gap-3">
               <ArcSpinner size={20} />

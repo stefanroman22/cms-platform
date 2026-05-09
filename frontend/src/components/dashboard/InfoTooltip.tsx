@@ -7,9 +7,13 @@ interface InfoTooltipProps {
   className?: string;
   /**
    * Horizontal alignment of the tooltip relative to the icon.
-   * - "center" (default) — centered on the icon
-   * - "start"  — left-aligns with the icon; use when icon is near the left edge
-   * - "end"    — right-aligns with the icon; use when icon is near the right edge
+   * - "start"  (default) — left edge of tooltip aligns with the icon, extends RIGHT.
+   *   Best when the icon sits near the left edge of the viewport / parent (the
+   *   common "label + ⓘ" layout); won't clip on small screens.
+   * - "center" — centred on the icon. Risky on narrow viewports — half the
+   *   tooltip can overflow the parent or the window.
+   * - "end"    — right edge of tooltip aligns with the icon, extends LEFT.
+   *   Use when the icon is at the far right of a row.
    */
   align?: "center" | "start" | "end";
   /**
@@ -20,9 +24,18 @@ interface InfoTooltipProps {
   direction?: "up" | "down";
   /**
    * Wider tooltip (w-72 instead of w-56) so longer hints don't wrap as much.
+   * Width is also clamped to the viewport so phones never see overflow.
    */
   wide?: boolean;
 }
+
+// Width is `min(target, calc(100vw - 1.5rem))` so on a 320 px screen the
+// tooltip becomes ~ 296 px instead of overflowing at its declared 288 px.
+// `1.5rem` accounts for ~12 px of breathing room on each edge.
+const widthClasses = {
+  default: "w-[min(theme(spacing.56),calc(100vw-1.5rem))]",
+  wide: "w-[min(theme(spacing.72),calc(100vw-1.5rem))]",
+} as const;
 
 const alignClasses = {
   center: "left-1/2 -translate-x-1/2",
@@ -39,11 +52,16 @@ const arrowAlignClasses = {
 /**
  * A small ⓘ icon that shows a tooltip on hover.
  * Place inline next to a field label for formatting hints.
+ *
+ * Default alignment is `"start"` (left-anchored) because most uses sit
+ * next to a left-aligned label; centring would clip the tooltip on
+ * narrow viewports. Pass `align="end"` if the icon is on the far
+ * right of its row.
  */
 export function InfoTooltip({
   hint,
   className = "",
-  align = "center",
+  align = "start",
   direction = "up",
   wide = false,
 }: InfoTooltipProps) {
@@ -58,7 +76,8 @@ export function InfoTooltip({
         className={`
                     pointer-events-none absolute z-50
                     ${isUp ? "bottom-full mb-1.5" : "top-full mt-1.5"}
-                    ${wide ? "w-72" : "w-56"}
+                    ${wide ? widthClasses.wide : widthClasses.default}
+                    max-w-[calc(100vw-1.5rem)]
                     rounded-lg border border-zinc-200
                     bg-white px-3 py-2 text-xs leading-relaxed text-zinc-600
                     shadow-md

@@ -50,6 +50,16 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      # Adjustment-B — debounce. workflow_run fires twice per dev push
+      # (one for CI, one for E2E). Five rapid commits = five trigger
+      # events → up to five auto-merge attempts. Sleep 60s up front;
+      # the next "is dev still at this SHA?" check below then collapses
+      # the flurry to ONE successful promotion (the latest SHA wins;
+      # earlier triggers exit silently because dev has moved past
+      # their gate SHA).
+      - name: Settle window (debounce rapid-fire triggers)
+        run: sleep 60
+
       - name: Verify both CI + E2E green on dev tip SHA
         id: gate
         env:

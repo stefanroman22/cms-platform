@@ -4,7 +4,14 @@ import { useState } from "react";
 import { Send, CheckCircle } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { FormFeedback } from "@/components/dashboard/FormFeedback";
+import { SubmitOverlay } from "@/components/dashboard/SubmitOverlay";
 import { dashboardPrimaryBtnCn, dashboardInputLgCn, dashboardFieldLabelCn } from "@/lib/styles";
+
+type SubmitPhase = "idle" | "sending" | "sent";
+
+// Pause on the green "sent" state before flipping to the success card
+// so the user actually sees the colour shift instead of a flash.
+const SENT_DWELL_MS = 1100;
 
 const PROJECT_TYPES = [
   { value: "website", label: "Website" },
@@ -36,17 +43,18 @@ export default function CreateNewProjectPage() {
   const [description, setDescription] = useState("");
   const [budget, setBudget] = useState("");
   const [timeline, setTimeline] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   const isValid = name.trim() !== "" && description.trim() !== "";
+  const loading = phase !== "idle";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isValid) return;
 
-    setLoading(true);
+    setPhase("sending");
     setError("");
 
     try {
@@ -65,13 +73,19 @@ export default function CreateNewProjectPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data?.detail ?? "Failed to submit. Please try again.");
-      } else {
-        setSubmitted(true);
+        setPhase("idle");
+        return;
       }
+      // Show the green confirmation state for a beat before swapping
+      // the page over to the success card. Without the dwell the
+      // overlay flashes for one frame and the user misses it.
+      setPhase("sent");
+      await new Promise((resolve) => setTimeout(resolve, SENT_DWELL_MS));
+      setSubmitted(true);
+      setPhase("idle");
     } catch {
       setError("An unexpected error occurred.");
-    } finally {
-      setLoading(false);
+      setPhase("idle");
     }
   }
 
@@ -108,101 +122,114 @@ export default function CreateNewProjectPage() {
   }
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="max-w-xl">
-        <PageHeader
-          title="Create New Project"
-          description="Tell us about your idea and we'll get back to you with a proposal."
-        />
+    <div className="relative min-h-full">
+      {/* SubmitOverlay covers this whole content area while the
+          submission is in flight + during the brief green-confirm
+          dwell. Sidebar stays interactive because the overlay sits
+          inside the page wrapper, not at the dashboard root. */}
+      <SubmitOverlay
+        phase={phase}
+        messages={{
+          sending: "Sending your request…",
+          sent: "Request sent — we'll be in touch soon.",
+        }}
+      />
+      <div className="p-4 md:p-8">
+        <div className="max-w-xl">
+          <PageHeader
+            title="Create New Project"
+            description="Tell us about your idea and we'll get back to you with a proposal."
+          />
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <FormFeedback error={error || undefined} />
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <FormFeedback error={error || undefined} />
 
-          <div>
-            <label className={dashboardFieldLabelCn}>
-              Project name <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Company website redesign"
-              className={dashboardInputLgCn}
-            />
-          </div>
-
-          <div>
-            <label className={dashboardFieldLabelCn}>
-              Project type <span className="text-red-400">*</span>
-            </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className={dashboardInputLgCn}
-            >
-              {PROJECT_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={dashboardFieldLabelCn}>
-              Description <span className="text-red-400">*</span>
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe what you'd like to build, its goals, and any specific requirements…"
-              rows={5}
-              className={`${dashboardInputLgCn} resize-none`}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={dashboardFieldLabelCn}>Budget range</label>
+              <label className={dashboardFieldLabelCn}>
+                Project name <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Company website redesign"
+                className={dashboardInputLgCn}
+              />
+            </div>
+
+            <div>
+              <label className={dashboardFieldLabelCn}>
+                Project type <span className="text-red-400">*</span>
+              </label>
               <select
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
+                value={type}
+                onChange={(e) => setType(e.target.value)}
                 className={dashboardInputLgCn}
               >
-                {BUDGET_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
+                {PROJECT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
                   </option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className={dashboardFieldLabelCn}>Timeline</label>
-              <select
-                value={timeline}
-                onChange={(e) => setTimeline(e.target.value)}
-                className={dashboardInputLgCn}
-              >
-                {TIMELINE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
 
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={!isValid || loading}
-              className={`${dashboardPrimaryBtnCn} px-5 py-2.5`}
-            >
-              <Send className="h-4 w-4" />
-              {loading ? "Submitting…" : "Submit request"}
-            </button>
-          </div>
-        </form>
+            <div>
+              <label className={dashboardFieldLabelCn}>
+                Description <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe what you'd like to build, its goals, and any specific requirements…"
+                rows={5}
+                className={`${dashboardInputLgCn} resize-none`}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={dashboardFieldLabelCn}>Budget range</label>
+                <select
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  className={dashboardInputLgCn}
+                >
+                  {BUDGET_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={dashboardFieldLabelCn}>Timeline</label>
+                <select
+                  value={timeline}
+                  onChange={(e) => setTimeline(e.target.value)}
+                  className={dashboardInputLgCn}
+                >
+                  {TIMELINE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={!isValid || loading}
+                className={`${dashboardPrimaryBtnCn} px-5 py-2.5`}
+              >
+                <Send className="h-4 w-4" />
+                {loading ? "Submitting…" : "Submit request"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

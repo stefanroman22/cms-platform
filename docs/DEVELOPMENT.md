@@ -2,60 +2,69 @@
 
 How code travels from your editor to roman-technologies.dev. Read this once; from then on, the workflow is muscle memory.
 
+If you are a new contributor, read [`docs/ONBOARDING.md`](./ONBOARDING.md) first — it walks the same flow with no jargon.
+
 ## TL;DR (the 30-second version)
 
-1. `git checkout dev && git pull`
+1. `git checkout -b fix/<short-name>` (feature branch off `dev`)
 2. Edit code.
-3. `make ci` (lint + tests, ~20 s) — optional but recommended.
+3. `make ci` — local lint + tests (~20 s), optional but cheap.
 4. `git commit -m "<type>: <what>"` — pre-commit hook runs lint + secret scan.
-5. `git push origin dev` — CI + E2E run automatically. ~3-4 min wall time.
-6. Merge to `master` lands automatically (post-PR-5 — see [Roadmap](#roadmap)). Until then: `gh workflow run "Scheduled merge dev → master"` triggers it on demand.
-7. Vercel auto-deploys backend + frontend from `master`. ~2-3 min.
+5. `git push origin fix/<short-name>` — feature-branch push runs **CI only** (~2-3 min). E2E and CodeQL stay quiet.
+6. When the feature is done: `git checkout dev && git merge fix/<short-name> && git push origin dev`. Now the full pipeline fires.
+7. `dev` push → CI + E2E + CodeQL all run. Auto-merge waits 60 s (debounce), verifies both green, fast-forwards `master`.
+8. `master` push → Vercel auto-deploys backend + frontend. Post-deploy smoke probes the new URLs; auto-rollback fires on failure.
 
-Total typical change → prod: ~6-10 min.
+Total typical change → prod: **~6-10 minutes** from `git push origin dev`.
 
 ## Branches
 
-| Branch | Purpose | Protection |
-|---|---|---|
-| `dev` | day-to-day development | unprotected (force-push allowed) |
-| `master` | production tip | required status checks: `ci-complete`, `e2e-complete`. `enforce_admins=true` (admin override needs the runbook below). |
-| `dependabot/*` | auto-raised by Dependabot | unprotected; auto-merged on green CI for patch + minor (post-PR-7). |
+| Branch | Purpose | Triggers on push | Protection |
+|---|---|---|---|
+| `fix/**`, `feat/**`, `chore/**`, `feature/**` | feature work — short-lived | CI only (lint + unit tests, no E2E) | none |
+| `dev` | integration branch | CI + E2E + CodeQL | none (force-push allowed) |
+| `master` | production tip | E2E (deployed_state slice) + CodeQL + post-deploy smoke | required status checks: `CI complete (gate)`, `E2E complete (gate)`. `enforce_admins=true`. |
+| `dependabot/**` | auto-raised | CI only | auto-merged on green for patch + minor |
 
-`dev` is "everything goes". `master` is "everything is true". Never push to master directly except through the merge flow.
+`dev` is "everything we believe should ship". `master` is "everything that has shipped". Never push to `master` directly except through the documented admin-bypass runbook.
+
+## Why this layout
+
+- **Feature branches**: cheap CI only — fast feedback while you iterate without burning E2E minutes.
+- **`dev`**: integration point. Full pipeline. Must be green.
+- **`master`**: production. Auto-promoted from `dev` once green; no human typing.
+- **One automated path** — every change traverses identically. No "rush to prod" or "skip the tests" valves.
 
 ## Daily flow
 
-### Routine change (no schema, no auth, no RLS)
+### Routine change
 
 ```bash
 git checkout dev
 git pull
+git checkout -b fix/something-short
 # edit
 make ci          # local guard: ruff + black + tsc + vitest + pytest
 git add -p
 git commit -m "feat(workspace): add <thing>"
-git push
+git push                 # → CI only (~2-3 min)
+# repeat edits / commits / pushes; CI runs each time
+
+# When done:
+git checkout dev
+git merge fix/something-short
+git push origin dev      # → CI + E2E + CodeQL → auto-merge → master deploy
 ```
-
-CI + E2E run on the push. If both green, the next scheduled-merge run promotes `dev → master`.
-
-### Cross-cutting change (touches >1 area, or schema, or auth, or RLS)
-
-Same flow, plus:
-
-- Add a `pytest.mark.deployed_state` integration test if behavior depends on the deployed environment (security headers, rate-limit thresholds, RLS).
-- Update [`docs/SECURITY.md`](./SECURITY.md) if the threat model shifts.
-- Land any DB migration as a separate commit *before* the code that depends on it; apply via Supabase dashboard, log in [`docs/SECURITY.md`](./SECURITY.md) rotation table.
 
 ### Hot-fix
 
-- Fix on `dev`. Push.
-- If you need it in prod immediately (don't wait for the next scheduled merge):
-  ```bash
-  gh workflow run "Scheduled merge dev → master"
-  ```
-- The workflow is gated by green CI + E2E on dev tip. If the gate refuses, fix the failing check first.
+Same shape, just shorter cycle. The auto-merge debounce window (60 s) means if you push two fixes back-to-back, only the latest reaches `master`. That's intentional — saves a wasted Vercel build.
+
+### Cross-cutting change (touches schema / auth / RLS)
+
+- Land DB migrations as a **separate commit** before the code that depends on them. Apply via Supabase SQL editor, log in [`docs/SECURITY.md`](./SECURITY.md).
+- Add a `pytest.mark.deployed_state` test if behaviour depends on the live deploy (security headers, rate-limit thresholds, RLS policies).
+- Update [`docs/SECURITY.md`](./SECURITY.md) if the threat model shifts.
 
 ## Local commands (`make`)
 
@@ -64,7 +73,7 @@ Same flow, plus:
 | `make install` | first-time setup (venv, npm ci, pre-commit install) |
 | `make env` | interactive env-var bootstrap |
 | `make dev` | prints backend + frontend dev-server commands |
-| `make test` | runs every test suite |
+| `make test` | every test suite |
 | `make test-backend` / `test-agent` / `test-frontend` | per-area |
 | `make lint` | ruff + black --check + tsc + ESLint + Prettier |
 | `make format` | auto-fix everything |
@@ -76,42 +85,72 @@ Installed by `make install`. Runs on every `git commit`:
 
 - `ruff` (Python lint + auto-fix)
 - `ruff-format` (Python format)
-- `black` (Python format — same version as CI: 26.3.1)
+- `black` (Python format — pinned to CI version)
 - `gitleaks` (secret scanning, custom rules in [`.gitleaks.toml`](../.gitleaks.toml))
 - `lint-staged` on staged JS/TS/CSS (Prettier + ESLint)
 - standard hygiene: trailing-whitespace, end-of-file, check-yaml, check-toml, large-files, merge-conflict markers
 
 **Tests do NOT run in pre-commit.** Too slow. CI catches them.
 
-If a hook fails, fix the issue and re-commit. **Never `--no-verify`** unless explicitly whitelisted (currently: line-ending false-positive on Windows; tracked).
-
-## CI / E2E
+## CI / E2E pipeline
 
 ### CI (`.github/workflows/ci.yml`)
-Triggered on push to `master` or `dev`. Three parallel jobs:
 
-- **Backend** — ruff + black --check + pytest (79 unit tests).
-- **Agent** — pytest (14 unit tests).
-- **Frontend** — tsc + ESLint + Prettier --check + vitest.
+Triggered on:
+- push to `master`, `dev`, `fix/**`, `feat/**`, `chore/**`, `feature/**`
+- any pull request
 
-A `ci-complete` aggregator job depends on all three with `if: always()`; it's the single check protected on master. Path-filtered jobs that skip count as success.
+Five jobs (path-filtered — only the changed-area jobs actually run):
+
+| Job | What it runs |
+|---|---|
+| Detect changed paths | git diff vs parent; emits `backend / agent / frontend` booleans |
+| Secret scan (gitleaks) | always |
+| Backend (FastAPI) | ruff + black --check + pytest + **coverage gate (≥ 60 %)** |
+| Agent (CMS Connector) | pytest |
+| Frontend (Next.js) | tsc + ESLint + Prettier --check + vitest |
+| `CI complete (gate)` | aggregator — single status check `master` requires |
 
 ### E2E (`.github/workflows/e2e.yml`)
-Same triggers. Two sequential jobs:
 
-- **Backend integration** — httpx → deployed FastAPI. Hits `cms-backend-roman.vercel.app`. Marker filter:
-  - dev push: `-m "integration and not deployed_state"` (skips tests that assert behavior of the *just-pushed* code, since prod hasn't deployed it yet).
-  - master push: full `-m integration` after a 4-min `/health` poll + 60s edge-cache cushion.
-- **Frontend E2E** — Playwright → deployed Next.js. 1 worker, fullyParallel: false (shared seed user/project; lock TEST-001).
+Triggered on push to `dev` / `master` only — feature branches skip.
 
-An `e2e-complete` aggregator job is the single check protected.
+| Job | What it runs |
+|---|---|
+| Detect changed paths | skip on docs-only |
+| Backend integration | pytest `tests_integration/`. **dev push**: `-m "integration and not deployed_state"`. **master push**: `-m "integration and deployed_state"` only (the rest already passed on `dev` for the same SHA). |
+| Frontend E2E | Playwright. `PLAYWRIGHT_DEPLOYED_STATE=true` only on master push. |
+| `E2E complete (gate)` | aggregator |
 
-### Status checks on master
-Branch protection requires:
-- `ci-complete`
-- `e2e-complete`
+The deploy-readiness step (master only) polls backend `/health` AND frontend `/log-in` for up to 4 min each before kicking off the deployed_state suite, so we never race Vercel's edge.
 
-Any other failing/skipped sub-job is invisible to protection — only the aggregator's red/green matters.
+### CodeQL (`.github/workflows/codeql.yml`)
+
+Python + JavaScript/TypeScript matrix, `security-extended` query pack. Push to `master`/`dev` + Sundays 03:00 UTC.
+
+### Auto-merge (`.github/workflows/auto-merge-dev-to-master.yml`)
+
+`workflow_run` trigger after CI / E2E completes on `dev`. Sequence:
+
+1. Sleep 60 s (debounce — collapses 5 rapid commits into 1 promotion).
+2. Verify CI + E2E **both** completed `success` for the dev tip SHA.
+3. Verify dev tip is still the SHA we were going to merge (otherwise a later commit handles itself).
+4. Skip if the latest commit message contains `[skip-merge]`.
+5. Fast-forward `master` to dev. Push.
+6. Dispatch master-only workflows (E2E full suite, post-deploy smoke, CodeQL) since GitHub doesn't fire `push:` workflows on bot pushes.
+
+### Post-deploy smoke (`.github/workflows/post-deploy-smoke.yml`)
+
+Triggered after master push. Probes:
+- `cms-backend-roman.vercel.app/health` → 200 + payload `"ok"`
+- `cms-backend-roman.vercel.app/auth/me` (no cookie) → 401
+- `roman-technologies.dev/log-in` → 200 + `Content-Security-Policy` header containing `frame-ancestors 'none'`
+
+On any failure: `git revert HEAD` on master, push, open a P0 incident issue.
+
+### Branch protection
+
+`master` requires `CI complete (gate)` + `E2E complete (gate)`. Feature branches and PRs gate the same way; aggregator jobs accept `success` OR `skipped` (path-filtered no-runs count as pass), failure or cancellation is the only block.
 
 ## Vercel
 
@@ -121,21 +160,29 @@ Any other failing/skipped sub-job is invisible to protection — only the aggreg
 | `cms-frontend-roman` | https://roman-technologies.dev (custom domain) | `master` |
 | Per-client | `<slug>.vercel.app` | per-project; managed by `agents/CMS Connector - Website` |
 
-Preview deploys (any branch other than master) are also created for backend + frontend. Useful for ad-hoc QA. After PR-4, E2E will target the dev branch's preview URLs instead of prod.
-
 ## Test markers (pytest)
 
 | Marker | Where it runs | What it tests |
 |---|---|---|
 | (none) | every push, ms each | pure unit logic, mocks |
-| `integration` | every push (E2E job) | deployed backend, real network, no mocks |
+| `integration` | dev push (E2E job) | deployed backend, real network, no mocks |
 | `deployed_state` | master push only, post-deploy | asserts the *freshly-deployed* code matches expectations (security headers, rate-limit thresholds, RLS policies) |
 
 If you write a test that checks "the version of the code I just pushed is running" — mark it `deployed_state`. CI on dev will skip it; CI on master will run it after the deploy gate.
 
+For Playwright tests with the same coupling, gate them with the `PLAYWRIGHT_DEPLOYED_STATE` env var (set to `"true"` only on master push by `e2e.yml`).
+
+## Coverage
+
+Backend tests must keep coverage ≥ 60 % (current ~ 66 %). The threshold is enforced by `pytest --cov-fail-under=60` in CI.
+
+- Local check: `cd backend && pytest --cov` (config in `backend/.coveragerc`).
+- Bump the floor in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) when discipline rises sustainably.
+- Excluded from measurement: `tests/`, `tests_integration/`, `migrations/`, `venv/`.
+
 ## Admin-bypass runbook (master push when CI/E2E gate fails)
 
-Branch protection on `master` requires `ci-complete` + `e2e-complete` green on the dev tip. Sometimes (e.g. the `deployed_state` catch-22) a dev push can't satisfy them until master deploy lands. Procedure:
+Branch protection on `master` requires the two aggregator checks. Sometimes (e.g. a `deployed_state` catch-22) a dev push can't satisfy them until the master deploy lands. Procedure:
 
 1. Confirm the failing checks are unrunnable, not actually red.
 2. Disable enforce_admins:
@@ -156,75 +203,25 @@ This is a controlled escape hatch. Never use it because "tests are flaky and I'm
 
 ## When something breaks in prod
 
-1. Pull the Vercel runtime logs (frontend + backend) for the deploy window.
-2. If the cause is the latest deploy: roll back via Vercel dashboard (or `vercel rollback` if CLI is configured).
-3. Fix on `dev`, push, re-merge.
-4. Document in [`docs/SECURITY.md`](./SECURITY.md) if user data was potentially affected.
+1. The auto-rollback workflow may have already reverted master. Check the issues tab — incident issue with label `incident,P0`.
+2. Pull Vercel runtime logs (frontend + backend) for the deploy window.
+3. If auto-rollback didn't fire and prod is still broken: `vercel rollback` via dashboard.
+4. Fix on a feature branch, merge to dev, let the pipeline promote.
+5. Document in [`docs/SECURITY.md`](./SECURITY.md) if user data was affected.
 
 The post-mortem template lives at `docs/superpowers/post-mortems/YYYY-MM-DD-<slug>.md`.
 
-## Automation pipeline (active)
+## Tooling defaults
 
-The full path from `git push origin dev` to prod is:
+- **Python**: 3.13 (`.python-version`). Pinned via `setup-python` in CI.
+- **Node**: read from `.nvmrc`. Pinned via `setup-node`.
+- **Lockfiles**: `requirements.lock` + `requirements-dev.lock` (pip-compile, `--require-hashes`); `package-lock.json` (npm ci).
+- **Pre-commit hooks** SHA-pinned in `.pre-commit-config.yaml`.
+- **GitHub Actions**: every action SHA-pinned. Dependabot bumps weekly Mondays.
 
-```
-push to dev
-   ↓
-[CI]   ruff + black + tsc + ESLint + vitest + pytest (path-filtered, ~2-3 min)
-   ↓
-[E2E]  pytest -m "integration and not deployed_state" (against deployed prod, ~3-4 min)
-   ↓
-[Auto-merge dev → master]  workflow_run trigger after CI + E2E both green
-   ↓
-[Vercel auto-deploys]  master push → backend + frontend rebuild (~2 min)
-   ↓
-[Post-deploy smoke]
-   • probe backend /health, /auth/me-unauth (=401)
-   • probe frontend /log-in (200 + CSP frame-ancestors 'none')
-   ↓
-   pass → done; routine code change is in prod ~6-10 min after push
-   fail → auto-revert master + open P0 incident issue, you get pinged
-```
+## Glossary
 
-### Quality + safety gates baked in
-
-| Gate | Catches | Runs in |
-|---|---|---|
-| Pre-commit (local) | lint, format, secrets | every commit |
-| CI (path-filtered) | type errors, lint, unit tests | every push, ~2-3 min |
-| E2E backend integration | API contract regressions | every push, ~3 min |
-| E2E frontend (Playwright) | broken user journeys | every push, ~2 min |
-| Auto-merge gate | only fires when CI + E2E both green | every dev workflow_run |
-| Post-deploy smoke | broken Vercel deploy, missing CSP, 5xx | every master push |
-| Auto-rollback | reverts master + opens P0 issue | smoke fails |
-| CodeQL | static-analysis findings (auth, crypto, injection) | every push + Sundays |
-| Dependabot auto-merge | patch + minor bumps land hands-free | every Dependabot PR |
-| `deployed_state` tests | regressions in *deployed* behavior (headers, RLS) | master push only |
-
-### Where you still get pinged
-
-- Major Dependabot PR — left open for review (~1/month).
-- CodeQL high finding — issue auto-opened.
-- Post-deploy smoke fail — auto-rollback already happened; incident issue tags you.
-- Coverage drop > 2pp (when PR-8 ships) — auto-merge skipped, you decide.
-
-### Where you don't get pinged
-
-- Routine green push → ~6-10 min later it's in prod.
-- Patch / minor Dependabot bumps land themselves.
-- Path-skipped CI jobs (docs-only changes don't run code jobs).
-
-## Bootstrap notes
-
-Workflows triggered by `workflow_run` (auto-merge) or by `deployment_status` only fire when the workflow file exists on the **default branch** (master). After this batch first lands on `dev`:
-
-1. `master` does NOT have the new workflow files yet — auto-merge won't fire on the first dev push.
-2. One-time: manually FF-merge `dev → master` (`make` ... or `gh api` admin override) to plant the workflow files on master.
-3. From then on, every subsequent dev push auto-promotes itself.
-
-The same applies to `post-deploy-smoke.yml` — first push to master after this batch lands runs the smoke check against itself.
-
-## Future-work roadmap
-
-- **PR-4** — Vercel preview-URL E2E (point `deployed_state` tests at the per-branch preview deployment instead of prod). Currently `deployed_state` only runs on master post-deploy; PR-4 would let those tests run pre-merge too. Requires `VERCEL_TOKEN` as a repo secret.
-- **PR-8 — coverage + mypy** — pytest-cov + Codecov upload + mypy seed (`auth_service/services/*` first). Out of scope for the auto-pipeline batch; track in audit doc.
+- **Feature branch**: any short-lived branch off `dev` named with `fix/`, `feat/`, `chore/`, `feature/` prefix.
+- **Aggregator gate**: a single CI job that depends on every other job and `success|skipped` counts as pass. Branch protection points at the aggregator, not the individual jobs, so path-filtered skips don't block merges.
+- **Debounce**: 60 s sleep at the start of auto-merge that lets rapid-fire commits collapse into a single master promotion.
+- **`deployed_state`**: pytest marker (and Playwright env equivalent) for tests that need the just-deployed code running on the prod URL. Skipped pre-deploy, runs after.

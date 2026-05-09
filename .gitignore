@@ -42,6 +42,13 @@ frontend/.vercel/
 frontend/.turbo/
 frontend/coverage/
 frontend/dist/
+# Python coverage (pytest-cov) artefacts — generated during CI + local runs.
+.coverage
+.coverage.*
+htmlcov/
+backend/.coverage
+backend/.coverage.*
+backend/htmlcov/
 frontend/*.tsbuildinfo
 frontend/next-env.d.ts
 

@@ -1,8 +1,21 @@
 name: CI
 
+# Adjustment-C — extend triggers to cover feature branches and PRs:
+#   • push to master/dev: full pipeline + auto-merge eligibility
+#   • push to fix/**, feat/**, chore/**: same pipeline so a typo on a
+#     feature branch fails fast; doesn't trigger E2E (separate
+#     workflow gates on dev/master only)
+#   • pull_request: catches PRs from forks / external contributors
 on:
   push:
-    branches: [master, dev]
+    branches:
+      - master
+      - dev
+      - "fix/**"
+      - "feat/**"
+      - "chore/**"
+      - "feature/**"
+  pull_request:
   workflow_dispatch:
 
 # Default-deny token scope. Jobs that need write must opt in explicitly.
@@ -123,8 +136,11 @@ jobs:
       - name: Format check (black)
         run: black --check .
         working-directory: .
-      - name: Tests (pytest)
-        run: python -m pytest auth_service/tests/ -q
+      # Adjustment-F — coverage threshold gate. Floor set to 60 % to
+       # match the current 66 % baseline with 6pp headroom for benign
+       # refactors. Bump the floor when coverage rises sustainably.
+      - name: Tests (pytest + coverage gate)
+        run: python -m pytest auth_service/tests/ -q --cov --cov-report=term --cov-fail-under=60
 
   agent:
     name: Agent (CMS Connector — Website)

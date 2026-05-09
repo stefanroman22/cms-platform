@@ -143,7 +143,11 @@ jobs:
           E2E_ADMIN_API_KEY: ${{ secrets.E2E_ADMIN_API_KEY }}
         run: python -m pytest auth_service/tests_integration/ -v -m "integration and not deployed_state"
 
-      - name: Run integration tests (master — full suite)
+      # Adjustment-A — master only runs the deployed_state slice.
+      # The rest of `-m integration` already passed on dev for THIS SHA
+      # (auto-merge fast-forwards the same SHA to master). Re-running
+      # them buys nothing and adds ~3 min to every change.
+      - name: Run integration tests (master — deployed_state only)
         if: github.ref == 'refs/heads/master'
         env:
           E2E_BASE_URL_BACKEND: ${{ secrets.E2E_BASE_URL_BACKEND }}
@@ -152,7 +156,7 @@ jobs:
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
           E2E_ADMIN_API_KEY: ${{ secrets.E2E_ADMIN_API_KEY }}
-        run: python -m pytest auth_service/tests_integration/ -v -m integration
+        run: python -m pytest auth_service/tests_integration/ -v -m "integration and deployed_state"
 
   frontend-e2e:
     name: Frontend E2E (Playwright → deployed Next.js)

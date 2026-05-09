@@ -45,3 +45,30 @@ markers = [
     "integration: hits the deployed backend over the network",
     "deployed_state: requires deployed prod URL to match the test file's expectations. Skipped on dev push (Vercel only deploys to prod from master); run only on master push after a deploy-wait gate.",
 ]
+
+# Adjustment-F — coverage tracking with a soft floor.
+# `--cov-fail-under` blocks regressions: a PR that drops coverage below
+# the floor fails CI. Bump the floor as test discipline improves.
+# Source-only measurement; test files themselves are omitted.
+[tool.coverage.run]
+# Pytest runs from `backend/`, so source path is relative to that.
+source = ["auth_service"]
+omit = [
+    "auth_service/tests/*",
+    "auth_service/tests_integration/*",
+    "*/venv/*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    # Defensive branches that exist purely to surface a clearer error
+    # before crashing — they're hard to exercise in tests.
+    "raise HTTPException",
+]
+show_missing = true
+skip_covered = false

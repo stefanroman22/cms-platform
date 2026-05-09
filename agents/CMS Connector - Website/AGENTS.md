@@ -81,6 +81,34 @@ surface a clear remediation. Do not silently skip.
 
 These hard rules are **also enforced** in `prompts.py` SYSTEM_PROMPT. Keep both in sync.
 
+## Generated client website contracts
+
+When the agent stitches the client repo to the CMS (Phase 4 —
+integration), the generated TypeScript code MUST treat all
+`key_value` services as open records — never hardcode a fixed set of
+keys. Concretely:
+
+- The `key_value` selector returns `Record<string, string>` (legacy
+  array shape `[{key, value}, ...]` is also tolerated and flattened
+  client-side; the backend coalesces both shapes via
+  `_normalise_published`).
+- The contact section (and any other dynamic key-value renderer)
+  iterates EVERY entry. Use a heuristic resolver — value shape
+  (`@` → email; digits → phone), then key-family stems
+  (`address`/`hour`/`program`/etc.), then a humanised-key fallback —
+  to pick an icon, label, and click target per entry. Reference
+  implementation: `it-global-services` repo at
+  `src/lib/contactFields.ts` (`resolveContactCards`).
+- The operator MUST be free to type any key in the CMS and see the
+  field render with a sensible icon. No naming convention enforced
+  on them.
+
+This was a real bug: an early generated site (`it-global-services`)
+hardcoded `phone | email | address | hours` as the only valid keys.
+The operator typed `program` for opening hours; the website silently
+dropped it. Future generated sites must follow the heuristic-resolver
+pattern above so the same class of bug can't reappear.
+
 ## Glossary
 
 - **Service** — CMS content unit. Eight types: `text_block`, `image`, `gallery`, `video`, `file_download`, `key_value`, `email_config`, `repeater`.
