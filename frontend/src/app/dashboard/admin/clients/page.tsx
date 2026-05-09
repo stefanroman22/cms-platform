@@ -1,11 +1,23 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Users, ShieldCheck, ExternalLink } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { dashboardSectionCardCn } from "@/lib/styles";
+
+// Belt: opt out of static prerender entirely. The admin section is
+// auth-gated and never useful as static HTML; serving fresh per
+// request matches reality (every visit hits /api/admin/clients).
+//
+// Suspenders: even with `force-dynamic`, Next.js 16 / Turbopack still
+// bails the build if `useSearchParams` is called outside a Suspense
+// boundary in a client component. The page export below wraps the
+// inner component in <Suspense>; the inner component is the one that
+// reads URL params. Closes the prod build error on a8a4f99.
+export const dynamic = "force-dynamic";
 
 interface Client {
   id: string;
@@ -26,6 +38,28 @@ function fetchClients(includeTest: boolean): Promise<Client[]> {
 }
 
 export default function AdminClientsPage() {
+  // Suspense boundary required by Next.js 16 because the inner
+  // component calls `useSearchParams`. Fallback is the same skeleton
+  // shape the inner component renders while loading data, so the
+  // user never sees layout shift.
+  return (
+    <Suspense
+      fallback={
+        <div className="p-4 md:p-8">
+          <PageHeader
+            title="All Clients"
+            description="Every registered user across the platform."
+          />
+          <div className="h-48 rounded-xl border border-zinc-200 bg-white animate-pulse dark:border-zinc-800 dark:bg-zinc-900" />
+        </div>
+      }
+    >
+      <AdminClientsInner />
+    </Suspense>
+  );
+}
+
+function AdminClientsInner() {
   // `?include_test=true` flips the test-data filter off — used by the
   // Playwright admin spec to verify the e2e seed users render, and by
   // the operator when debugging E2E pollution. Default keeps the
