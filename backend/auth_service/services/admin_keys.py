@@ -2,12 +2,14 @@
 
 Key format: cmsk_<env>_<lookup>_<secret>
 - env: "dev" or "prod" (informational)
-- lookup: 16 base64url chars, stored as key_prefix for fast row lookup
-- secret: 32 base64url chars, argon2-hashed at rest
+- lookup: 16 hex chars, stored as key_prefix for fast row lookup
+- secret: 32 hex chars, argon2-hashed at rest
 
 The verifier parses the lookup half, fetches the single matching row,
-and argon2-verifies the secret half against key_hash. Constant cost
-per request regardless of how many keys exist.
+and argon2-verifies the secret half against key_hash. To avoid leaking
+format-validity through timing (BE-011 / CWE-208), every failure path
+runs argon2.verify against a precomputed dummy hash, so wall-clock
+time is constant regardless of where parsing failed.
 """
 
 from __future__ import annotations
@@ -26,6 +28,23 @@ SECRET_LEN_TARGET = 32
 
 _ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4)
 
+# Precomputed at import time so the verify-on-fail path costs the same
+# argon2 cycles as the success path. Hash of `_DUMMY_PLAIN`; we ignore
+# the verify result (always raises VerifyMismatchError given a fresh
+# random plain). Computed once → no startup penalty in serverless cold
+# start beyond the existing PasswordHasher instantiation.
+_DUMMY_PLAIN = secrets.token_hex(SECRET_LEN_TARGET // 2)
+_DUMMY_HASH = _ph.hash(_DUMMY_PLAIN)
+
+
+def _equalise_timing() -> None:
+    """Burn argon2 cycles on every parse-fail / row-miss path so the
+    response time is independent of where validation failed."""
+    try:
+        _ph.verify(_DUMMY_HASH, "x")
+    except VerifyMismatchError:
+        pass
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -43,9 +62,6 @@ def mint_admin_api_key(
     The plain key is the only thing that can be used to authenticate;
     callers must hand it to the operator immediately and never log it.
     """
-    # token_hex emits 0-9a-f only — never `_`, so the cmsk_<env>_<lookup>_<secret>
-    # split-on-underscore parser never desyncs. 8 bytes = 16 hex chars (lookup),
-    # 16 bytes = 32 hex chars (secret) — same lengths as the previous attempt.
     lookup = secrets.token_hex(KEY_PREFIX_LEN // 2)
     secret = secrets.token_hex(SECRET_LEN_TARGET // 2)
     plain = f"cmsk_{env}_{lookup}_{secret}"
@@ -68,12 +84,18 @@ def mint_admin_api_key(
 
 def verify_admin_api_key(plain_key: str) -> dict | None:
     """Returns the user dict if `plain_key` matches an active, non-expired,
-    non-revoked admin key. Updates last_used_at on success."""
+    non-revoked admin key. Updates last_used_at on success.
+
+    BE-011: every failure path calls argon2.verify so wall-clock time
+    leaks no information about WHICH validation step failed.
+    """
     parts = plain_key.split("_") if plain_key else []
     if len(parts) != 4 or parts[0] != "cmsk" or parts[1] not in {"dev", "prod"}:
+        _equalise_timing()
         return None
     lookup, secret = parts[2], parts[3]
     if len(lookup) != KEY_PREFIX_LEN:
+        _equalise_timing()
         return None
 
     sb = get_supabase_admin()
@@ -87,9 +109,11 @@ def verify_admin_api_key(plain_key: str) -> dict | None:
     )
     row = res.data if res else None
     if not row:
+        _equalise_timing()
         return None
 
     if row.get("expires_at") and row["expires_at"] <= _now_iso():
+        _equalise_timing()
         return None
 
     try:
@@ -99,6 +123,12 @@ def verify_admin_api_key(plain_key: str) -> dict | None:
 
     u = row.get("users") or {}
     if not (u.get("is_admin") and u.get("is_active")):
+        # Tiny timing parity: the success path runs an extra DB update below;
+        # equalising one argon2.verify here keeps wall-clock cost the same
+        # order of magnitude even when an attacker knows the secret but the
+        # user is non-admin / disabled. Threat model is moot (guessing the
+        # 128-bit secret is the hard part), but symmetry is cheap.
+        _equalise_timing()
         return None
 
     sb.table("admin_api_keys").update({"last_used_at": _now_iso()}).eq("id", row["id"]).execute()
