@@ -128,7 +128,9 @@ What the platform is defending:
   service config must never leak into another client's frontend or
   another client's API responses. Boundary: `projects.user_id` +
   `project_services.project_id` chain, enforced by application-layer
-  filters today and (planned, BE-010) Postgres RLS.
+  filters today and Postgres RLS (BE-010, defense-in-depth —
+  service-role bypasses RLS today, but anon-bound regressions return
+  zero rows instead of cross-tenant data).
 - **Admin endpoint authority** — `/admin/*` and the `cmsk_*` Bearer key
   path must only run for the operator. Boundary: `users.is_admin = true`
   *and* admin-API-key match. Scope-restricted Bearer keys (e.g. agent
@@ -148,6 +150,35 @@ What is **explicitly out of scope** for the threat model:
   `--ignore-scripts` on `npm ci` + Dependabot + gitleaks, but not zero).
 - Vercel platform compromise (vendor-trust boundary).
 - Physical / coercive attack on the operator.
+
+## Defense layers
+
+What hardening is in place per layer:
+
+- **RLS layer** — Every tenant-scoped table (`users`, `sessions`,
+  `projects`, `content_entries`, `project_issues`, `project_requests`)
+  has Row-Level Security enabled with owner policies
+  (`user_id = auth.uid()`). The backend uses the service-role client
+  which bypasses RLS by design — the policies are defense-in-depth
+  against future code that uses an anon-bound client or a refactor
+  that drops a `.eq("user_id", uid)` filter. Migration:
+  `backend/migrations/2026_05_09_tenant_tables_rls.sql`. Presence
+  test: `auth_service/tests_integration/test_rls_policies.py`.
+- **Bearer auth path rate-limit** — `Authorization: Bearer cmsk_…`
+  requests are gated at 10 attempts / minute / IP (in-memory token
+  bucket per serverless instance). Every parse-fail path runs
+  `argon2.verify` against a precomputed dummy hash so wall-clock time
+  is independent of where validation failed (closes BE-011 / CWE-208).
+  Module: `backend/auth_service/core/bearer_limiter.py`.
+- **Login rate-limit** — `/auth/login` is gated at 30/minute/IP
+  (BE-002, raised from 10 for typo tolerance). Same `client_ip()`
+  resolver as the Bearer path; also runs argon2 verify against a
+  dummy hash on the email-not-found branch to close the account-
+  enumeration timing oracle.
+- **Form-submit rate-limit** — `submit_form` is gated at
+  5/10minutes/(slug:form:ip) bucket (BE-001), so an attacker
+  hammering one project's form can't burn another project's quota.
+- **Session integrity** — see Standing rules above for cookie flags.
 
 ## Incident response runbook
 
