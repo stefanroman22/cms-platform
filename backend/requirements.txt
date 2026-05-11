@@ -14,7 +14,7 @@
 
 fastapi==0.136.1
 starlette==0.49.1
-uvicorn==0.32.1
+uvicorn==0.46.0
 # uvicorn[standard] dropped — its `uvloop` transitive is Linux-only and
 # pip-compile (which we run on Windows for CI-004 / DEP-009 hash pinning)
 # can't generate a hash entry for a wheel that doesn't exist on this
@@ -22,10 +22,10 @@ uvicorn==0.32.1
 # perf extras only matter for `uvicorn auth_service.main:app` local dev,
 # and the default asyncio loop is fine there.
 argon2-cffi==23.1.0
-supabase==2.29.0
-pydantic[email]==2.11.7
-pydantic-settings==2.7.0
+supabase==2.30.0
+pydantic[email]==2.13.4
+pydantic-settings==2.14.1
 slowapi==0.1.9
 python-dotenv==1.2.2
-python-multipart==0.0.27
-resend==2.7.0
+python-multipart==0.0.28
+resend==2.30.0
