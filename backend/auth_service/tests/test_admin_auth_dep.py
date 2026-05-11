@@ -57,3 +57,32 @@ async def test_no_bearer_non_admin_raises_403():
         with pytest.raises(HTTPException) as exc:
             await deps.admin_user_via_bearer_or_sid(_request(cookies={"sid": "sess123"}))
         assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_bearer_blocked_on_rate_limit():
+    """11th attempt within 60s from the same IP must 429 before
+    `verify_admin_api_key` is called."""
+    from auth_service.core import bearer_limiter
+
+    # Fresh bucket so this test isn't order-dependent.
+    bearer_limiter._BEARER_BUCKET = bearer_limiter.Bucket(capacity=10, window_seconds=60)
+    headers = {"authorization": "Bearer cmsk_dev_aaaaaaaaaaaaaaaa_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
+
+    req = MagicMock()
+    req.headers = headers
+    req.cookies = {}
+    req.client = MagicMock(host="203.0.113.5")
+
+    # Verify is patched to a fail (so we burn through the bucket
+    # without succeeding). 10 fails are still allowed by the limiter,
+    # 11th must hit 429.
+    with patch.object(deps, "verify_admin_api_key", return_value=None):
+        for _ in range(10):
+            with pytest.raises(HTTPException) as exc:
+                await deps.admin_user_via_bearer_or_sid(req)
+            assert exc.value.status_code == 401
+
+        with pytest.raises(HTTPException) as exc:
+            await deps.admin_user_via_bearer_or_sid(req)
+        assert exc.value.status_code == 429

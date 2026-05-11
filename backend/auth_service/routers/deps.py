@@ -1,5 +1,7 @@
 from fastapi import HTTPException, Request, status
 
+from ..core.bearer_limiter import check_bearer_attempt
+from ..core.limiter import client_ip
 from ..models.schemas import UserOut
 from ..services.admin_keys import verify_admin_api_key
 from ..services.sessions import validate_session
@@ -38,13 +40,19 @@ def require_project_access(project_slug: str, user: UserOut) -> dict:
 async def admin_user_via_bearer_or_sid(request: Request):
     """Auth dep used by every admin route.
 
-    Accepts EITHER an `Authorization: Bearer cmsk_…` header (agent path)
-    OR a `sid` cookie (dashboard path). Bearer wins if both are sent.
-    Falls through to `require_user` for the cookie path so the existing
-    session-validation logic keeps applying unchanged.
+    Bearer path is rate-limited (BE-011): 10 attempts/min/IP, applied
+    BEFORE verify_admin_api_key so a brute-forcer can't bypass via raw
+    throughput. Cookie path is unchanged — session validation is
+    already cheap and hardening lives at /auth/login (BE-002).
     """
     auth_header = request.headers.get("authorization", "")
     if auth_header.lower().startswith("bearer "):
+        ip = client_ip(request)
+        if not check_bearer_attempt(ip):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many admin auth attempts; slow down.",
+            )
         plain = auth_header.split(" ", 1)[1].strip()
         user = verify_admin_api_key(plain)
         if user:
