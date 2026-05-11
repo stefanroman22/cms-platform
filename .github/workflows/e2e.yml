@@ -141,6 +141,8 @@ jobs:
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
           E2E_ADMIN_API_KEY: ${{ secrets.E2E_ADMIN_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python -m pytest auth_service/tests_integration/ -v -m "integration and not deployed_state"
 
       # Adjustment-A — master only runs the deployed_state slice.
@@ -156,6 +158,8 @@ jobs:
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
           E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
           E2E_ADMIN_API_KEY: ${{ secrets.E2E_ADMIN_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python -m pytest auth_service/tests_integration/ -v -m "integration and deployed_state"
 
   frontend-e2e:
