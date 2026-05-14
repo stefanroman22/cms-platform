@@ -3,7 +3,7 @@
 import { LoadingProvider } from "@/context/loading";
 import { AuthProvider } from "@/context/auth";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function MarketingProviders({ children }: { children: React.ReactNode }) {
   return (
     <LoadingProvider>
       <AuthProvider>{children}</AuthProvider>

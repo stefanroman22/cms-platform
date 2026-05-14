@@ -1,7 +1,20 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback } from "react";
-import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import dynamic from "next/dynamic";
+
+/**
+ * LoadingScreen is dynamic-imported with `ssr: false`. Two reasons:
+ *   1. It's never visible on cold load — the overlay only shows when
+ *      a transition explicitly calls `show()`. Loading its module +
+ *      framer-motion + arc CSS upfront wastes bandwidth.
+ *   2. The overlay's framer animation has no business running during
+ *      SSR HTML generation.
+ */
+const LoadingScreen = dynamic(
+  () => import("@/components/ui/LoadingScreen").then((m) => ({ default: m.LoadingScreen })),
+  { ssr: false }
+);
 
 interface LoadingContextValue {
   show: () => void;
@@ -21,7 +34,9 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <LoadingContext.Provider value={{ show, hide }}>
-      <LoadingScreen isVisible={isVisible} />
+      {/* Only render the overlay once we actually want it visible — keeps
+          the dynamic chunk out of the network waterfall on cold load. */}
+      {isVisible && <LoadingScreen isVisible={isVisible} />}
       {children}
     </LoadingContext.Provider>
   );
