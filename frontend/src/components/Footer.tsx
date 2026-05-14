@@ -9,7 +9,7 @@ import { dividerCn, sectionLabelCn } from "@/lib/styles";
 /* ─── Data ───────────────────────────────────────────────────────────────── */
 
 const CONTACT_ITEMS = [
-  { href: "tel:+40751181184", icon: Phone, label: "+40751-81184" },
+  { href: "tel:+40751081184", icon: Phone, label: "+40751081184" },
   { href: "mailto:stefanromanpers@gmail.com", icon: Mail, label: "stefanromanpers@gmail.com" },
 ] as const;
 

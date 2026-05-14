@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Reserve scrollbar gutter on the root so the viewport width does not
+   change between a short page (no scrollbar) and a tall one. Without
+   this, the fixed Header (positioned in full viewport coords) and
+   non-fixed page content (positioned in viewport-minus-scrollbar
+   coords) end up centered on slightly different axes, making the
+   login card look offset from the nav bar above it. */
+html {
+  scrollbar-gutter: stable;
+}
+
 /* Dashboard dark mode — scoped to .dark wrapper applied by ThemeShell.
    This replaces the default prefers-color-scheme media query so system dark mode
    has no effect; only the .dark class on the dashboard wrapper triggers dark: utilities. */

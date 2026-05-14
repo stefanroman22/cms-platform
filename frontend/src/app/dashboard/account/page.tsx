@@ -163,7 +163,7 @@ export default function AccountSettingsPage() {
                   Full name
                 </span>
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 pl-7 sm:pl-0">
                 {editingName ? (
                   <div className="space-y-2">
                     <input
