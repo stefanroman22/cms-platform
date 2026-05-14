@@ -99,3 +99,26 @@ def test_created_posts_to_slack_with_expected_payload(monkeypatch):
     assert "github.com/stefan/acme-site" in blocks_text
     assert "Image stretches" in blocks_text
     assert "https://cms.example.com" in blocks_text  # dashboard link
+
+
+def test_created_does_not_raise_on_malformed_issue(monkeypatch, caplog):
+    """A malformed issue dict (missing keys) must NOT raise — service docstring promise."""
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    with patch.object(slack_notify.httpx, "post") as mock_post:
+        with caplog.at_level("ERROR"):
+            # Empty issue dict — no id, no title, no description, no priority.
+            slack_notify.notify_issue_created(
+                issue={},
+                project=_sample_project(),
+                user_email="client@acme.com",
+            )
+
+    # The function returned cleanly (no exception bubbled out).
+    # It may or may not have called httpx.post depending on where the failure happened —
+    # the important contract is "no exception escapes".
+    assert (
+        any("slack_notify (created) failed" in rec.message for rec in caplog.records)
+        or mock_post.called
+    )  # one of the two: either we logged the failure OR we posted with sentinel values

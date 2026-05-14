@@ -115,9 +115,12 @@ def notify_issue_created(
     if not _enabled():
         logger.info("slack_notify disabled — skipping created")
         return
-    blocks = _build_created_blocks(issue, project, user_email)
-    fallback = f"New issue [{project.get('slug', '?')}]: {issue['title']}"
-    _post(blocks, fallback)
+    try:
+        blocks = _build_created_blocks(issue, project, user_email)
+        fallback = f"New issue [{project.get('slug', '?')}]: {issue.get('title', '?')}"
+        _post(blocks, fallback)
+    except Exception:  # noqa: BLE001 — public API must never re-raise
+        logger.exception("slack_notify (created) failed during build/post")
 
 
 def notify_issue_resolved(
