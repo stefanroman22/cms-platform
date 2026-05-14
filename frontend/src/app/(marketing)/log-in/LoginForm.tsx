@@ -172,7 +172,7 @@ export function LoginForm() {
               aria-checked={rememberMe}
               aria-labelledby="remember-me-label"
               onClick={() => setRememberMe((v) => !v)}
-              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors focus:outline-none focus:ring-1 focus:ring-white/30 ${
+              className={`flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded border transition-colors focus:outline-none focus:ring-1 focus:ring-white/30 ${
                 rememberMe
                   ? "border-white bg-white"
                   : "border-white/30 bg-zinc-950 hover:border-white/50"
@@ -201,7 +201,7 @@ export function LoginForm() {
             type="submit"
             variant="primary"
             size="lg"
-            className="w-full text-base"
+            className="w-full text-base cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-auto"
             disabled={!isFormValid || isLoading}
             isLoading={isLoading}
           >

@@ -51,6 +51,27 @@ make format      # auto-fix everything (ruff --fix + black + prettier)
 make ci          # same gate as GitHub Actions (lint + test)
 ```
 
+### Run the servers directly (without `make`)
+
+Two terminals — one for each service.
+
+**Backend** → http://127.0.0.1:8001
+
+```bash
+cd backend
+source venv/Scripts/activate
+uvicorn auth_service.main:app --reload --port 8001
+```
+
+**Frontend** → http://localhost:3000
+
+```bash
+cd frontend
+npm run dev
+```
+
+The `source venv/Scripts/activate` line is the Git Bash form on Windows. On macOS/Linux use `source venv/bin/activate`.
+
 **Prerequisites**: Node ≥ 22 (pinned in `.nvmrc`), Python ≥ 3.13 (pinned in
 `.python-version`). `nvm`/`pyenv` users auto-switch.
 
