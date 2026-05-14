@@ -16,8 +16,10 @@ import { useAuth } from "@/context/auth";
  *
  * Entrance animation: pure CSS `.animate-fade-down` (defined in
  * globals.css). The form HTML paints immediately; the fade plays on
- * top, so perceived appearance is instant. Removing framer-motion
- * from this island also keeps ~40KB out of the /log-in chunk.
+ * top, so perceived appearance is instant. Dropping framer-motion
+ * from this island removes the form from the framer dependency graph;
+ * the chunk itself is still pulled in on /log-in by HeaderRightCluster
+ * (mobile drawer) until that island is rewritten too.
  */
 const DASHBOARD_WINDOW_NAME = "cms-dashboard";
 
