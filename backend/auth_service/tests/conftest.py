@@ -44,6 +44,7 @@ def mock_supabase():
         "auth_service.routers.workspace.get_supabase_admin",
         "auth_service.routers.projects.get_supabase_admin",
         "auth_service.routers.publish.get_supabase_admin",  # created in Task 7
+        "auth_service.routers.issues.get_supabase_admin",  # S1 — Slack notifications
         "auth_service.services.sessions.get_supabase_admin",
         # auth.change_password does `from ..services.supabase_client import get_supabase_admin`
         # inline — patch the source so the late import sees the mock.
@@ -111,9 +112,21 @@ def auth_as(monkeypatch):
             monkeypatch.setattr("auth_service.routers.publish.require_user", fake_require_user)
         except (AttributeError, ModuleNotFoundError, ImportError):
             pass
+        # issues.py — new in S1
+        try:
+            monkeypatch.setattr("auth_service.routers.issues.require_user", fake_require_user)
+        except (AttributeError, ModuleNotFoundError, ImportError):
+            pass
 
         def fake_require_project_access(slug, u):
-            return {"id": f"project-{slug}", "slug": slug, "name": slug.title()}
+            return {
+                "id": f"project-{slug}",
+                "slug": slug,
+                "name": slug.title(),
+                "github_repo": f"https://github.com/test/{slug}",
+                "repo_branch": "dev",
+                "preview_url": f"https://{slug}-dev.vercel.app",
+            }
 
         monkeypatch.setattr(
             "auth_service.routers.workspace.require_project_access", fake_require_project_access
@@ -121,6 +134,12 @@ def auth_as(monkeypatch):
         try:
             monkeypatch.setattr(
                 "auth_service.routers.publish.require_project_access", fake_require_project_access
+            )
+        except (AttributeError, ModuleNotFoundError, ImportError):
+            pass
+        try:
+            monkeypatch.setattr(
+                "auth_service.routers.issues.require_project_access", fake_require_project_access
             )
         except (AttributeError, ModuleNotFoundError, ImportError):
             pass
