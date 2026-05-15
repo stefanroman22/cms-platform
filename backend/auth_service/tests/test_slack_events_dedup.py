@@ -50,3 +50,13 @@ def test_mark_processed_swallows_db_error():
     mock_sb.execute.side_effect = RuntimeError("db down")
     with patch.object(slack_events_dedup, "get_supabase_admin", return_value=mock_sb):
         slack_events_dedup.mark_processed("evt-x")  # must not raise
+
+
+def test_already_processed_swallows_db_error():
+    """If the dedup lookup fails, treat as not-processed rather than blocking."""
+    mock_sb = MagicMock()
+    for m in ("table", "select", "eq", "maybe_single"):
+        getattr(mock_sb, m).return_value = mock_sb
+    mock_sb.execute.side_effect = RuntimeError("db down")
+    with patch.object(slack_events_dedup, "get_supabase_admin", return_value=mock_sb):
+        assert slack_events_dedup.already_processed("evt-x") is False
