@@ -154,6 +154,25 @@ The backend posts to `#issues-websites` when a client submits an issue and when 
 
 Leaving `SLACK_BOT_TOKEN` or `SLACK_ISSUES_CHANNEL_ID` unset disables notifications silently — useful for local dev and CI. The service logs `slack_notify disabled` at INFO and never raises.
 
+## Slack Approval & Revision (S1.5)
+
+S1 posts notifications; S1.5 listens for Stefan's response in `#issues-websites`. A ✅ reaction on a resolved-issue Slack message merges `cms-preview → master` of the client repo (triggering a Vercel production deploy) and emails the client. A threaded text reply (≥5 chars) reverts the issue to `in_progress` and stores Stefan's feedback for later S3 use.
+
+### One-time additions to the Slack app
+
+1. https://api.slack.com/apps → CMS Issues Bot → **OAuth & Permissions** → Bot Token Scopes → add `reactions:read` and `channels:history`.
+2. Click **Reinstall to Workspace** → approve. Copy the new `xoxb-...` token (the old one is revoked). Update `SLACK_BOT_TOKEN` in `backend/.env` and Vercel envs.
+3. **Basic Information** → App Credentials → copy the **Signing Secret** → set as `SLACK_SIGNING_SECRET`.
+4. **Event Subscriptions** → Enable → Request URL: `https://cms-backend-roman.vercel.app/slack/events` (deploy the backend with the new router first, otherwise Slack's verification ping fails). Subscribe to bot events: `reaction_added`, `message.channels`. Save.
+
+### One-time GitHub PAT
+
+Reuse the CMS Connector agent's PAT (`repo` scope) or create a new one at https://github.com/settings/tokens. Set as `GITHUB_TOKEN` env var (backend + Vercel).
+
+### Slack user IDs
+
+In Slack desktop, click your profile → **Copy member ID** for `SLACK_APPROVER_USER_ID`. For `SLACK_BOT_USER_ID`, in the Slack app dashboard go to OAuth & Permissions and copy the Bot User ID shown near the bot user setting.
+
 ## Glossary in plain words
 
 - **CI** = the GitHub robot that runs tests on every push.

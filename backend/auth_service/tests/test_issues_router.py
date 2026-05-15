@@ -38,7 +38,7 @@ def test_create_issue_fires_slack_created(mock_supabase, client, auth_as, client
     assert call["issue"]["id"] == "issue-1"
     assert call["issue"]["title"] == "Hero broken"
     assert call["project"]["slug"] == "acme"
-    assert call["project"]["repo_branch"] == "dev"
+    assert call["project"]["repo_branch"] == "cms-preview"
 
 
 def test_create_issue_slack_failure_does_not_break_201(
@@ -175,3 +175,72 @@ def test_status_pending_to_in_progress_does_not_fire(
     resp = client.patch("/projects/acme/issues/issue-1/status", json={"status": "in_progress"})
     assert resp.status_code == 200, resp.text
     assert calls == []
+
+
+def test_status_done_persists_slack_ts(mock_supabase, client, auth_as, admin_user, monkeypatch):
+    auth_as(admin_user)
+
+    pending_row = {"id": "issue-1", "project_id": "project-acme", "status": "pending"}
+    updated_row = {
+        "id": "issue-1",
+        "project_id": "project-acme",
+        "title": "Hero broken",
+        "description": "stretches",
+        "priority": "High",
+        "status": "done",
+        "created_by": "client-uuid",
+        "created_at": "2026-05-15T10:00:00Z",
+    }
+    mock_supabase.execute.side_effect = [
+        MagicMock(data=pending_row),  # pre-update SELECT
+        MagicMock(data=[updated_row]),  # UPDATE status
+        MagicMock(data={"email": "client@acme.com"}),  # email lookup
+        MagicMock(data=[updated_row]),  # UPDATE slack_resolved_ts
+    ]
+
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_resolved",
+        lambda **kw: "1715789123.001234",
+    )
+
+    resp = client.patch("/projects/acme/issues/issue-1/status", json={"status": "done"})
+    assert resp.status_code == 200
+
+    # Verify some UPDATE call set slack_resolved_ts
+    update_calls = [c.args[0] for c in mock_supabase.update.call_args_list if c.args]
+    ts_updates = [u for u in update_calls if "slack_resolved_ts" in u]
+    assert len(ts_updates) == 1
+    assert ts_updates[0]["slack_resolved_ts"] == "1715789123.001234"
+
+
+def test_status_done_no_ts_when_slack_disabled(
+    mock_supabase, client, auth_as, admin_user, monkeypatch
+):
+    """If slack_notify returns None, do NOT update slack_resolved_ts."""
+    auth_as(admin_user)
+    pending_row = {"id": "issue-1", "project_id": "project-acme", "status": "pending"}
+    updated_row = {
+        "id": "issue-1",
+        "project_id": "project-acme",
+        "title": "x",
+        "description": "y",
+        "priority": "Low",
+        "status": "done",
+        "created_by": None,
+        "created_at": "2026-05-15T10:00:00Z",
+    }
+    mock_supabase.execute.side_effect = [
+        MagicMock(data=pending_row),
+        MagicMock(data=[updated_row]),
+    ]
+
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_resolved",
+        lambda **kw: None,
+    )
+
+    resp = client.patch("/projects/acme/issues/issue-1/status", json={"status": "done"})
+    assert resp.status_code == 200
+
+    update_calls = [c.args[0] for c in mock_supabase.update.call_args_list if c.args]
+    assert not any("slack_resolved_ts" in u for u in update_calls)

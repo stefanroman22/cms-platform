@@ -223,3 +223,83 @@ def test_swallows_api_error_ok_false(monkeypatch, caplog):
             )
 
     assert any("not_in_channel" in rec.message for rec in caplog.records)
+
+
+def test_resolved_returns_slack_ts(monkeypatch):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    class _OkResp:
+        def json(self):
+            return {"ok": True, "ts": "1715789123.001234"}
+
+    with patch.object(slack_notify.httpx, "post", return_value=_OkResp()):
+        ts = slack_notify.notify_issue_resolved(
+            issue=_sample_issue(),
+            project=_sample_project(),
+            resolver_email="stefan@example.com",
+        )
+
+    assert ts == "1715789123.001234"
+
+
+def test_resolved_returns_none_when_disabled(monkeypatch):
+    monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("SLACK_ISSUES_CHANNEL_ID", raising=False)
+    ts = slack_notify.notify_issue_resolved(
+        issue=_sample_issue(),
+        project=_sample_project(),
+        resolver_email="stefan@example.com",
+    )
+    assert ts is None
+
+
+def test_resolved_returns_none_on_api_error(monkeypatch):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    class _ErrResp:
+        def json(self):
+            return {"ok": False, "error": "not_in_channel"}
+
+    with patch.object(slack_notify.httpx, "post", return_value=_ErrResp()):
+        ts = slack_notify.notify_issue_resolved(
+            issue=_sample_issue(),
+            project=_sample_project(),
+            resolver_email="stefan@example.com",
+        )
+
+    assert ts is None
+
+
+def test_post_thread_reply_posts_with_thread_ts(monkeypatch):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    captured = {}
+
+    class _OkResp:
+        def json(self):
+            return {"ok": True, "ts": "1715789200.000001"}
+
+    def fake_post(url, headers, json, timeout):
+        captured["json"] = json
+        return _OkResp()
+
+    with patch.object(slack_notify.httpx, "post", side_effect=fake_post):
+        slack_notify.post_thread_reply(
+            thread_ts="1715789123.001234", text="🚀 Promoted to production."
+        )
+
+    body = captured["json"]
+    assert body["channel"] == "C123"
+    assert body["thread_ts"] == "1715789123.001234"
+    assert body["text"] == "🚀 Promoted to production."
+
+
+def test_post_thread_reply_disabled_no_op(monkeypatch):
+    monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("SLACK_ISSUES_CHANNEL_ID", raising=False)
+    with patch.object(slack_notify.httpx, "post") as mock_post:
+        slack_notify.post_thread_reply(thread_ts="x", text="y")
+        mock_post.assert_not_called()

@@ -71,3 +71,32 @@ def test_require_project_access_selects_slack_fields(monkeypatch):
     # call project.get("github_repo") / project.get("preview_url") directly).
     assert project["github_repo"] == "https://github.com/x/acme"
     assert project["preview_url"] == "https://acme-dev.vercel.app"
+
+
+def test_require_project_access_selects_s1_5_fields(mock_supabase, admin_user):
+    """Regression: deps.require_project_access must SELECT production_branch and
+    production_url so the slack_handler approval flow has the fields it needs."""
+    from auth_service.routers import deps
+
+    mock_supabase.execute.return_value.data = {
+        "id": "p1",
+        "name": "Acme",
+        "slug": "acme",
+        "user_id": admin_user.id,
+        "is_active": True,
+        "github_repo": "https://github.com/x/acme",
+        "preview_url": "https://acme-dev.vercel.app",
+        "production_url": "https://acme.vercel.app",
+        "production_branch": "master",
+        "repo_branch": "cms-preview",
+    }
+
+    project = deps.require_project_access("acme", admin_user)
+
+    select_arg = mock_supabase.select.call_args.args[0]
+    assert "production_branch" in select_arg
+    assert "production_url" in select_arg
+    assert "repo_branch" in select_arg
+
+    assert project["production_branch"] == "master"
+    assert project["repo_branch"] == "cms-preview"

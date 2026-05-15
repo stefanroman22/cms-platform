@@ -45,6 +45,7 @@ def mock_supabase():
         "auth_service.routers.projects.get_supabase_admin",
         "auth_service.routers.publish.get_supabase_admin",  # created in Task 7
         "auth_service.routers.issues.get_supabase_admin",  # S1 — Slack notifications
+        "auth_service.routers.deps.get_supabase_admin",  # S1.5 Task 8 — widened SELECT regression
         "auth_service.services.sessions.get_supabase_admin",
         # auth.change_password does `from ..services.supabase_client import get_supabase_admin`
         # inline — patch the source so the late import sees the mock.
@@ -124,8 +125,10 @@ def auth_as(monkeypatch):
                 "slug": slug,
                 "name": slug.title(),
                 "github_repo": f"https://github.com/test/{slug}",
-                "repo_branch": "dev",
+                "repo_branch": "cms-preview",
+                "production_branch": "master",
                 "preview_url": f"https://{slug}-dev.vercel.app",
+                "production_url": f"https://{slug}.vercel.app",
             }
 
         monkeypatch.setattr(

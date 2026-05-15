@@ -32,6 +32,10 @@ startup.
 | `SLACK_ISSUES_CHANNEL_ID` | optional | Slack channel ID (e.g. `C0123ABCDEF`) for `#issues-websites`. Disabled silently if unset. |
 | `CMS_DASHBOARD_URL` | optional | Base URL for the CMS dashboard, used as the "Open in CMS" button target in Slack messages. Defaults to `https://roman-technologies.dev`. |
 | `AGENT_CACHE_ROOT` | optional (agents) | Filesystem root used by future S2/S3 issue-resolution agents (`<root>/<slug>` per project). Not consumed by S1. |
+| `SLACK_SIGNING_SECRET` | optional | HMAC secret from Slack app → Basic Information. Required for `/slack/events` to accept any event; if unset, all signed events 401. |
+| `SLACK_APPROVER_USER_ID` | optional | Stefan's Slack member ID (`U...`). Pins who can approve via ✅ or submit revisions via thread reply. |
+| `SLACK_BOT_USER_ID` | optional | CMS Issues Bot's user ID. Used by message handler to ignore bot's own replies (loop guard). |
+| `GITHUB_TOKEN` | optional | PAT with `repo` scope. Required for ✅ approval to fast-forward `master` to `cms-preview`. Reuses CMS Connector agent's token. |
 
 ## Frontend env contract — `cms-frontend-roman`
 
