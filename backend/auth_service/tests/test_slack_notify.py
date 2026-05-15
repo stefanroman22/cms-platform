@@ -122,3 +122,66 @@ def test_created_does_not_raise_on_malformed_issue(monkeypatch, caplog):
         any("slack_notify (created) failed" in rec.message for rec in caplog.records)
         or mock_post.called
     )  # one of the two: either we logged the failure OR we posted with sentinel values
+
+
+def test_resolved_posts_to_slack_with_expected_payload(monkeypatch):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+    monkeypatch.setenv("CMS_DASHBOARD_URL", "https://cms.example.com")
+
+    captured = {}
+
+    class _OkResp:
+        def json(self):
+            return {"ok": True}
+
+    def fake_post(url, headers, json, timeout):
+        captured["json"] = json
+        return _OkResp()
+
+    with patch.object(slack_notify.httpx, "post", side_effect=fake_post):
+        slack_notify.notify_issue_resolved(
+            issue=_sample_issue(),
+            project=_sample_project(),
+            resolver_email="stefan@example.com",
+        )
+
+    body = captured["json"]
+    assert "Resolved" in body["text"]
+    assert "acme-site" in body["text"]
+
+    blocks_text = str(body["blocks"])
+    assert "Issue Resolved" in blocks_text
+    assert "Hero image broken on mobile" in blocks_text
+    assert "stefan@example.com" in blocks_text
+    assert "https://acme-site-dev.vercel.app" in blocks_text  # preview URL
+    assert "https://cms.example.com" in blocks_text  # dashboard link
+
+
+def test_resolved_no_preview_url_omits_preview_section(monkeypatch):
+    """Project without preview_url should still produce a valid message."""
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    project = _sample_project()
+    project["preview_url"] = None
+
+    captured = {}
+
+    class _OkResp:
+        def json(self):
+            return {"ok": True}
+
+    def fake_post(url, headers, json, timeout):
+        captured["json"] = json
+        return _OkResp()
+
+    with patch.object(slack_notify.httpx, "post", side_effect=fake_post):
+        slack_notify.notify_issue_resolved(
+            issue=_sample_issue(),
+            project=project,
+            resolver_email="stefan@example.com",
+        )
+
+    blocks_text = str(captured["json"]["blocks"])
+    assert "preview not configured" in blocks_text.lower()

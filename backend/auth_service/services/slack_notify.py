@@ -109,6 +109,55 @@ def _build_created_blocks(
     ]
 
 
+def _build_resolved_blocks(
+    issue: dict[str, Any], project: dict[str, Any], resolver_email: str | None
+) -> list[dict]:
+    project_name = project.get("name") or project.get("slug", "unknown")
+    slug = project.get("slug", "unknown")
+    preview = project.get("preview_url")
+    dashboard = f"{_dashboard_url()}/dashboard/projects/{slug}/issues/{issue['id']}"
+
+    preview_line = preview if preview else "_(preview not configured)_"
+
+    blocks: list[dict] = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"✅ Issue Resolved — {project_name}",
+                "emoji": True,
+            },
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Title:*\n{issue['title']}"},
+                {"type": "mrkdwn", "text": f"*Resolved by:*\n{resolver_email or 'unknown'}"},
+                {"type": "mrkdwn", "text": f"*Preview:*\n{preview_line}"},
+            ],
+        },
+    ]
+
+    action_elements: list[dict] = []
+    if preview:
+        action_elements.append(
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Open Preview"},
+                "url": preview,
+            }
+        )
+    action_elements.append(
+        {
+            "type": "button",
+            "text": {"type": "plain_text", "text": "Open in CMS"},
+            "url": dashboard,
+        }
+    )
+    blocks.append({"type": "actions", "elements": action_elements})
+    return blocks
+
+
 def notify_issue_created(
     issue: dict[str, Any], project: dict[str, Any], user_email: str | None
 ) -> None:
@@ -129,5 +178,9 @@ def notify_issue_resolved(
     if not _enabled():
         logger.info("slack_notify disabled — skipping resolved")
         return
-    # Implemented in Task 4.
-    return
+    try:
+        blocks = _build_resolved_blocks(issue, project, resolver_email)
+        fallback = f"Resolved [{project.get('slug', '?')}]: {issue.get('title', '?')}"
+        _post(blocks, fallback)
+    except Exception:  # noqa: BLE001 — public API must never re-raise
+        logger.exception("slack_notify (resolved) failed during build/post")
