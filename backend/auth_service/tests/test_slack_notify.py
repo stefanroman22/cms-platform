@@ -185,3 +185,41 @@ def test_resolved_no_preview_url_omits_preview_section(monkeypatch):
 
     blocks_text = str(captured["json"]["blocks"])
     assert "preview not configured" in blocks_text.lower()
+
+
+def test_swallows_timeout(monkeypatch):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    def fake_post(*args, **kwargs):
+        raise slack_notify.httpx.TimeoutException("slow")
+
+    with patch.object(slack_notify.httpx, "post", side_effect=fake_post):
+        # Must not raise.
+        slack_notify.notify_issue_created(
+            issue=_sample_issue(),
+            project=_sample_project(),
+            user_email="client@acme.com",
+        )
+
+
+def test_swallows_api_error_ok_false(monkeypatch, caplog):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    class _ErrResp:
+        def json(self):
+            return {"ok": False, "error": "not_in_channel"}
+
+    def fake_post(*args, **kwargs):
+        return _ErrResp()
+
+    with patch.object(slack_notify.httpx, "post", side_effect=fake_post):
+        with caplog.at_level("WARNING"):
+            slack_notify.notify_issue_resolved(
+                issue=_sample_issue(),
+                project=_sample_project(),
+                resolver_email="stefan@example.com",
+            )
+
+    assert any("not_in_channel" in rec.message for rec in caplog.records)
