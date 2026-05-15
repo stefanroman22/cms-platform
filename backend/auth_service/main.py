@@ -1,16 +1,23 @@
 import re
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from .core.config import settings
-from .core.limiter import limiter
-from .core.security_headers import SecurityHeadersMiddleware
-from .routers import auth, content, projects, publish, workspace
-from .routers.forms import router as forms_router
-from .routers.issues import router as issues_router
+# Load backend/.env into os.environ for modules that read env directly
+# (e.g. slack_notify). Vercel/production already injects env vars into
+# os.environ, so this is a no-op there.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+from .core.config import settings  # noqa: E402
+from .core.limiter import limiter  # noqa: E402
+from .core.security_headers import SecurityHeadersMiddleware  # noqa: E402
+from .routers import auth, content, projects, publish, workspace  # noqa: E402
+from .routers.forms import router as forms_router  # noqa: E402
+from .routers.issues import router as issues_router  # noqa: E402
 
 # ── Main app ──────────────────────────────────────────────────────────────────
 
