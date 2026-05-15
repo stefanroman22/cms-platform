@@ -23,7 +23,7 @@ def require_project_access(project_slug: str, user: UserOut) -> dict:
     sb = get_supabase_admin()
     result = (
         sb.table("projects")
-        .select("id, name, slug, user_id, is_active")
+        .select("id, name, slug, user_id, is_active, github_repo, preview_url")
         .eq("slug", project_slug)
         .eq("is_active", True)
         .maybe_single()
