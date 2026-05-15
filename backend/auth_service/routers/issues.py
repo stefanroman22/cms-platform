@@ -223,7 +223,7 @@ async def update_issue_status(
     sb = get_supabase_admin()
     issue_result = (
         sb.table("project_issues")
-        .select("id, project_id")
+        .select("id, project_id, status")
         .eq("id", issue_id)
         .eq("project_id", project["id"])
         .maybe_single()
@@ -231,6 +231,8 @@ async def update_issue_status(
     )
     if not issue_result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found.")
+
+    old_status = issue_result.data.get("status", "pending")
 
     updated = (
         sb.table("project_issues").update({"status": body.status}).eq("id", issue_id).execute()
@@ -245,7 +247,7 @@ async def update_issue_status(
         else None
     )
 
-    return IssueOut(
+    issue_out = IssueOut(
         id=r["id"],
         project_id=r["project_id"],
         title=r["title"],
@@ -258,3 +260,17 @@ async def update_issue_status(
         ),
         created_at=r["created_at"],
     )
+
+    if old_status != "done" and body.status == "done":
+        try:
+            slack_notify.notify_issue_resolved(
+                issue={"id": r["id"], "title": r["title"]},
+                project=project,
+                resolver_email=user.email,
+            )
+        except Exception:  # noqa: BLE001 — Slack must never break status update
+            import logging
+
+            logging.getLogger(__name__).exception("slack_notify (resolved) raised")
+
+    return issue_out

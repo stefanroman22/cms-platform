@@ -72,3 +72,106 @@ def test_create_issue_slack_failure_does_not_break_201(
     # The service itself swallows; if a router-level guard is missing, this test
     # forces it to be added.
     assert resp.status_code == 201, resp.text
+
+
+def test_status_pending_to_done_fires_resolved(
+    mock_supabase, client, auth_as, admin_user, monkeypatch
+):
+    auth_as(admin_user)
+
+    # First SELECT returns the existing row (status=pending).
+    # Then UPDATE returns the new row (status=done).
+    pending_row = {"id": "issue-1", "project_id": "project-acme", "status": "pending"}
+    updated_row = {
+        "id": "issue-1",
+        "project_id": "project-acme",
+        "title": "Hero broken",
+        "description": "stretches",
+        "priority": "High",
+        "status": "done",
+        "created_by": "client-uuid",
+        "created_at": "2026-05-15T10:00:00Z",
+    }
+
+    mock_supabase.execute.side_effect = [
+        MagicMock(data=pending_row),  # pre-update SELECT (maybe_single)
+        MagicMock(data=[updated_row]),  # UPDATE
+        MagicMock(data={"email": "client@acme.com"}),  # email lookup
+    ]
+
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_resolved",
+        lambda **kw: calls.append(kw),
+    )
+
+    resp = client.patch(
+        "/projects/acme/issues/issue-1/status",
+        json={"status": "done"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert len(calls) == 1
+    assert calls[0]["resolver_email"] == admin_user.email
+    assert calls[0]["issue"]["id"] == "issue-1"
+    assert calls[0]["project"]["preview_url"] == "https://acme-dev.vercel.app"
+
+
+def test_status_done_to_done_does_not_fire(mock_supabase, client, auth_as, admin_user, monkeypatch):
+    auth_as(admin_user)
+    done_row = {"id": "issue-1", "project_id": "project-acme", "status": "done"}
+    updated_row = {
+        "id": "issue-1",
+        "project_id": "project-acme",
+        "title": "x",
+        "description": "y",
+        "priority": "Low",
+        "status": "done",
+        "created_by": None,
+        "created_at": "2026-05-15T10:00:00Z",
+    }
+    mock_supabase.execute.side_effect = [
+        MagicMock(data=done_row),
+        MagicMock(data=[updated_row]),
+    ]
+
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_resolved",
+        lambda **kw: calls.append(kw),
+    )
+
+    resp = client.patch("/projects/acme/issues/issue-1/status", json={"status": "done"})
+    assert resp.status_code == 200, resp.text
+    assert calls == []
+
+
+def test_status_pending_to_in_progress_does_not_fire(
+    mock_supabase, client, auth_as, admin_user, monkeypatch
+):
+    auth_as(admin_user)
+    pending_row = {"id": "issue-1", "project_id": "project-acme", "status": "pending"}
+    updated_row = {
+        "id": "issue-1",
+        "project_id": "project-acme",
+        "title": "x",
+        "description": "y",
+        "priority": "Low",
+        "status": "in_progress",
+        "created_by": None,
+        "created_at": "2026-05-15T10:00:00Z",
+    }
+    mock_supabase.execute.side_effect = [
+        MagicMock(data=pending_row),
+        MagicMock(data=[updated_row]),
+    ]
+
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_resolved",
+        lambda **kw: calls.append(kw),
+    )
+
+    resp = client.patch("/projects/acme/issues/issue-1/status", json={"status": "in_progress"})
+    assert resp.status_code == 200, resp.text
+    assert calls == []
