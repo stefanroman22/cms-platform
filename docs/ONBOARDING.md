@@ -136,6 +136,24 @@ git push origin --delete fix/something-short-and-clear
 | Database schema (read-only ref) | `backend/migrations/` |
 | Public website code | the per-client repo (e.g. `it-global-services`) |
 
+## Slack Issue Notifications
+
+The backend posts to `#issues-websites` when a client submits an issue and when an admin marks it resolved.
+
+### One-time setup
+
+1. Go to https://api.slack.com/apps → **Create New App** → **From scratch**.
+2. Name: `CMS Issues Bot`. Workspace: your Slack workspace.
+3. **OAuth & Permissions** → **Bot Token Scopes** → add `chat:write`.
+4. **Install to Workspace** → approve.
+5. Copy the **Bot User OAuth Token** (starts with `xoxb-...`) into the backend env as `SLACK_BOT_TOKEN`.
+6. In Slack desktop, right-click `#issues-websites` → **View channel details** → copy the **Channel ID** (e.g. `C0123ABCDEF`). Put it in `SLACK_ISSUES_CHANNEL_ID`.
+7. Inside `#issues-websites`, run `/invite @CMS Issues Bot`. The bot must be a channel member to post.
+
+### Disabled mode
+
+Leaving `SLACK_BOT_TOKEN` or `SLACK_ISSUES_CHANNEL_ID` unset disables notifications silently — useful for local dev and CI. The service logs `slack_notify disabled` at INFO and never raises.
+
 ## Glossary in plain words
 
 - **CI** = the GitHub robot that runs tests on every push.

@@ -219,6 +219,10 @@ The post-mortem template lives at `docs/superpowers/post-mortems/YYYY-MM-DD-<slu
 - **Pre-commit hooks** SHA-pinned in `.pre-commit-config.yaml`.
 - **GitHub Actions**: every action SHA-pinned. Dependabot bumps weekly Mondays.
 
+## Slack notifications in local dev
+
+`backend/auth_service/services/slack_notify.py` is silent unless both `SLACK_BOT_TOKEN` and `SLACK_ISSUES_CHANNEL_ID` are set. Local dev does not need to configure Slack; tests use mocks. To smoke-test for real, copy the prod values into `backend/.env` and POST an issue.
+
 ## Glossary
 
 - **Feature branch**: any short-lived branch off `dev` named with `fix/`, `feat/`, `chore/`, `feature/` prefix.

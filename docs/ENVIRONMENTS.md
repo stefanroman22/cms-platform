@@ -28,6 +28,10 @@ startup.
 | `RESEND_API_KEY` | preview + production | Sends transactional + welcome email. |
 | `RESEND_FROM_EMAIL` | optional | Defaults to `noreply@roman-technologies.dev` (verified in Resend). |
 | `RESEND_FROM_NAME` | optional | Defaults to `Roman Technologies CMS`. |
+| `SLACK_BOT_TOKEN` | optional | Bot User OAuth Token (`xoxb-...`) from the **CMS Issues Bot** Slack app. Disabled silently if unset. |
+| `SLACK_ISSUES_CHANNEL_ID` | optional | Slack channel ID (e.g. `C0123ABCDEF`) for `#issues-websites`. Disabled silently if unset. |
+| `CMS_DASHBOARD_URL` | optional | Base URL for the CMS dashboard, used as the "Open in CMS" button target in Slack messages. Defaults to `https://roman-technologies.dev`. |
+| `AGENT_CACHE_ROOT` | optional (agents) | Filesystem root used by future S2/S3 issue-resolution agents (`<root>/<slug>` per project). Not consumed by S1. |
 
 ## Frontend env contract — `cms-frontend-roman`
 
