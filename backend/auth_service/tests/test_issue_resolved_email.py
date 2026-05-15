@@ -32,11 +32,12 @@ def _project() -> dict:
         "slug": "acme",
         "name": "Acme Corp",
         "preview_url": "https://acme-dev.vercel.app",
+        "production_url": "https://acme.example.com",
     }
 
 
 def test_render_html_happy_path():
-    """HTML body contains the issue title, project name, and preview link."""
+    """HTML body contains the issue title, description, project name, and production link."""
     html = issue_resolved_email.render_issue_resolved_html(
         client_name="Laurian",
         issue=_issue(),
@@ -44,7 +45,13 @@ def test_render_html_happy_path():
     )
     assert "Hero image broken" in html
     assert "Acme Corp" in html
-    assert "https://acme-dev.vercel.app" in html
+    # Email fires after publish — links to production, not preview.
+    assert "https://acme.example.com" in html
+    assert "https://acme-dev.vercel.app" not in html
+    # Description rendered in the body.
+    assert "Stretches on mobile" in html
+    # H1 reflects the post-publish state.
+    assert "Your issue is fixed" in html
     # Friendly greeting on the client name.
     assert "Laurian" in html
 
@@ -71,16 +78,32 @@ def test_render_html_escapes_user_controlled_fields():
 
 
 def test_render_html_drops_non_http_preview_url():
-    """`javascript:` and `data:` preview URLs render as the safe fallback."""
-    project = {**_project(), "preview_url": "javascript:alert(1)"}
+    """`javascript:` and `data:` site URLs render as the safe fallback."""
+    project = {
+        **_project(),
+        "production_url": "javascript:alert(1)",
+        "preview_url": "data:text/html,oops",
+    }
     html = issue_resolved_email.render_issue_resolved_html(
         client_name="Laurian",
         issue=_issue(),
         project=project,
     )
     assert "javascript:alert(1)" not in html
+    assert "data:text/html" not in html
     # Falls back to the canonical site.
     assert "roman-technologies.dev" in html
+
+
+def test_render_html_falls_back_to_preview_when_production_missing():
+    """If no production_url is set, the CTA links to preview_url."""
+    project = {k: v for k, v in _project().items() if k != "production_url"}
+    html = issue_resolved_email.render_issue_resolved_html(
+        client_name="Laurian",
+        issue=_issue(),
+        project=project,
+    )
+    assert "https://acme-dev.vercel.app" in html
 
 
 def test_send_raises_when_resend_api_key_unset(monkeypatch):

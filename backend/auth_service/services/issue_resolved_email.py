@@ -54,8 +54,9 @@ def render_issue_resolved_html(
     greeting = html.escape(client_name) if client_name else "there"
     project_name = html.escape(project.get("name") or project.get("slug") or "your project")
     issue_title = html.escape(issue.get("title") or "")
-    preview = _safe_url(project.get("preview_url"))
-    preview_safe = html.escape(preview)
+    issue_description = html.escape(issue.get("description") or "").replace("\n", "<br>")
+    site_url = _safe_url(project.get("production_url") or project.get("preview_url"))
+    site_url_safe = html.escape(site_url)
     dashboard = DASHBOARD_URL
 
     return f"""<!DOCTYPE html>
@@ -79,24 +80,22 @@ def render_issue_resolved_html(
           </table>
         </td></tr>
         <tr><td style="padding:32px 32px 8px">
-          <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#18181b">Issue resolved.</h1>
+          <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#18181b">Your issue is fixed.</h1>
           <p style="margin:0;font-size:15px;line-height:1.55;color:#52525b">
-            Hi {greeting}, the issue you reported on <strong>{project_name}</strong>
-            has been marked as resolved. The fix is live on your preview
-            environment — take a look and let us know if anything still
-            looks off.
+            Hi {greeting}, the fix for the issue you reported on <strong>{project_name}</strong> is now live on your site.
           </p>
         </td></tr>
         <tr><td style="padding:8px 32px">
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:#fafafa;border:1px solid #e4e4e7;border-radius:8px">
             <tr><td style="padding:18px 22px">
-              <p style="margin:0 0 12px;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#71717a">Issue</p>
-              <p style="margin:0;font-size:14px;line-height:1.5;color:#18181b;font-weight:600">{issue_title}</p>
+              <p style="margin:0 0 12px;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#71717a">Issue resolved</p>
+              <p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#18181b">{issue_title}</p>
+              <p style="margin:0;font-size:14px;line-height:1.6;color:#52525b">{issue_description}</p>
             </td></tr>
           </table>
         </td></tr>
         <tr><td style="padding:24px 32px 8px" align="center">
-          <a href="{preview_safe}" style="display:inline-block;background:#18181b;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px">View the fix &rarr;</a>
+          <a href="{site_url_safe}" style="display:inline-block;background:#18181b;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px">View your live site &rarr;</a>
         </td></tr>
         <tr><td style="padding:8px 32px 24px" align="center">
           <p style="margin:0;font-size:13px;color:#71717a">
@@ -127,20 +126,21 @@ def render_issue_resolved_text(
     greeting = client_name or "there"
     project_name = project.get("name") or project.get("slug") or "your project"
     issue_title = issue.get("title") or ""
-    preview = _safe_url(project.get("preview_url"))
+    issue_description = issue.get("description") or ""
+    site_url = _safe_url(project.get("production_url") or project.get("preview_url"))
 
     return f"""Roman Technologies — CMS Platform
 
-ISSUE RESOLVED
+YOUR ISSUE IS FIXED
 
 Hi {greeting},
 
-The issue you reported on {project_name} has been marked as resolved.
-The fix is live on your preview environment — take a look and let us
-know if anything still looks off.
+The fix for the issue you reported on {project_name} is now live on
+your site.
 
-  Issue:    {issue_title}
-  Preview:  {preview}
+  Issue:        {issue_title}
+  Description:  {issue_description}
+  Live site:    {site_url}
 
 Open the dashboard to browse the rest of your issues:
 {DASHBOARD_URL}
