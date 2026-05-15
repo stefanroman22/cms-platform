@@ -9,7 +9,7 @@ feedback.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime  # noqa: F401 — used by Task 10 (revision flow)
+from datetime import UTC, datetime
 
 from ..core.config import settings
 from . import github_merge, issue_resolved_email, slack_notify
@@ -81,6 +81,55 @@ def handle_reaction_added(event: dict) -> None:
         f"• Merged `{project['repo_branch']}` → `{project['production_branch']}` (SHA `{sha}`)\n"
         f"• Email sent to client\n"
         f"• Production: {project.get('production_url') or '(deploy in progress)'}",
+    )
+
+
+def handle_message(event: dict) -> None:
+    """Stefan replies in the resolved-issue thread → revert + store feedback."""
+    if event.get("subtype") == "bot_message":
+        return
+    if event.get("bot_id") or event.get("user") == settings.SLACK_BOT_USER_ID:
+        return
+
+    channel = event.get("channel")
+    thread_ts = event.get("thread_ts")
+    text = (event.get("text") or "").strip()
+
+    if channel != settings.SLACK_ISSUES_CHANNEL_ID or not thread_ts:
+        return
+
+    issue = _find_issue_by_slack_ts(thread_ts)
+    if not issue:
+        return
+
+    if event.get("user") != settings.SLACK_APPROVER_USER_ID:
+        return
+
+    if issue["status"] != "done":
+        _post_thread_reply(
+            thread_ts,
+            f"⚠️ Issue is `{issue['status']}` — cannot mark as needs revision.",
+        )
+        return
+
+    if len(text) < 5:
+        return
+
+    sb = get_supabase_admin()
+    sb.table("project_issues").update(
+        {
+            "status": "in_progress",
+            "revision_feedback": text,
+            "revision_feedback_at": datetime.now(UTC).isoformat(),
+        }
+    ).eq("id", issue["id"]).execute()
+
+    excerpt = text[:120] + ("…" if len(text) > 120 else "")
+    _post_thread_reply(
+        thread_ts,
+        f"📝 *Marked as needs revision.*\n> {excerpt}\n\n"
+        f"Issue moved back to `in_progress`. Fix on `cms-preview` and "
+        f"mark done again to re-trigger approval.",
     )
 
 

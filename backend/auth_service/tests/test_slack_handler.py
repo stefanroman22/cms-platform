@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -187,3 +187,135 @@ def test_reaction_email_failure_partial_success(slack_env, monkeypatch):
     text = ack.call_args.args[1]
     assert "⚠️" in text
     assert "email" in text.lower()
+
+
+def _event_message(
+    *,
+    user: str | None = None,
+    text: str = "fix the spacing on hero",
+    thread_ts: str = "1715789123.001234",
+    subtype: str | None = None,
+    bot_id: str | None = None,
+) -> dict:
+    event: dict = {
+        "type": "message",
+        "user": user or _stefan(),
+        "text": text,
+        "thread_ts": thread_ts,
+        "channel": _channel(),
+    }
+    if subtype:
+        event["subtype"] = subtype
+    if bot_id:
+        event["bot_id"] = bot_id
+    return event
+
+
+def test_message_bot_subtype_noop(slack_env):
+    with patch.object(slack_handler, "_find_issue_by_slack_ts") as lookup:
+        slack_handler.handle_message(_event_message(subtype="bot_message"))
+        lookup.assert_not_called()
+
+
+def test_message_bot_id_noop(slack_env):
+    with patch.object(slack_handler, "_find_issue_by_slack_ts") as lookup:
+        slack_handler.handle_message(_event_message(bot_id="B123"))
+        lookup.assert_not_called()
+
+
+def test_message_from_bot_user_noop(slack_env):
+    with patch.object(slack_handler, "_find_issue_by_slack_ts") as lookup:
+        slack_handler.handle_message(_event_message(user=_bot()))
+        lookup.assert_not_called()
+
+
+def test_message_top_level_no_thread_noop(slack_env):
+    event = _event_message()
+    del event["thread_ts"]
+    with patch.object(slack_handler, "_find_issue_by_slack_ts") as lookup:
+        slack_handler.handle_message(event)
+        lookup.assert_not_called()
+
+
+def test_message_unknown_thread_noop(slack_env, monkeypatch):
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: None)
+    with patch.object(slack_handler, "_post_thread_reply") as ack:
+        slack_handler.handle_message(_event_message())
+        ack.assert_not_called()
+
+
+def test_message_wrong_user_noop(slack_env, monkeypatch):
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: _issue_done())
+    with patch.object(slack_handler, "_post_thread_reply") as ack:
+        slack_handler.handle_message(_event_message(user="U_RANDO"))
+        ack.assert_not_called()
+
+
+def test_message_status_not_done_warns(slack_env, monkeypatch):
+    issue = _issue_done()
+    issue["status"] = "in_progress"
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: issue)
+    with patch.object(slack_handler, "_post_thread_reply") as ack:
+        slack_handler.handle_message(_event_message())
+        ack.assert_called_once()
+        assert "in_progress" in ack.call_args.args[1]
+
+
+def test_message_too_short_noop(slack_env, monkeypatch):
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: _issue_done())
+    with patch.object(slack_handler, "_post_thread_reply") as ack:
+        slack_handler.handle_message(_event_message(text="ok"))
+        ack.assert_not_called()
+
+
+def test_message_happy_path_reverts_status(slack_env, monkeypatch):
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: _issue_done())
+
+    updates: list[dict] = []
+    fake_sb = MagicMock()
+    for m in ("table", "update", "eq", "execute"):
+        getattr(fake_sb, m).return_value = fake_sb
+
+    def capture_update(payload):
+        updates.append(payload)
+        return fake_sb
+
+    fake_sb.update = capture_update
+
+    with (
+        patch.object(slack_handler, "get_supabase_admin", return_value=fake_sb),
+        patch.object(slack_handler, "_post_thread_reply") as ack,
+    ):
+        slack_handler.handle_message(
+            _event_message(text="please fix the spacing on hero, looks tight")
+        )
+
+    assert len(updates) == 1
+    update = updates[0]
+    assert update["status"] == "in_progress"
+    assert "please fix the spacing" in update["revision_feedback"]
+    assert update["revision_feedback_at"]
+
+    ack.assert_called_once()
+    text = ack.call_args.args[1]
+    assert "📝" in text
+    assert "please fix the spacing" in text
+    assert "in_progress" in text
+
+
+def test_message_long_feedback_truncated_in_ack(slack_env, monkeypatch):
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: _issue_done())
+    long_text = "needs revision " * 30  # ~450 chars
+
+    fake_sb = MagicMock()
+    for m in ("table", "update", "eq", "execute"):
+        getattr(fake_sb, m).return_value = fake_sb
+
+    with (
+        patch.object(slack_handler, "get_supabase_admin", return_value=fake_sb),
+        patch.object(slack_handler, "_post_thread_reply") as ack,
+    ):
+        slack_handler.handle_message(_event_message(text=long_text))
+
+    text = ack.call_args.args[1]
+    assert "…" in text  # truncation marker
