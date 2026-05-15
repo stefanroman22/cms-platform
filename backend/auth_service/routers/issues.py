@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ..models.schemas import IssueCreateRequest, IssueOut, IssueStatusRequest, IssueUpdateRequest
+from ..services import slack_notify
 from ..services.supabase_client import get_supabase_admin
 from .deps import require_project_access, require_user
 
@@ -72,7 +73,7 @@ async def create_issue(project_slug: str, body: IssueCreateRequest, request: Req
     if not result.data:
         raise HTTPException(status_code=500, detail="Issue could not be created.")
     row = result.data[0]
-    return IssueOut(
+    issue_out = IssueOut(
         id=row["id"],
         project_id=row["project_id"],
         title=row["title"],
@@ -83,6 +84,25 @@ async def create_issue(project_slug: str, body: IssueCreateRequest, request: Req
         created_by_email=user.email,
         created_at=row["created_at"],
     )
+
+    try:
+        slack_notify.notify_issue_created(
+            issue={
+                "id": row["id"],
+                "title": row["title"],
+                "description": row["description"],
+                "priority": row["priority"],
+                "created_at": row["created_at"],
+            },
+            project=project,
+            user_email=user.email,
+        )
+    except Exception:  # noqa: BLE001 — Slack must never break issue creation
+        import logging
+
+        logging.getLogger(__name__).exception("slack_notify (created) raised")
+
+    return issue_out
 
 
 @router.patch("/projects/{project_slug}/issues/{issue_id}", response_model=IssueOut)
