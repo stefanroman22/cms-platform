@@ -30,6 +30,17 @@ class Settings(BaseSettings):
     RESEND_FROM_EMAIL: str = "noreply@roman-technologies.dev"
     RESEND_FROM_NAME: str = "Roman Technologies CMS"
 
+    # Slack — S1 outbound + S1.5 inbound
+    SLACK_BOT_TOKEN: str = ""
+    SLACK_ISSUES_CHANNEL_ID: str = ""
+    SLACK_SIGNING_SECRET: str = ""
+    SLACK_APPROVER_USER_ID: str = ""
+    SLACK_BOT_USER_ID: str = ""
+    CMS_DASHBOARD_URL: str = "https://roman-technologies.dev"
+
+    # GitHub PAT for production-promote fast-forward (S1.5)
+    GITHUB_TOKEN: str = ""
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.FRONTEND_ORIGINS.split(",") if o.strip()]

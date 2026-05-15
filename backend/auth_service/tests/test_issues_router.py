@@ -38,7 +38,7 @@ def test_create_issue_fires_slack_created(mock_supabase, client, auth_as, client
     assert call["issue"]["id"] == "issue-1"
     assert call["issue"]["title"] == "Hero broken"
     assert call["project"]["slug"] == "acme"
-    assert call["project"]["repo_branch"] == "dev"
+    assert call["project"]["repo_branch"] == "cms-preview"
 
 
 def test_create_issue_slack_failure_does_not_break_201(
