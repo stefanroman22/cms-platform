@@ -263,11 +263,15 @@ async def update_issue_status(
 
     if old_status != "done" and body.status == "done":
         try:
-            slack_notify.notify_issue_resolved(
+            ts = slack_notify.notify_issue_resolved(
                 issue={"id": r["id"], "title": r["title"]},
                 project=project,
                 resolver_email=user.email,
             )
+            if ts:
+                sb.table("project_issues").update({"slack_resolved_ts": ts}).eq(
+                    "id", r["id"]
+                ).execute()
         except Exception:  # noqa: BLE001 — Slack must never break status update
             import logging
 
