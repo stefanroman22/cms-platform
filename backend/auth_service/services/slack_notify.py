@@ -36,30 +36,37 @@ def _truncate(text: str, limit: int = 500) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
-def _post(blocks: list[dict], text_fallback: str) -> None:
-    """POST one message to Slack. Swallow all errors."""
+def _post(blocks: list[dict], text_fallback: str, thread_ts: str | None = None) -> str | None:
+    """POST one message to Slack. Returns the message ts on success, None on
+    disabled mode or any failure. Swallow all errors."""
     if not _enabled():
         logger.info("slack_notify disabled — skipping")
-        return
+        return None
     try:
+        body: dict[str, Any] = {
+            "channel": os.environ["SLACK_ISSUES_CHANNEL_ID"],
+            "text": text_fallback,
+            "blocks": blocks,
+        }
+        if thread_ts:
+            body["thread_ts"] = thread_ts
         resp = httpx.post(
             SLACK_API,
             headers={
                 "Authorization": f"Bearer {os.environ['SLACK_BOT_TOKEN']}",
                 "Content-Type": "application/json; charset=utf-8",
             },
-            json={
-                "channel": os.environ["SLACK_ISSUES_CHANNEL_ID"],
-                "text": text_fallback,
-                "blocks": blocks,
-            },
+            json=body,
             timeout=_TIMEOUT_S,
         )
-        body = resp.json()
-        if not body.get("ok"):
-            logger.warning("slack_notify api error: %s", body.get("error"))
+        data = resp.json()
+        if not data.get("ok"):
+            logger.warning("slack_notify api error: %s", data.get("error"))
+            return None
+        return data.get("ts")
     except Exception:
         logger.exception("slack_notify post failed")
+        return None
 
 
 def _build_created_blocks(
@@ -160,27 +167,63 @@ def _build_resolved_blocks(
 
 def notify_issue_created(
     issue: dict[str, Any], project: dict[str, Any], user_email: str | None
-) -> None:
+) -> str | None:
     if not _enabled():
         logger.info("slack_notify disabled — skipping created")
-        return
+        return None
     try:
         blocks = _build_created_blocks(issue, project, user_email)
         fallback = f"New issue [{project.get('slug', '?')}]: {issue.get('title', '?')}"
-        _post(blocks, fallback)
+        return _post(blocks, fallback)
     except Exception:  # noqa: BLE001 — public API must never re-raise
         logger.exception("slack_notify (created) failed during build/post")
+        return None
 
 
 def notify_issue_resolved(
     issue: dict[str, Any], project: dict[str, Any], resolver_email: str | None
-) -> None:
+) -> str | None:
+    """Returns the Slack message ts on success, None otherwise."""
     if not _enabled():
         logger.info("slack_notify disabled — skipping resolved")
-        return
+        return None
     try:
         blocks = _build_resolved_blocks(issue, project, resolver_email)
         fallback = f"Resolved [{project.get('slug', '?')}]: {issue.get('title', '?')}"
-        _post(blocks, fallback)
+        return _post(blocks, fallback)
     except Exception:  # noqa: BLE001 — public API must never re-raise
         logger.exception("slack_notify (resolved) failed during build/post")
+        return None
+
+
+def post_thread_reply(*, thread_ts: str, text: str) -> str | None:
+    """Reply in the thread of a previously-posted message.
+
+    text is rendered as Slack mrkdwn. No blocks (simple reply).
+    Returns the reply's ts on success, None otherwise.
+    """
+    if not _enabled():
+        logger.info("slack_notify disabled — skipping thread reply")
+        return None
+    try:
+        resp = httpx.post(
+            SLACK_API,
+            headers={
+                "Authorization": f"Bearer {os.environ['SLACK_BOT_TOKEN']}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            json={
+                "channel": os.environ["SLACK_ISSUES_CHANNEL_ID"],
+                "thread_ts": thread_ts,
+                "text": text,
+            },
+            timeout=_TIMEOUT_S,
+        )
+        data = resp.json()
+        if not data.get("ok"):
+            logger.warning("post_thread_reply api error: %s", data.get("error"))
+            return None
+        return data.get("ts")
+    except Exception:
+        logger.exception("post_thread_reply failed")
+        return None
