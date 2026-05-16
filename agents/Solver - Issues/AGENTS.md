@@ -40,6 +40,7 @@ GitHub Actions secrets (set in repo Settings → Secrets and variables → Actio
 | Supabase service-role | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Phase 1, 4, 5 (release path) |
 | GitHub (client repos) | `SOLVER_GITHUB_TOKEN` | Phase 2, 4 |
 | Backend admin | `CMS_API_TOKEN` | Phase 5 |
+| Slack | `SLACK_BOT_TOKEN`, `SLACK_ISSUES_CHANNEL_ID` | Phase 5 (release path, blocked notification) |
 | Backend URL | `CMS_BACKEND_URL` (=`https://cms-backend-roman.vercel.app`) | Phase 5 |
 
 If a credential is missing, the affected workflow step fails; the `failure()` release step decrements the lock and increments `agent_retry_count`. Stefan investigates.
