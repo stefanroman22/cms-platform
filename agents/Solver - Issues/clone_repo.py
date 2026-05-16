@@ -19,12 +19,16 @@ def main() -> int:
     if Path(dest).exists():
         shutil.rmtree(dest)
 
-    repo.clone(
-        repo=project["github_repo"],
-        branch=project["repo_branch"],
+    repo.clone_and_reset_to_prod(
+        repo_slug=project["github_repo"],
+        dev_branch=project["repo_branch"],
+        prod_branch=project["production_branch"],
         dest=dest,
     )
-    print(f"cloned {project['github_repo']} @ {project['repo_branch']} → {dest}")
+    print(
+        f"cloned {project['github_repo']}: "
+        f"reset {project['repo_branch']} → origin/{project['production_branch']} → {dest}"
+    )
     return 0
 
 
