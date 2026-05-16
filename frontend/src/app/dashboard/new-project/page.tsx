@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Send, ChevronUp } from "lucide-react";
+import { Send, ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { FormFeedback } from "@/components/dashboard/FormFeedback";
@@ -27,19 +27,21 @@ const PROJECT_TYPES = [
 /**
  * Custom-styled select for the Project type field. Uses a button +
  * absolutely positioned listbox so the option list can animate in/out
- * with framer-motion. Closed-state arrow points up; opening rotates
- * it 180° so it points down — per design call.
+ * with framer-motion. Caller picks the closed-state arrow direction
+ * via `initialChevron`; opening rotates it 180°.
  */
 function AnimatedSelect({
   value,
   onChange,
   options,
   ariaLabel,
+  initialChevron = "down",
 }: {
   value: string;
   onChange: (v: string) => void;
   options: readonly { value: string; label: string }[];
   ariaLabel: string;
+  initialChevron?: "up" | "down";
 }) {
   const [open, setOpen] = useState(false);
   // When there isn't enough room below the button for the listbox + a
@@ -96,12 +98,21 @@ function AnimatedSelect({
         className={`${dashboardInputLgCn} flex cursor-pointer items-center justify-between text-left`}
       >
         <span className="truncate">{current.label}</span>
-        <ChevronUp
-          className={`ml-2 h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200 ${
-            open ? "rotate-180" : ""
-          }`}
-          aria-hidden="true"
-        />
+        {initialChevron === "up" ? (
+          <ChevronUp
+            className={`ml-2 h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200 ${
+              open ? "rotate-180" : ""
+            }`}
+            aria-hidden="true"
+          />
+        ) : (
+          <ChevronDown
+            className={`ml-2 h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200 ${
+              open ? "rotate-180" : ""
+            }`}
+            aria-hidden="true"
+          />
+        )}
       </button>
 
       <AnimatePresence>
@@ -268,6 +279,7 @@ export default function CreateNewProjectPage() {
                 onChange={setType}
                 options={PROJECT_TYPES}
                 ariaLabel="Project type"
+                initialChevron="up"
               />
             </div>
 

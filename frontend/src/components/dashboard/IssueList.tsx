@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Pencil, Trash2, X, Save } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { CheckCircle2, Pencil, Trash2, X, Save, Info } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import * as cache from "@/lib/cache";
 import {
@@ -168,6 +169,9 @@ export function IssueList({ projectSlug, refreshTrigger, isAdmin, currentUserId 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
+  // Mobile-only: which issue has its email/date meta revealed.
+  const [expandedMetaId, setExpandedMetaId] = useState<string | null>(null);
+
   function startEdit(issue: Issue) {
     setEditingId(issue.id);
     setEditTitle(issue.title);
@@ -310,7 +314,12 @@ export function IssueList({ projectSlug, refreshTrigger, isAdmin, currentUserId 
 
                       if (isEditing) {
                         return (
-                          <div key={issue.id} className="px-5 py-4 space-y-3">
+                          <motion.div
+                            key={issue.id}
+                            layout
+                            transition={{ layout: { duration: 0.28, ease: "easeOut" } }}
+                            className="px-5 py-4 space-y-3"
+                          >
                             {editError && <p className={dashboardErrorBannerCn}>{editError}</p>}
                             <div>
                               <label className={dashboardFieldLabelCn}>Title</label>
@@ -369,27 +378,53 @@ export function IssueList({ projectSlug, refreshTrigger, isAdmin, currentUserId 
                                 {editSaving ? "Saving…" : "Save"}
                               </button>
                             </div>
-                          </div>
+                          </motion.div>
                         );
                       }
 
                       return (
-                        <div key={issue.id} className="px-5 py-4 flex items-start gap-4">
+                        <motion.div
+                          key={issue.id}
+                          layout
+                          transition={{ layout: { duration: 0.28, ease: "easeOut" } }}
+                          className="px-5 py-4 flex items-start gap-4"
+                        >
                           {/* Priority badge */}
                           <span
-                            className={`mt-0.5 shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${priorityBadgeCn[issue.priority]}`}
+                            className={`mt-0.5 shrink-0 inline-flex items-center justify-center w-20 rounded-full px-2.5 py-0.5 text-xs font-medium ${priorityBadgeCn[issue.priority]}`}
                           >
                             {issue.priority}
                           </span>
 
                           {/* Content + admin status buttons */}
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50 truncate">
+                            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50 truncate sm:truncate">
                               {issue.title}
                             </p>
-                            <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2 whitespace-pre-wrap">
+                            <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400 line-clamp-3 sm:line-clamp-2 whitespace-pre-wrap">
                               {issue.description}
                             </p>
+                            <AnimatePresence initial={false}>
+                              {expandedMetaId === issue.id && (
+                                <motion.div
+                                  key="meta"
+                                  className="sm:hidden overflow-hidden"
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.22, ease: "easeOut" }}
+                                >
+                                  <div className="mt-2 space-y-0.5">
+                                    <p className="text-xs text-zinc-400 dark:text-zinc-500 break-all">
+                                      {issue.created_by_email ?? "Unknown"}
+                                    </p>
+                                    <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                                      {formatDate(issue.created_at)}
+                                    </p>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                             {isAdmin && (
                               <div className="mt-2 flex gap-1.5 flex-wrap">
                                 {STATUS_TRANSITIONS[issue.status].map(
@@ -411,12 +446,27 @@ export function IssueList({ projectSlug, refreshTrigger, isAdmin, currentUserId 
 
                           {/* Meta + edit/delete actions */}
                           <div className="shrink-0 text-right space-y-1">
-                            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                            <p className="hidden sm:block text-xs text-zinc-400 dark:text-zinc-500">
                               {issue.created_by_email ?? "Unknown"}
                             </p>
-                            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                            <p className="hidden sm:block text-xs text-zinc-400 dark:text-zinc-500">
                               {formatDate(issue.created_at)}
                             </p>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedMetaId((prev) => (prev === issue.id ? null : issue.id))
+                              }
+                              className="sm:hidden flex items-center justify-center h-7 w-7 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ml-auto"
+                              aria-label={
+                                expandedMetaId === issue.id
+                                  ? "Hide author and date"
+                                  : "Show author and date"
+                              }
+                              aria-expanded={expandedMetaId === issue.id}
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
                             {canEdit && (
                               <div className="flex gap-1 justify-end mt-1">
                                 <button
@@ -439,7 +489,7 @@ export function IssueList({ projectSlug, refreshTrigger, isAdmin, currentUserId 
                               </div>
                             )}
                           </div>
-                        </div>
+                        </motion.div>
                       );
                     })}
                   </div>
