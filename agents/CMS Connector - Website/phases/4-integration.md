@@ -33,7 +33,7 @@ Phase 6). Otherwise reuse the existing row.
    - Set env vars: `VITE_CMS_ENDPOINT` (production + preview), `VITE_CMS_PREVIEW_TOKEN` (preview only). Reuse existing `preview_token` from CMS project row if present (idempotent).
    - Create `cms-preview` branch from production branch if missing.
    - Trigger production + preview deployments.
-   - PATCH the CMS project row with `github_repo`, `vercel_project_id`, `production_url`, `preview_url`, `preview_token`.
+   - PATCH the CMS project row with `github_repo`, `production_branch` (resolved in this step from Vercel `productionBranch` or GitHub `default_branch` — see [AGENTS.md → Branch standardization](../AGENTS.md)), `vercel_project_id`, `production_url`, `preview_url`, `preview_token`.
 6. **Commit `cms.config.json`** to the client repo and push (uses Phase 1's git origin).
 
 ## Failure feedback

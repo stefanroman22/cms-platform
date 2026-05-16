@@ -426,13 +426,14 @@ def _vercel_setup(
         headers,
         {
             "github_repo": github_repo,
+            "production_branch": prod_branch,
             "vercel_project_id": project_id,
             "production_url": production_url,
             "preview_url": preview_url,
             "preview_token": preview_token,
         },
     )
-    click.echo("  ✓ Saved Vercel metadata to CMS project row")
+    click.echo(f"  ✓ Saved Vercel metadata to CMS project row (prod branch: {prod_branch})")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

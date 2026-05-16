@@ -1,3 +1,5 @@
+import re
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 # ── Shared validators ────────────────────────────────────────────────────────
@@ -285,6 +287,12 @@ class RotateTokenResponse(BaseModel):
 
 class AdminProjectPatchIn(BaseModel):
     github_repo: str | None = Field(default=None, max_length=200)
+    # Production branch (`main` for new repos per Option A guideline,
+    # `master` tolerated for legacy repos). Persisted so the Solver
+    # Agent's clone+reset path knows which ref to base cms-preview on.
+    # Allowlist excludes shell metacharacters — defense in depth since
+    # the value flows into subprocess git calls.
+    production_branch: str | None = Field(default=None, min_length=1, max_length=80)
     vercel_project_id: str | None = Field(default=None, max_length=80)
     # URL fields stored as str (mocks + supabase serialisation need str
     # not pydantic Url objects) but validated as http(s) so admin / agent
@@ -312,11 +320,24 @@ class AdminProjectPatchIn(BaseModel):
             raise ValueError("URL must start with http:// or https://")
         return v
 
+    @field_validator("production_branch", mode="after")
+    @classmethod
+    def _safe_ref_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            raise ValueError("production_branch cannot be empty")
+        if not re.fullmatch(r"[A-Za-z0-9._/-]+", v):
+            raise ValueError("production_branch contains invalid characters")
+        return v
+
 
 class AdminProjectDetailOut(BaseModel):
     slug: str
     name: str
     github_repo: str | None = None
+    production_branch: str | None = None
     vercel_project_id: str | None = None
     production_url: str | None = None
     preview_url: str | None = None

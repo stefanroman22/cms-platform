@@ -81,6 +81,21 @@ surface a clear remediation. Do not silently skip.
 
 These hard rules are **also enforced** in `prompts.py` SYSTEM_PROMPT. Keep both in sync.
 
+## Branch standardization (Option A)
+
+Two branches per client repo:
+
+- **`<production_branch>`** — `main` for new repos (GitHub's default since 2020). Legacy repos with `master` are tolerated; we do not auto-rename. Solver Agent reads the resolved name from `projects.production_branch` so its clone+reset path is branch-agnostic.
+- **`cms-preview`** — long-lived dev branch, solver-only. Auto-created from `<production_branch>` in Phase 4 (`github.create_branch`) if missing.
+
+Policy:
+
+- **New repos**: do not override GitHub's `default_branch`. Whatever the user's GitHub account default is (typically `main`), record it as `production_branch`.
+- **Legacy repos** (`default_branch == "master"`): accept it. Do not propose renaming inside this agent — branch renames break external PRs, CI badges, and downstream service hooks.
+- **Resolution order** in [`scan.py`](./scan.py) `_vercel_setup`: Vercel `productionBranch` first, then GitHub `default_branch`. This lets the operator override per-project via Vercel without changing the GitHub repo itself.
+
+Solver Agent reads `production_branch` from the `projects` table on every run. Phase 4 of this agent writes it. If the value is `NULL` after a Connector run, the Solver run fails at clone time — verify the Phase 4 PATCH log line `✓ Saved Vercel metadata to CMS project row (prod branch: <branch>)`.
+
 ## Generated client website contracts
 
 When the agent stitches the client repo to the CMS (Phase 4 —
