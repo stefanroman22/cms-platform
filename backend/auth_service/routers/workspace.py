@@ -443,7 +443,8 @@ async def admin_get_project(project_slug: str, request: Request):
     result = (
         sb.table("projects")
         .select(
-            "slug, name, github_repo, vercel_project_id, production_url, preview_url, preview_token, last_published_at"
+            "slug, name, github_repo, production_branch, vercel_project_id, "
+            "production_url, preview_url, preview_token, last_published_at"
         )
         .eq("slug", project_slug)
         .single()

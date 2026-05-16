@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock
 
+import pytest
+
 
 def test_put_service_writes_to_draft_content_only(mock_supabase, client, auth_as, client_user):
     auth_as(client_user)
@@ -176,6 +178,7 @@ def test_admin_get_project_returns_vercel_fields(mock_supabase, client, auth_as,
             "slug": "demo",
             "name": "Demo",
             "github_repo": "x/y",
+            "production_branch": "main",
             "vercel_project_id": "prj_1",
             "production_url": "https://p",
             "preview_url": "https://pr",
@@ -189,6 +192,7 @@ def test_admin_get_project_returns_vercel_fields(mock_supabase, client, auth_as,
     body = res.json()
     assert body["preview_token"] == "tok123"
     assert body["vercel_project_id"] == "prj_1"
+    assert body["production_branch"] == "main"
 
 
 def test_admin_get_project_requires_admin(mock_supabase, client, auth_as, client_user):
@@ -221,9 +225,8 @@ def test_admin_patch_project_updates_vercel_fields(mock_supabase, client, auth_a
     assert "preview_token" not in updated
 
 
-def test_admin_patch_project_rejects_non_http_url(
-    mock_supabase, client, auth_as, admin_user
-):  # noqa: ARG001
+@pytest.mark.usefixtures("mock_supabase")
+def test_admin_patch_project_rejects_non_http_url(client, auth_as, admin_user):
     """BE-004 / BE-006 — javascript: + data: URLs are blocked at schema
     layer so an admin (or stolen Bearer key) can't fixate the welcome
     email's CTA on a phishing target."""
@@ -231,6 +234,56 @@ def test_admin_patch_project_rejects_non_http_url(
     res = client.patch(
         "/admin/projects/demo",
         json={"production_url": "javascript:alert(1)"},
+    )
+    assert res.status_code == 422
+
+
+def test_admin_patch_project_persists_production_branch(mock_supabase, client, auth_as, admin_user):
+    """Connector calls this endpoint to record the repo's production branch
+    so Solver agent can reset cms-preview to the right ref."""
+    auth_as(admin_user)
+    mock_supabase.execute.return_value = MagicMock(data=[{"slug": "demo"}])
+
+    res = client.patch(
+        "/admin/projects/demo",
+        json={"production_branch": "main"},
+    )
+    assert res.status_code == 200, res.text
+
+    updated = mock_supabase.update.call_args_list[0].args[0]
+    assert updated["production_branch"] == "main"
+
+
+def test_admin_patch_project_accepts_master_branch(mock_supabase, client, auth_as, admin_user):
+    """Legacy repos use master. Accept without judgment (Option A guideline)."""
+    auth_as(admin_user)
+    mock_supabase.execute.return_value = MagicMock(data=[{"slug": "demo"}])
+
+    res = client.patch(
+        "/admin/projects/demo",
+        json={"production_branch": "master"},
+    )
+    assert res.status_code == 200, res.text
+
+
+@pytest.mark.usefixtures("mock_supabase")
+def test_admin_patch_project_rejects_invalid_production_branch(client, auth_as, admin_user):
+    """Git ref-name allowlist blocks shell metacharacters — defense in
+    depth since Solver agent passes this value to subprocess git calls."""
+    auth_as(admin_user)
+    res = client.patch(
+        "/admin/projects/demo",
+        json={"production_branch": "main; rm -rf /"},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.usefixtures("mock_supabase")
+def test_admin_patch_project_rejects_empty_production_branch(client, auth_as, admin_user):
+    auth_as(admin_user)
+    res = client.patch(
+        "/admin/projects/demo",
+        json={"production_branch": ""},
     )
     assert res.status_code == 422
 
