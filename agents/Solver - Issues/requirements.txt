@@ -2,5 +2,5 @@
 # Regenerate lockfile: pip-compile --generate-hashes --output-file=requirements.lock requirements.txt
 
 supabase==2.29.0
-requests==2.32.3
+requests==2.33.0
 python-dotenv==1.2.2
