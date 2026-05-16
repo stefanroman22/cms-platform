@@ -45,23 +45,18 @@ jobs:
         env:
           SOLVER_GITHUB_TOKEN: ${{ secrets.SOLVER_GITHUB_TOKEN }}
 
-      - name: Read prompt file for action input
-        id: prompt
+      - name: Install Claude CLI
         if: steps.claim.outputs.has_issue == 'true'
+        # Installs the official `claude` CLI from npm. The CLI ships as a Node
+        # package so we use npm (already present on ubuntu-latest runners).
         run: |
-          {
-            echo 'text<<SOLVER_EOF'
-            cat /tmp/agent-prompt.md
-            echo SOLVER_EOF
-          } >> "$GITHUB_OUTPUT"
+          npm install -g @anthropic-ai/claude-code@latest
+          claude --version
 
-      - name: Pre-write Claude credentials file
+      - name: Pre-write Claude credentials
         if: steps.claim.outputs.has_issue == 'true'
-        # Workaround for anthropics/claude-code-action#1281: OAuth token from
-        # `with: claude_code_oauth_token` doesn't propagate to the Claude
-        # subprocess. Writing the credentials JSON directly to the path
-        # `claude setup-token` would produce locally is documented as a
-        # working bypass.
+        # Same file `claude setup-token` writes locally. Standalone CLI reads
+        # it for subscription-OAuth auth.
         run: |
           mkdir -p "$HOME/.claude"
           cat > "$HOME/.claude/.credentials.json" <<EOF
@@ -69,29 +64,26 @@ jobs:
           EOF
           chmod 600 "$HOME/.claude/.credentials.json"
 
-      - name: Run Claude Code agent
+      - name: Run Claude headless against client repo
         if: steps.claim.outputs.has_issue == 'true'
-        # Known bugs: anthropics/claude-code-action#1026 (SDK post-processing
-        # crash) and #1281 (OAuth token propagation broken to subprocess).
-        # continue-on-error lets finalize.py pick up any file changes anyway.
+        # Direct CLI invocation. No middleware (replaces anthropics/claude-code-action@v1
+        # which has broken OAuth wiring — see issues #1026, #1281). The CLI
+        # itself handles OAuth correctly via the credentials file above.
+        #
+        # continue-on-error lets finalize.py inspect the working tree for any
+        # changes Claude made, even if the CLI exits non-zero on edge cases
+        # (e.g., max-turns reached).
         continue-on-error: true
-        uses: anthropics/claude-code-action@v1
         env:
-          # Belt-and-suspenders: token in env AND credentials file AND action input.
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: ${{ steps.prompt.outputs.text }}
-          # CLI-style flags forwarded to the underlying `claude` invocation.
-          # Working dir scoped to the cloned client repo so the agent can't
-          # touch this repo's sources. Tool allowlist excludes git push/commit,
-          # rm, and WebFetch — orchestrator handles git ops in finalize.py.
-          claude_args: >-
-            --cwd ./client-repo
-            --model claude-sonnet-4-6
-            --max-turns 15
-            --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*)"
-            --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch"
+        run: |
+          cd ./client-repo
+          claude --print \
+            --model claude-sonnet-4-6 \
+            --max-turns 15 \
+            --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*)" \
+            --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch" \
+            "$(cat /tmp/agent-prompt.md)"
 
       - name: Commit, push, mark done
         if: steps.claim.outputs.has_issue == 'true'
