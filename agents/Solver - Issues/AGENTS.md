@@ -24,7 +24,7 @@ The local skill replays a single workflow step against a real claimed issue. Not
 |---|-------|-----|------|
 | 1 | Claim | [phases/1-claim.md](./phases/1-claim.md) | Atomic priority-ordered claim from Supabase |
 | 2 | Clone | [phases/2-clone.md](./phases/2-clone.md) | Shallow clone client repo at `cms-preview` |
-| 3 | Solve | [phases/3-solve.md](./phases/3-solve.md) | Run `anthropics/claude-code-action` with verification + fix prompt |
+| 3 | Solve | [phases/3-solve.md](./phases/3-solve.md) | Install `claude` CLI + invoke headless with verification + fix prompt |
 | 4 | Push | [phases/4-push.md](./phases/4-push.md) | Commit + push the fix to `cms-preview` |
 | 5 | Finalize | [phases/5-finalize.md](./phases/5-finalize.md) | PATCH backend `/admin/issues/{id}/status` to mark done → S1 fires |
 
