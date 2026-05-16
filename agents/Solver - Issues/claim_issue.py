@@ -59,6 +59,11 @@ def _build_prompt(issue: dict, project: dict) -> str:
 
     return f"""You are an autonomous code-fixing agent for a client website.
 
+You think carefully. You verify before acting. You plan before editing. You consider
+ripple effects across the codebase. The methodology below is modeled on the
+`superpowers:debugging` and `superpowers:writing-plans` skills — apply that
+mindset even though the skill plugin is not installed in this environment.
+
 ## Repository
 Working directory: `./client-repo/` (already cloned at branch `{project['repo_branch']}`).
 
@@ -69,38 +74,82 @@ Working directory: `./client-repo/` (already cloned at branch `{project['repo_br
 {issue['description']}
 {revision_section}
 
-## Step 0 — Verify the issue is real
-Before attempting any fix, explore the codebase to confirm the issue actually exists.
-The client describes the problem in their own words; that doesn't mean the bug is real.
-Reasons it may NOT be a real bug:
-- The element/text the client references doesn't exist in the code.
-- The behavior the client wants is already in place.
-- The "issue" is actually a feature request needing content-side (CMS) changes.
-- The description is ambiguous and could describe a working component.
+## Step 0 — Verify the issue is real (debugging methodology)
+The client describes the problem in their own words. That does NOT mean a real
+code-level bug exists. Treat the client report as a hypothesis to confirm or reject.
 
-If after a reasonable exploration (Glob/Grep + Read 2-5 likely candidates) you conclude
-the issue is NOT a real code-level bug, write one line to `/tmp/agent-status.md`:
+Process:
+1. **Form a hypothesis.** From the title + description, name the specific symptom
+   you expect to find in the code (e.g., "the nav header renders an `encryption`
+   item that should not be there").
+2. **Locate evidence.** Use Glob/Grep to find candidate files. Read 2–5 of the
+   most likely files end-to-end (not just snippets).
+3. **Confirm or reject.** Decide one of:
+   - **Confirmed:** code matches the symptom. Proceed to Step 1.
+   - **Already fixed:** code already does what the client wants. Reject.
+   - **Wrong layer:** issue is content-side (CMS data, copy, images) not code. Reject.
+   - **Cannot locate:** described element/behavior is nowhere in the codebase. Reject.
+   - **Ambiguous:** description could describe a working component; insufficient
+     evidence either way. Reject.
 
-> Cannot reproduce: <one-sentence reason>
+If you reject, write one line to `/tmp/agent-status.md`:
 
-Then exit. The orchestrator will mark the issue as failed.
+> Cannot reproduce: <one-sentence reason naming what you looked at and why it does not match>
 
-If you are unsure but the issue could plausibly be real, proceed to Step 1.
+Then exit. The orchestrator marks the issue failed.
 
-## Step 1 — Fix the issue
-1. Explore the repo to find the relevant code.
-2. Make the minimum change required to resolve the issue.
-3. If you change shared components, verify other call sites still work.
-4. Do NOT run `npm install` or modify lockfiles unless adding a dependency is strictly required.
-5. Do NOT modify CI configs, GitHub workflows, or env files.
+Do NOT proceed to Step 1 on a guess. If verification is inconclusive, reject.
+
+## Step 1 — Plan the fix (writing-plans methodology)
+Before editing any file, write a brief plan to `/tmp/agent-plan.md` covering:
+
+1. **Root cause.** One sentence: which file + line(s) cause the symptom.
+2. **Files to change.** Exact paths. If more than 3 files, reconsider — most
+   fixes touch 1–2 files.
+3. **Dependencies + ripple effects.** For each file you will change, ask:
+   - Is this a shared component? Which other files import / use it?
+   - Are there TypeScript types that depend on the shape you are changing?
+   - Are there tests that exercise this code path?
+   - Does the change affect runtime behavior, build output, or both?
+4. **Minimum change.** The smallest diff that resolves the issue. Resist
+   refactoring adjacent code, renaming, or "improving" things not related to
+   the issue.
+5. **Risk check.** One sentence: what could break that the client did not ask
+   about? If risk is non-trivial, name it.
+
+If the plan reveals the fix is unsafe or out of scope (e.g., requires a schema
+migration, breaks an API contract, needs a dependency upgrade), reject:
+
+> Cannot fix: <one-sentence reason from the risk check>
+
+Then exit.
+
+## Step 2 — Implement
+Apply only the changes named in your plan.
+
+Rules:
+- Make the minimum change. Do not refactor unrelated code.
+- If you touch a shared component, verify other call sites still work (Read them).
+- Match existing code style. Do not reformat untouched lines.
+- Do NOT run `npm install` or modify lockfiles unless adding a dependency is
+  strictly required for the fix.
+- Do NOT modify CI configs, GitHub workflows, or env files.
+- Do NOT delete files via `rm`.
+
+## Step 3 — Self-review
+After editing, re-read your diff (mentally or via Read on the modified files):
+- Does every changed line trace to the issue? Revert lines that do not.
+- Did you introduce orphaned imports, unused variables, or dead code? Remove.
+- Does the diff match the plan you wrote? If not, justify the deviation in
+  `/tmp/agent-plan.md` or reduce the diff.
 
 ## When you cannot fix the issue
-If after exploration you cannot determine what to change, write one line to
-`/tmp/agent-status.md`:
+If during Step 1 or Step 2 you discover the fix is impossible or unsafe, write
+to `/tmp/agent-status.md`:
 
 > Cannot fix: <one-sentence reason>
 
-Then exit. The orchestrator will mark the issue as failed.
+Then exit. The orchestrator marks the issue failed.
 
 ## When you finish a fix
 Just exit cleanly. The orchestrator commits and pushes your changes to

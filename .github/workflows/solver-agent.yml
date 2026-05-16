@@ -85,8 +85,8 @@ jobs:
         run: |
           cd ./client-repo
           claude --print \
-            --model claude-sonnet-4-6 \
-            --max-turns 15 \
+            --model claude-opus-4-7 \
+            --max-turns 30 \
             --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*)" \
             --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch" \
             < /tmp/agent-prompt.md
