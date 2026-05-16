@@ -119,6 +119,20 @@ def auth_as(monkeypatch):
         except (AttributeError, ModuleNotFoundError, ImportError):
             pass
 
+        # S3 Task 2 — admin endpoint authenticates via admin_user_via_bearer_or_sid.
+        # Patch the reference imported into issues.py so bearer-auth tests can run
+        # without a real Supabase admin_keys lookup. async def per deps.py.
+        async def fake_admin_user(request):  # noqa: ARG001
+            return user
+
+        try:
+            monkeypatch.setattr(
+                "auth_service.routers.issues.admin_user_via_bearer_or_sid",
+                fake_admin_user,
+            )
+        except (AttributeError, ModuleNotFoundError, ImportError):
+            pass
+
         def fake_require_project_access(slug, u):
             return {
                 "id": f"project-{slug}",

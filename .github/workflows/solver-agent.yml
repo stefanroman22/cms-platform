@@ -1,0 +1,77 @@
+name: Solver Agent (S3)
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: solver-agent
+  cancel-in-progress: false
+
+jobs:
+  solve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: agents/Solver - Issues/requirements.lock
+
+      - name: Install agent deps
+        run: |
+          cd "agents/Solver - Issues"
+          pip install --require-hashes -r requirements.lock
+
+      - name: Claim next issue
+        id: claim
+        run: python "agents/Solver - Issues/claim_issue.py"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Clone client repo
+        if: steps.claim.outputs.has_issue == 'true'
+        run: python "agents/Solver - Issues/clone_repo.py"
+        env:
+          SOLVER_GITHUB_TOKEN: ${{ secrets.SOLVER_GITHUB_TOKEN }}
+
+      - name: Run Claude Code agent
+        if: steps.claim.outputs.has_issue == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt_file: /tmp/agent-prompt.md
+          working_directory: ./client-repo
+          allowed_tools: 'Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*)'
+          disallowed_tools: 'Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch'
+          max_turns: '15'
+          model: claude-sonnet-4-6
+
+      - name: Commit, push, mark done
+        if: steps.claim.outputs.has_issue == 'true'
+        run: python "agents/Solver - Issues/finalize.py"
+        env:
+          SOLVER_GITHUB_TOKEN: ${{ secrets.SOLVER_GITHUB_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CMS_API_TOKEN: ${{ secrets.CMS_API_TOKEN }}
+          CMS_BACKEND_URL: https://cms-backend-roman.vercel.app
+
+      - name: Release on failure
+        if: failure() && steps.claim.outputs.has_issue == 'true'
+        run: python "agents/Solver - Issues/release_issue.py"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SOLVER_MAX_RETRIES: '3'
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_ISSUES_CHANNEL_ID: ${{ secrets.SLACK_ISSUES_CHANNEL_ID }}

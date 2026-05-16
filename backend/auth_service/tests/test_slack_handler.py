@@ -319,3 +319,32 @@ def test_message_long_feedback_truncated_in_ack(slack_env, monkeypatch):
 
     text = ack.call_args.args[1]
     assert "…" in text  # truncation marker
+
+
+def test_message_happy_path_resets_agent_state(slack_env, monkeypatch):
+    """Revision feedback must clear solver agent state so the agent retries from scratch."""
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: _issue_done())
+
+    updates = []
+    fake_sb = MagicMock()
+    for m in ("table", "update", "eq", "execute"):
+        getattr(fake_sb, m).return_value = fake_sb
+
+    def capture_update(payload):
+        updates.append(payload)
+        return fake_sb
+
+    fake_sb.update = capture_update
+
+    with (
+        patch.object(slack_handler, "get_supabase_admin", return_value=fake_sb),
+        patch.object(slack_handler, "_post_thread_reply"),
+    ):
+        slack_handler.handle_message(_event_message(text="please fix the spacing on hero"))
+
+    assert len(updates) == 1
+    update = updates[0]
+    assert update["status"] == "in_progress"
+    assert update["agent_status"] == "idle"
+    assert update["agent_retry_count"] == 0
+    assert update["agent_last_error"] is None

@@ -5,6 +5,7 @@ Catalog of all agents in this repo. Each agent owns its own folder with its own 
 | Agent | Folder | Skill | Purpose |
 |-------|--------|-------|---------|
 | **CMS Connector — Website** | [`CMS Connector - Website/`](./CMS%20Connector%20-%20Website/) | [`.claude/skills/cms-connector-website/SKILL.md`](../.claude/skills/cms-connector-website/SKILL.md) | Import a client website to GitHub, scan it for editable content, generate a markdown integration report for human review, provision CMS services + Vercel preview, run a test matrix. Self-improves via `LEARNINGS.md`. |
+| **Solver — Issues** | [`Solver - Issues/`](./Solver%20-%20Issues/) | [`.claude/skills/solver-issues/SKILL.md`](../.claude/skills/solver-issues/SKILL.md) | Autonomous code-fixing worker. Triggered by GitHub Actions cron every 15 min. Claims pending CMS issues (priority-ordered), runs Claude Code action against a cloned client repo, commits the fix to `cms-preview`, then routes back into the S1.5 approval flow. |
 
 ## Adding a new agent
 
