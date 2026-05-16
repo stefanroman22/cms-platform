@@ -16,6 +16,7 @@ jobs:
 
     permissions:
       contents: read
+      id-token: write   # required by anthropics/claude-code-action@v1 OIDC token fetch
 
     steps:
       - uses: actions/checkout@v4
@@ -44,17 +45,32 @@ jobs:
         env:
           SOLVER_GITHUB_TOKEN: ${{ secrets.SOLVER_GITHUB_TOKEN }}
 
+      - name: Read prompt file for action input
+        id: prompt
+        if: steps.claim.outputs.has_issue == 'true'
+        run: |
+          {
+            echo 'text<<SOLVER_EOF'
+            cat /tmp/agent-prompt.md
+            echo SOLVER_EOF
+          } >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code agent
         if: steps.claim.outputs.has_issue == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt_file: /tmp/agent-prompt.md
-          working_directory: ./client-repo
-          allowed_tools: 'Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*)'
-          disallowed_tools: 'Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch'
-          max_turns: '15'
-          model: claude-sonnet-4-6
+          prompt: ${{ steps.prompt.outputs.text }}
+          # CLI-style flags forwarded to the underlying `claude` invocation.
+          # Working dir scoped to the cloned client repo so the agent can't
+          # touch this repo's sources. Tool allowlist excludes git push/commit,
+          # rm, and WebFetch — orchestrator handles git ops in finalize.py.
+          claude_args: >-
+            --cwd ./client-repo
+            --model claude-sonnet-4-6
+            --max-turns 15
+            --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*)"
+            --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch"
 
       - name: Commit, push, mark done
         if: steps.claim.outputs.has_issue == 'true'
