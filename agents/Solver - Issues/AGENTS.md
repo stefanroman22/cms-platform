@@ -23,9 +23,9 @@ The local skill replays a single workflow step against a real claimed issue. Not
 | # | Phase | Doc | Goal |
 |---|-------|-----|------|
 | 1 | Claim | [phases/1-claim.md](./phases/1-claim.md) | Atomic priority-ordered claim from Supabase |
-| 2 | Clone | [phases/2-clone.md](./phases/2-clone.md) | Shallow clone client repo at `cms-preview` |
+| 2 | Clone | [phases/2-clone.md](./phases/2-clone.md) | Clone + reset `cms-preview` to production HEAD; save prev SHA |
 | 3 | Solve | [phases/3-solve.md](./phases/3-solve.md) | Install `claude` CLI + invoke headless with verification + fix prompt |
-| 4 | Push | [phases/4-push.md](./phases/4-push.md) | Commit + push the fix to `cms-preview` |
+| 4 | Push | [phases/4-push.md](./phases/4-push.md) | Commit + force-with-lease push to `cms-preview` |
 | 5 | Finalize | [phases/5-finalize.md](./phases/5-finalize.md) | PATCH backend `/admin/issues/{id}/status` to mark done → S1 fires |
 
 Each phase doc contains: goal, inputs, steps, outputs, failure messages, self-improvement hook.
@@ -63,6 +63,7 @@ If a credential is missing, the affected workflow step fails; the `failure()` re
 - Modify CI configs, GitHub workflows, env files, or `.git/` internals.
 - Fetch external code or URLs (`WebFetch` is disallowed).
 - Delete files via `rm` (Bash(rm:*) is disallowed).
+- Treat `cms-preview` as a long-lived branch. It is reset to production HEAD at the start of every solver run — any direct commits to `cms-preview` (from Stefan or anywhere outside the solver) WILL be overwritten. If Stefan needs to hotfix, he commits to the production branch (`main`/`master`) and the next solver run picks it up.
 
 ## Self-improvement loop
 
@@ -74,6 +75,7 @@ LEARNINGS.md is **append-only**.
 
 ## Modifying this agent
 
+If you change Phase 2 reset logic: keep `phases/2-clone.md` in sync with `clone_repo.py` + `repo.clone_and_reset_to_prod`. The `production_branch` column on `projects` is the source of truth — do not hardcode `main` or `master`.
 If you change Phase 3 prompt: keep `phases/3-solve.md` in sync with `claim_issue.py` `_build_prompt`.
 If you change Phase 5 backend call: update the route in `backend/auth_service/routers/issues.py` to match.
 If you change Phase 1 claim SQL: update the data model in `docs/superpowers/specs/2026-05-16-solver-agent-s3-design.md`.
