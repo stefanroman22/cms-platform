@@ -133,99 +133,129 @@ export function PreviewPublishBar({
                 this h-16 container) so it doesn't push the buttons off-
                 center vs. the logo. */}
       <div className="sticky top-0 z-30 -mx-4 -mt-4 md:-mx-8 md:-mt-8 mb-6 flex h-16 items-center justify-between gap-3 border-b border-zinc-200 bg-white/90 px-4 md:px-8 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
-        {hasPreview && previewTarget ? (
-          <a
-            href={previewTarget}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Open preview in a new tab"
-            className="cursor-pointer inline-flex shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-          >
-            <ExternalLink className="h-4 w-4" />
-            <span className="hidden sm:inline">See Preview</span>
-            <span className="sm:hidden">Preview</span>
-          </a>
-        ) : (
-          <button
-            type="button"
-            disabled
-            title={loading ? "Loading…" : "Preview not set up — contact admin"}
-            className="cursor-not-allowed inline-flex shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-          >
-            <ExternalLink className="h-4 w-4" />
-            <span className="hidden sm:inline">See Preview</span>
-            <span className="sm:hidden">Preview</span>
-          </button>
-        )}
+        <AnimatePresence mode="wait" initial={false}>
+          {hasPreview && previewTarget ? (
+            <motion.a
+              key="preview-enabled"
+              href={previewTarget}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open preview in a new tab"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="cursor-pointer inline-flex shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors duration-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span className="hidden sm:inline">See Preview</span>
+              <span className="sm:hidden">Preview</span>
+            </motion.a>
+          ) : (
+            <motion.button
+              key="preview-disabled"
+              type="button"
+              disabled
+              title={loading ? "Loading…" : "Preview not set up — contact admin"}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="cursor-not-allowed inline-flex shrink-0 items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span className="hidden sm:inline">See Preview</span>
+              <span className="sm:hidden">Preview</span>
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         <div className="flex items-center gap-2">
-          {!loading && (
-            <div
-              ref={countWrapperRef}
-              className="relative"
-              onMouseEnter={() => setCountPopoverOpen(true)}
-              onMouseLeave={() => setCountPopoverOpen(false)}
-            >
-              <button
-                type="button"
-                onClick={() => setCountPopoverOpen((s) => !s)}
-                aria-label={
-                  isClean
-                    ? "All changes are published"
-                    : `${count} unpublished change${count === 1 ? "" : "s"}`
-                }
-                className={`cursor-pointer inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums transition-colors ${
-                  isClean
-                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
-                    : "bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60"
-                }`}
+          <AnimatePresence initial={false}>
+            {!loading && (
+              <motion.div
+                key="count-badge-wrap"
+                ref={countWrapperRef}
+                className="relative"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                onMouseEnter={() => setCountPopoverOpen(true)}
+                onMouseLeave={() => setCountPopoverOpen(false)}
               >
-                {isClean ? <Check className="h-3 w-3" strokeWidth={3} /> : count}
-              </button>
-              <AnimatePresence>
-                {countPopoverOpen && (
-                  /* Wrapper has pt-2 (no margin) so its
+                <button
+                  type="button"
+                  onClick={() => setCountPopoverOpen((s) => !s)}
+                  aria-label={
+                    isClean
+                      ? "All changes are published"
+                      : `${count} unpublished change${count === 1 ? "" : "s"}`
+                  }
+                  className={`cursor-pointer relative inline-flex h-5 min-w-[1.25rem] items-center justify-center overflow-hidden rounded-full px-1.5 text-[11px] font-bold tabular-nums transition-colors duration-500 ease-out ${
+                    isClean
+                      ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
+                      : "bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60"
+                  }`}
+                >
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.span
+                      key={isClean ? "check" : `count-${count}`}
+                      initial={{ opacity: 0, scale: 0.6, y: 4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.6, y: -4 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className="inline-flex items-center justify-center"
+                    >
+                      {isClean ? <Check className="h-3 w-3" strokeWidth={3} /> : count}
+                    </motion.span>
+                  </AnimatePresence>
+                </button>
+                <AnimatePresence>
+                  {countPopoverOpen && (
+                    /* Wrapper has pt-2 (no margin) so its
                                        bounding box bridges the visual gap
                                        between the badge and the popover —
                                        prevents mouseLeave from firing while
                                        the cursor crosses into the popover. */
-                  <motion.div
-                    initial={{ opacity: 0, y: -4, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -4, scale: 0.96 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                    className="absolute top-full left-1/2 z-40 -translate-x-1/2 pt-2"
-                  >
-                    <div
-                      role="status"
-                      className={`relative whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium shadow-lg ${
-                        isClean
-                          ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-100"
-                          : "bg-amber-100 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100"
-                      }`}
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.96 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="absolute top-full left-1/2 z-40 -translate-x-1/2 pt-2"
                     >
-                      {isClean
-                        ? "All changes are published."
-                        : `You have ${count} unpublished change${count === 1 ? "" : "s"}`}
-                      {/* Up-pointing tail, color matched to popover bg */}
-                      <span
-                        className={`absolute bottom-full left-1/2 -translate-x-1/2 border-x-4 border-b-4 border-x-transparent ${
+                      <div
+                        role="status"
+                        className={`relative whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium shadow-lg ${
                           isClean
-                            ? "border-b-emerald-100 dark:border-b-emerald-900/60"
-                            : "border-b-amber-100 dark:border-b-amber-900/60"
+                            ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-100"
+                            : "bg-amber-100 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100"
                         }`}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
+                      >
+                        {isClean
+                          ? "All changes are published."
+                          : `You have ${count} unpublished change${count === 1 ? "" : "s"}`}
+                        {/* Up-pointing tail, color matched to popover bg */}
+                        <span
+                          className={`absolute bottom-full left-1/2 -translate-x-1/2 border-x-4 border-b-4 border-x-transparent ${
+                            isClean
+                              ? "border-b-emerald-100 dark:border-b-emerald-900/60"
+                              : "border-b-amber-100 dark:border-b-amber-900/60"
+                          }`}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <button
             type="button"
             disabled={count === 0 || publishing || loading}
             onClick={() => setModalOpen(true)}
-            className="cursor-pointer inline-flex shrink-0 items-center gap-2 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            className="cursor-pointer inline-flex shrink-0 items-center gap-2 rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-[opacity,background-color,color] duration-300 ease-out hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
           >
             <CheckCircle2 className="h-4 w-4" />
             <span className="hidden sm:inline">Publish Changes</span>
