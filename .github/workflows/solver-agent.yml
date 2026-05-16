@@ -58,6 +58,12 @@ jobs:
       - name: Run Claude Code agent
         if: steps.claim.outputs.has_issue == 'true'
         uses: anthropics/claude-code-action@v1
+        env:
+          # Belt-and-suspenders: also expose the OAuth token to the runner's
+          # process.env so the Claude CLI / Agent SDK can resolve credentials
+          # via the standard env-var auth path. The action's `with:` input
+          # alone wasn't enough on first smoke (SDK couldn't find apiKey/authToken).
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.prompt.outputs.text }}
