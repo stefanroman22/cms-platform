@@ -1,0 +1,6 @@
+# Runtime deps for Solver Agent (S3).
+# Regenerate lockfile: pip-compile --generate-hashes --output-file=requirements.lock requirements.txt
+
+supabase==2.9.1
+requests==2.32.3
+python-dotenv==1.2.2
