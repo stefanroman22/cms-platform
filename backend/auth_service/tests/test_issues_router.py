@@ -244,3 +244,111 @@ def test_status_done_no_ts_when_slack_disabled(
 
     update_calls = [c.args[0] for c in mock_supabase.update.call_args_list if c.args]
     assert not any("slack_resolved_ts" in u for u in update_calls)
+
+
+def test_admin_status_update_requires_bearer(mock_supabase, client):
+    """Without Authorization header, admin endpoint returns 401."""
+    resp = client.patch("/admin/issues/issue-1/status", json={"status": "done"})
+    assert resp.status_code == 401
+
+
+def test_admin_status_update_fires_slack_resolved(
+    mock_supabase, client, auth_as, admin_user, monkeypatch
+):
+    auth_as(admin_user)
+
+    pending_row = {"id": "issue-1", "project_id": "project-acme", "status": "pending"}
+    updated_row = {
+        "id": "issue-1",
+        "project_id": "project-acme",
+        "title": "Hero broken",
+        "description": "stretches",
+        "priority": "High",
+        "status": "done",
+        "created_by": "client-uuid",
+        "created_at": "2026-05-16T10:00:00Z",
+    }
+    project_row = {
+        "id": "project-acme",
+        "name": "Acme",
+        "slug": "acme",
+        "github_repo": "stefan/acme",
+        "repo_branch": "cms-preview",
+        "preview_url": "https://acme-dev.vercel.app",
+        "production_url": "https://acme.vercel.app",
+        "production_branch": "master",
+        "user_id": "client-uuid",
+    }
+    mock_supabase.execute.side_effect = [
+        MagicMock(data=pending_row),  # pre-update SELECT
+        MagicMock(data=[updated_row]),  # UPDATE status
+        MagicMock(data=project_row),  # project lookup
+        MagicMock(data={"email": "client@acme.com"}),  # email lookup in _build_issue_out
+        MagicMock(data=[updated_row]),  # UPDATE slack_resolved_ts
+    ]
+
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_resolved",
+        lambda **kw: "1715789999.000001",
+    )
+
+    resp = client.patch(
+        "/admin/issues/issue-1/status",
+        json={"status": "done"},
+        headers={"Authorization": "Bearer cmsk_dummy"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    update_calls = [c.args[0] for c in mock_supabase.update.call_args_list if c.args]
+    ts_updates = [u for u in update_calls if "slack_resolved_ts" in u]
+    assert len(ts_updates) == 1
+    assert ts_updates[0]["slack_resolved_ts"] == "1715789999.000001"
+
+
+def test_admin_status_update_skips_when_already_done(
+    mock_supabase, client, auth_as, admin_user, monkeypatch
+):
+    """No re-fire when old_status was already 'done'."""
+    auth_as(admin_user)
+
+    done_row = {"id": "issue-1", "project_id": "project-acme", "status": "done"}
+    updated_row = {
+        "id": "issue-1",
+        "project_id": "project-acme",
+        "title": "x",
+        "description": "y",
+        "priority": "Low",
+        "status": "done",
+        "created_by": None,
+        "created_at": "2026-05-16T10:00:00Z",
+    }
+    project_row = {
+        "id": "project-acme",
+        "name": "Acme",
+        "slug": "acme",
+        "github_repo": "stefan/acme",
+        "repo_branch": "cms-preview",
+        "production_branch": "master",
+        "preview_url": "https://acme-dev.vercel.app",
+        "production_url": "https://acme.vercel.app",
+        "user_id": "client-uuid",
+    }
+    mock_supabase.execute.side_effect = [
+        MagicMock(data=done_row),
+        MagicMock(data=[updated_row]),
+        MagicMock(data=project_row),
+    ]
+
+    calls = []
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_resolved",
+        lambda **kw: calls.append(kw) or None,
+    )
+
+    resp = client.patch(
+        "/admin/issues/issue-1/status",
+        json={"status": "done"},
+        headers={"Authorization": "Bearer cmsk_dummy"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert calls == []

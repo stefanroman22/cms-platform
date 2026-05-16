@@ -5,9 +5,31 @@ from fastapi import APIRouter, HTTPException, Request, status
 from ..models.schemas import IssueCreateRequest, IssueOut, IssueStatusRequest, IssueUpdateRequest
 from ..services import slack_notify
 from ..services.supabase_client import get_supabase_admin
-from .deps import require_project_access, require_user
+from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
 
 router = APIRouter(tags=["issues"])
+
+
+def _build_issue_out(row: dict, sb) -> IssueOut:
+    """Build IssueOut from a project_issues row, looking up creator email via users table."""
+    email_result = (
+        sb.table("users").select("email").eq("id", row["created_by"]).maybe_single().execute()
+        if row.get("created_by")
+        else None
+    )
+    return IssueOut(
+        id=row["id"],
+        project_id=row["project_id"],
+        title=row["title"],
+        description=row["description"],
+        priority=row["priority"],
+        status=row.get("status", "pending"),
+        created_by=row.get("created_by"),
+        created_by_email=(
+            email_result.data.get("email") if email_result and email_result.data else None
+        ),
+        created_at=row["created_at"],
+    )
 
 
 @router.get("/projects/{project_slug}/issues", response_model=list[IssueOut])
@@ -151,25 +173,7 @@ async def update_issue(
         raise HTTPException(status_code=500, detail="Issue could not be updated.")
 
     r = updated.data[0]
-    email_result = (
-        (sb.table("users").select("email").eq("id", r["created_by"]).maybe_single().execute())
-        if r.get("created_by")
-        else None
-    )
-
-    return IssueOut(
-        id=r["id"],
-        project_id=r["project_id"],
-        title=r["title"],
-        description=r["description"],
-        priority=r["priority"],
-        status=r.get("status", "pending"),
-        created_by=r.get("created_by"),
-        created_by_email=(
-            email_result.data.get("email") if email_result and email_result.data else None
-        ),
-        created_at=r["created_at"],
-    )
+    return _build_issue_out(r, sb)
 
 
 @router.delete(
@@ -241,25 +245,7 @@ async def update_issue_status(
         raise HTTPException(status_code=500, detail="Status could not be updated.")
 
     r = updated.data[0]
-    email_result = (
-        (sb.table("users").select("email").eq("id", r["created_by"]).maybe_single().execute())
-        if r.get("created_by")
-        else None
-    )
-
-    issue_out = IssueOut(
-        id=r["id"],
-        project_id=r["project_id"],
-        title=r["title"],
-        description=r["description"],
-        priority=r["priority"],
-        status=r["status"],
-        created_by=r.get("created_by"),
-        created_by_email=(
-            email_result.data.get("email") if email_result and email_result.data else None
-        ),
-        created_at=r["created_at"],
-    )
+    issue_out = _build_issue_out(r, sb)
 
     if old_status != "done" and body.status == "done":
         try:
@@ -276,5 +262,76 @@ async def update_issue_status(
             import logging
 
             logging.getLogger(__name__).exception("slack_notify (resolved) raised")
+
+    return issue_out
+
+
+@router.patch(
+    "/admin/issues/{issue_id}/status",
+    response_model=IssueOut,
+)
+async def admin_update_issue_status(
+    issue_id: str,
+    body: IssueStatusRequest,
+    request: Request,
+):
+    """Admin/agent path — same effect as the user-facing PATCH but auth'd
+    via admin bearer token (or cookie session). Skips the project-access
+    ownership check — the solver acts cross-project.
+    """
+    user = await admin_user_via_bearer_or_sid(request)
+    sb = get_supabase_admin()
+
+    issue_result = (
+        sb.table("project_issues")
+        .select("id, project_id, status")
+        .eq("id", issue_id)
+        .maybe_single()
+        .execute()
+    )
+    if not issue_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found.")
+
+    old_status = issue_result.data.get("status", "pending")
+
+    updated = (
+        sb.table("project_issues").update({"status": body.status}).eq("id", issue_id).execute()
+    )
+    if not updated.data:
+        raise HTTPException(status_code=500, detail="Status could not be updated.")
+
+    r = updated.data[0]
+
+    project_row = (
+        sb.table("projects")
+        .select(
+            "id, name, slug, github_repo, repo_branch, production_branch, "
+            "preview_url, production_url, user_id"
+        )
+        .eq("id", r["project_id"])
+        .single()
+        .execute()
+    )
+    project = project_row.data or {}
+
+    resolver_email = getattr(user, "email", None) or "solver@roman-technologies.dev"
+
+    issue_out = _build_issue_out(r, sb)
+
+    if old_status != "done" and body.status == "done":
+        try:
+            ts = slack_notify.notify_issue_resolved(
+                issue={"id": r["id"], "title": r["title"]},
+                project=project,
+                resolver_email=resolver_email,
+            )
+            if ts:
+                sb.table("project_issues").update({"slack_resolved_ts": ts}).eq(
+                    "id", r["id"]
+                ).execute()
+        except Exception:  # noqa: BLE001 — Slack must never break admin endpoint
+            import logging
+
+            logging.getLogger(__name__).exception("slack_notify (admin resolve) raised")
 
     return issue_out
