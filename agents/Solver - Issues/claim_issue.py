@@ -52,8 +52,14 @@ def _build_prompt(issue: dict, project: dict) -> str:
             "\n## Previous attempt was rejected\n"
             "Stefan's feedback on the last fix attempt:\n"
             f"> {issue['revision_feedback']}\n\n"
-            "Look at git log for your previous commit (most recent commit on "
-            f"{project['repo_branch']}), understand what you did, and address "
+            "Your previous commit's SHA is in `/tmp/prev-solver-sha` (if "
+            "non-empty). Read it and run `git show <sha>` from inside "
+            "`./client-repo/` to see exactly what you changed last time. "
+            f"The `{project['repo_branch']}` branch ref has been reset to "
+            "the production HEAD, so the commit is no longer reachable "
+            "from the branch, but the object is still in `.git/objects` "
+            "and `git show` works.\n\n"
+            "Use that diff to understand what you did, then address "
             "Stefan's feedback this time.\n"
         )
 

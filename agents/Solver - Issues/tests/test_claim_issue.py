@@ -91,3 +91,5 @@ def test_prompt_includes_revision_feedback_when_present(monkeypatch, gh_output, 
     prompt = (tmp_files / "agent-prompt.md").read_text()
     assert "Previous attempt was rejected" in prompt
     assert "the change you made broke the header" in prompt
+    assert "/tmp/prev-solver-sha" in prompt
+    assert "git show" in prompt
