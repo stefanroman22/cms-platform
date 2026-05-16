@@ -121,6 +121,9 @@ def handle_message(event: dict) -> None:
             "status": "in_progress",
             "revision_feedback": text,
             "revision_feedback_at": datetime.now(UTC).isoformat(),
+            "agent_status": "idle",  # S3: clear lock
+            "agent_retry_count": 0,  # S3: fresh attempt budget
+            "agent_last_error": None,  # S3: clear stale error
         }
     ).eq("id", issue["id"]).execute()
 
