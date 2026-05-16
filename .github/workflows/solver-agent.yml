@@ -57,6 +57,12 @@ jobs:
 
       - name: Run Claude Code agent
         if: steps.claim.outputs.has_issue == 'true'
+        # Known bug: anthropics/claude-code-action@v1 crashes during post-processing
+        # in workflow_dispatch + OAuth context even when the agent succeeded.
+        # See https://github.com/anthropics/claude-code-action/issues/1026.
+        # We continue-on-error so finalize.py can detect any file changes the
+        # agent did make and commit them. Empty diff → release_issue_failed.
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         env:
           # Belt-and-suspenders: also expose the OAuth token to the runner's
