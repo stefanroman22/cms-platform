@@ -66,11 +66,24 @@ def test_actionable_issue_writes_outputs_and_prompt(monkeypatch, gh_output, tmp_
     assert issue_json["id"] == "issue-1"
     assert issue_json["project"]["slug"] == "acme"
 
-    prompt = (tmp_files / "agent-prompt.md").read_text()
+    prompt = (tmp_files / "agent-prompt.md").read_text(encoding="utf-8")
     assert "Hero broken" in prompt
     assert "stretches on iPhone" in prompt
     assert "Step 0 — Verify the issue is real" in prompt
     assert "Previous attempt was rejected" not in prompt  # no revision_feedback
+
+    # Skill injection contract: every vendored skill name must appear as an
+    # XML tag in the prompt; neutralization preamble must precede it; the
+    # execution-environment block must explicitly disable the Skill tool.
+    for skill_name in claim_issue.VENDORED_SKILLS:
+        assert f"<skill name='{skill_name}'>" in prompt, f"missing skill '{skill_name}' in prompt"
+    for ref_name in claim_issue.VENDORED_REFERENCES:
+        assert (
+            f"<reference name='{ref_name}'>" in prompt
+        ), f"missing reference '{ref_name}' in prompt"
+    assert "<execution-environment>" in prompt
+    assert "you cannot invoke skills" in prompt.lower()
+    assert "1M-token context window" in prompt
 
 
 def test_prompt_includes_revision_feedback_when_present(monkeypatch, gh_output, tmp_files):
@@ -88,7 +101,7 @@ def test_prompt_includes_revision_feedback_when_present(monkeypatch, gh_output, 
     monkeypatch.setattr(claim_issue.db, "fetch_project", lambda pid: project)
 
     claim_issue.main()
-    prompt = (tmp_files / "agent-prompt.md").read_text()
+    prompt = (tmp_files / "agent-prompt.md").read_text(encoding="utf-8")
     assert "Previous attempt was rejected" in prompt
     assert "the change you made broke the header" in prompt
     assert "/tmp/prev-solver-sha" in prompt

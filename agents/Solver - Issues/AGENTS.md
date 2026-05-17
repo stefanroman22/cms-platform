@@ -77,5 +77,6 @@ LEARNINGS.md is **append-only**.
 
 If you change Phase 2 reset logic: keep `phases/2-clone.md` in sync with `clone_repo.py` + `repo.clone_and_reset_to_prod`. The `production_branch` column on `projects` is the source of truth — do not hardcode `main` or `master`.
 If you change Phase 3 prompt: keep `phases/3-solve.md` in sync with `claim_issue.py` `_build_prompt`.
+If you change Phase 3 methodology: edit the vendored skill files in `skills/`, not the inline prompt text in `claim_issue.py`. The prompt builder injects skill content via `_render_skills_block()`. To re-sync from upstream, copy SKILL.md bodies from `~/.claude/plugins/cache/claude-plugins-official/superpowers/<version>/skills/<name>/SKILL.md` into `skills/<name>.md`. See `skills/README.md` for sources + last sync date.
 If you change Phase 5 backend call: update the route in `backend/auth_service/routers/issues.py` to match.
 If you change Phase 1 claim SQL: update the data model in `docs/superpowers/specs/2026-05-16-solver-agent-s3-design.md`.
