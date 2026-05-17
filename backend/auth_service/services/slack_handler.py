@@ -12,7 +12,7 @@ import logging
 from datetime import UTC, datetime
 
 from ..core.config import settings
-from . import github_merge, issue_resolved_email, slack_notify
+from . import github_merge, issue_resolved_email, slack_notify, solver_dispatch
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -126,6 +126,11 @@ def handle_message(event: dict) -> None:
             "agent_last_error": None,  # S3: clear stale error
         }
     ).eq("id", issue["id"]).execute()
+
+    try:
+        solver_dispatch.dispatch_solver_tick(issue_id=issue["id"])
+    except Exception:  # noqa: BLE001 — dispatch failure falls back to hourly cron
+        logger.exception("solver_dispatch raised on revision")
 
     excerpt = text[:120] + ("…" if len(text) > 120 else "")
     _post_thread_reply(
