@@ -59,6 +59,9 @@ def slack_env(monkeypatch):
     monkeypatch.setattr(slack_handler.settings, "SLACK_ISSUES_CHANNEL_ID", _channel())
     monkeypatch.setattr(slack_handler.settings, "SLACK_APPROVER_USER_ID", _stefan())
     monkeypatch.setattr(slack_handler.settings, "SLACK_BOT_USER_ID", _bot())
+    # Prevent real HTTP from solver_dispatch in every test that exercises the
+    # revision path. Tests that assert on dispatch override this themselves.
+    monkeypatch.setattr(slack_handler.solver_dispatch, "dispatch_solver_tick", lambda **kw: None)
 
 
 def test_reaction_wrong_emoji_noop(slack_env, monkeypatch):
@@ -348,3 +351,50 @@ def test_message_happy_path_resets_agent_state(slack_env, monkeypatch):
     assert update["agent_status"] == "idle"
     assert update["agent_retry_count"] == 0
     assert update["agent_last_error"] is None
+
+
+def test_message_dispatches_solver_on_revision(slack_env, monkeypatch):
+    """Revision feedback must fire repository_dispatch so solver re-runs immediately."""
+    issue = _issue_done()
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: issue)
+
+    fake_sb = MagicMock()
+    for m in ("table", "update", "eq", "execute"):
+        getattr(fake_sb, m).return_value = fake_sb
+
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        slack_handler.solver_dispatch,
+        "dispatch_solver_tick",
+        lambda **kw: calls.append(kw),
+    )
+
+    with (
+        patch.object(slack_handler, "get_supabase_admin", return_value=fake_sb),
+        patch.object(slack_handler, "_post_thread_reply"),
+    ):
+        slack_handler.handle_message(_event_message(text="please fix the spacing on hero"))
+
+    assert calls == [{"issue_id": issue["id"]}]
+
+
+def test_message_dispatch_failure_does_not_break_revision(slack_env, monkeypatch):
+    """If dispatch raises, revision still records DB update + acks Slack."""
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: _issue_done())
+
+    fake_sb = MagicMock()
+    for m in ("table", "update", "eq", "execute"):
+        getattr(fake_sb, m).return_value = fake_sb
+
+    def boom(**kw):
+        raise RuntimeError("github down")
+
+    monkeypatch.setattr(slack_handler.solver_dispatch, "dispatch_solver_tick", boom)
+
+    with (
+        patch.object(slack_handler, "get_supabase_admin", return_value=fake_sb),
+        patch.object(slack_handler, "_post_thread_reply") as ack,
+    ):
+        slack_handler.handle_message(_event_message(text="please fix the spacing on hero"))
+
+    ack.assert_called_once()
