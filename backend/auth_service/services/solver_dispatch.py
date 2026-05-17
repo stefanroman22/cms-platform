@@ -30,14 +30,17 @@ def dispatch_solver_tick(*, issue_id: str | None = None) -> None:
     """POST a repository_dispatch event to trigger solver-agent.yml.
 
     Reads SOLVER_DISPATCH_TOKEN + SOLVER_DISPATCH_REPO from the
-    environment so tests can override via monkeypatch.
+    environment so tests can override via monkeypatch. Falls back to
+    GITHUB_TOKEN (used elsewhere for S1.5 fast-forward) so a single
+    classic PAT with `repo` + `workflow` scopes can serve both flows
+    without provisioning a second secret.
 
     Raises SolverDispatchError on any failure (missing token, non-2xx,
     timeout). Caller is responsible for catching + logging.
     """
-    token = os.environ.get("SOLVER_DISPATCH_TOKEN", "")
+    token = os.environ.get("SOLVER_DISPATCH_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
     if not token:
-        raise SolverDispatchError("SOLVER_DISPATCH_TOKEN not configured")
+        raise SolverDispatchError("Neither SOLVER_DISPATCH_TOKEN nor GITHUB_TOKEN configured")
 
     repo = os.environ.get("SOLVER_DISPATCH_REPO", "stefanroman22/cms-platform")
 

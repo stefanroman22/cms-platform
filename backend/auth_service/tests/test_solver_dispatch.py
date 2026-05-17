@@ -68,8 +68,43 @@ def test_dispatch_without_issue_id_omits_client_payload(monkeypatch):
 
 def test_dispatch_missing_token_raises(monkeypatch):
     monkeypatch.delenv("SOLVER_DISPATCH_TOKEN", raising=False)
-    with pytest.raises(SolverDispatchError, match="not configured"):
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    with pytest.raises(SolverDispatchError, match="Neither SOLVER_DISPATCH_TOKEN nor GITHUB_TOKEN"):
         dispatch_solver_tick(issue_id="x")
+
+
+def test_dispatch_falls_back_to_github_token(monkeypatch):
+    """When SOLVER_DISPATCH_TOKEN is unset, dispatch reuses GITHUB_TOKEN."""
+    monkeypatch.delenv("SOLVER_DISPATCH_TOKEN", raising=False)
+    monkeypatch.setenv("GITHUB_TOKEN", "fallback-token")
+
+    captured: dict = {}
+
+    def fake_urlopen(req, timeout):
+        captured["auth"] = dict(req.header_items())["Authorization"]
+        return _fake_response(204)
+
+    with patch.object(solver_dispatch.urllib.request, "urlopen", fake_urlopen):
+        dispatch_solver_tick(issue_id="x")
+
+    assert captured["auth"] == "Bearer fallback-token"
+
+
+def test_dispatch_prefers_solver_token_over_github_token(monkeypatch):
+    """If both are set, SOLVER_DISPATCH_TOKEN wins."""
+    monkeypatch.setenv("SOLVER_DISPATCH_TOKEN", "primary")
+    monkeypatch.setenv("GITHUB_TOKEN", "fallback")
+
+    captured: dict = {}
+
+    def fake_urlopen(req, timeout):
+        captured["auth"] = dict(req.header_items())["Authorization"]
+        return _fake_response(204)
+
+    with patch.object(solver_dispatch.urllib.request, "urlopen", fake_urlopen):
+        dispatch_solver_tick(issue_id="x")
+
+    assert captured["auth"] == "Bearer primary"
 
 
 def test_dispatch_http_error_raises(monkeypatch):
