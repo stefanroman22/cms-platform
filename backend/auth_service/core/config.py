@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     # GitHub PAT for production-promote fast-forward (S1.5)
     GITHUB_TOKEN: str = ""
 
+    # GitHub PAT for triggering Solver Agent workflow via repository_dispatch
+    # when a client submits an issue. Scoped narrowly to actions:write on
+    # the cms-platform repo (fine-grained PAT). Failures degrade silently —
+    # the hourly cron picks up issues whose dispatch did not fire.
+    SOLVER_DISPATCH_TOKEN: str = ""
+    SOLVER_DISPATCH_REPO: str = "stefanroman22/cms-platform"
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.FRONTEND_ORIGINS.split(",") if o.strip()]

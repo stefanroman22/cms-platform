@@ -10,7 +10,11 @@ Authoritative spec for **this agent only**. Each agent owns its own AGENTS.md.
 
 ## Trigger
 
-This agent is invoked **automatically** by GitHub Actions cron (`.github/workflows/solver-agent.yml`) every 15 minutes. Manual invocation via `workflow_dispatch` from the GitHub Actions UI is supported for testing.
+Primary trigger: `repository_dispatch` event of type `solver-tick`. The backend (`backend/auth_service/services/solver_dispatch.py`) fires this immediately after a client submits a new issue, so the solver runs within ~30s of submission.
+
+Safety-net trigger: hourly cron (`7 * * * *`, off-peak minute) catches issues whose dispatch failed silently (token expired, GitHub API blip), retry queue, stale claims, and manual DB inserts that bypass the API.
+
+Manual trigger: `workflow_dispatch` from the GitHub Actions UI for ad-hoc testing.
 
 Local skill invocation:
 
