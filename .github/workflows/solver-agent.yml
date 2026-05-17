@@ -1,8 +1,16 @@
 name: Solver Agent (S3)
 
 on:
+  # Backend fires this immediately after a client submits a new issue
+  # (see backend/auth_service/services/solver_dispatch.py). Primary
+  # trigger — typical latency from issue submit to workflow start ~30s.
+  repository_dispatch:
+    types: [solver-tick]
+  # Hourly safety net for: failed dispatches (token expired, GH API
+  # blip), retries on previously-failed issues, stale claim cleanup,
+  # manual DB inserts. Minute 7 to avoid top-of-hour cron congestion.
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '7 * * * *'
   workflow_dispatch: {}
 
 concurrency:

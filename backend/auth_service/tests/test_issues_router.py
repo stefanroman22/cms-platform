@@ -74,6 +74,77 @@ def test_create_issue_slack_failure_does_not_break_201(
     assert resp.status_code == 201, resp.text
 
 
+def test_create_issue_fires_solver_dispatch(
+    mock_supabase, client, auth_as, client_user, monkeypatch
+):
+    auth_as(client_user)
+    mock_supabase.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "issue-dispatch-1",
+                "project_id": "project-acme",
+                "title": "x",
+                "description": "y",
+                "priority": "Low",
+                "created_at": "2026-05-15T10:00:00Z",
+                "created_by": client_user.id,
+            }
+        ]
+    )
+    # Don't make a real dispatch HTTP call.
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_created",
+        lambda **kw: None,
+    )
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        "auth_service.routers.issues.solver_dispatch.dispatch_solver_tick",
+        lambda **kw: calls.append(kw),
+    )
+
+    resp = client.post(
+        "/projects/acme/issues",
+        json={"title": "x", "description": "y", "priority": "Low"},
+    )
+    assert resp.status_code == 201, resp.text
+    assert calls == [{"issue_id": "issue-dispatch-1"}]
+
+
+def test_create_issue_dispatch_failure_does_not_break_201(
+    mock_supabase, client, auth_as, client_user, monkeypatch
+):
+    """Dispatch failure must degrade silently — cron picks the issue up."""
+    auth_as(client_user)
+    mock_supabase.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "issue-dispatch-2",
+                "project_id": "project-acme",
+                "title": "x",
+                "description": "y",
+                "priority": "Low",
+                "created_at": "2026-05-15T10:00:00Z",
+                "created_by": client_user.id,
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_created",
+        lambda **kw: None,
+    )
+
+    def boom(**kw):
+        raise RuntimeError("github down")
+
+    monkeypatch.setattr("auth_service.routers.issues.solver_dispatch.dispatch_solver_tick", boom)
+
+    resp = client.post(
+        "/projects/acme/issues",
+        json={"title": "x", "description": "y", "priority": "Low"},
+    )
+    assert resp.status_code == 201, resp.text
+
+
 def test_status_pending_to_done_fires_resolved(
     mock_supabase, client, auth_as, admin_user, monkeypatch
 ):

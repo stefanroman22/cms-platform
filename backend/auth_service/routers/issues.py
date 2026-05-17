@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ..models.schemas import IssueCreateRequest, IssueOut, IssueStatusRequest, IssueUpdateRequest
-from ..services import slack_notify
+from ..services import slack_notify, solver_dispatch
 from ..services.supabase_client import get_supabase_admin
 from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
 
@@ -123,6 +123,13 @@ async def create_issue(project_slug: str, body: IssueCreateRequest, request: Req
         import logging
 
         logging.getLogger(__name__).exception("slack_notify (created) raised")
+
+    try:
+        solver_dispatch.dispatch_solver_tick(issue_id=row["id"])
+    except Exception:  # noqa: BLE001 — dispatch failure falls back to hourly cron
+        import logging
+
+        logging.getLogger(__name__).exception("solver_dispatch raised")
 
     return issue_out
 
