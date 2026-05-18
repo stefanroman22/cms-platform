@@ -7,6 +7,7 @@ import { LeadStatsCards } from "./LeadStatsCards";
 import { LeadFilters } from "./LeadFilters";
 import { LeadsTable } from "./LeadsTable";
 import { LeadKanban } from "./LeadKanban";
+import { LeadDetailDrawer } from "./LeadDetailDrawer";
 import { EMPTY_FILTERS } from "./types";
 import type { Lead, LeadFiltersState, LeadsListResponse } from "./types";
 import type { LeadStatus } from "@/lib/leadEnums";
@@ -35,6 +36,7 @@ export function LeadsDashboard() {
   const [filters, setFilters] = useState<LeadFiltersState>(EMPTY_FILTERS);
   const [page, setPage] = useState(0);
   const [view, setView] = useState<"table" | "kanban">("table");
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   const qs = useMemo(() => buildQuery(filters, page), [filters, page]);
 
@@ -54,8 +56,12 @@ export function LeadsDashboard() {
   }
 
   function handleSelect(lead: Lead) {
-    // C9 wires the LeadDetailDrawer; for now log so the row click is testable.
-    console.log("selected lead:", lead.id, lead.business_name);
+    setSelectedLead(lead);
+  }
+
+  function handlePatched(updated: Lead) {
+    setSelectedLead(updated);
+    refresh();
   }
 
   async function handleStatusChange(leadId: string, next: LeadStatus) {
@@ -123,6 +129,11 @@ export function LeadsDashboard() {
           )}
         </motion.div>
       </AnimatePresence>
+      <LeadDetailDrawer
+        lead={selectedLead}
+        onClose={() => setSelectedLead(null)}
+        onPatched={handlePatched}
+      />
     </div>
   );
 }
