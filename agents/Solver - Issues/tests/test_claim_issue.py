@@ -104,8 +104,8 @@ def test_prompt_includes_revision_feedback_when_present(monkeypatch, gh_output, 
     prompt = (tmp_files / "agent-prompt.md").read_text(encoding="utf-8")
     assert "Previous attempt was rejected" in prompt
     assert "the change you made broke the header" in prompt
-    assert "/tmp/prev-solver-sha" in prompt
-    assert "git show" in prompt
+    assert "git show HEAD" in prompt
+    assert "HEAD" in prompt
 
 
 def test_dispatch_issue_id_calls_claim_specific(monkeypatch, tmp_path):
@@ -227,3 +227,57 @@ def test_empty_dispatch_issue_id_treated_as_unset(monkeypatch, tmp_path):
 
     claim_issue.main()
     assert specific_calls == []
+
+
+def test_prompt_includes_source_of_truth_note():
+    import claim_issue
+
+    issue = {
+        "id": "i1",
+        "title": "t",
+        "description": "d",
+        "priority": "Medium",
+        "revision_feedback": None,
+    }
+    project = {"repo_branch": "cms-preview"}
+    prompt = claim_issue._build_prompt(issue, project)
+    # Agent must understand it's reading staging, not prod.
+    assert "cms-preview" in prompt
+    assert "staging" in prompt.lower()
+    assert "not production" in prompt.lower() or "not prod" in prompt.lower()
+
+
+def test_prompt_revision_feedback_acknowledges_branch_head():
+    import claim_issue
+
+    issue = {
+        "id": "i1",
+        "title": "t",
+        "description": "d",
+        "priority": "Medium",
+        "revision_feedback": "logo too small",
+    }
+    project = {"repo_branch": "cms-preview"}
+    prompt = claim_issue._build_prompt(issue, project)
+    # Revision flow with model B: prev attempt is at HEAD, not orphaned.
+    assert "logo too small" in prompt
+    assert "HEAD" in prompt
+    # Must NOT contain the obsolete orphan-recovery prose.
+    assert "no longer reachable" not in prompt
+    assert ".git/objects" not in prompt
+
+
+def test_prompt_content_not_code_rejection_hint():
+    import claim_issue
+
+    issue = {
+        "id": "i1",
+        "title": "t",
+        "description": "d",
+        "priority": "Medium",
+        "revision_feedback": None,
+    }
+    project = {"repo_branch": "cms-preview"}
+    prompt = claim_issue._build_prompt(issue, project)
+    # Step 0 rejection guidance must include "name the dashboard tab".
+    assert "dashboard" in prompt.lower()
