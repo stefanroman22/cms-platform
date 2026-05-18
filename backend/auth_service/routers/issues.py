@@ -2,7 +2,13 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from ..models.schemas import IssueCreateRequest, IssueOut, IssueStatusRequest, IssueUpdateRequest
+from ..models.schemas import (
+    AgentEventRequest,
+    IssueCreateRequest,
+    IssueOut,
+    IssueStatusRequest,
+    IssueUpdateRequest,
+)
 from ..services import slack_notify, solver_dispatch
 from ..services.supabase_client import get_supabase_admin
 from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
@@ -346,3 +352,58 @@ async def admin_update_issue_status(
             logging.getLogger(__name__).exception("slack_notify (admin resolve) raised")
 
     return issue_out
+
+
+@router.post(
+    "/admin/issues/{issue_id}/agent-event",
+    status_code=status.HTTP_200_OK,
+)
+async def admin_issue_agent_event(
+    issue_id: str,
+    body: AgentEventRequest,
+    request: Request,
+):
+    """Solver agent → backend event notification.
+
+    Posts a Slack thread reply under the issue's "New Issue" message
+    (slack_created_ts). If that ts is missing (notify_issue_created failed at
+    create time), degrades to a top-level Slack post that includes project +
+    title for context. The agent calls this on every silent finalize.py exit
+    so the Slack channel reflects every solver outcome.
+    """
+    user = await admin_user_via_bearer_or_sid(request)  # noqa: F841 — auth side-effect
+    sb = get_supabase_admin()
+
+    issue_result = (
+        sb.table("project_issues")
+        .select("id, project_id, title, status, slack_created_ts")
+        .eq("id", issue_id)
+        .maybe_single()
+        .execute()
+    )
+    if not issue_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found.")
+
+    issue_row = issue_result.data
+
+    project_row = (
+        sb.table("projects")
+        .select(
+            "id, name, slug, github_repo, repo_branch, production_branch, "
+            "preview_url, production_url, user_id"
+        )
+        .eq("id", issue_row["project_id"])
+        .single()
+        .execute()
+    )
+    project = project_row.data or {}
+
+    ts = slack_notify.notify_agent_event(
+        thread_ts=issue_row.get("slack_created_ts"),  # None → degrade in slack_notify
+        kind=body.kind,
+        reason=body.reason,
+        project=project,
+        issue={"id": issue_row["id"], "title": issue_row["title"]},
+    )
+
+    return {"posted_ts": ts}
