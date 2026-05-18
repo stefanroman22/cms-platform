@@ -1,12 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useQuery } from "@/hooks/useQuery";
 import { LeadStatsCards } from "./LeadStatsCards";
 import { LeadFilters } from "./LeadFilters";
 import { LeadsTable } from "./LeadsTable";
+import { LeadKanban } from "./LeadKanban";
 import { EMPTY_FILTERS } from "./types";
 import type { Lead, LeadFiltersState, LeadsListResponse } from "./types";
+import type { LeadStatus } from "@/lib/leadEnums";
 
 const PAGE_SIZE = 50;
 
@@ -31,10 +34,11 @@ function buildQuery(filters: LeadFiltersState, page: number): string {
 export function LeadsDashboard() {
   const [filters, setFilters] = useState<LeadFiltersState>(EMPTY_FILTERS);
   const [page, setPage] = useState(0);
+  const [view, setView] = useState<"table" | "kanban">("table");
 
   const qs = useMemo(() => buildQuery(filters, page), [filters, page]);
 
-  const { data, loading } = useQuery<LeadsListResponse>(
+  const { data, loading, refresh } = useQuery<LeadsListResponse>(
     `leads:${qs}`,
     () =>
       fetch(`/api/admin/leads?${qs}`, { credentials: "include" }).then(async (r) => {
@@ -54,6 +58,17 @@ export function LeadsDashboard() {
     console.log("selected lead:", lead.id, lead.business_name);
   }
 
+  async function handleStatusChange(leadId: string, next: LeadStatus) {
+    const res = await fetch(`/api/admin/leads/${leadId}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_status: next }),
+    });
+    if (!res.ok) throw new Error(`Status update failed (${res.status})`);
+    await refresh();
+  }
+
   const leads = data?.items ?? [];
   const total = data?.total ?? 0;
 
@@ -63,15 +78,51 @@ export function LeadsDashboard() {
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
         <LeadFilters value={filters} onChange={handleFiltersChange} />
       </div>
-      <LeadsTable
-        leads={leads}
-        total={total}
-        loading={loading}
-        page={page}
-        pageSize={PAGE_SIZE}
-        onPageChange={setPage}
-        onSelect={handleSelect}
-      />
+      <div className="flex items-center gap-2">
+        {(["table", "kanban"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={[
+              "px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer",
+              view === v
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700",
+            ].join(" ")}
+          >
+            {v === "table" ? "Table" : "Kanban"}
+          </button>
+        ))}
+      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={view}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+        >
+          {view === "table" ? (
+            <LeadsTable
+              leads={leads}
+              total={total}
+              loading={loading}
+              page={page}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+              onSelect={handleSelect}
+            />
+          ) : (
+            <LeadKanban
+              leads={leads}
+              loading={loading}
+              onSelect={handleSelect}
+              onStatusChange={handleStatusChange}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
