@@ -27,9 +27,9 @@ The local skill replays a single workflow step against a real claimed issue. Not
 | # | Phase | Doc | Goal |
 |---|-------|-----|------|
 | 1 | Claim | [phases/1-claim.md](./phases/1-claim.md) | Atomic priority-ordered claim from Supabase |
-| 2 | Clone | [phases/2-clone.md](./phases/2-clone.md) | Clone + reset `cms-preview` to production HEAD; save prev SHA |
+| 2 | Clone | [phases/2-clone.md](./phases/2-clone.md) | Clone `cms-preview` at its current HEAD; save prev SHA for revision-feedback context |
 | 3 | Solve | [phases/3-solve.md](./phases/3-solve.md) | Install `claude` CLI + invoke headless with verification + fix prompt |
-| 4 | Push | [phases/4-push.md](./phases/4-push.md) | Commit + force-with-lease push to `cms-preview` |
+| 4 | Push | [phases/4-push.md](./phases/4-push.md) | Commit + plain push to `cms-preview`; fail loudly on conflict |
 | 5 | Finalize | [phases/5-finalize.md](./phases/5-finalize.md) | PATCH backend `/admin/issues/{id}/status` to mark done → S1 fires |
 
 Each phase doc contains: goal, inputs, steps, outputs, failure messages, self-improvement hook.
@@ -55,10 +55,11 @@ If a credential is missing, the affected workflow step fails; the `failure()` re
 |-------|--------|---------------|
 | Transient (network 5xx, Supabase timeout) | Step fails; `release_issue.py` increments retry; next cron tick retries. | No |
 | Quota exhausted (Anthropic 429 / Claude subscription quota) | Action step exits non-zero; release increments retry; cron resumes when quota replenishes. | No |
-| Agent cannot reproduce / fix (writes `/tmp/agent-status.md`) | `finalize.py` reads status, marks failed without commit. | Always — append rule to LEARNINGS if reason is novel. |
-| Empty diff (agent finished but produced no changes) | `finalize.py` marks failed. | Always — usually indicates ambiguous issue or prompt drift. |
+| Agent rejected (`/tmp/agent-status.md`) | Slack thread reply under "New Issue"; retry counter incremented; cron retries up to 3× | Always — if reason is novel, append rule to LEARNINGS |
+| Agent CLI crashed (exit ≠ 0) | Slack thread reply with workflow logs link; retry counter incremented | Only if recurring |
+| Push rejected (cms-preview moved during run) | Slack thread reply; workflow exits non-zero; runner workspace is ephemeral so local commit is lost | Only if recurring |
 | Git push 403 | Likely PAT scope drift. Mark failed; Stefan fixes PAT. | Only if recurring. |
-| Backend PATCH 5xx | Commit is durable; log + exit 0. Slack post + status update missed. Sync via dashboard later. | No |
+| Backend PATCH 5xx | Retry 3× exp backoff; if still failing → direct Slack thread reply with manual recovery command; commit is durable | Only if recurring |
 
 ## Hard rules — what the agent must NOT do
 
@@ -67,7 +68,7 @@ If a credential is missing, the affected workflow step fails; the `failure()` re
 - Modify CI configs, GitHub workflows, env files, or `.git/` internals.
 - Fetch external code or URLs (`WebFetch` is disallowed).
 - Delete files via `rm` (Bash(rm:*) is disallowed).
-- Treat `cms-preview` as a long-lived branch. It is reset to production HEAD at the start of every solver run — any direct commits to `cms-preview` (from Stefan or anywhere outside the solver) WILL be overwritten. If Stefan needs to hotfix, he commits to the production branch (`main`/`master`) and the next solver run picks it up.
+- `cms-preview` is a real staging branch. The solver clones it at HEAD without resetting and pushes plain (no `--force`). Direct edits to cms-preview by Stefan or anyone else are preserved across solver runs. If a push conflicts because cms-preview moved during a run, the workflow fails loudly (Slack thread reply + non-zero exit) rather than silently overwriting concurrent work.
 
 ## Self-improvement loop
 
@@ -79,7 +80,7 @@ LEARNINGS.md is **append-only**.
 
 ## Modifying this agent
 
-If you change Phase 2 reset logic: keep `phases/2-clone.md` in sync with `clone_repo.py` + `repo.clone_and_reset_to_prod`. The `production_branch` column on `projects` is the source of truth — do not hardcode `main` or `master`.
+If you change Phase 2 clone logic: keep `phases/2-clone.md` in sync with `clone_repo.py` + `repo.clone_at_preview_head`. The `repo_branch` column on `projects` is the source of truth for the staging branch name (always `cms-preview` for current clients but do not hardcode).
 If you change Phase 3 prompt: keep `phases/3-solve.md` in sync with `claim_issue.py` `_build_prompt`.
 If you change Phase 3 methodology: edit the vendored skill files in `skills/`, not the inline prompt text in `claim_issue.py`. The prompt builder injects skill content via `_render_skills_block()`. To re-sync from upstream, copy SKILL.md bodies from `~/.claude/plugins/cache/claude-plugins-official/superpowers/<version>/skills/<name>/SKILL.md` into `skills/<name>.md`. See `skills/README.md` for sources + last sync date.
 If you change Phase 5 backend call: update the route in `backend/auth_service/routers/issues.py` to match.
