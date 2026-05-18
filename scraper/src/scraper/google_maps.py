@@ -221,12 +221,32 @@ async def _extract_reviews(page: Page, limit: int) -> list[dict[str, Any]]:
     return reviews
 
 
+_DUTCH_POSTAL_RE = re.compile(r"^(\d{4}\s?[A-Z]{2})\s+(.+)$")
+
+
+def _strip_icon_prefix(text: str | None) -> str | None:
+    """Strip leading private-use-area chars + leading whitespace.
+    Google Maps prefixes some labels with icon-font glyphs (U+E000-U+F8FF)
+    followed by a newline."""
+    if text is None:
+        return None
+    cleaned = text.lstrip()
+    i = 0
+    while i < len(cleaned) and ("" <= cleaned[i] <= "" or cleaned[i].isspace()):
+        i += 1
+    return cleaned[i:].strip() or None
+
+
 def _split_address(address: str | None) -> tuple[str | None, str | None]:
-    """Crude best-effort split of the trailing comma-separated segment
-    into (postal_code, city). Refined in a follow-up if needed."""
+    """Best-effort split of the trailing comma-separated segment into
+    (postal_code, city). Handles Dutch `NNNN AA City` postal-code format
+    explicitly; falls back to the prior whitespace split otherwise."""
     if not address:
         return None, None
     tail = address.split(",")[-1].strip()
+    m = _DUTCH_POSTAL_RE.match(tail)
+    if m:
+        return m.group(1), m.group(2).strip()
     parts = tail.split(None, 1)
     if len(parts) == 2 and any(ch.isdigit() for ch in parts[0]):
         return parts[0], parts[1]
@@ -243,10 +263,16 @@ def _parse_rating(rating_text: str | None) -> float | None:
 
 
 def _parse_review_count(aria_text: str | None) -> int | None:
+    """Pull the review count out of an aria-label like
+    `"4.7 stars 87 Reviews"`. The count is the last integer token —
+    the rating's fractional digit comes first, so taking the last
+    `\\d+` match avoids concatenating rating digits with count digits."""
     if not aria_text:
         return None
-    digits = "".join(c for c in aria_text if c.isdigit())
-    return int(digits) if digits else None
+    matches = re.findall(r"\d+", aria_text)
+    if not matches:
+        return None
+    return int(matches[-1])
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -268,18 +294,18 @@ async def _scrape_one_place(
         await page.wait_for_selector(selectors.PLACE_TITLE, timeout=10_000)
         await _polite_delay()
 
-        title = await _safe_text(page, selectors.PLACE_TITLE) or ""
+        title = _strip_icon_prefix(await _safe_text(page, selectors.PLACE_TITLE)) or ""
         if not title:
             logger.warning("no title for {} — skipping", url)
             return None
 
         normalized = normalize_name(title)
-        address = await _safe_text(page, selectors.PLACE_ADDRESS_BUTTON)
-        phone = await _safe_text(page, selectors.PLACE_PHONE_BUTTON)
+        address = _strip_icon_prefix(await _safe_text(page, selectors.PLACE_ADDRESS_BUTTON))
+        phone = _strip_icon_prefix(await _safe_text(page, selectors.PLACE_PHONE_BUTTON))
         website_url = await _safe_attr(page, selectors.PLACE_WEBSITE_BUTTON, "href")
-        category = await _safe_text(page, selectors.PLACE_CATEGORY_BUTTON)
+        category = _strip_icon_prefix(await _safe_text(page, selectors.PLACE_CATEGORY_BUTTON))
         menu_url = await _safe_attr(page, selectors.PLACE_MENU_BUTTON, "href")
-        description = await _safe_text(page, selectors.PLACE_DESCRIPTION)
+        description = _strip_icon_prefix(await _safe_text(page, selectors.PLACE_DESCRIPTION))
 
         rating = _parse_rating(await _safe_text(page, selectors.PLACE_RATING_NUMBER))
         review_count = _parse_review_count(
