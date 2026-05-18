@@ -108,7 +108,7 @@ async def create_issue(project_slug: str, body: IssueCreateRequest, request: Req
     )
 
     try:
-        slack_notify.notify_issue_created(
+        ts = slack_notify.notify_issue_created(
             issue={
                 "id": row["id"],
                 "title": row["title"],
@@ -119,6 +119,10 @@ async def create_issue(project_slug: str, body: IssueCreateRequest, request: Req
             project=project,
             user_email=user.email,
         )
+        if ts:
+            sb.table("project_issues").update({"slack_created_ts": ts}).eq(
+                "id", row["id"]
+            ).execute()
     except Exception:  # noqa: BLE001 — Slack must never break issue creation
         import logging
 
