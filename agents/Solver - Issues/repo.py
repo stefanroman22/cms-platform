@@ -1,7 +1,7 @@
 """Git operations for the Solver Agent.
 
-Clone+reset (so cms-preview always starts from production HEAD),
-has-diff check, commit-and-force-push. Token-authed via SOLVER_GITHUB_TOKEN.
+Clone cms-preview at current HEAD (staging-branch model), has-diff check,
+commit-and-force-push. Token-authed via SOLVER_GITHUB_TOKEN.
 """
 
 from __future__ import annotations
@@ -27,17 +27,13 @@ def _run(
     return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=check)
 
 
-def clone_and_reset_to_prod(
-    *, repo_slug: str, dev_branch: str, prod_branch: str, dest: str
-) -> None:
-    """Clone client repo, fetch dev_branch, reset working tree to prod_branch HEAD.
+def clone_at_preview_head(*, repo_slug: str, dev_branch: str, dest: str) -> None:
+    """Clone client repo at dev_branch HEAD (no reset).
 
-    Guarantees the agent always edits from current production state so the
-    S1.5 listener can fast-forward production to cms-preview after the fix.
-
-    Previous dev_branch SHA is saved to PREV_SHA_PATH (empty on first run);
-    revision-feedback prompt uses it via `git show <sha>` since the object
-    stays in .git/objects after the branch ref moves.
+    With the staging-branch model (S3.5), cms-preview is a real staging
+    branch — manual edits and prior unapproved solver attempts are preserved
+    across runs. PREV_SHA_PATH stores the cloned HEAD SHA so revision-feedback
+    retries can diff against the prior attempt's commit.
     """
     url = f"https://x-access-token:{_token()}@github.com/{repo_slug}.git"
 
@@ -47,9 +43,8 @@ def clone_and_reset_to_prod(
             "clone",
             "--depth",
             "50",
-            "--no-single-branch",
             "--branch",
-            prod_branch,
+            dev_branch,
             url,
             dest,
         ]
@@ -57,23 +52,10 @@ def clone_and_reset_to_prod(
     _run(["git", "-C", dest, "config", "user.email", _GIT_USER_EMAIL])
     _run(["git", "-C", dest, "config", "user.name", _GIT_USER_NAME])
 
-    fetch_result = _run(
-        ["git", "-C", dest, "fetch", "--depth", "50", "origin", dev_branch],
-        check=False,
-    )
-
-    prev_sha = ""
-    if fetch_result.returncode == 0:
-        rev_parse = _run(
-            ["git", "-C", dest, "rev-parse", f"origin/{dev_branch}"],
-            check=False,
-        )
-        if rev_parse.returncode == 0:
-            prev_sha = rev_parse.stdout.strip()
-
+    # Save current HEAD for revision-feedback diff context.
+    sha_result = _run(["git", "-C", dest, "rev-parse", "HEAD"], check=False)
+    prev_sha = sha_result.stdout.strip() if sha_result.returncode == 0 else ""
     Path(PREV_SHA_PATH).write_text(prev_sha)
-
-    _run(["git", "-C", dest, "checkout", "-B", dev_branch, f"origin/{prod_branch}"])
 
 
 def has_diff(path: str) -> bool:
