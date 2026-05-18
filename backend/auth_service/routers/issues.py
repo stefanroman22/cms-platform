@@ -136,10 +136,27 @@ async def create_issue(project_slug: str, body: IssueCreateRequest, request: Req
 
     try:
         solver_dispatch.dispatch_solver_tick(issue_id=row["id"])
-    except Exception:  # noqa: BLE001 — dispatch failure falls back to hourly cron
+    except Exception as e:  # noqa: BLE001 — dispatch failure falls back to hourly cron
         import logging
 
         logging.getLogger(__name__).exception("solver_dispatch raised")
+        # Best-effort alert: tell the user the fast-path is broken; cron will
+        # catch the issue within an hour. Threading falls back to top-level
+        # when slack_created_ts isn't set yet (notify_issue_created may have
+        # also failed in the same window).
+        try:
+            slack_notify.notify_agent_event(
+                thread_ts=None,  # alert goes top-level — needs attention
+                kind="backend_error",
+                reason=(
+                    f"Could not dispatch solver workflow ({type(e).__name__}: {e}). "
+                    f"The hourly cron will pick this up within ~1 hour."
+                ),
+                project=project,
+                issue={"id": row["id"], "title": row["title"]},
+            )
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("dispatch-failure Slack alert raised")
 
     return issue_out
 
