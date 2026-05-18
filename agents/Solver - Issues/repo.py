@@ -1,7 +1,7 @@
 """Git operations for the Solver Agent.
 
 Clone cms-preview at current HEAD (staging-branch model), has-diff check,
-commit-and-force-push. Token-authed via SOLVER_GITHUB_TOKEN.
+commit-and-push. Token-authed via SOLVER_GITHUB_TOKEN.
 """
 
 from __future__ import annotations
@@ -13,6 +13,16 @@ from pathlib import Path
 _GIT_USER_EMAIL = "solver@roman-technologies.dev"
 _GIT_USER_NAME = "Solver Agent"
 _MAX_TITLE_LEN = 60
+
+
+class PushRejectedError(Exception):
+    """Raised when git push fails because the remote branch moved.
+
+    The runner workspace is ephemeral — when this is raised, the local
+    commit cannot be recovered. finalize.py catches this and emits a
+    distinct Slack event (kind=backend_error, "cms-preview moved during run").
+    """
+
 
 PREV_SHA_PATH = "/tmp/prev-solver-sha"
 
@@ -65,9 +75,14 @@ def has_diff(path: str) -> bool:
 
 
 def commit_and_push(*, path: str, issue_id: str, issue_title: str) -> str:
-    """Stage all changes, commit, force-with-lease push current HEAD to origin.
+    """Stage all changes, commit, push current HEAD to origin (plain push).
 
-    Returns the new HEAD SHA.
+    Plain `git push` (no --force-with-lease) — cms-preview is now a real
+    staging branch with potentially-meaningful state. If the remote moved
+    during the run, raise PushRejectedError so finalize.py can emit the
+    distinct "branch moved" Slack event.
+
+    Returns the new HEAD SHA on success.
     """
     short_title = issue_title[:_MAX_TITLE_LEN]
     message = (
@@ -79,5 +94,10 @@ def commit_and_push(*, path: str, issue_id: str, issue_title: str) -> str:
     _run(["git", "-C", path, "commit", "-m", message])
     sha_result = _run(["git", "-C", path, "rev-parse", "HEAD"])
     sha = sha_result.stdout.strip()
-    _run(["git", "-C", path, "push", "--force-with-lease", "origin", "HEAD"])
+    try:
+        _run(["git", "-C", path, "push", "origin", "HEAD"])
+    except subprocess.CalledProcessError as e:
+        raise PushRejectedError(
+            f"git push to {path} HEAD failed: {e.stderr or e.stdout or 'unknown'}"
+        ) from e
     return sha

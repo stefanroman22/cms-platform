@@ -75,21 +75,33 @@ def test_commit_uses_required_message_format(fake_run, monkeypatch):
     assert "Co-Authored-By: Solver Agent" in msg
 
 
-def test_commit_and_push_uses_force_with_lease(fake_run, monkeypatch):
-    calls = []
+def test_commit_and_push_uses_plain_push_no_force(fake_run, tmp_path):
+    sha = repo.commit_and_push(path=str(tmp_path), issue_id="i1", issue_title="t")
+    push_calls = [c for c in fake_run if "push" in c["args"]]
+    assert len(push_calls) == 1
+    push_args = push_calls[0]["args"]
+    assert "--force" not in str(push_args)
+    assert "--force-with-lease" not in str(push_args)
 
-    def fake_run_with_sha(args, **kwargs):
-        calls.append({"args": args, "kwargs": kwargs})
-        result = MagicMock()
-        result.returncode = 0
-        if "rev-parse" in args:
-            result.stdout = "abc123\n"
-        return result
 
-    monkeypatch.setattr(repo.subprocess, "run", fake_run_with_sha)
-    repo.commit_and_push(path="./client-repo", issue_id="i1", issue_title="t")
-    push_call = next(c for c in calls if "push" in c["args"])
-    assert "--force-with-lease" in push_call["args"]
+def test_commit_and_push_raises_push_rejected_error(monkeypatch, tmp_path):
+    """When git push exits non-zero, raise PushRejectedError instead of CalledProcessError."""
+    from subprocess import CalledProcessError, CompletedProcess
+
+    def run(args, **kwargs):
+        if "push" in args:
+            raise CalledProcessError(
+                returncode=1,
+                cmd=args,
+                stderr="rejected — non-fast-forward",
+            )
+        return CompletedProcess(args=args, returncode=0, stdout="abc123\n", stderr="")
+
+    monkeypatch.setattr(repo.subprocess, "run", run)
+    monkeypatch.setenv("SOLVER_GITHUB_TOKEN", "ghs_test")
+
+    with pytest.raises(repo.PushRejectedError):
+        repo.commit_and_push(path=str(tmp_path), issue_id="i1", issue_title="t")
 
 
 def test_commit_truncates_long_title(fake_run, monkeypatch):
