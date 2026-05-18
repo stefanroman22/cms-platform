@@ -40,6 +40,8 @@ PLACE_TITLE = "h1[class]"
 PLACE_CATEGORY_BUTTON = 'button[jsaction*="category"]'  # FRAGILE
 PLACE_RATING_NUMBER = 'div.F7nice > span > span[aria-hidden="true"]'  # FRAGILE
 PLACE_REVIEW_COUNT_BUTTON = 'button[aria-label*="review"], button[jsaction*="reviewChart"]'
+# Container around rating + count; inner_text typically reads "4.7\n(87)" or "4.7 (87)".
+PLACE_RATING_BLOCK = "div.F7nice"
 PLACE_ADDRESS_BUTTON = 'button[data-item-id="address"]'
 PLACE_WEBSITE_BUTTON = 'a[data-item-id="authority"]'
 PLACE_PHONE_BUTTON = 'button[data-item-id*="phone"]'

@@ -134,6 +134,18 @@ def test_parse_review_count_no_digits():
     assert _parse_review_count("Reviews") is None
 
 
+def test_parse_review_count_parenthesised_from_rating_block():
+    # F7nice container inner_text often reads "4.7\n(87)" — fallback path.
+    assert _parse_review_count("4.7\n(87)") == 87
+    assert _parse_review_count("4.7 (1,234)") == 1234
+
+
+def test_parse_review_count_rating_only_returns_none():
+    # No parens, no "review" word — must refuse to guess (avoid returning 7).
+    assert _parse_review_count("4.7") is None
+    assert _parse_review_count("4.7\n") is None
+
+
 def test_filters_default_keeps_no_website_and_social_only():
     f = ScrapeFilters()
     assert _passes_filters(_mk_lead(web_presence="none"), f) is True

@@ -262,17 +262,27 @@ def _parse_rating(rating_text: str | None) -> float | None:
         return None
 
 
-def _parse_review_count(aria_text: str | None) -> int | None:
-    """Pull the review count out of an aria-label like
-    `"4.7 stars 87 Reviews"`. The count is the last integer token —
-    the rating's fractional digit comes first, so taking the last
-    `\\d+` match avoids concatenating rating digits with count digits."""
-    if not aria_text:
+def _parse_review_count(text: str | None) -> int | None:
+    """Pull the review count from one of several Google Maps surfaces:
+
+    - aria-label on the review button: `"4.7 stars 87 Reviews"` → 87
+    - inner_text on the same button: `"87"` or `"(87)"` → 87
+    - rating block's inner_text: `"4.7\\n(87)"` → 87
+    - rating block without count: `"4.7"` → None (NOT 7)
+
+    Strategy: prefer a parenthesised `(N)` (the visible "(87)" form);
+    fall back to "N review(s)" pattern; otherwise None. Plain digit
+    runs without context are ambiguous (could be a rating digit) so
+    we refuse to guess."""
+    if not text:
         return None
-    matches = re.findall(r"\d+", aria_text)
-    if not matches:
-        return None
-    return int(matches[-1])
+    paren = re.search(r"\((\d[\d.,]*)\)", text)
+    if paren:
+        return int(paren.group(1).replace(",", "").replace(".", ""))
+    near_word = re.search(r"(\d[\d.,]*)\s*review", text, re.IGNORECASE)
+    if near_word:
+        return int(near_word.group(1).replace(",", "").replace(".", ""))
+    return None
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -311,6 +321,15 @@ async def _scrape_one_place(
         review_count = _parse_review_count(
             await _safe_attr(page, selectors.PLACE_REVIEW_COUNT_BUTTON, "aria-label")
         )
+        if review_count is None:
+            # Fallback 1: button inner_text often reads "87" or "(87)".
+            review_count = _parse_review_count(
+                await _safe_text(page, selectors.PLACE_REVIEW_COUNT_BUTTON)
+            )
+        if review_count is None:
+            # Fallback 2: rating block's inner_text usually reads "4.7\n(87)".
+            block_text = await _safe_text(page, selectors.PLACE_RATING_BLOCK)
+            review_count = _parse_review_count(block_text)
 
         opening_hours = await _extract_opening_hours(page)
         reviews = await _extract_reviews(page, params.review_limit) if params.with_reviews else None
