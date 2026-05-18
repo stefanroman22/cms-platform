@@ -20,7 +20,8 @@ class SupabaseSink(Sink):
         self._sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
 
     async def write(self, lead: Lead) -> bool:
-        assert self._sb is not None
+        if self._sb is None:
+            raise RuntimeError("SupabaseSink.write called before open()")
         row = lead.model_dump(mode="json", exclude_none=False)
         try:
             self._sb.table("leads").upsert(row, on_conflict="external_id").execute()

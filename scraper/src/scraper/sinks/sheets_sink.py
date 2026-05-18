@@ -36,11 +36,11 @@ _FIELD_MAP: dict[str, Callable[[Lead], Any]] = {
     "about": lambda lead: lead.about,
     "photos": lambda lead: ",".join(lead.photo_urls) if lead.photo_urls else None,
     "menu": lambda lead: lead.menu_url,
-    "status website": lambda lead: "not_started",
-    "status ai workflow": lambda lead: "not_started",
-    "status lead": lambda lead: "not_sent",
+    "status website": lambda lead: None,
+    "status ai workflow": lambda lead: None,
+    "status lead": lambda lead: None,
     "type lead": lambda lead: lead.lead_type,
-    "payment": lambda lead: "not_applicable",
+    "payment": lambda lead: None,
 }
 
 
@@ -63,7 +63,8 @@ class SheetsSink(Sink):
         self._headers = [h.strip() for h in self._ws.row_values(1)]
 
     async def write(self, lead: Lead) -> bool:
-        assert self._ws is not None
+        if self._ws is None:
+            raise RuntimeError("SheetsSink.write called before open()")
         row: list[Any] = []
         for header in self._headers:
             key = header.lower()
