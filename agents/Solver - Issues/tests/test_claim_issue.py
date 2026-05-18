@@ -106,3 +106,124 @@ def test_prompt_includes_revision_feedback_when_present(monkeypatch, gh_output, 
     assert "the change you made broke the header" in prompt
     assert "/tmp/prev-solver-sha" in prompt
     assert "git show" in prompt
+
+
+def test_dispatch_issue_id_calls_claim_specific(monkeypatch, tmp_path):
+    import claim_issue
+
+    monkeypatch.setenv("DISPATCH_ISSUE_ID", "issue-77")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "gh-output"))
+
+    specific_calls = []
+    next_calls = []
+    monkeypatch.setattr(
+        claim_issue.db,
+        "claim_specific_issue",
+        lambda id: specific_calls.append(id)
+        or {
+            "id": "issue-77",
+            "project_id": "p1",
+            "title": "t",
+            "description": "d",
+            "priority": "High",
+            "status": "pending",
+            "revision_feedback": None,
+        },
+    )
+    monkeypatch.setattr(
+        claim_issue.db,
+        "claim_next_issue",
+        lambda: next_calls.append("called") or None,
+    )
+    monkeypatch.setattr(
+        claim_issue.db,
+        "fetch_project",
+        lambda pid: {
+            "github_repo": "x/y",
+            "repo_branch": "cms-preview",
+            "production_branch": "main",
+        },
+    )
+
+    monkeypatch.setattr(claim_issue, "ISSUE_JSON_PATH", str(tmp_path / "issue.json"))
+    monkeypatch.setattr(claim_issue, "PROMPT_PATH", str(tmp_path / "prompt.md"))
+
+    claim_issue.main()
+
+    assert specific_calls == ["issue-77"]
+    assert next_calls == []  # queue path NOT used
+
+
+def test_dispatch_issue_id_falls_back_to_queue_when_ineligible(monkeypatch, tmp_path):
+    import claim_issue
+
+    monkeypatch.setenv("DISPATCH_ISSUE_ID", "issue-77")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "gh-output"))
+
+    monkeypatch.setattr(claim_issue.db, "claim_specific_issue", lambda id: None)
+    queue_row = {
+        "id": "issue-other",
+        "project_id": "p2",
+        "title": "fallback",
+        "description": "d",
+        "priority": "Medium",
+        "status": "pending",
+        "revision_feedback": None,
+    }
+    monkeypatch.setattr(claim_issue.db, "claim_next_issue", lambda: queue_row)
+    monkeypatch.setattr(
+        claim_issue.db,
+        "fetch_project",
+        lambda pid: {
+            "github_repo": "x/y",
+            "repo_branch": "cms-preview",
+            "production_branch": "main",
+        },
+    )
+    monkeypatch.setattr(claim_issue, "ISSUE_JSON_PATH", str(tmp_path / "issue.json"))
+    monkeypatch.setattr(claim_issue, "PROMPT_PATH", str(tmp_path / "prompt.md"))
+
+    claim_issue.main()
+
+    import json
+
+    written = json.loads((tmp_path / "issue.json").read_text())
+    assert written["id"] == "issue-other"  # fallback succeeded
+
+
+def test_no_dispatch_issue_id_uses_queue(monkeypatch, tmp_path):
+    import claim_issue
+
+    monkeypatch.delenv("DISPATCH_ISSUE_ID", raising=False)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "gh-output"))
+
+    specific_calls = []
+    monkeypatch.setattr(
+        claim_issue.db,
+        "claim_specific_issue",
+        lambda id: specific_calls.append(id) or None,
+    )
+    monkeypatch.setattr(claim_issue.db, "claim_next_issue", lambda: None)
+
+    claim_issue.main()
+
+    assert specific_calls == []  # specific path skipped entirely
+
+
+def test_empty_dispatch_issue_id_treated_as_unset(monkeypatch, tmp_path):
+    """GitHub passes empty string when client_payload is absent."""
+    import claim_issue
+
+    monkeypatch.setenv("DISPATCH_ISSUE_ID", "")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "gh-output"))
+
+    specific_calls = []
+    monkeypatch.setattr(
+        claim_issue.db,
+        "claim_specific_issue",
+        lambda id: specific_calls.append(id) or None,
+    )
+    monkeypatch.setattr(claim_issue.db, "claim_next_issue", lambda: None)
+
+    claim_issue.main()
+    assert specific_calls == []

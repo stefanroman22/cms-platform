@@ -65,7 +65,17 @@ def _render_skills_block() -> str:
 
 
 def main() -> int:
-    issue = db.claim_next_issue()
+    dispatch_id = (os.environ.get("DISPATCH_ISSUE_ID") or "").strip()
+    if dispatch_id:
+        issue = db.claim_specific_issue(dispatch_id)
+        if issue is None:
+            # Targeted issue ineligible (already done, claimed by concurrent run,
+            # blocked, or maxed retries). Fall back to the queue so the run still
+            # does useful work — eg. drains the backlog of older issues.
+            print(f"dispatch issue {dispatch_id} not eligible; falling back to queue")
+            issue = db.claim_next_issue()
+    else:
+        issue = db.claim_next_issue()
     gh_output = Path(os.environ["GITHUB_OUTPUT"])
 
     if issue is None:
