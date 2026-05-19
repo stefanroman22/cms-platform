@@ -124,3 +124,44 @@ def test_trigger_issue_resolved_does_not_retry_on_4xx(monkeypatch):
     with pytest.raises(HTTPError):
         backend_api.trigger_issue_resolved("issue-77")
     assert attempts["count"] == 1  # NOT retried
+
+
+def test_post_thread_event_direct_posts_to_slack(monkeypatch):
+    import slack as slack_client
+
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    captured = {}
+
+    class FakeResp:
+        @staticmethod
+        def json():
+            return {"ok": True, "ts": "ts-direct"}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["json"] = json
+        return FakeResp()
+
+    monkeypatch.setattr(slack_client.requests, "post", fake_post)
+
+    slack_client.post_thread_event_direct(
+        thread_ts="ts-original",
+        kind="backend_error",
+        reason="trigger_issue_resolved failed after 3 retries",
+    )
+    assert captured["url"] == "https://slack.com/api/chat.postMessage"
+    assert captured["json"]["thread_ts"] == "ts-original"
+    assert captured["json"]["channel"] == "C123"
+    assert "🛑" in captured["json"]["text"]
+
+
+def test_post_thread_event_direct_disabled_silently(monkeypatch):
+    import slack as slack_client
+
+    monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("SLACK_ISSUES_CHANNEL_ID", raising=False)
+
+    # Should not raise — disabled mode just logs.
+    slack_client.post_thread_event_direct(thread_ts="x", kind="backend_error", reason="y")
