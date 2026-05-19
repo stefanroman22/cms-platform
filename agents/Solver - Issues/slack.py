@@ -62,3 +62,66 @@ def post_blocked_notification(
             logger.warning("slack post_blocked failed: %s", body.get("error"))
     except Exception:
         logger.exception("slack post_blocked exception")
+
+
+_EVENT_EMOJI = {
+    "rejected": "🤔",
+    "no_diff": "⚠️",
+    "agent_crashed": "🔧",
+    "backend_error": "🛑",
+}
+
+_EVENT_HEADER = {
+    "rejected": "Agent reviewed, no change",
+    "no_diff": "Agent produced no file changes",
+    "agent_crashed": "Agent CLI crashed",
+    "backend_error": "Backend / push error",
+}
+
+
+def post_thread_event_direct(
+    *,
+    thread_ts: str | None,
+    kind: str,
+    reason: str,
+) -> None:
+    """Direct chat.postMessage thread reply — fallback when backend is failing.
+
+    Used by finalize.py when trigger_issue_resolved exhausts its retries; at
+    that point we can't reach the backend's /admin/issues/{id}/agent-event
+    route to post the event, so we go direct to Slack with the same emoji +
+    header convention.
+
+    Silently disabled when SLACK_BOT_TOKEN or SLACK_ISSUES_CHANNEL_ID is unset.
+    Never raises.
+    """
+    if not _enabled():
+        logger.info("slack disabled — skipping post_thread_event_direct")
+        return
+
+    emoji = _EVENT_EMOJI.get(kind, "❔")
+    header = _EVENT_HEADER.get(kind, "Agent event")
+    reason_trimmed = (reason or "")[:500]
+    text = f"{emoji} {header} — {reason_trimmed}"
+
+    try:
+        body: dict = {
+            "channel": os.environ["SLACK_ISSUES_CHANNEL_ID"],
+            "text": text,
+        }
+        if thread_ts:
+            body["thread_ts"] = thread_ts
+        response = requests.post(
+            _SLACK_API,
+            headers={
+                "Authorization": f"Bearer {os.environ['SLACK_BOT_TOKEN']}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            json=body,
+            timeout=_TIMEOUT,
+        )
+        body = response.json()
+        if not body.get("ok"):
+            logger.warning("post_thread_event_direct failed: %s", body.get("error"))
+    except Exception:
+        logger.exception("post_thread_event_direct exception")

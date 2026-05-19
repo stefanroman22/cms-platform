@@ -47,6 +47,28 @@ def claim_next_issue() -> dict | None:
     return rows[0] if rows else None
 
 
+def claim_specific_issue(issue_id: str) -> dict | None:
+    """Atomically claim a specific issue by id.
+
+    Used when repository_dispatch.client_payload.issue_id is set (the user
+    submitted an issue and dispatch fired immediately). If the targeted
+    issue is no longer eligible (already done, claimed by another run,
+    blocked, or maxed retries), returns None — caller should fall through
+    to claim_next_issue() so the run still does useful work.
+    """
+    sb = _supabase()
+    response = sb.rpc(
+        "claim_specific_solver_issue",
+        {
+            "p_issue_id": issue_id,
+            "p_max_retries": _max_retries(),
+            "p_stale_minutes": _stale_minutes(),
+        },
+    ).execute()
+    rows = response.data or []
+    return rows[0] if rows else None
+
+
 def fetch_project(project_id: str) -> dict:
     """Return the full project row for the given project_id."""
     sb = _supabase()

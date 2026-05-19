@@ -303,3 +303,110 @@ def test_post_thread_reply_disabled_no_op(monkeypatch):
     with patch.object(slack_notify.httpx, "post") as mock_post:
         slack_notify.post_thread_reply(thread_ts="x", text="y")
         mock_post.assert_not_called()
+
+
+def test_notify_agent_event_posts_thread_reply(monkeypatch):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    posted = {}
+
+    class FakeResp:
+        @staticmethod
+        def json():
+            return {"ok": True, "ts": "1715865500.000111"}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        posted["url"] = url
+        posted["json"] = json
+        return FakeResp()
+
+    monkeypatch.setattr(slack_notify.httpx, "post", fake_post)
+
+    ts = slack_notify.notify_agent_event(
+        thread_ts="1715865123.456789",
+        kind="rejected",
+        reason="Cannot reproduce: header already correct",
+        project=_sample_project(),
+        issue=_sample_issue(),
+    )
+
+    assert ts == "1715865500.000111"
+    assert posted["json"]["thread_ts"] == "1715865123.456789"
+    assert posted["json"]["channel"] == "C123"
+    assert "🤔" in posted["json"]["text"]
+    assert "Cannot reproduce" in posted["json"]["text"]
+
+
+def test_notify_agent_event_kinds_use_distinct_emojis(monkeypatch):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    captured: list[dict] = []
+
+    class FakeResp:
+        @staticmethod
+        def json():
+            return {"ok": True, "ts": "0"}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured.append(json)
+        return FakeResp()
+
+    monkeypatch.setattr(slack_notify.httpx, "post", fake_post)
+
+    for kind in ("rejected", "no_diff", "agent_crashed", "backend_error"):
+        slack_notify.notify_agent_event(
+            thread_ts="t1",
+            kind=kind,
+            reason="x",
+            project=_sample_project(),
+            issue=_sample_issue(),
+        )
+
+    emojis = {
+        kind: c["text"][0]
+        for kind, c in zip(
+            ("rejected", "no_diff", "agent_crashed", "backend_error"), captured, strict=False
+        )
+    }
+    # All four must use different leading emojis so users can scan the thread.
+    assert len(set(emojis.values())) == 4
+
+
+def test_notify_agent_event_swallows_api_error(monkeypatch):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_ISSUES_CHANNEL_ID", "C123")
+
+    class FakeResp:
+        @staticmethod
+        def json():
+            return {"ok": False, "error": "channel_not_found"}
+
+    monkeypatch.setattr(
+        slack_notify.httpx,
+        "post",
+        lambda *a, **kw: FakeResp(),
+    )
+
+    result = slack_notify.notify_agent_event(
+        thread_ts="t1",
+        kind="rejected",
+        reason="x",
+        project=_sample_project(),
+        issue=_sample_issue(),
+    )
+    assert result is None
+
+
+def test_notify_agent_event_disabled_returns_none(monkeypatch):
+    monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("SLACK_ISSUES_CHANNEL_ID", raising=False)
+    result = slack_notify.notify_agent_event(
+        thread_ts="t1",
+        kind="rejected",
+        reason="x",
+        project=_sample_project(),
+        issue=_sample_issue(),
+    )
+    assert result is None

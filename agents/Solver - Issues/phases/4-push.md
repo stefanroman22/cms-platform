@@ -1,6 +1,6 @@
 # Phase 4 — Push
 
-**Goal:** Commit agent's file changes and force-with-lease push to `cms-preview`.
+**Goal:** Commit agent's file changes and push to `cms-preview`.
 
 **Inputs:** `./client-repo/` working tree, `SOLVER_GITHUB_TOKEN`.
 
@@ -11,12 +11,13 @@
    - `git add -A`.
    - Commit with message `fix: <issue.title>\n\nAutomated fix by Solver Agent for CMS issue <id>.\n\nCo-Authored-By: Solver Agent (Claude Code) <solver@roman-technologies.dev>`.
    - Capture HEAD SHA.
-   - `git push --force-with-lease origin HEAD`.
+   - `git push origin HEAD`.
 
-**Why --force-with-lease?** Phase 2 reset `cms-preview` to production HEAD, rewriting its history. A plain push would be rejected as non-fast-forward. `--force-with-lease` is safer than `--force`: it only overwrites the remote if the remote ref matches the expected SHA. If another solver run or Stefan pushed to `cms-preview` between our clone and our push, the lease fails and we surface a clear error instead of stomping on their work.
-
-**Outputs:** New commit on `cms-preview`, parent = production HEAD.
+**Outputs:** New commit on `cms-preview`, parent = previous `cms-preview` HEAD.
 
 **Failure messages:**
 - Push 403 → PAT scope drift; surface to release step.
-- Push rejected (lease failed) → another writer touched `cms-preview` mid-run; surface "cms-preview moved during run, retry on next tick".
+
+**Failure mode: push rejected**
+
+If cms-preview moved between clone and push (concurrent solver run, manual edit pushed by Stefan, etc.), `git push` returns non-zero. `repo.commit_and_push` raises `PushRejectedError`. `finalize.py` catches it, posts a Slack thread reply (kind=backend_error, "cms-preview moved during run; local commit lost — re-trigger workflow after staging stabilizes"), then re-raises. The `Release on failure` workflow step handles `release_issue_failed` (single retry increment). Runner workspace is ephemeral — the local commit cannot be recovered.

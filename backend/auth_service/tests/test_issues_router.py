@@ -376,6 +376,76 @@ def test_admin_status_update_fires_slack_resolved(
     assert ts_updates[0]["slack_resolved_ts"] == "1715789999.000001"
 
 
+def test_create_issue_persists_slack_created_ts(
+    mock_supabase, client, auth_as, client_user, monkeypatch
+):
+    """When notify_issue_created returns a ts, it is persisted as slack_created_ts."""
+    auth_as(client_user)
+
+    inserted_row = {
+        "id": "issue-77",
+        "project_id": "project-acme",
+        "title": "x",
+        "description": "y",
+        "priority": "Low",
+        "created_at": "2026-05-15T10:00:00Z",
+        "created_by": client_user.id,
+    }
+    # First call (insert) returns the row; subsequent UPDATE returns it too.
+    mock_supabase.execute.return_value = MagicMock(data=[inserted_row])
+
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_created",
+        lambda **kw: "1715865123.456789",
+    )
+
+    resp = client.post(
+        "/projects/acme/issues",
+        json={"title": "x", "description": "y", "priority": "Low"},
+    )
+    assert resp.status_code == 201, resp.text
+
+    # Find the UPDATE call that set slack_created_ts.
+    update_calls = [
+        c for c in mock_supabase.update.call_args_list if c.args and "slack_created_ts" in c.args[0]
+    ]
+    assert len(update_calls) == 1
+    assert update_calls[0].args[0]["slack_created_ts"] == "1715865123.456789"
+
+
+def test_create_issue_no_ts_when_slack_returns_none(
+    mock_supabase, client, auth_as, client_user, monkeypatch
+):
+    """When notify_issue_created returns None (disabled/error), no UPDATE is made."""
+    auth_as(client_user)
+    mock_supabase.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "issue-78",
+                "project_id": "project-acme",
+                "title": "x",
+                "description": "y",
+                "priority": "Low",
+                "created_at": "2026-05-15T10:00:00Z",
+                "created_by": client_user.id,
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_created",
+        lambda **kw: None,
+    )
+    resp = client.post(
+        "/projects/acme/issues",
+        json={"title": "x", "description": "y", "priority": "Low"},
+    )
+    assert resp.status_code == 201
+    update_calls = [
+        c for c in mock_supabase.update.call_args_list if c.args and "slack_created_ts" in c.args[0]
+    ]
+    assert len(update_calls) == 0
+
+
 def test_admin_status_update_skips_when_already_done(
     mock_supabase, client, auth_as, admin_user, monkeypatch
 ):

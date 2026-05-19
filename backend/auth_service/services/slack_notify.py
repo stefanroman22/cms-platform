@@ -196,6 +196,85 @@ def notify_issue_resolved(
         return None
 
 
+_AGENT_EVENT_EMOJI = {
+    "rejected": "🤔",
+    "no_diff": "⚠️",
+    "agent_crashed": "🔧",
+    "backend_error": "🛑",
+}
+
+_AGENT_EVENT_HEADER = {
+    "rejected": "Agent reviewed, no change",
+    "no_diff": "Agent produced no file changes",
+    "agent_crashed": "Agent CLI crashed",
+    "backend_error": "Backend / push error",
+}
+
+
+def notify_agent_event(
+    *,
+    thread_ts: str | None,
+    kind: str,
+    reason: str,
+    project: dict[str, Any],
+    issue: dict[str, Any],
+) -> str | None:
+    """Post an agent-event Slack message.
+
+    If thread_ts is provided, posts as a thread reply. If thread_ts is None
+    (slack_created_ts was never persisted, e.g. notify_issue_created failed at
+    create time), degrades to a top-level message that includes project + title
+    for context.
+
+    Returns the resulting Slack ts on success, None on disabled mode or any
+    failure. Swallow all errors — slack outages must not break the agent.
+    """
+    if not _enabled():
+        logger.info("slack_notify disabled — skipping agent_event")
+        return None
+
+    emoji = _AGENT_EVENT_EMOJI.get(kind, "❔")
+    header = _AGENT_EVENT_HEADER.get(kind, "Agent event")
+    project_name = project.get("name") or project.get("slug", "unknown")
+    title = issue.get("title", "(no title)")
+    reason_trimmed = _truncate(reason, 500)
+
+    if thread_ts:
+        text = f"{emoji} {header} — {reason_trimmed}"
+    else:
+        text = (
+            f"{emoji} {header} — {project_name}\n"
+            f"*Title:* {title}\n"
+            f"*Reason:* {reason_trimmed}\n"
+            f"_(threaded reply not possible — original 'New Issue' Slack ts unknown)_"
+        )
+
+    try:
+        body: dict[str, Any] = {
+            "channel": os.environ["SLACK_ISSUES_CHANNEL_ID"],
+            "text": text,
+        }
+        if thread_ts:
+            body["thread_ts"] = thread_ts
+        resp = httpx.post(
+            SLACK_API,
+            headers={
+                "Authorization": f"Bearer {os.environ['SLACK_BOT_TOKEN']}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            json=body,
+            timeout=_TIMEOUT_S,
+        )
+        data = resp.json()
+        if not data.get("ok"):
+            logger.warning("notify_agent_event api error: %s", data.get("error"))
+            return None
+        return data.get("ts")
+    except Exception:
+        logger.exception("notify_agent_event post failed")
+        return None
+
+
 def post_thread_reply(*, thread_ts: str, text: str) -> str | None:
     """Reply in the thread of a previously-posted message.
 

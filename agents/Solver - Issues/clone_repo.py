@@ -19,15 +19,15 @@ def main() -> int:
     if Path(dest).exists():
         shutil.rmtree(dest)
 
-    repo.clone_and_reset_to_prod(
+    repo.clone_at_preview_head(
         repo_slug=project["github_repo"],
         dev_branch=project["repo_branch"],
-        prod_branch=project["production_branch"],
         dest=dest,
     )
+    prev_sha = Path(repo.PREV_SHA_PATH).read_text().strip()
     print(
         f"cloned {project['github_repo']}: "
-        f"reset {project['repo_branch']} → origin/{project['production_branch']} → {dest}"
+        f"{project['repo_branch']} HEAD = {prev_sha[:7] if prev_sha else '(empty)'} → {dest}"
     )
     return 0
 

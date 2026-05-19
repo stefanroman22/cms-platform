@@ -64,3 +64,43 @@ def test_claim_passes_env_overrides_to_rpc(monkeypatch, mock_pg):
     params = mock_pg["calls"][0]["params"]
     assert params["p_max_retries"] == 5
     assert params["p_stale_minutes"] == 30
+
+
+def test_claim_specific_returns_row_when_eligible(mock_pg):
+    row = {
+        "id": "issue-77",
+        "project_id": "proj-1",
+        "title": "x",
+        "description": "y",
+        "priority": "High",
+        "status": "pending",
+        "revision_feedback": None,
+    }
+    mock_pg["next_result"] = [row]
+    assert db.claim_specific_issue("issue-77") == row
+
+
+def test_claim_specific_returns_none_when_ineligible(mock_pg):
+    mock_pg["next_result"] = []
+    assert db.claim_specific_issue("issue-77") is None
+
+
+def test_claim_specific_uses_correct_rpc_name(mock_pg):
+    mock_pg["next_result"] = []
+    db.claim_specific_issue("issue-77")
+    assert mock_pg["calls"][0]["fn"] == "claim_specific_solver_issue"
+
+
+def test_claim_specific_passes_issue_id_param(mock_pg):
+    mock_pg["next_result"] = []
+    db.claim_specific_issue("issue-abc")
+    assert mock_pg["calls"][0]["params"]["p_issue_id"] == "issue-abc"
+
+
+def test_claim_specific_respects_env_overrides(monkeypatch, mock_pg):
+    monkeypatch.setenv("SOLVER_MAX_RETRIES", "5")
+    monkeypatch.setenv("SOLVER_STALE_CLAIM_MINUTES", "30")
+    mock_pg["next_result"] = []
+    db.claim_specific_issue("issue-x")
+    assert mock_pg["calls"][0]["params"]["p_max_retries"] == 5
+    assert mock_pg["calls"][0]["params"]["p_stale_minutes"] == 30

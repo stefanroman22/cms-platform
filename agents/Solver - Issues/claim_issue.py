@@ -65,7 +65,17 @@ def _render_skills_block() -> str:
 
 
 def main() -> int:
-    issue = db.claim_next_issue()
+    dispatch_id = (os.environ.get("DISPATCH_ISSUE_ID") or "").strip()
+    if dispatch_id:
+        issue = db.claim_specific_issue(dispatch_id)
+        if issue is None:
+            # Targeted issue ineligible (already done, claimed by concurrent run,
+            # blocked, or maxed retries). Fall back to the queue so the run still
+            # does useful work — eg. drains the backlog of older issues.
+            print(f"dispatch issue {dispatch_id} not eligible; falling back to queue")
+            issue = db.claim_next_issue()
+    else:
+        issue = db.claim_next_issue()
     gh_output = Path(os.environ["GITHUB_OUTPUT"])
 
     if issue is None:
@@ -96,15 +106,14 @@ def _build_prompt(issue: dict, project: dict) -> str:
             "\n## Previous attempt was rejected\n"
             "Stefan's feedback on the last fix attempt:\n"
             f"> {issue['revision_feedback']}\n\n"
-            "Your previous commit's SHA is in `/tmp/prev-solver-sha` (if "
-            "non-empty). Read it and run `git show <sha>` from inside "
-            "`./client-repo/` to see exactly what you changed last time. "
-            f"The `{project['repo_branch']}` branch ref has been reset to "
-            "the production HEAD, so the commit is no longer reachable "
-            "from the branch, but the object is still in `.git/objects` "
-            "and `git show` works.\n\n"
-            "Use that diff to understand what you did, then address "
-            "Stefan's feedback this time.\n"
+            f"Your previous commit is the HEAD of `{project['repo_branch']}` "
+            "(it was NOT reverted server-side). Run `git log -3 --oneline` "
+            "inside `./client-repo/` to see recent history, and `git show HEAD` "
+            "to see the rejected diff.\n\n"
+            "Decide: amend with a better fix on top of HEAD, OR revert HEAD "
+            "first (`git revert --no-edit HEAD`) then write the correct fix. "
+            "Amend is preferred when the rejection was about a missing detail; "
+            "revert is preferred when the prior approach was fundamentally wrong.\n"
         )
 
     skills_block = _render_skills_block()
@@ -139,6 +148,8 @@ the only objective.
 
 <repository>
 Working directory: `./client-repo/` (already cloned at branch `{project['repo_branch']}`).
+
+**Source of truth:** You are reading the CURRENT state of `{project['repo_branch']}`, which IS the staging branch (not production). If the bug describes staging behavior, you should be able to reproduce it in this code. Production may have different state. Reason about staging, not prod.
 </repository>
 
 <issue>
@@ -176,9 +187,17 @@ Concretely:
    - **Already fixed** / **Wrong layer (content not code)** / **Cannot locate** /
      **Ambiguous** → reject.
 
-If you reject, write one line to `/tmp/agent-status.md`:
+If you reject, write one line to `/tmp/agent-status.md` using the most appropriate prefix:
 
-> Cannot reproduce: <one-sentence reason naming what you looked at and why it does not match>
+- `Cannot reproduce: <one-sentence reason naming what you looked at and why it does not match>`
+- `Already fixed: <commit-sha-or-file-line that already implements the requested state>`
+- `Wrong layer (content not code): <which dashboard tab the user should edit instead, eg "Content → Hero section" or "Content → Footer text">`
+- `Cannot locate: <what you searched for and where>`
+- `Ambiguous: <which two or more interpretations make the description unresolvable>`
+
+For "Wrong layer (content not code)" rejections, the reason MUST name a specific
+dashboard tab so the user has an actionable next step. The CMS dashboard has tabs
+for editable content per page; tell them where to go.
 
 Then exit. Do not proceed to Step 1 on a guess.
 
