@@ -76,3 +76,25 @@ startup.
 See [`docs/SECURITY.md`](./SECURITY.md) for the rotation log + procedure.
 After rotating in the provider, update Vercel dashboard, redeploy, and verify
 the live endpoints (`/health`, `/content/<slug>`, `/auth/login`, `/forms/...`).
+
+## Scraper env contract — Hetzner box (`/etc/scraper.env`)
+
+These vars live in `/etc/scraper.env` on the Hetzner cron box. They are **not**
+on Vercel and the backend service does not import the scraper package — these two
+deploy surfaces are fully independent.
+
+| Var | Required in | Notes |
+|-----|-------------|-------|
+| `SUPABASE_URL` | required | `https://<ref>.supabase.co` — same value as backend. |
+| `SUPABASE_SERVICE_KEY` | required | Service-role key that bypasses RLS. Same secret as backend's `SUPABASE_SERVICE_ROLE_KEY`. **Never expose.** |
+| `GOOGLE_SHEETS_CREDENTIALS_JSON` | required | Filesystem path to the Google service-account JSON (e.g. `/etc/scraper/google-sa.json`). File must be owned `root:scraper`, mode `640`. |
+| `GOOGLE_SHEET_ID` | required | Spreadsheet ID (the long key in the Google Sheets URL) for the leads mirror. |
+| `SCRAPER_HEADLESS` | optional | Run Playwright headless. Default: `true`. Set `false` only for local debugging — headful mode won't work on the server. |
+| `SCRAPER_LOCALE_DEFAULT` | optional | Browser locale passed to Playwright. Default: `en`. |
+| `SCRAPER_USER_AGENT` | optional | Browser user-agent string. Default: Chromium 131 Windows UA (see `scraper/src/scraper/config.py`). |
+| `SCRAPER_MIN_DELAY_MS` | optional | Minimum jitter delay between Maps requests (ms). Default: `600`. |
+| `SCRAPER_MAX_DELAY_MS` | optional | Maximum jitter delay between Maps requests (ms). Default: `2200`. |
+
+Log file lives at `/var/log/rt-scraper.log`, owned by `scraper:scraper`.
+See `scraper/.env.example` for a ready-to-copy template and `scraper/deploy/DEPLOY.md`
+for the full provisioning guide.
