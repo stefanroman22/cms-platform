@@ -50,6 +50,7 @@ def mock_supabase():
         "auth_service.routers.publish.get_supabase_admin",  # created in Task 7
         "auth_service.routers.issues.get_supabase_admin",  # S1 — Slack notifications
         "auth_service.routers.admin_leads.get_supabase_admin",  # C2 — leads admin router
+        "auth_service.routers.admin_scrape_jobs.get_supabase_admin",  # C3 — scrape-jobs admin router
         "auth_service.routers.deps.get_supabase_admin",  # S1.5 Task 8 — widened SELECT regression
         "auth_service.services.sessions.get_supabase_admin",
         # auth.change_password does `from ..services.supabase_client import get_supabase_admin`
@@ -147,6 +148,13 @@ def auth_as(monkeypatch):
         try:
             monkeypatch.setattr(
                 "auth_service.routers.admin_leads.admin_user_via_bearer_or_sid",
+                fake_admin_user,
+            )
+        except (AttributeError, ModuleNotFoundError, ImportError):
+            pass
+        try:
+            monkeypatch.setattr(
+                "auth_service.routers.admin_scrape_jobs.admin_user_via_bearer_or_sid",
                 fake_admin_user,
             )
         except (AttributeError, ModuleNotFoundError, ImportError):
