@@ -1,8 +1,11 @@
-"""Workflow entrypoint on `failure()` — increment retry counter for the
-currently-claimed issue.
+"""Workflow entrypoint on `failure()` — increment retry counter + notify Slack.
 
-Reads issue id from /tmp/issue.json (claim_issue.py wrote it). If the
-file doesn't exist, no issue was claimed → nothing to release.
+Reads issue id from /tmp/issue.json (claim_issue.py wrote it). If the file
+doesn't exist, no issue was claimed → exit clean.
+
+De-dup with finalize.py: if /tmp/agent-event-emitted exists, finalize already
+posted the relevant Slack thread reply (eg. on PushRejectedError) — skip our
+own emission to avoid posting two messages for one failure.
 """
 
 from __future__ import annotations
@@ -13,12 +16,14 @@ import os
 import sys
 from pathlib import Path
 
+import backend_api
 import db
 import slack as slack_client
 
 logger = logging.getLogger(__name__)
 
 ISSUE_JSON_PATH = "/tmp/issue.json"
+EVENT_MARKER_PATH = "/tmp/agent-event-emitted"
 
 
 def main() -> int:
@@ -32,6 +37,19 @@ def main() -> int:
 
     db.release_issue_failed(issue["id"], error)
     print(f"released issue {issue['id']} as failed: {error[:80]}")
+
+    # De-dup: if finalize.py already emitted an event for this failure, skip.
+    if Path(EVENT_MARKER_PATH).exists():
+        print("event already emitted by finalize.py — skipping duplicate")
+    else:
+        try:
+            backend_api.notify_agent_event(
+                issue["id"],
+                kind="agent_crashed",
+                reason=error,
+            )
+        except Exception:  # noqa: BLE001 — best-effort
+            logger.exception("backend notify_agent_event failed (continuing)")
 
     new_count = _current_retry_count(issue["id"])
     max_retries = int(os.environ.get("SOLVER_MAX_RETRIES", "3"))
@@ -49,9 +67,6 @@ def main() -> int:
 
 
 def _failure_reason() -> str:
-    """Best-effort: read a step hint from FAILED_STEP env (set by caller workflow,
-    if any). Falls back to generic message.
-    """
     failed_step = os.environ.get("FAILED_STEP", "")
     if failed_step:
         return f"workflow step failed: {failed_step}"
