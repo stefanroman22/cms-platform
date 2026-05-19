@@ -1,0 +1,11 @@
+[Unit]
+Description=Run RT Scraper nightly + every 30 min as catch-up
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+OnCalendar=*-*-* 00/0:30:00
+Persistent=true
+Unit=scraper.service
+
+[Install]
+WantedBy=timers.target
