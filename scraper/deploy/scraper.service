@@ -1,0 +1,14 @@
+[Unit]
+Description=RT Scraper — claim and run one pending scrape job
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=scraper
+WorkingDirectory=/opt/rt-scraper
+EnvironmentFile=/etc/scraper.env
+ExecStart=/opt/rt-scraper/.venv/bin/python -m scraper.cli run-pending
+StandardOutput=append:/var/log/rt-scraper.log
+StandardError=append:/var/log/rt-scraper.log
+Nice=10

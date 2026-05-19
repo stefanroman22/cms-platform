@@ -31,6 +31,10 @@ def mock_supabase():
         "delete",
         "neq",
         "filter",
+        "range",
+        "gte",
+        "lte",
+        "ilike",
     ]:
         getattr(mock, method).return_value = mock
 
@@ -45,6 +49,8 @@ def mock_supabase():
         "auth_service.routers.projects.get_supabase_admin",
         "auth_service.routers.publish.get_supabase_admin",  # created in Task 7
         "auth_service.routers.issues.get_supabase_admin",  # S1 — Slack notifications
+        "auth_service.routers.admin_leads.get_supabase_admin",  # C2 — leads admin router
+        "auth_service.routers.admin_scrape_jobs.get_supabase_admin",  # C3 — scrape-jobs admin router
         "auth_service.routers.deps.get_supabase_admin",  # S1.5 Task 8 — widened SELECT regression
         "auth_service.services.sessions.get_supabase_admin",
         # auth.change_password does `from ..services.supabase_client import get_supabase_admin`
@@ -123,11 +129,32 @@ def auth_as(monkeypatch):
         # Patch the reference imported into issues.py so bearer-auth tests can run
         # without a real Supabase admin_keys lookup. async def per deps.py.
         async def fake_admin_user(request):  # noqa: ARG001
+            from fastapi import HTTPException
+
+            is_admin = getattr(user, "is_admin", None)
+            if is_admin is None and isinstance(user, dict):
+                is_admin = user.get("is_admin")
+            if not is_admin:
+                raise HTTPException(status_code=403, detail="Admin access required")
             return user
 
         try:
             monkeypatch.setattr(
                 "auth_service.routers.issues.admin_user_via_bearer_or_sid",
+                fake_admin_user,
+            )
+        except (AttributeError, ModuleNotFoundError, ImportError):
+            pass
+        try:
+            monkeypatch.setattr(
+                "auth_service.routers.admin_leads.admin_user_via_bearer_or_sid",
+                fake_admin_user,
+            )
+        except (AttributeError, ModuleNotFoundError, ImportError):
+            pass
+        try:
+            monkeypatch.setattr(
+                "auth_service.routers.admin_scrape_jobs.admin_user_via_bearer_or_sid",
                 fake_admin_user,
             )
         except (AttributeError, ModuleNotFoundError, ImportError):

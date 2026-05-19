@@ -382,3 +382,126 @@ class WelcomeEmailIn(BaseModel):
         if checked is None:
             raise ValueError("website_url must be a non-empty http(s) URL")
         return checked
+
+
+# ───────── Lead scraper (added 2026-05-17) ─────────
+
+LeadType = Literal["website", "automation", "both"]
+WebPresence = Literal["none", "social_only", "has_website", "unknown"]
+WebsiteBuildStatus = Literal[
+    "not_started",
+    "building_design",
+    "design_done",
+    "building",
+    "finished_cms",
+    "refining",
+    "not_applicable",
+]
+AiWorkflowStatus = Literal[
+    "not_started",
+    "building",
+    "finished",
+    "refining",
+    "not_applicable",
+]
+LeadStatus = Literal["not_sent", "sent", "accepted", "refused"]
+LeadContactType = Literal["not_contacted", "phone", "mail", "in_person"]
+PaymentStatus = Literal["not_applicable", "not_paid", "paid"]
+ScrapeJobStatus = Literal["pending", "running", "done", "failed", "cancelled"]
+
+
+class ScrapeFilters(BaseModel):
+    min_rating: float | None = None
+    max_rating: float | None = None
+    min_reviews: int | None = None
+    max_reviews: int | None = None
+    web_presence: list[WebPresence] = Field(default_factory=lambda: ["none", "social_only"])
+
+
+class ScrapeParams(BaseModel):
+    category: str
+    country: str
+    cities: list[str] = Field(default_factory=list)
+    areas: list[str] = Field(default_factory=list)
+    max_results_per_area: int = 120
+    language: str = "en"
+    lead_type: LeadType = "website"
+    with_reviews: bool = False
+    review_limit: int = 10
+    filters: ScrapeFilters = Field(default_factory=ScrapeFilters)
+
+
+class LeadOut(BaseModel):
+    id: str
+    external_id: str
+    scrape_job_id: str | None = None
+    primary_source: str
+    source_url: str | None = None
+    lead_type: LeadType
+    category: str | None = None
+    business_name: str
+    name_normalized: str
+    description: str | None = None
+    about: str | None = None
+    country: str | None = None
+    region: str | None = None
+    city: str | None = None
+    address: str | None = None
+    postal_code: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    phone: str | None = None
+    email: str | None = None
+    website_url: str | None = None
+    facebook_url: str | None = None
+    instagram_url: str | None = None
+    menu_url: str | None = None
+    web_presence: WebPresence
+    rating: float | None = None
+    review_count: int | None = None
+    reviews: list[dict] | None = None
+    opening_hours: dict[str, str] | None = None
+    photo_urls: list[str] = Field(default_factory=list)
+    website_build_status: WebsiteBuildStatus
+    ai_workflow_status: AiWorkflowStatus
+    lead_status: LeadStatus
+    lead_contact_type: LeadContactType
+    payment_status: PaymentStatus
+    ai_score: int | None = None
+    ai_recommendation: str | None = None
+    ai_reasoning: str | None = None
+    ai_scored_at: str | None = None
+    extra: dict = Field(default_factory=dict)
+    notes: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class LeadUpdate(BaseModel):
+    """Only pipeline-status fields are editable from the admin tab.
+    Everything else is owned by the scraper or the future AI agent."""
+
+    website_build_status: WebsiteBuildStatus | None = None
+    ai_workflow_status: AiWorkflowStatus | None = None
+    lead_status: LeadStatus | None = None
+    lead_contact_type: LeadContactType | None = None
+    payment_status: PaymentStatus | None = None
+    notes: str | None = None
+
+
+class ScrapeJobOut(BaseModel):
+    id: str
+    created_at: str
+    status: ScrapeJobStatus
+    params: ScrapeParams
+    started_at: str | None = None
+    finished_at: str | None = None
+    results_found: int | None = None
+    results_inserted: int | None = None
+    results_skipped: int | None = None
+    error: str | None = None
+    triggered_by: str
+
+
+class ScrapeJobCreate(BaseModel):
+    params: ScrapeParams
