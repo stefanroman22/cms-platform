@@ -191,7 +191,7 @@ export function LeadKanban({ leads, loading, onSelect, onStatusChange }: Props) 
           dnd-kit itself — independent of grid/column reflow. */}
       <DragOverlay dropAnimation={null}>
         {activeLead ? (
-          <div className={`${CARD_CN} shadow-2xl ring-2 ring-blue-400 dark:ring-blue-500 rotate-2`}>
+          <div className={`${CARD_CN} shadow-2xl ring-2 ring-zinc-400 dark:ring-zinc-600`}>
             <CardContent lead={activeLead} />
           </div>
         ) : null}
