@@ -402,7 +402,7 @@ ScrapeJobStatus = Literal["pending", "running", "done", "failed", "cancelled"]
 class ScrapeFilters(BaseModel):
     min_rating: float | None = None
     max_rating: float | None = None
-    min_reviews: int | None = None
+    min_reviews: int | None = 5
     max_reviews: int | None = None
     web_presence: list[WebPresence] = Field(default_factory=lambda: ["none", "social_only"])
 

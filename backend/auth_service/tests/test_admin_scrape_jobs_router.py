@@ -84,7 +84,7 @@ def test_create_job_with_empty_params_uses_defaults(mock_supabase, client, auth_
                     "filters": {
                         "min_rating": None,
                         "max_rating": None,
-                        "min_reviews": None,
+                        "min_reviews": 5,
                         "max_reviews": None,
                         "web_presence": ["none", "social_only"],
                     },
@@ -106,3 +106,4 @@ def test_create_job_with_empty_params_uses_defaults(mock_supabase, client, auth_
     assert body["params"]["country"] == "NL"
     assert body["params"]["with_reviews"] is True
     assert body["params"]["filters"]["web_presence"] == ["none", "social_only"]
+    assert body["params"]["filters"]["min_reviews"] == 5
