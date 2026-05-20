@@ -31,14 +31,14 @@ class ScrapeParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    category: str
-    country: str
+    category: str = "businesses"
+    country: str = "NL"
     cities: list[str] = Field(default_factory=list)
     areas: list[str] = Field(default_factory=list)
     max_results_per_area: int = 120
     language: str = "en"
     lead_type: LeadType = "website"
-    with_reviews: bool = False
+    with_reviews: bool = True
     review_limit: int = 10
     filters: ScrapeFilters = Field(default_factory=ScrapeFilters)
 
