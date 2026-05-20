@@ -58,7 +58,7 @@ def scrape(
     lead_type: Annotated[str, typer.Option("--lead-type")] = "website",
     min_rating: Annotated[float | None, typer.Option("--min-rating")] = None,
     max_rating: Annotated[float | None, typer.Option("--max-rating")] = None,
-    min_reviews: Annotated[int | None, typer.Option("--min-reviews")] = None,
+    min_reviews: Annotated[int | None, typer.Option("--min-reviews")] = 5,
     max_reviews: Annotated[int | None, typer.Option("--max-reviews")] = None,
     web_presence: Annotated[list[str], typer.Option("--web-presence")] = _DEFAULT_WEB_PRESENCE,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
