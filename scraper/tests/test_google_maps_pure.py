@@ -2,6 +2,7 @@
 
 from scraper.google_maps import (
     _build_queries,
+    _normalize_attribute_key,
     _parse_rating,
     _parse_review_count,
     _passes_filters,
@@ -167,3 +168,10 @@ def test_filters_review_count_range():
     assert _passes_filters(_mk_lead(review_count=50), f) is True
     assert _passes_filters(_mk_lead(review_count=5), f) is False
     assert _passes_filters(_mk_lead(review_count=200), f) is False
+
+
+def test_normalize_attribute_key_spaces():
+    assert _normalize_attribute_key("Free Wi-Fi") == "free_wi_fi"
+    assert _normalize_attribute_key("Pet-friendly") == "pet_friendly"
+    assert _normalize_attribute_key("Free parking") == "free_parking"
+    assert _normalize_attribute_key("Outdoor seating") == "outdoor_seating"

@@ -35,7 +35,7 @@ _FIELD_MAP: dict[str, Callable[[Lead], Any]] = {
     "schedule": lambda lead: lead.opening_hours,
     "about": lambda lead: lead.about,
     "photos": lambda lead: ",".join(lead.photo_urls) if lead.photo_urls else None,
-    "menu": lambda lead: lead.menu_url,
+    "menu": lambda lead: None,
     "status website": lambda lead: None,
     "status ai workflow": lambda lead: None,
     "status lead": lambda lead: None,

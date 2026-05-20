@@ -185,13 +185,27 @@ async def _card_text(card: ElementHandle, selector: str) -> str | None:
 
 
 async def _review_from_card(card: ElementHandle) -> dict[str, Any]:
-    """Pull the three review fields out of one card. One async call per
-    field keeps the control flow obvious; selectors live in
-    `scraper.selectors`."""
+    """Pull author, text, relative_date, rating (1-5 int) out of one card.
+    Rating is parsed from the aria-label on the star span (REVIEW_RATING
+    selector); falls back to None if not parseable."""
+    rating: int | None = None
+    try:
+        star_el = await card.query_selector(selectors.REVIEW_RATING)
+        if star_el is not None:
+            aria = await star_el.get_attribute("aria-label")
+            if aria:
+                import re
+
+                m = re.search(r"(\d+)\s*(star|ster)", aria, re.IGNORECASE)
+                if m:
+                    rating = int(m.group(1))
+    except Exception:
+        rating = None
     return {
         "author": await _card_text(card, selectors.REVIEW_AUTHOR),
         "text": await _card_text(card, selectors.REVIEW_TEXT),
         "relative_date": await _card_text(card, selectors.REVIEW_RELATIVE_DATE),
+        "rating": rating,
     }
 
 
@@ -210,15 +224,59 @@ async def _open_reviews_tab(page: Page) -> bool:
 
 
 async def _extract_reviews(page: Page, limit: int) -> list[dict[str, Any]]:
-    """Open the Reviews tab if present, scrape up to `limit` reviews."""
+    """Open the Reviews tab if present, return TOP 3 reviews by star
+    rating. `limit` is ignored from the spec — kept as a no-op for API
+    compatibility — we always return 3."""
     if not await _open_reviews_tab(page):
         return []
 
+    # Cap candidates: scrolling the reviews pane would yield more, but
+    # the top-rated are usually rendered first by Google's default sort.
     cards = await page.locator(selectors.REVIEW_CARD).element_handles()
-    reviews: list[dict[str, Any]] = []
-    for card in cards[:limit]:
-        reviews.append(await _review_from_card(card))
-    return reviews
+    candidates: list[dict[str, Any]] = []
+    for card in cards[:30]:
+        candidates.append(await _review_from_card(card))
+
+    # Sort by rating desc; None ratings sink to the bottom.
+    candidates.sort(key=lambda r: (r.get("rating") or -1), reverse=True)
+    return candidates[:3]
+
+
+def _normalize_attribute_key(label: str) -> str:
+    """Convert 'Free Wi-Fi' -> 'free_wifi', 'Pet-friendly' -> 'pet_friendly'."""
+    import re
+
+    cleaned = re.sub(r"[^\w\s]", " ", label.lower())
+    cleaned = re.sub(r"\s+", "_", cleaned.strip())
+    return cleaned
+
+
+async def _extract_about_attributes(page: Page) -> dict[str, bool]:
+    """Open the About tab and read each attribute as a boolean dict.
+    Returns empty dict if the tab is absent or unparseable."""
+    try:
+        btn = page.locator(selectors.ABOUT_TAB_BUTTON).first
+        if await btn.count() == 0:
+            return {}
+        await btn.click(timeout=2000)
+        await page.wait_for_load_state("networkidle", timeout=3000)
+        items = await page.locator(selectors.ABOUT_ATTRIBUTE_ITEMS).element_handles()
+        attrs: dict[str, bool] = {}
+        for it in items:
+            label = await it.get_attribute("aria-label")
+            if not label:
+                continue
+            # Google marks unavailable attributes with "No" prefix
+            # (e.g. "No Wi-Fi"). Treat those as false.
+            normalized = label.strip()
+            if normalized.lower().startswith("no "):
+                key = _normalize_attribute_key(normalized[3:].strip())
+                attrs[key] = False
+            else:
+                attrs[_normalize_attribute_key(normalized)] = True
+        return attrs
+    except Exception:
+        return {}
 
 
 _DUTCH_POSTAL_RE = re.compile(r"^(\d{4}\s?[A-Z]{2})\s+(.+)$")
@@ -314,7 +372,6 @@ async def _scrape_one_place(
         phone = _strip_icon_prefix(await _safe_text(page, selectors.PLACE_PHONE_BUTTON))
         website_url = await _safe_attr(page, selectors.PLACE_WEBSITE_BUTTON, "href")
         category = _strip_icon_prefix(await _safe_text(page, selectors.PLACE_CATEGORY_BUTTON))
-        menu_url = await _safe_attr(page, selectors.PLACE_MENU_BUTTON, "href")
         description = _strip_icon_prefix(await _safe_text(page, selectors.PLACE_DESCRIPTION))
 
         rating = _parse_rating(await _safe_text(page, selectors.PLACE_RATING_NUMBER))
@@ -337,12 +394,18 @@ async def _scrape_one_place(
         web_presence, fb_url, ig_url = classify_web_presence(website_url)
         postal_code, city = _split_address(address)
 
-        # EXTENSION POINT: scrape the "About" tab for attribute toggles
-        # (delivery, dine-in, wheelchair-accessible, etc.) and stash them
-        # in `extra`. Skipped in v1 to keep the scrape fast.
+        about_attrs = await _extract_about_attributes(page)
+
+        # Substitute fallback strings for null text fields the user
+        # wants to see in the UI rather than "—".
+        def _or_not_found(v: str | None) -> str:
+            return v if v else "Not found"
+
         # EXTENSION POINT: download photos into Supabase Storage. v1
         # stores URLs only — extracting URLs here is left to a follow-up.
         extra: dict[str, Any] = {}
+        if about_attrs:
+            extra["attributes"] = about_attrs
 
         return Lead(
             external_id=external_id_from_url(
@@ -356,10 +419,10 @@ async def _scrape_one_place(
             primary_source="google_maps",
             source_url=url,
             lead_type=params.lead_type,
-            category=category,
+            category=_or_not_found(category),
             business_name=title,
             name_normalized=normalized,
-            description=description,
+            description=_or_not_found(description),
             country=params.country,
             city=city,
             address=address,
@@ -368,7 +431,7 @@ async def _scrape_one_place(
             website_url=website_url if web_presence == "has_website" else None,
             facebook_url=fb_url,
             instagram_url=ig_url,
-            menu_url=menu_url,
+            menu_url=None,  # spec: stop populating; field kept on model for back-compat
             web_presence=web_presence,  # type: ignore[arg-type]
             rating=rating,
             review_count=review_count,

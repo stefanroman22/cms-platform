@@ -60,3 +60,11 @@ REVIEW_TEXT = "span.wiI7pd, div[data-review-id] span[jscontroller]"
 
 # Photos.
 PHOTO_BUTTONS = "button[data-photo-index] img"
+
+# About tab — attribute toggles (Free Wi-Fi, Free breakfast, etc.).
+# The tab is a button labelled "About" / "Over"; cards inside have
+# aria-label containing the attribute name.
+ABOUT_TAB_BUTTON = 'button[aria-label*="About"], button[aria-label*="Over"]'
+# Inside the About tab, each visible attribute is exposed via this
+# selector. We read the aria-label off each.
+ABOUT_ATTRIBUTE_ITEMS = 'div[role="group"] li[aria-label], div[role="region"] li[aria-label]'
