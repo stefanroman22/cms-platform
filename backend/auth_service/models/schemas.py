@@ -461,6 +461,8 @@ class LeadOut(BaseModel):
     ai_reasoning: str | None = None
     ai_scored_at: str | None = None
     extra: dict = Field(default_factory=dict)
+    closed_amount: float | None = None
+    closed_at: str | None = None
     notes: str | None = None
     created_at: str
     updated_at: str
@@ -476,6 +478,7 @@ class LeadUpdate(BaseModel):
     lead_contact_type: LeadContactType | None = None
     payment_status: PaymentStatus | None = None
     notes: str | None = None
+    closed_amount: float | None = None
 
 
 class ScrapeJobOut(BaseModel):

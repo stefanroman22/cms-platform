@@ -3,6 +3,8 @@ Writes are limited to pipeline-status fields (LeadUpdate)."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from ..models.schemas import LeadOut, LeadUpdate
@@ -86,6 +88,29 @@ async def patch_lead(lead_id: str, body: LeadUpdate, request: Request) -> LeadOu
     patch = dict(body.model_dump(exclude_none=True))
     if not patch:
         raise HTTPException(status_code=422, detail="No fields to update")
+
+    # Gate closed_amount writes on lead_status='accepted' — either the current
+    # row is already accepted, OR this same PATCH transitions it to accepted.
+    if "closed_amount" in patch:
+        current = (
+            sb.table("leads")
+            .select("lead_status, closed_amount")
+            .eq("id", lead_id)
+            .maybe_single()
+            .execute()
+        )
+        if not current.data:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        new_status = patch.get("lead_status", current.data["lead_status"])
+        if new_status != "accepted":
+            raise HTTPException(
+                status_code=422,
+                detail="closed_amount can only be set when lead_status is 'accepted'",
+            )
+        # Auto-set closed_at on first non-null write.
+        if current.data["closed_amount"] is None and patch["closed_amount"] is not None:
+            patch["closed_at"] = datetime.now(UTC).isoformat()
+
     res = sb.table("leads").update(patch).eq("id", lead_id).execute()
     if not res.data:
         raise HTTPException(status_code=500, detail="Update failed")
