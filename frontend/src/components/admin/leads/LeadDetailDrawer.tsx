@@ -16,6 +16,9 @@ import {
   type WebsiteBuildStatus,
 } from "@/lib/leadEnums";
 import type { Lead } from "./types";
+import { OpeningHoursTable } from "./OpeningHoursTable";
+import { ReviewsList } from "./ReviewsList";
+import { AboutAttributesPanel } from "./AboutAttributesPanel";
 
 interface Props {
   lead: Lead | null;
@@ -299,9 +302,28 @@ function DrawerBody({
       </DetailCard>
 
       {/* Opening hours + reviews + extra — collapsible */}
-      <CollapsibleJson title="Opening hours" data={lead.opening_hours} />
-      <CollapsibleJson title="Reviews" data={lead.reviews} />
-      <CollapsibleJson title="Extra (extensibility seam)" data={lead.extra} />
+      <OpeningHoursTable hours={lead.opening_hours as Record<string, string> | null} />
+      <ReviewsList
+        reviews={
+          (lead.reviews ?? null) as
+            | {
+                author: string | null;
+                text: string | null;
+                relative_date: string | null;
+                rating: number | null;
+              }[]
+            | null
+        }
+      />
+      <AboutAttributesPanel
+        attributes={
+          (lead.extra && typeof lead.extra === "object" && "attributes" in lead.extra
+            ? (lead.extra.attributes as Record<string, Record<string, boolean>>)
+            : null) ?? null
+        }
+      />
+      {/* Keep raw extra JSON as a debug aid */}
+      <CollapsibleJson title="Raw extra (debug)" data={lead.extra} />
     </div>
   );
 }
