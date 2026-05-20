@@ -5,13 +5,13 @@ description = "Google Maps lead scraper for Roman Technologies"
 requires-python = ">=3.11"
 dependencies = [
     "playwright==1.50.0",
-    "pydantic==2.9.2",
-    "pydantic-settings==2.6.1",
+    "pydantic==2.11.7",
+    "pydantic-settings==2.7.0",
     "typer==0.13.1",
     "loguru==0.7.2",
     "tenacity==9.0.0",
     "rapidfuzz==3.10.1",
-    "supabase==2.10.0",
+    "supabase==2.29.0",
     "gspread==6.1.4",
     "google-auth==2.36.0",
     "python-dotenv==1.0.1",
