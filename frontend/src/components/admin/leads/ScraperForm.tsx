@@ -31,7 +31,7 @@ const DEFAULT_PARAMS: ScrapeParams = {
   filters: {
     min_rating: null,
     max_rating: null,
-    min_reviews: null,
+    min_reviews: 5,
     max_reviews: null,
     web_presence: ["none", "social_only"],
   },
@@ -163,7 +163,7 @@ export function ScraperForm({ onJobCreated }: Props) {
         placeholder="e.g. Centrum"
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div>
           <label className={dashboardFieldLabelCn}>Max / area</label>
           <input
@@ -197,6 +197,19 @@ export function ScraperForm({ onJobCreated }: Props) {
               value: k,
               label: LEAD_TYPE_LABEL[k],
             }))}
+          />
+        </div>
+        <div>
+          <label className={dashboardFieldLabelCn}>Min reviews</label>
+          <input
+            type="number"
+            min="0"
+            className={dashboardInputCn}
+            value={params.filters.min_reviews ?? ""}
+            placeholder="5"
+            onChange={(e) =>
+              setFilter("min_reviews", e.target.value === "" ? null : Number(e.target.value))
+            }
           />
         </div>
         <div className="flex items-end">
@@ -245,11 +258,6 @@ export function ScraperForm({ onJobCreated }: Props) {
                   value={params.filters.max_rating}
                   step="0.1"
                   onChange={(v) => setFilter("max_rating", v)}
-                />
-                <FilterNumber
-                  label="Reviews min"
-                  value={params.filters.min_reviews}
-                  onChange={(v) => setFilter("min_reviews", v)}
                 />
                 <FilterNumber
                   label="Reviews max"
