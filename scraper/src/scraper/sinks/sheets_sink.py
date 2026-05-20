@@ -41,6 +41,12 @@ _FIELD_MAP: dict[str, Callable[[Lead], Any]] = {
     "status lead": lambda lead: None,
     "type lead": lambda lead: lead.lead_type,
     "payment": lambda lead: None,
+    # CMS-managed fields — humans fill these via the dashboard after a deal
+    # closes. The scraper-side Lead model doesn't carry them; getattr returns
+    # None so the sheet columns stay empty for scrape inserts. Add "Closed
+    # Amount" + "Closed Date" header cells to the sheet manually.
+    "closed amount": lambda lead: getattr(lead, "closed_amount", None),
+    "closed date": lambda lead: getattr(lead, "closed_at", None),
 }
 
 
