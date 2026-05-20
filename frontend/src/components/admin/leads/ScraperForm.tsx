@@ -26,7 +26,7 @@ const DEFAULT_PARAMS: ScrapeParams = {
   max_results_per_area: 120,
   language: "en",
   lead_type: "website",
-  with_reviews: false,
+  with_reviews: true,
   review_limit: 10,
   filters: {
     min_rating: null,
@@ -46,7 +46,17 @@ export function ScraperForm({ onJobCreated }: Props) {
   const [success, setSuccess] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const valid = params.category.trim() !== "" && params.country.trim() !== "";
+  // All fields have server-side defaults; submission is always allowed.
+  // Blanks are substituted at submit time by `buildSubmitParams`.
+  const valid = true;
+
+  function buildSubmitParams(p: ScrapeParams): ScrapeParams {
+    return {
+      ...p,
+      category: p.category.trim() || "businesses",
+      country: p.country.trim() || "NL",
+    };
+  }
 
   function addChip(target: "cities" | "areas", value: string) {
     const trimmed = value.trim();
@@ -85,7 +95,7 @@ export function ScraperForm({ onJobCreated }: Props) {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ params }),
+        body: JSON.stringify({ params: buildSubmitParams(params) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -107,25 +117,21 @@ export function ScraperForm({ onJobCreated }: Props) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className={dashboardFieldLabelCn}>
-            Category <span className="text-red-400">*</span>
-          </label>
+          <label className={dashboardFieldLabelCn}>Category</label>
           <input
             type="text"
             className={dashboardInputCn}
-            placeholder="e.g. restaurants"
+            placeholder="businesses (default)"
             value={params.category}
             onChange={(e) => setParams((p) => ({ ...p, category: e.target.value }))}
           />
         </div>
         <div>
-          <label className={dashboardFieldLabelCn}>
-            Country <span className="text-red-400">*</span>
-          </label>
+          <label className={dashboardFieldLabelCn}>Country</label>
           <input
             type="text"
             className={dashboardInputCn}
-            placeholder="NL"
+            placeholder="NL (default)"
             value={params.country}
             onChange={(e) => setParams((p) => ({ ...p, country: e.target.value.toUpperCase() }))}
           />
