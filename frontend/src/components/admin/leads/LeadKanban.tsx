@@ -3,14 +3,15 @@
 import { useState } from "react";
 import {
   DndContext,
+  DragOverlay,
   type DragEndEvent,
+  type DragStartEvent,
   PointerSensor,
   useDroppable,
   useDraggable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { motion } from "framer-motion";
 import { Star } from "lucide-react";
 import { LeadBadge } from "./LeadBadge";
 import {
@@ -30,31 +31,11 @@ interface Props {
   onStatusChange: (leadId: string, next: LeadStatus) => Promise<void>;
 }
 
-function KanbanCard({ lead, onSelect }: { lead: Lead; onSelect: (l: Lead) => void }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: lead.id,
-  });
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 10 }
-    : undefined;
+// Shared card chrome — used by both the source draggable AND the
+// DragOverlay ghost so the visual stays identical during drag.
+function CardContent({ lead }: { lead: Lead }) {
   return (
-    <motion.div
-      ref={setNodeRef}
-      layout
-      style={style}
-      {...attributes}
-      {...listeners}
-      onClick={(e) => {
-        // Only fire select on a clean click (not after a drag).
-        if (!isDragging) onSelect(lead);
-        e.stopPropagation();
-      }}
-      className={[
-        "rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 cursor-grab active:cursor-grabbing",
-        "hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors",
-        isDragging ? "opacity-50" : "",
-      ].join(" ")}
-    >
+    <>
       <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
         {lead.business_name}
       </div>
@@ -73,7 +54,35 @@ function KanbanCard({ lead, onSelect }: { lead: Lead; onSelect: (l: Lead) => voi
           </span>
         )}
       </div>
-    </motion.div>
+    </>
+  );
+}
+
+const CARD_CN =
+  "rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 cursor-grab active:cursor-grabbing select-none";
+
+function KanbanCard({ lead, onSelect }: { lead: Lead; onSelect: (l: Lead) => void }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
+
+  // No inline transform here — DragOverlay handles the visual drag. The
+  // source card stays put as a faded placeholder so sibling cards don't
+  // reflow under the cursor.
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={() => {
+        if (!isDragging) onSelect(lead);
+      }}
+      className={[
+        CARD_CN,
+        "hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors",
+        isDragging ? "opacity-30" : "",
+      ].join(" ")}
+    >
+      <CardContent lead={lead} />
+    </div>
   );
 }
 
@@ -91,8 +100,8 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={[
-        "flex flex-col rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-3 min-h-[12rem]",
-        isOver ? "ring-2 ring-zinc-400 dark:ring-zinc-600" : "",
+        "flex flex-col rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-3 min-h-[12rem] transition-colors",
+        isOver ? "ring-2 ring-zinc-400 dark:ring-zinc-600 bg-zinc-100 dark:bg-zinc-800" : "",
       ].join(" ")}
     >
       <div className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-semibold mb-2">
@@ -111,13 +120,23 @@ function KanbanColumn({
 }
 
 export function LeadKanban({ leads, loading, onSelect, onStatusChange }: Props) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // Tight activation distance + small delay-free pointer keeps the drag
+  // glued to the cursor from the first pixel of movement.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  // Track which card is being dragged so DragOverlay can render its ghost.
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   // Optimistic local override so the card snaps to the new column
   // immediately; parent's refresh() reconciles with the API.
   const [override, setOverride] = useState<Record<string, LeadStatus>>({});
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id));
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null);
     const leadId = String(event.active.id);
     const newStatus = event.over?.id as LeadStatus | undefined;
     if (!newStatus || !COLUMNS.includes(newStatus)) return;
@@ -130,7 +149,6 @@ export function LeadKanban({ leads, loading, onSelect, onStatusChange }: Props) 
     try {
       await onStatusChange(leadId, newStatus);
     } catch {
-      // Revert on failure.
       setOverride((o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== leadId)));
     }
   }
@@ -154,13 +172,30 @@ export function LeadKanban({ leads, loading, onSelect, onStatusChange }: Props) 
   };
   for (const l of leads) byStatus[effective(l)].push(l);
 
+  const activeLead = activeId ? (leads.find((l) => l.id === activeId) ?? null) : null;
+
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveId(null)}
+    >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {COLUMNS.map((s) => (
           <KanbanColumn key={s} status={s} leads={byStatus[s]} onSelect={onSelect} />
         ))}
       </div>
+      {/* Ghost card that follows the cursor while dragging. Glued to the
+          pointer because DragOverlay is portal-rendered and positioned by
+          dnd-kit itself — independent of grid/column reflow. */}
+      <DragOverlay dropAnimation={null}>
+        {activeLead ? (
+          <div className={`${CARD_CN} shadow-2xl ring-2 ring-blue-400 dark:ring-blue-500 rotate-2`}>
+            <CardContent lead={activeLead} />
+          </div>
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 }
