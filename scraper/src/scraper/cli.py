@@ -47,13 +47,13 @@ def _build_sinks(
 
 @app.command()
 def scrape(
-    category: Annotated[str, typer.Argument()],
-    country: Annotated[str, typer.Argument()],
+    category: Annotated[str, typer.Option("--category")] = "businesses",
+    country: Annotated[str, typer.Option("--country")] = "NL",
     city: Annotated[list[str], typer.Option("--city")] = [],  # noqa: B006 — typer reads default
     area: Annotated[list[str], typer.Option("--area")] = [],  # noqa: B006 — typer reads default
     max: Annotated[int, typer.Option("--max")] = 120,
     language: Annotated[str, typer.Option("--language")] = "en",
-    with_reviews: Annotated[bool, typer.Option("--with-reviews")] = False,
+    with_reviews: Annotated[bool, typer.Option("--with-reviews/--no-with-reviews")] = True,
     review_limit: Annotated[int, typer.Option("--review-limit")] = 10,
     lead_type: Annotated[str, typer.Option("--lead-type")] = "website",
     min_rating: Annotated[float | None, typer.Option("--min-rating")] = None,
