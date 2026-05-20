@@ -53,6 +53,8 @@ export interface Lead {
   ai_reasoning: string | null;
   ai_scored_at: string | null;
   extra: Record<string, unknown>;
+  closed_amount: number | null;
+  closed_at: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -127,3 +129,43 @@ export interface ScrapeJob {
   error: string | null;
   triggered_by: string;
 }
+
+export interface ConversionTimePoint {
+  month: string;
+  revenue: number;
+  accepted: number;
+  sent: number;
+}
+
+export interface ConversionBreakdownRow {
+  key: string;
+  accepted: number;
+  revenue: number;
+}
+
+export interface ConversionSummary {
+  total_sent: number;
+  total_accepted: number;
+  total_refused: number;
+  conversion_rate: number;
+  total_revenue: number;
+  average_deal_size: number;
+  timeseries: ConversionTimePoint[];
+  by_lead_type: ConversionBreakdownRow[];
+  by_category: ConversionBreakdownRow[];
+  by_city: ConversionBreakdownRow[];
+}
+
+export interface ConversionFilters {
+  lead_type: string;
+  city: string;
+  category: string;
+  since: string;
+}
+
+export const EMPTY_CONVERSION_FILTERS: ConversionFilters = {
+  lead_type: "",
+  city: "",
+  category: "",
+  since: "",
+};
