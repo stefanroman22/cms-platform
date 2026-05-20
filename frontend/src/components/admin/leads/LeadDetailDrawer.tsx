@@ -76,6 +76,9 @@ function DrawerBody({
 }) {
   // Local copies for inline editing — debounced PATCH.
   const [notes, setNotes] = useState(lead.notes ?? "");
+  const [closedAmount, setClosedAmount] = useState<string>(
+    lead.closed_amount != null ? String(lead.closed_amount) : ""
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +87,11 @@ function DrawerBody({
     setNotes(lead.notes ?? "");
     setError(null);
   }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setClosedAmount(lead.closed_amount != null ? String(lead.closed_amount) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id]);
 
   // Debounced notes PATCH.
   useEffect(() => {
@@ -95,7 +103,26 @@ function DrawerBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notes]);
 
-  async function patch(body: Record<string, string | null>) {
+  useEffect(() => {
+    const serverValue = lead.closed_amount != null ? String(lead.closed_amount) : "";
+    if (closedAmount === serverValue) return;
+    const t = setTimeout(() => {
+      const trimmed = closedAmount.trim();
+      if (trimmed === "") {
+        patch({ closed_amount: null }).catch(() => {});
+        return;
+      }
+      const parsed = Number(trimmed);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        return; // invalid input — wait for correction
+      }
+      patch({ closed_amount: parsed }).catch(() => {});
+    }, 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closedAmount]);
+
+  async function patch(body: Record<string, string | number | null>) {
     setSaving(true);
     setError(null);
     try {
@@ -204,6 +231,36 @@ function DrawerBody({
           />
         </div>
       </section>
+
+      {lead.lead_status === "accepted" && (
+        <section className="mt-5">
+          <h3 className="text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-semibold mb-2">
+            Closed deal
+          </h3>
+          <div className="rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-3 space-y-2">
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Deal amount (EUR)
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-500 dark:text-zinc-400">€</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="flex-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                value={closedAmount}
+                placeholder="0.00"
+                onChange={(e) => setClosedAmount(e.target.value)}
+              />
+            </div>
+            {lead.closed_at && (
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                First closed on {new Date(lead.closed_at).toLocaleDateString()}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Location */}
       <DetailCard title="Location">
