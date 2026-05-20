@@ -25,7 +25,13 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from . import selectors
 from .config import settings
-from .dedup import classify_web_presence, external_id_from_url, normalize_name
+from .dedup import (
+    classify_web_presence,
+    external_id_from_url,
+    normalize_name,
+    parse_latlng_from_url,
+    peek_external_id,
+)
 from .models import Lead, ScrapeFilters, ScrapeParams
 
 # ──────────────────────────────────────────────────────────────────────
@@ -393,6 +399,7 @@ async def _scrape_one_place(
 
         web_presence, fb_url, ig_url = classify_web_presence(website_url)
         postal_code, city = _split_address(address)
+        lat, lng = parse_latlng_from_url(url)
 
         about_attrs = await _extract_about_attributes(page)
 
@@ -412,8 +419,8 @@ async def _scrape_one_place(
                 url,
                 normalized_name=normalized,
                 city=city,
-                lat=None,
-                lng=None,
+                lat=lat,
+                lng=lng,
             ),
             scrape_job_id=scrape_job_id,
             primary_source="google_maps",
@@ -427,6 +434,8 @@ async def _scrape_one_place(
             city=city,
             address=address,
             postal_code=postal_code,
+            lat=lat,
+            lng=lng,
             phone=phone,
             website_url=website_url if web_presence == "has_website" else None,
             facebook_url=fb_url,
@@ -508,6 +517,10 @@ async def scrape(
         ctx = await _new_context(browser, params.language, params.country)
         page = await ctx.new_page()
 
+        # Run-wide dedup so cartesian queries (cities × areas) and overlapping
+        # neighbourhoods don't yield the same business twice. Peek the feature
+        # id BEFORE visiting to save the ~5-10s place-page cost.
+        seen_ids: set[str] = set()
         try:
             for query in _build_queries(params):
                 logger.info("query: {}", query)
@@ -523,6 +536,14 @@ async def scrape(
                 logger.info("collected {} place links for {!r}", len(links), query)
 
                 for link in links:
+                    # Pre-visit dedup: if URL carries a Google feature id and we
+                    # already yielded that business in this run, skip without
+                    # loading the page.
+                    pre_id = peek_external_id(link)
+                    if pre_id is not None and pre_id in seen_ids:
+                        logger.debug("dedup pre-visit skip: {}", pre_id)
+                        continue
+
                     try:
                         lead = await _scrape_one_place(ctx, link, params, scrape_job_id)
                     except Exception as exc:  # noqa: BLE001 — per-place isolation
@@ -531,9 +552,15 @@ async def scrape(
 
                     if lead is None:
                         continue
+                    # Post-visit safety net for URLs whose feature id was
+                    # absent at pre-visit time (hash-fallback path).
+                    if lead.external_id in seen_ids:
+                        logger.debug("dedup post-visit skip: {}", lead.external_id)
+                        continue
                     if not _passes_filters(lead, params.filters):
                         continue
 
+                    seen_ids.add(lead.external_id)
                     yield lead
                     await _polite_delay()
         finally:

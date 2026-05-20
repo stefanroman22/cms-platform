@@ -47,13 +47,26 @@ _FIELD_MAP: dict[str, Callable[[Lead], Any]] = {
     # Amount" + "Closed Date" header cells to the sheet manually.
     "closed amount": lambda lead: getattr(lead, "closed_amount", None),
     "closed date": lambda lead: getattr(lead, "closed_at", None),
+    # Dedup key — sink reads this column at open() time to populate _seen
+    # and skip append for rows already present. Add an "External ID" header
+    # cell to the sheet to enable cross-run dedup.
+    "external id": lambda lead: lead.external_id,
 }
+
+# Header label the sink uses to populate its _seen set. Case-insensitive
+# match against the sheet's row-1 headers.
+_EXTERNAL_ID_HEADER = "external id"
 
 
 class SheetsSink(Sink):
     def __init__(self) -> None:
         self._ws: gspread.Worksheet | None = None
         self._headers: list[str] = []
+        # external_ids already present on the sheet — populated at open(),
+        # mutated by write(). Cross-run dedup hinges on the sheet having an
+        # "External ID" column; without it, _seen stays empty and the sink
+        # falls back to append-only behaviour.
+        self._seen: set[str] = set()
 
     async def open(self) -> None:
         if not settings.GOOGLE_SHEETS_CREDENTIALS_JSON or not settings.GOOGLE_SHEET_ID:
@@ -67,10 +80,33 @@ class SheetsSink(Sink):
         sh = gc.open_by_key(settings.GOOGLE_SHEET_ID)
         self._ws = sh.sheet1
         self._headers = [h.strip() for h in self._ws.row_values(1)]
+        # Build the dedup set from the existing sheet contents if an
+        # "External ID" column exists. One extra read at start; cheaper
+        # than appending duplicates and cleaning up later.
+        ext_id_col = next(
+            (i + 1 for i, h in enumerate(self._headers) if h.lower() == _EXTERNAL_ID_HEADER),
+            None,
+        )
+        if ext_id_col is None:
+            logger.warning(
+                "sheet has no 'External ID' column — running in append-only "
+                "mode; duplicate rows possible. Add the header to enable dedup."
+            )
+            return
+        # col_values returns header + data; skip row 1.
+        existing = self._ws.col_values(ext_id_col)
+        for val in existing[1:]:
+            v = str(val).strip() if val is not None else ""
+            if v:
+                self._seen.add(v)
+        logger.info("sheets sink dedup: {} existing external_ids loaded", len(self._seen))
 
     async def write(self, lead: Lead) -> bool:
         if self._ws is None:
             raise RuntimeError("SheetsSink.write called before open()")
+        if lead.external_id in self._seen:
+            logger.debug("sheets dedup skip: {}", lead.external_id)
+            return False
         row: list[Any] = []
         for header in self._headers:
             key = header.lower()
@@ -82,6 +118,7 @@ class SheetsSink(Sink):
             row.append("" if value is None else str(value))
         try:
             self._ws.append_row(row, value_input_option="RAW")
+            self._seen.add(lead.external_id)
             return True
         except Exception as exc:  # noqa: BLE001 — never break the scrape on a single bad row
             logger.warning("sheets append failed for {}: {}", lead.external_id, exc)

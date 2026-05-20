@@ -94,3 +94,45 @@ def test_classify_has_website():
 def test_classify_with_www_prefix_strip():
     presence, _, _ = classify_web_presence("https://www.acme.example.com")
     assert presence == "has_website"
+
+
+def test_peek_external_id_extracts_feature_id():
+    from scraper.dedup import peek_external_id
+
+    url = "https://www.google.com/maps/place/X/data=!4m7!3m6!1s0x47c627aca6eb87c7:0xa8baaf0585fae425!8m2!3d52.5174668!4d5.4861178"
+    assert peek_external_id(url) == "0x47c627aca6eb87c7:0xa8baaf0585fae425"
+
+
+def test_peek_external_id_returns_none_without_feature_segment():
+    from scraper.dedup import peek_external_id
+
+    assert peek_external_id("https://www.google.com/maps/place/X") is None
+
+
+def test_parse_latlng_extracts_floats():
+    from scraper.dedup import parse_latlng_from_url
+
+    url = "https://www.google.com/maps/place/X/data=!1s0x...!8m2!3d52.5174668!4d5.4861178"
+    lat, lng = parse_latlng_from_url(url)
+    assert lat == 52.5174668
+    assert lng == 5.4861178
+
+
+def test_parse_latlng_returns_none_when_absent():
+    from scraper.dedup import parse_latlng_from_url
+
+    assert parse_latlng_from_url("https://example.com") == (None, None)
+
+
+def test_external_id_uses_full_hash_when_latlng_present():
+    """The fallback hash should incorporate lat/lng when provided — two
+    same-name same-city businesses at different coords get different IDs."""
+    from scraper.dedup import external_id_from_url
+
+    a = external_id_from_url(
+        "https://x/a", normalized_name="subway", city="lelystad", lat=52.50, lng=5.47
+    )
+    b = external_id_from_url(
+        "https://x/b", normalized_name="subway", city="lelystad", lat=52.60, lng=5.50
+    )
+    assert a != b
