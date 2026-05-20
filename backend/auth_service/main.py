@@ -16,6 +16,7 @@ from .core.config import settings  # noqa: E402
 from .core.limiter import limiter  # noqa: E402
 from .core.security_headers import SecurityHeadersMiddleware  # noqa: E402
 from .routers import auth, content, projects, publish, workspace  # noqa: E402
+from .routers.admin_conversions import router as admin_conversions_router  # noqa: E402
 from .routers.admin_leads import router as admin_leads_router  # noqa: E402
 from .routers.admin_scrape_jobs import router as admin_scrape_jobs_router  # noqa: E402
 from .routers.forms import router as forms_router  # noqa: E402
@@ -134,6 +135,7 @@ app.include_router(workspace.router)
 app.include_router(issues_router)
 app.include_router(admin_leads_router)
 app.include_router(admin_scrape_jobs_router)
+app.include_router(admin_conversions_router)
 app.include_router(publish.router)
 app.include_router(slack_events_router)
 

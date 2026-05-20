@@ -497,3 +497,29 @@ class ScrapeJobOut(BaseModel):
 
 class ScrapeJobCreate(BaseModel):
     params: ScrapeParams
+
+
+class ConversionTimePoint(BaseModel):
+    month: str
+    revenue: float
+    accepted: int
+    sent: int
+
+
+class ConversionBreakdownRow(BaseModel):
+    key: str
+    accepted: int
+    revenue: float
+
+
+class ConversionSummary(BaseModel):
+    total_sent: int
+    total_accepted: int
+    total_refused: int
+    conversion_rate: float
+    total_revenue: float
+    average_deal_size: float
+    timeseries: list[ConversionTimePoint]
+    by_lead_type: list[ConversionBreakdownRow]
+    by_category: list[ConversionBreakdownRow]
+    by_city: list[ConversionBreakdownRow]
