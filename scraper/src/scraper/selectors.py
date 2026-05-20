@@ -51,8 +51,15 @@ PLACE_HOURS_TABLE = 'table[aria-label*="hours"], table[aria-label*="openingstijd
 PLACE_DESCRIPTION = "div.PYvSYb"  # FRAGILE — editorial summary
 
 # Reviews tab.
-REVIEWS_TAB_BUTTON = 'button[aria-label*="Reviews"], button[aria-label*="recensies"]'
-REVIEW_CARD = "div[data-review-id]"
+REVIEWS_TAB_BUTTON = (
+    'button[aria-label^="Reviews for "],'
+    'button[aria-label="Reviews"],'
+    'button[aria-label*="recensies"],'
+    '[role="tab"][aria-label^="Reviews for "],'
+    '[role="tab"][aria-label="Reviews"],'
+    'button[jsaction*="reviewChart"]'
+)
+REVIEW_CARD = 'div[data-review-id], div[jsaction*="reviewerLink"]'
 REVIEW_AUTHOR = "div.d4r55"  # FRAGILE
 REVIEW_RATING = 'span[role="img"][aria-label*="star"], span[role="img"][aria-label*="ster"]'
 REVIEW_RELATIVE_DATE = "span.rsqaWe"  # FRAGILE

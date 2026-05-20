@@ -195,6 +195,22 @@ def test_default_opening_hours_has_seven_days():
     assert all(v == "___" for v in hours.values())
 
 
+def test_reviews_sort_prefers_text_then_rating():
+    """In-memory check that the same logic used inside _extract_reviews
+    prefers a 4-star with text over a 5-star without text."""
+    reviews = [
+        {"author": "A", "text": None, "rating": 5},
+        {"author": "B", "text": "great place", "rating": 4},
+        {"author": "C", "text": "loved it", "rating": 5},
+    ]
+    reviews.sort(
+        key=lambda r: (1 if r.get("text") else 0, r.get("rating") or -1),
+        reverse=True,
+    )
+    # Order should be: C (text + 5), B (text + 4), A (no text + 5)
+    assert [r["author"] for r in reviews] == ["C", "B", "A"]
+
+
 def test_every_scrape_params_field_is_referenced_in_engine():
     """Every attribute on ScrapeParams must be read somewhere in google_maps.py
     by name. Catches the "added a knob but forgot to wire it" bug."""

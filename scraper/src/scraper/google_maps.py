@@ -252,8 +252,12 @@ async def _extract_reviews(page: Page, limit: int) -> list[dict[str, Any]]:
     for card in cards[:30]:
         candidates.append(await _review_from_card(card))
 
-    # Sort by rating desc; None ratings sink to the bottom.
-    candidates.sort(key=lambda r: (r.get("rating") or -1), reverse=True)
+    # Sort: reviews with text rank above star-only; within each bucket,
+    # higher rating first. Achieved by sorting on a tuple (has_text, rating).
+    candidates.sort(
+        key=lambda r: (1 if r.get("text") else 0, r.get("rating") or -1),
+        reverse=True,
+    )
     return candidates[:3]
 
 
