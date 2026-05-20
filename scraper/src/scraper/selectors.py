@@ -71,7 +71,19 @@ PHOTO_BUTTONS = "button[data-photo-index] img"
 # About tab — attribute toggles (Free Wi-Fi, Free breakfast, etc.).
 # The tab is a button labelled "About" / "Over"; cards inside have
 # aria-label containing the attribute name.
-ABOUT_TAB_BUTTON = 'button[aria-label*="About"], button[aria-label*="Over"]'
-# Inside the About tab, each visible attribute is exposed via this
-# selector. We read the aria-label off each.
-ABOUT_ATTRIBUTE_ITEMS = 'div[role="group"] li[aria-label], div[role="region"] li[aria-label]'
+ABOUT_TAB_BUTTON = (
+    'button[aria-label^="About "],'
+    'button[aria-label="About"],'
+    'button[aria-label*="Over "],'
+    '[role="tab"][aria-label^="About "],'
+    '[role="tab"][aria-label="About"]'
+)
+
+# About-tab structure (best-effort): when the tab is opened, the right-
+# hand panel contains rows. Each visible attribute exposes its label via
+# `aria-label` on a `li`, OR is text inside a `div[role="img"]` icon row.
+ABOUT_ATTRIBUTE_ITEMS = (
+    'div[role="region"] li[aria-label],'
+    'div[role="group"] li[aria-label],'
+    'div[aria-label*="About"] li[aria-label]'
+)

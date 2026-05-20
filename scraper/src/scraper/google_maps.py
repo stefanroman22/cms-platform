@@ -261,39 +261,50 @@ async def _extract_reviews(page: Page, limit: int) -> list[dict[str, Any]]:
     return candidates[:3]
 
 
-def _normalize_attribute_key(label: str) -> str:
-    """Convert 'Free Wi-Fi' -> 'free_wifi', 'Pet-friendly' -> 'pet_friendly'."""
-    import re
+async def _extract_about_attributes(page: Page) -> dict[str, dict[str, bool]]:
+    """Open the About tab and read attributes grouped by section heading.
+    Returns {} when the tab is absent or unparseable.
 
-    cleaned = re.sub(r"[^\w\s]", " ", label.lower())
-    cleaned = re.sub(r"\s+", "_", cleaned.strip())
-    return cleaned
-
-
-async def _extract_about_attributes(page: Page) -> dict[str, bool]:
-    """Open the About tab and read each attribute as a boolean dict.
-    Returns empty dict if the tab is absent or unparseable."""
+    Shape:
+        {
+            "Accessibility": {"Wheelchair-accessible car park": True, ...},
+            "Amenities": {"Toilet": True},
+            "Payments": {"Debit cards": True, ...},
+            ...
+        }
+    """
     try:
         btn = page.locator(selectors.ABOUT_TAB_BUTTON).first
         if await btn.count() == 0:
             return {}
         await btn.click(timeout=2000)
         await page.wait_for_load_state("networkidle", timeout=3000)
-        items = await page.locator(selectors.ABOUT_ATTRIBUTE_ITEMS).element_handles()
-        attrs: dict[str, bool] = {}
-        for it in items:
-            label = await it.get_attribute("aria-label")
-            if not label:
-                continue
-            # Google marks unavailable attributes with "No" prefix
-            # (e.g. "No Wi-Fi"). Treat those as false.
-            normalized = label.strip()
-            if normalized.lower().startswith("no "):
-                key = _normalize_attribute_key(normalized[3:].strip())
-                attrs[key] = False
-            else:
-                attrs[_normalize_attribute_key(normalized)] = True
-        return attrs
+
+        # Walk the About panel in-page so we capture the grouped structure
+        # (section heading → attribute labels) in one round-trip.
+        grouped = await page.evaluate("""() => {
+                const panel = document.querySelector('div[role="region"][aria-label*="About"]')
+                    || document.querySelector('div[role="region"]');
+                if (!panel) return {};
+                const out = {};
+                let current = "Other";
+                for (const node of panel.querySelectorAll('h2, h3, [role="heading"], li')) {
+                    const tag = node.tagName.toLowerCase();
+                    if (tag === 'h2' || tag === 'h3' || node.getAttribute('role') === 'heading') {
+                        current = (node.innerText || '').trim() || current;
+                        continue;
+                    }
+                    const aria = node.getAttribute('aria-label');
+                    const label = (aria || node.innerText || '').trim();
+                    if (!label) continue;
+                    const isNo = /^no\\s+/i.test(label);
+                    const key = label.replace(/^no\\s+/i, '').trim();
+                    if (!out[current]) out[current] = {};
+                    out[current][key] = !isNo;
+                }
+                return out;
+            }""")
+        return grouped or {}
     except Exception:
         return {}
 
