@@ -174,7 +174,16 @@ async def _extract_opening_hours(page: Page) -> dict[str, str] | None:
                 value_text = (await cells[1].inner_text()).strip()
                 if day_text:
                     hours[day_text] = value_text
-        return hours or None
+        if not hours:
+            return None
+        # Merge into the skeleton so every canonical day key is present.
+        skeleton = _default_opening_hours()
+        for k, v in hours.items():
+            for canon in skeleton.keys():
+                if canon.lower() in k.lower():
+                    skeleton[canon] = v
+                    break
+        return skeleton
     except Exception:
         return None
 
@@ -301,6 +310,21 @@ def _strip_icon_prefix(text: str | None) -> str | None:
     return cleaned[i:].strip() or None
 
 
+def _default_opening_hours() -> dict[str, str]:
+    """7-day skeleton with `___` placeholders. Used when extraction
+    misses (selector drift or place has no hours block) so downstream
+    consumers (website builder agent, dashboard) always see all days."""
+    return {
+        "Monday": "___",
+        "Tuesday": "___",
+        "Wednesday": "___",
+        "Thursday": "___",
+        "Friday": "___",
+        "Saturday": "___",
+        "Sunday": "___",
+    }
+
+
 def _split_address(address: str | None) -> tuple[str | None, str | None]:
     """Best-effort split of the trailing comma-separated segment into
     (postal_code, city). Handles Dutch `NNNN AA City` postal-code format
@@ -394,7 +418,7 @@ async def _scrape_one_place(
             block_text = await _safe_text(page, selectors.PLACE_RATING_BLOCK)
             review_count = _parse_review_count(block_text)
 
-        opening_hours = await _extract_opening_hours(page)
+        opening_hours = await _extract_opening_hours(page) or _default_opening_hours()
         reviews = await _extract_reviews(page, params.review_limit) if params.with_reviews else None
 
         web_presence, fb_url, ig_url = classify_web_presence(website_url)

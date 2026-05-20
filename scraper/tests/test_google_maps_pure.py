@@ -179,6 +179,22 @@ def test_normalize_attribute_key_spaces():
     assert _normalize_attribute_key("Outdoor seating") == "outdoor_seating"
 
 
+def test_default_opening_hours_has_seven_days():
+    from scraper.google_maps import _default_opening_hours
+
+    hours = _default_opening_hours()
+    assert set(hours.keys()) == {
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    }
+    assert all(v == "___" for v in hours.values())
+
+
 def test_every_scrape_params_field_is_referenced_in_engine():
     """Every attribute on ScrapeParams must be read somewhere in google_maps.py
     by name. Catches the "added a knob but forgot to wire it" bug."""
