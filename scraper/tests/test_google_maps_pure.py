@@ -148,14 +148,16 @@ def test_parse_review_count_rating_only_returns_none():
 
 
 def test_filters_default_keeps_no_website_and_social_only():
-    f = ScrapeFilters()
+    # Override min_reviews=None to isolate the web_presence dimension under test.
+    f = ScrapeFilters(min_reviews=None)
     assert _passes_filters(_mk_lead(web_presence="none"), f) is True
     assert _passes_filters(_mk_lead(web_presence="social_only"), f) is True
     assert _passes_filters(_mk_lead(web_presence="has_website"), f) is False
 
 
 def test_filters_rating_range():
-    f = ScrapeFilters(min_rating=4.0, max_rating=4.5)
+    # Override min_reviews=None to isolate the rating dimension under test.
+    f = ScrapeFilters(min_rating=4.0, max_rating=4.5, min_reviews=None)
     assert _passes_filters(_mk_lead(rating=4.2), f) is True
     assert _passes_filters(_mk_lead(rating=3.9), f) is False
     assert _passes_filters(_mk_lead(rating=4.6), f) is False
