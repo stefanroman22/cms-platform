@@ -39,12 +39,24 @@ cp .env.example .env
 
 The package exposes a Typer-based CLI registered as the `scraper` entry point.
 
-### scrape
+### Quick run (defaults)
 
-Runs a single ad-hoc scrape for a given `lead_type` and country code. Useful for manual testing and one-off harvests.
+All fields are optional. With zero arguments the scraper runs against
+**Netherlands**, category **"businesses"**, **all cities country-wide**,
+**reviews on (top 3 by stars)**, and the **no-website filter**.
 
 ```bash
-python -m scraper.cli scrape restaurants NL --city Lelystad --max 10 --dry-run
+python -m scraper.cli scrape --dry-run
+```
+
+Override any field with the matching `--option`. See `scrape --help` for the full list.
+
+### scrape
+
+Runs a single ad-hoc scrape. Useful for manual testing and one-off harvests.
+
+```bash
+python -m scraper.cli scrape --category restaurants --country NL --city Lelystad --max 10 --dry-run
 ```
 
 `--dry-run` writes results to a local JSON file instead of Supabase + Sheets; omit it for a real run.
