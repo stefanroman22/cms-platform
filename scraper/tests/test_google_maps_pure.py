@@ -175,3 +175,33 @@ def test_normalize_attribute_key_spaces():
     assert _normalize_attribute_key("Pet-friendly") == "pet_friendly"
     assert _normalize_attribute_key("Free parking") == "free_parking"
     assert _normalize_attribute_key("Outdoor seating") == "outdoor_seating"
+
+
+def test_every_scrape_params_field_is_referenced_in_engine():
+    """Every attribute on ScrapeParams must be read somewhere in google_maps.py
+    by name. Catches the "added a knob but forgot to wire it" bug."""
+    import inspect
+
+    from scraper import google_maps
+
+    # review_limit is a no-op since the top-3-by-stars rewrite; kept on
+    # the model for API compatibility. All other fields must be wired.
+    whitelist = {"review_limit"}
+    engine_src = inspect.getsource(google_maps)
+    missing: list[str] = []
+
+    for field_name in ScrapeParams.model_fields:
+        if field_name in whitelist:
+            continue
+        if field_name == "filters":
+            for sub in ScrapeFilters.model_fields:
+                if sub not in engine_src:
+                    missing.append(f"filters.{sub}")
+            continue
+        if field_name not in engine_src:
+            missing.append(field_name)
+
+    assert not missing, (
+        f"ScrapeParams fields not referenced in scraper.google_maps: {missing}. "
+        "Either wire them into the engine, or add to the whitelist with rationale."
+    )
