@@ -51,7 +51,7 @@ def scrape(
     country: Annotated[str, typer.Option("--country")] = "NL",
     city: Annotated[list[str], typer.Option("--city")] = [],  # noqa: B006 — typer reads default
     area: Annotated[list[str], typer.Option("--area")] = [],  # noqa: B006 — typer reads default
-    max: Annotated[int, typer.Option("--max")] = 120,
+    max: Annotated[int, typer.Option("--max")] = 20,
     language: Annotated[str, typer.Option("--language")] = "en",
     with_reviews: Annotated[bool, typer.Option("--with-reviews/--no-with-reviews")] = True,
     review_limit: Annotated[int, typer.Option("--review-limit")] = 10,

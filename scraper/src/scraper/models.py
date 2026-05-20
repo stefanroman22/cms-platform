@@ -35,7 +35,7 @@ class ScrapeParams(BaseModel):
     country: str = "NL"
     cities: list[str] = Field(default_factory=list)
     areas: list[str] = Field(default_factory=list)
-    max_results_per_area: int = 120
+    max_results_per_area: int = 20
     language: str = "en"
     lead_type: LeadType = "website"
     with_reviews: bool = True

@@ -23,7 +23,7 @@ const DEFAULT_PARAMS: ScrapeParams = {
   country: "NL",
   cities: [],
   areas: [],
-  max_results_per_area: 120,
+  max_results_per_area: 20,
   language: "en",
   lead_type: "website",
   with_reviews: true,

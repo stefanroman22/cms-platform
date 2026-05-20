@@ -8,7 +8,7 @@ def test_scrape_params_default_construction_all_optional():
     assert p.country == "NL"
     assert p.cities == []
     assert p.areas == []
-    assert p.max_results_per_area == 120
+    assert p.max_results_per_area == 20
     assert p.language == "en"
     assert p.lead_type == "website"
     assert p.with_reviews is True
