@@ -14,6 +14,7 @@ def test_scrape_params_default_construction_all_optional():
     assert p.with_reviews is True
     assert p.filters.web_presence == ["none", "social_only"]
     assert p.filters.min_rating is None
+    assert p.filters.min_reviews == 5
     assert p.filters.max_rating is None
 
 
@@ -29,7 +30,7 @@ def test_scrape_filters_all_optional_off_by_default():
     f = ScrapeFilters()
     assert f.min_rating is None
     assert f.max_rating is None
-    assert f.min_reviews is None
+    assert f.min_reviews == 5
     assert f.max_reviews is None
     assert f.web_presence == ["none", "social_only"]
 
