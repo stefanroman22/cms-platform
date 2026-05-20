@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Plus, Send, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FormFeedback } from "@/components/dashboard/FormFeedback";
 import { dashboardFieldLabelCn, dashboardInputCn, dashboardPrimaryBtnCn } from "@/lib/styles";
+import { AnimatedSelect } from "@/components/dashboard/AnimatedSelect";
 import {
   LEAD_TYPE_LABEL,
   WEB_PRESENCE_LABEL,
@@ -182,17 +183,15 @@ export function ScraperForm({ onJobCreated }: Props) {
         </div>
         <div>
           <label className={dashboardFieldLabelCn}>Lead type</label>
-          <select
-            className={dashboardInputCn}
+          <AnimatedSelect
             value={params.lead_type}
-            onChange={(e) => setParams((p) => ({ ...p, lead_type: e.target.value as LeadType }))}
-          >
-            {(Object.keys(LEAD_TYPE_LABEL) as LeadType[]).map((k) => (
-              <option key={k} value={k}>
-                {LEAD_TYPE_LABEL[k]}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setParams((p) => ({ ...p, lead_type: v as LeadType }))}
+            ariaLabel="Lead type"
+            options={(Object.keys(LEAD_TYPE_LABEL) as LeadType[]).map((k) => ({
+              value: k,
+              label: LEAD_TYPE_LABEL[k],
+            }))}
+          />
         </div>
         <div className="flex items-end">
           <label className="inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer">

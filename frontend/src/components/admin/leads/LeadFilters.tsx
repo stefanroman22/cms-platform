@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { dashboardInputCn, dashboardFieldLabelCn } from "@/lib/styles";
+import { AnimatedSelect } from "@/components/dashboard/AnimatedSelect";
 import { WEB_PRESENCE_LABEL, LEAD_STATUS_LABEL, LEAD_TYPE_LABEL } from "@/lib/leadEnums";
 import type { LeadFiltersState } from "./types";
 import { EMPTY_FILTERS } from "./types";
@@ -112,18 +113,18 @@ export function LeadFilters({ value, onChange }: Props) {
         </div>
         <div>
           <label className={dashboardFieldLabelCn}>Lead type</label>
-          <select
-            className={dashboardInputCn}
+          <AnimatedSelect
             value={value.lead_type}
-            onChange={(e) => set("lead_type", e.target.value as LeadType | "")}
-          >
-            <option value="">All</option>
-            {(Object.keys(LEAD_TYPE_LABEL) as LeadType[]).map((k) => (
-              <option key={k} value={k}>
-                {LEAD_TYPE_LABEL[k]}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set("lead_type", v as LeadType | "")}
+            ariaLabel="Lead type"
+            options={[
+              { value: "", label: "All" },
+              ...(Object.keys(LEAD_TYPE_LABEL) as LeadType[]).map((k) => ({
+                value: k,
+                label: LEAD_TYPE_LABEL[k],
+              })),
+            ]}
+          />
         </div>
       </div>
 
