@@ -17,6 +17,20 @@ def _lead_row(**overrides):
         "payment_status": "not_applicable",
         "extra": {},
         "photo_urls": [],
+        "address": None,
+        "city": None,
+        "country": None,
+        "postal_code": None,
+        "lat": None,
+        "lng": None,
+        "phone": None,
+        "email": None,
+        "website_url": None,
+        "facebook_url": None,
+        "instagram_url": None,
+        "menu_url": None,
+        "design_prompt": None,
+        "opening_hours": None,
         "closed_amount": None,
         "closed_at": None,
         "created_at": "2026-05-17T10:00:00Z",
@@ -134,3 +148,101 @@ def test_patch_status_and_amount_together_allowed(mock_supabase, client, auth_as
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["closed_amount"] == 2500.0
+
+
+def test_patch_closed_amount_can_be_cleared_to_null(mock_supabase, client, auth_as, admin_user):
+    """Sending {closed_amount: null} must clear the column, not be stripped by
+    exclude_unset. This is the regression for the 'No fields to update' bug
+    that fired when the user cleared the Deal amount field after a value was
+    saved (exclude_none would drop the explicit null and leave an empty patch
+    dict)."""
+    auth_as(admin_user)
+    updated_row = _lead_row(lead_status="accepted", closed_amount=None, closed_at=None)
+    mock_supabase.execute.side_effect = [
+        MagicMock(data={"lead_status": "accepted", "closed_amount": 1500.0}),
+        MagicMock(data=[updated_row]),
+    ]
+    resp = client.patch("/admin/leads/lead-1", json={"closed_amount": None})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["closed_amount"] is None
+
+
+def test_patch_location_and_contact_fields(mock_supabase, client, auth_as, admin_user):
+    """Patching location + contact fields persists each one. exclude_unset
+    keeps them in the patch dict; HttpUrl / EmailStr coerce to str before DB."""
+    auth_as(admin_user)
+    updated = _lead_row(
+        address="Main St 1",
+        city="Lelystad",
+        country="NL",
+        postal_code="8232",
+        lat=52.5,
+        lng=5.5,
+        phone="+31 6 12345678",
+        email="hi@acme.test",
+        website_url="https://acme.test/",
+        facebook_url="https://facebook.com/acme",
+        instagram_url="https://instagram.com/acme",
+        menu_url="https://acme.test/menu",
+    )
+    mock_supabase.execute.return_value = MagicMock(data=[updated])
+    resp = client.patch(
+        "/admin/leads/lead-1",
+        json={
+            "address": "Main St 1",
+            "city": "Lelystad",
+            "country": "NL",
+            "postal_code": "8232",
+            "lat": 52.5,
+            "lng": 5.5,
+            "phone": "+31 6 12345678",
+            "email": "hi@acme.test",
+            "website_url": "https://acme.test/",
+            "facebook_url": "https://facebook.com/acme",
+            "instagram_url": "https://instagram.com/acme",
+            "menu_url": "https://acme.test/menu",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["address"] == "Main St 1"
+    assert body["email"] == "hi@acme.test"
+    assert body["website_url"] == "https://acme.test/"
+
+
+def test_patch_design_prompt_plain_text(mock_supabase, client, auth_as, admin_user):
+    """design_prompt accepts arbitrary text and persists it."""
+    auth_as(admin_user)
+    updated = _lead_row(design_prompt="<p>Modern, minimal, dark.</p>")
+    mock_supabase.execute.return_value = MagicMock(data=[updated])
+    resp = client.patch(
+        "/admin/leads/lead-1",
+        json={"design_prompt": "<p>Modern, minimal, dark.</p>"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["design_prompt"] == "<p>Modern, minimal, dark.</p>"
+
+
+def test_patch_opening_hours_replaces_map(mock_supabase, client, auth_as, admin_user):
+    """opening_hours is a full replacement of the day->string map."""
+    auth_as(admin_user)
+    hours = {"Monday": "9–17", "Tuesday": "Closed"}
+    updated = _lead_row(opening_hours=hours)
+    mock_supabase.execute.return_value = MagicMock(data=[updated])
+    resp = client.patch("/admin/leads/lead-1", json={"opening_hours": hours})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["opening_hours"] == hours
+
+
+def test_patch_invalid_email_returns_422(client, auth_as, admin_user):
+    """Pydantic EmailStr rejects malformed emails with 422 — no DB write."""
+    auth_as(admin_user)
+    resp = client.patch("/admin/leads/lead-1", json={"email": "not-an-email"})
+    assert resp.status_code == 422
+
+
+def test_patch_invalid_url_returns_422(client, auth_as, admin_user):
+    """Pydantic HttpUrl rejects malformed URLs with 422."""
+    auth_as(admin_user)
+    resp = client.patch("/admin/leads/lead-1", json={"website_url": "not a url"})
+    assert resp.status_code == 422

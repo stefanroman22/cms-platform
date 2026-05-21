@@ -1,7 +1,7 @@
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import AfterValidator, BaseModel, EmailStr, Field, HttpUrl, field_validator
 
 # ── Shared validators ────────────────────────────────────────────────────────
 
@@ -25,6 +25,23 @@ def _http_url_validator(v: str | None) -> str | None:
     if not (v.startswith("http://") or v.startswith("https://")):
         raise ValueError("URL must start with http:// or https://")
     return v
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validate_lead_email(v: str | None) -> str | None:
+    """Loose format check (no DNS/TLD lookup) so .test domains used in
+    tests and unusual ccTLDs are accepted. Still rejects obvious non-emails."""
+    if v is None:
+        return v
+    if not _EMAIL_RE.match(v):
+        raise ValueError("value is not a valid email address")
+    return v
+
+
+# Annotated email type used by LeadUpdate — format-only, no deliverability check.
+_LeadEmail = Annotated[str | None, AfterValidator(_validate_lead_email)]
 
 
 class LoginRequest(BaseModel):
@@ -457,9 +474,8 @@ class LeadOut(BaseModel):
     lead_contact_type: LeadContactType
     payment_status: PaymentStatus
     ai_score: int | None = None
-    ai_recommendation: str | None = None
-    ai_reasoning: str | None = None
     ai_scored_at: str | None = None
+    design_prompt: str | None = None
     extra: dict = Field(default_factory=dict)
     closed_amount: float | None = None
     closed_at: str | None = None
@@ -469,9 +485,10 @@ class LeadOut(BaseModel):
 
 
 class LeadUpdate(BaseModel):
-    """Only pipeline-status fields are editable from the admin tab.
+    """Only pipeline-status + scraped-data fields are editable from the admin tab.
     Everything else is owned by the scraper or the future AI agent."""
 
+    # pipeline (existing)
     website_build_status: WebsiteBuildStatus | None = None
     ai_workflow_status: AiWorkflowStatus | None = None
     lead_status: LeadStatus | None = None
@@ -479,6 +496,31 @@ class LeadUpdate(BaseModel):
     payment_status: PaymentStatus | None = None
     notes: str | None = None
     closed_amount: float | None = None
+
+    # location
+    address: str | None = None
+    city: str | None = None
+    country: str | None = None
+    postal_code: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+
+    # contact
+    phone: str | None = None
+    email: _LeadEmail = None
+    website_url: HttpUrl | None = None
+    facebook_url: HttpUrl | None = None
+    instagram_url: HttpUrl | None = None
+    menu_url: HttpUrl | None = None
+
+    # design prompt — sanitized HTML (server-side bleach allow-list)
+    design_prompt: str | None = None
+
+    # opening hours — full replacement of the day -> string map
+    opening_hours: dict[str, str] | None = None
+
+    # about — virtual field; router merges into extra.attributes (handled in a later task)
+    about_attributes: dict[str, dict[str, bool]] | None = None
 
 
 class ScrapeJobOut(BaseModel):

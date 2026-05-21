@@ -85,7 +85,17 @@ async def get_lead(lead_id: str, request: Request) -> LeadOut:
 async def patch_lead(lead_id: str, body: LeadUpdate, request: Request) -> LeadOut:
     await admin_user_via_bearer_or_sid(request)
     sb = get_supabase_admin()
-    patch = dict(body.model_dump(exclude_none=True))
+    # exclude_unset (not exclude_none) is the correct PATCH semantic: a key
+    # explicitly sent as null means "clear this column", a key omitted means
+    # "don't touch". Using exclude_none would conflate the two and make it
+    # impossible to clear closed_amount/notes via the admin UI.
+    patch = dict(body.model_dump(exclude_unset=True))
+    # HttpUrl / EmailStr are pydantic types; Supabase wants plain strings.
+    for url_field in ("website_url", "facebook_url", "instagram_url", "menu_url"):
+        if url_field in patch and patch[url_field] is not None:
+            patch[url_field] = str(patch[url_field])
+    if "email" in patch and patch["email"] is not None:
+        patch["email"] = str(patch["email"])
     if not patch:
         raise HTTPException(status_code=422, detail="No fields to update")
 
