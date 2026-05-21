@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from ..models.schemas import LeadOut, LeadUpdate
+from ..services.html_sanitizer import sanitize_design_prompt
 from ..services.supabase_client import get_supabase_admin
 from .deps import admin_user_via_bearer_or_sid
 
@@ -93,6 +94,8 @@ async def patch_lead(lead_id: str, body: LeadUpdate, request: Request) -> LeadOu
     # _LeadEmail is a custom annotated type; Supabase wants a plain string.
     if "email" in patch and patch["email"] is not None:
         patch["email"] = str(patch["email"])
+    if "design_prompt" in patch and patch["design_prompt"] is not None:
+        patch["design_prompt"] = sanitize_design_prompt(patch["design_prompt"])
     if not patch:
         raise HTTPException(status_code=422, detail="No fields to update")
 

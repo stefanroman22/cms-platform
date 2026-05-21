@@ -246,3 +246,65 @@ def test_patch_invalid_url_returns_422(client, auth_as, admin_user):
     auth_as(admin_user)
     resp = client.patch("/admin/leads/lead-1", json={"website_url": "not a url"})
     assert resp.status_code == 422
+
+
+def test_patch_design_prompt_strips_script_tags(mock_supabase, client, auth_as, admin_user):
+    """Server-side bleach must strip dangerous tags before persisting."""
+    auth_as(admin_user)
+    # Capture what gets sent to Supabase .update(...)
+    captured = {}
+
+    def capture_update(payload):
+        captured["payload"] = payload
+        chain = MagicMock()
+        chain.eq.return_value.execute.return_value = MagicMock(
+            data=[_lead_row(design_prompt=payload["design_prompt"])]
+        )
+        return chain
+
+    mock_supabase.update.side_effect = capture_update
+
+    resp = client.patch(
+        "/admin/leads/lead-1",
+        json={"design_prompt": "<p>hi</p><script>alert(1)</script>"},
+    )
+    assert resp.status_code == 200, resp.text
+    # script tag stripped, <p>hi</p> preserved
+    assert "<script>" not in captured["payload"]["design_prompt"]
+    assert "<p>hi</p>" in captured["payload"]["design_prompt"]
+
+
+def test_patch_design_prompt_preserves_allowed_formatting(
+    mock_supabase, client, auth_as, admin_user
+):
+    """Bold, italic, headings, lists, links must survive sanitization."""
+    auth_as(admin_user)
+    captured = {}
+
+    def capture_update(payload):
+        captured["payload"] = payload
+        chain = MagicMock()
+        chain.eq.return_value.execute.return_value = MagicMock(
+            data=[_lead_row(design_prompt=payload["design_prompt"])]
+        )
+        return chain
+
+    mock_supabase.update.side_effect = capture_update
+
+    html = (
+        "<h2>Brief</h2>"
+        "<p><strong>Bold</strong> <em>italic</em></p>"
+        "<ul><li>Point</li></ul>"
+        '<a href="https://example.com">link</a>'
+    )
+    resp = client.patch("/admin/leads/lead-1", json={"design_prompt": html})
+    assert resp.status_code == 200, resp.text
+    saved = captured["payload"]["design_prompt"]
+    assert "<h2>Brief</h2>" in saved
+    assert "<strong>Bold</strong>" in saved
+    assert "<em>italic</em>" in saved
+    assert "<ul>" in saved and "<li>Point</li>" in saved
+    assert 'href="https://example.com"' in saved
+    # Forced safety attrs on <a>
+    assert 'rel="noopener nofollow"' in saved
+    assert 'target="_blank"' in saved
