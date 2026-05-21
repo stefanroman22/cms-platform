@@ -101,16 +101,21 @@ async def patch_lead(lead_id: str, body: LeadUpdate, request: Request) -> LeadOu
 
     # Gate closed_amount writes on lead_status='accepted' — either the current
     # row is already accepted, OR this same PATCH transitions it to accepted.
-    if "closed_amount" in patch:
+    # about_attributes is a virtual field that must be merged into extra.
+    # A single fetch covers both branches when either is in the patch.
+    needs_current = "closed_amount" in patch or "about_attributes" in patch
+    if needs_current:
         current = (
             sb.table("leads")
-            .select("lead_status, closed_amount")
+            .select("lead_status, closed_amount, extra")
             .eq("id", lead_id)
             .maybe_single()
             .execute()
         )
         if not current.data:
             raise HTTPException(status_code=404, detail="Lead not found")
+
+    if "closed_amount" in patch:
         new_status = patch.get("lead_status", current.data["lead_status"])
         if new_status != "accepted":
             raise HTTPException(
@@ -120,6 +125,14 @@ async def patch_lead(lead_id: str, body: LeadUpdate, request: Request) -> LeadOu
         # Auto-set closed_at on first non-null write.
         if current.data["closed_amount"] is None and patch["closed_amount"] is not None:
             patch["closed_at"] = datetime.now(UTC).isoformat()
+
+    if "about_attributes" in patch:
+        new_attrs = patch.pop("about_attributes")
+        current_extra = current.data.get("extra") or {}
+        if not isinstance(current_extra, dict):
+            current_extra = {}
+        current_extra["attributes"] = new_attrs
+        patch["extra"] = current_extra
 
     res = sb.table("leads").update(patch).eq("id", lead_id).execute()
     if not res.data:

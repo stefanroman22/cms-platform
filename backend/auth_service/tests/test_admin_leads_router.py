@@ -308,3 +308,40 @@ def test_patch_design_prompt_preserves_allowed_formatting(
     # Forced safety attrs on <a>
     assert 'rel="noopener nofollow"' in saved
     assert 'target="_blank"' in saved
+
+
+def test_patch_about_attributes_merges_into_extra(mock_supabase, client, auth_as, admin_user):
+    """about_attributes is a virtual field: the router fetches the current
+    row's extra, replaces extra.attributes with the new map, and writes the
+    merged extra back. Other extra keys must survive untouched."""
+    auth_as(admin_user)
+    new_attrs = {"Service options": {"Dine-in": True, "Takeout": False}}
+    captured = {}
+
+    def capture_update(payload):
+        captured["payload"] = payload
+        chain = MagicMock()
+        chain.eq.return_value.execute.return_value = MagicMock(
+            data=[_lead_row(extra={"scraped_at": "2026-05-17", "attributes": new_attrs})]
+        )
+        return chain
+
+    mock_supabase.update.side_effect = capture_update
+    # The current-row fetch returns extra with an unrelated key.
+    mock_supabase.execute.return_value = MagicMock(
+        data={
+            "lead_status": "not_sent",
+            "closed_amount": None,
+            "extra": {"scraped_at": "2026-05-17", "attributes": {"old": {"x": True}}},
+        }
+    )
+
+    resp = client.patch(
+        "/admin/leads/lead-1",
+        json={"about_attributes": new_attrs},
+    )
+    assert resp.status_code == 200, resp.text
+    # Payload to Supabase must have extra (not about_attributes) with both keys.
+    assert "about_attributes" not in captured["payload"]
+    assert captured["payload"]["extra"]["attributes"] == new_attrs
+    assert captured["payload"]["extra"]["scraped_at"] == "2026-05-17"
