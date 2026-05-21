@@ -22,6 +22,7 @@ uvicorn==0.32.1
 # perf extras only matter for `uvicorn auth_service.main:app` local dev,
 # and the default asyncio loop is fine there.
 argon2-cffi==23.1.0
+bleach==6.2.0
 supabase==2.29.0
 pydantic[email]==2.11.7
 pydantic-settings==2.7.0
