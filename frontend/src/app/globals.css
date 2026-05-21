@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* Reserve scrollbar gutter on the root so the viewport width does not
    change between a short page (no scrollbar) and a tall one. Without
