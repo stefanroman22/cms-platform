@@ -1,7 +1,7 @@
 import re
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, EmailStr, Field, HttpUrl, field_validator
+from pydantic import AfterValidator, BaseModel, EmailStr, Field, field_validator
 
 # ── Shared validators ────────────────────────────────────────────────────────
 
@@ -42,6 +42,10 @@ def _validate_lead_email(v: str | None) -> str | None:
 
 # Annotated email type used by LeadUpdate — format-only, no deliverability check.
 _LeadEmail = Annotated[str | None, AfterValidator(_validate_lead_email)]
+
+# Annotated URL type used by LeadUpdate — validates http(s) prefix but does NOT
+# normalize (no trailing-slash injection unlike pydantic HttpUrl).
+_LeadUrl = Annotated[str | None, AfterValidator(_http_url_validator)]
 
 
 class LoginRequest(BaseModel):
@@ -508,10 +512,10 @@ class LeadUpdate(BaseModel):
     # contact
     phone: str | None = None
     email: _LeadEmail = None
-    website_url: HttpUrl | None = None
-    facebook_url: HttpUrl | None = None
-    instagram_url: HttpUrl | None = None
-    menu_url: HttpUrl | None = None
+    website_url: _LeadUrl = None
+    facebook_url: _LeadUrl = None
+    instagram_url: _LeadUrl = None
+    menu_url: _LeadUrl = None
 
     # design prompt — sanitized HTML (server-side bleach allow-list)
     design_prompt: str | None = None

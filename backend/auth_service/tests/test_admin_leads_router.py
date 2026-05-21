@@ -235,7 +235,7 @@ def test_patch_opening_hours_replaces_map(mock_supabase, client, auth_as, admin_
 
 
 def test_patch_invalid_email_returns_422(client, auth_as, admin_user):
-    """Pydantic EmailStr rejects malformed emails with 422 — no DB write."""
+    """Pydantic validation rejects malformed emails with 422 — no DB write."""
     auth_as(admin_user)
     resp = client.patch("/admin/leads/lead-1", json={"email": "not-an-email"})
     assert resp.status_code == 422

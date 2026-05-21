@@ -1,5 +1,5 @@
 """Admin-only CRUD over public.leads. Reads are paginated + filterable.
-Writes are limited to pipeline-status fields (LeadUpdate)."""
+Writes are limited to pipeline-status and scraped-data fields (LeadUpdate)."""
 
 from __future__ import annotations
 
@@ -90,10 +90,7 @@ async def patch_lead(lead_id: str, body: LeadUpdate, request: Request) -> LeadOu
     # "don't touch". Using exclude_none would conflate the two and make it
     # impossible to clear closed_amount/notes via the admin UI.
     patch = dict(body.model_dump(exclude_unset=True))
-    # HttpUrl / EmailStr are pydantic types; Supabase wants plain strings.
-    for url_field in ("website_url", "facebook_url", "instagram_url", "menu_url"):
-        if url_field in patch and patch[url_field] is not None:
-            patch[url_field] = str(patch[url_field])
+    # _LeadEmail is a custom annotated type; Supabase wants a plain string.
     if "email" in patch and patch["email"] is not None:
         patch["email"] = str(patch["email"])
     if not patch:
