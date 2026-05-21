@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, Save, X } from "lucide-react";
 import {
   AI_WORKFLOW_STATUS_LABEL,
   LEAD_CONTACT_TYPE_LABEL,
@@ -16,10 +16,14 @@ import {
   type WebsiteBuildStatus,
 } from "@/lib/leadEnums";
 import type { Lead } from "./types";
-import { OpeningHoursTable } from "./OpeningHoursTable";
 import { ReviewsList } from "./ReviewsList";
-import { AboutAttributesPanel } from "./AboutAttributesPanel";
 import { AnimatedSelect } from "@/components/dashboard/AnimatedSelect";
+import { EditingSectionProvider } from "./context/EditingSectionContext";
+import { LocationSection } from "./sections/LocationSection";
+import { ContactSection } from "./sections/ContactSection";
+import { DesignPromptSection } from "./sections/DesignPromptSection";
+import { OpeningHoursSection } from "./sections/OpeningHoursSection";
+import { AboutSection } from "./sections/AboutSection";
 
 interface Props {
   lead: Lead | null;
@@ -78,7 +82,18 @@ function DrawerBody({
   onClose: () => void;
   onPatched: (updated: Lead) => void;
 }) {
-  // Local copies for inline editing — debounced PATCH.
+  // Local copies for every editable field — manual save only. Closing the
+  // drawer (X or backdrop) discards any pending edits; only the Save button
+  // persists to the server.
+  const [leadStatus, setLeadStatus] = useState<LeadStatus>(lead.lead_status);
+  const [websiteBuildStatus, setWebsiteBuildStatus] = useState<WebsiteBuildStatus>(
+    lead.website_build_status
+  );
+  const [aiWorkflowStatus, setAiWorkflowStatus] = useState<AiWorkflowStatus>(
+    lead.ai_workflow_status
+  );
+  const [leadContactType, setLeadContactType] = useState<LeadContactType>(lead.lead_contact_type);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(lead.payment_status);
   const [notes, setNotes] = useState(lead.notes ?? "");
   const [closedAmount, setClosedAmount] = useState<string>(
     lead.closed_amount != null ? String(lead.closed_amount) : ""
@@ -86,47 +101,48 @@ function DrawerBody({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset notes when the lead changes (drawer reused for a different lead).
+  // Reset every editor when the drawer is reused for a different lead.
   useEffect(() => {
+    setLeadStatus(lead.lead_status);
+    setWebsiteBuildStatus(lead.website_build_status);
+    setAiWorkflowStatus(lead.ai_workflow_status);
+    setLeadContactType(lead.lead_contact_type);
+    setPaymentStatus(lead.payment_status);
     setNotes(lead.notes ?? "");
-    setError(null);
-  }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     setClosedAmount(lead.closed_amount != null ? String(lead.closed_amount) : "");
+    setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
 
-  // Debounced notes PATCH.
-  useEffect(() => {
-    if (notes === (lead.notes ?? "")) return;
-    const t = setTimeout(() => {
-      patch({ notes }).catch(() => {});
-    }, 600);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notes]);
+  async function handleSave() {
+    const body: Record<string, string | number | null> = {};
+    if (leadStatus !== lead.lead_status) body.lead_status = leadStatus;
+    if (websiteBuildStatus !== lead.website_build_status)
+      body.website_build_status = websiteBuildStatus;
+    if (aiWorkflowStatus !== lead.ai_workflow_status) body.ai_workflow_status = aiWorkflowStatus;
+    if (leadContactType !== lead.lead_contact_type) body.lead_contact_type = leadContactType;
+    if (paymentStatus !== lead.payment_status) body.payment_status = paymentStatus;
+    if (notes !== (lead.notes ?? "")) body.notes = notes;
 
-  useEffect(() => {
-    const serverValue = lead.closed_amount != null ? String(lead.closed_amount) : "";
-    if (closedAmount === serverValue) return;
-    const t = setTimeout(() => {
+    const serverAmount = lead.closed_amount != null ? String(lead.closed_amount) : "";
+    if (closedAmount !== serverAmount) {
       const trimmed = closedAmount.trim();
-      if (trimmed === "") {
-        patch({ closed_amount: null }).catch(() => {});
-        return;
+      if (trimmed === "") body.closed_amount = null;
+      else {
+        const parsed = Number(trimmed);
+        if (Number.isNaN(parsed) || parsed < 0) {
+          setError("Deal amount must be a non-negative number.");
+          return;
+        }
+        body.closed_amount = parsed;
       }
-      const parsed = Number(trimmed);
-      if (Number.isNaN(parsed) || parsed < 0) {
-        return; // invalid input — wait for correction
-      }
-      patch({ closed_amount: parsed }).catch(() => {});
-    }, 700);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [closedAmount]);
+    }
 
-  async function patch(body: Record<string, string | number | null>) {
+    if (Object.keys(body).length === 0) {
+      setError(null);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -150,182 +166,174 @@ function DrawerBody({
   }
 
   return (
-    <div className="p-5">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            {lead.category ?? "Lead"}
-          </div>
-          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-            {lead.business_name}
-          </h2>
-          {lead.source_url && (
-            <a
-              href={lead.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              View on Google Maps
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close lead detail"
-          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {error && (
-        <div className="mt-3 rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
-      {saving && <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">Saving…</div>}
-
-      {/* Pipeline status editors */}
-      <section className="mt-5 space-y-3">
-        <h3 className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-semibold">
-          Pipeline
-        </h3>
-        <SelectField<LeadStatus>
-          label="Lead status"
-          value={lead.lead_status}
-          options={LEAD_STATUS_LABEL}
-          onChange={(v) => patch({ lead_status: v })}
-        />
-        <SelectField<WebsiteBuildStatus>
-          label="Website build"
-          value={lead.website_build_status}
-          options={WEBSITE_BUILD_STATUS_LABEL}
-          onChange={(v) => patch({ website_build_status: v })}
-        />
-        <SelectField<AiWorkflowStatus>
-          label="AI workflow"
-          value={lead.ai_workflow_status}
-          options={AI_WORKFLOW_STATUS_LABEL}
-          onChange={(v) => patch({ ai_workflow_status: v })}
-        />
-        <SelectField<LeadContactType>
-          label="Contact type"
-          value={lead.lead_contact_type}
-          options={LEAD_CONTACT_TYPE_LABEL}
-          onChange={(v) => patch({ lead_contact_type: v })}
-        />
-        <SelectField<PaymentStatus>
-          label="Payment"
-          value={lead.payment_status}
-          options={PAYMENT_STATUS_LABEL}
-          onChange={(v) => patch({ payment_status: v })}
-        />
-        <div>
-          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-            Notes
-          </label>
-          <textarea
-            rows={3}
-            className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 resize-none"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
-      </section>
-
-      {lead.lead_status === "accepted" && (
-        <section className="mt-5">
-          <h3 className="text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-semibold mb-2">
-            Closed deal
-          </h3>
-          <div className="rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-3 space-y-2">
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              Deal amount (EUR)
-            </label>
-            <div className="flex items-center gap-2">
-              <span className="text-zinc-500 dark:text-zinc-400">€</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                className="flex-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                value={closedAmount}
-                placeholder="0.00"
-                onChange={(e) => setClosedAmount(e.target.value)}
-              />
+    <EditingSectionProvider>
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              {lead.category ?? "Lead"}
             </div>
-            {lead.closed_at && (
-              <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                First closed on {new Date(lead.closed_at).toLocaleDateString()}
-              </div>
+            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+              {lead.business_name}
+            </h2>
+            {lead.source_url && (
+              <a
+                href={lead.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                View on Google Maps
+                <ExternalLink className="h-3 w-3" />
+              </a>
             )}
           </div>
-        </section>
-      )}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                handleSave().catch(() => {});
+              }}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 cursor-pointer transition-colors"
+            >
+              <Save className="h-3.5 w-3.5" />
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close lead detail"
+              className="h-8 w-8 inline-flex items-center justify-center rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
 
-      {/* Location */}
-      <DetailCard title="Location">
-        <Row label="Address" value={lead.address} />
-        <Row label="City" value={lead.city} />
-        <Row label="Country" value={lead.country} />
-        <Row label="Postal" value={lead.postal_code} />
-        <Row
-          label="Lat / Lng"
-          value={lead.lat != null && lead.lng != null ? `${lead.lat}, ${lead.lng}` : null}
-        />
-      </DetailCard>
-
-      {/* Contact */}
-      <DetailCard title="Contact">
-        <Row label="Phone" value={lead.phone} />
-        <Row label="Email" value={lead.email} />
-        <Row label="Website" value={lead.website_url} isLink />
-        <Row label="Facebook" value={lead.facebook_url} isLink />
-        <Row label="Instagram" value={lead.instagram_url} isLink />
-        <Row label="Menu" value={lead.menu_url} isLink />
-      </DetailCard>
-
-      {/* AI scoring */}
-      <DetailCard title="AI scoring">
-        {lead.ai_score == null ? (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 italic">Not scored yet.</p>
-        ) : (
-          <>
-            <Row label="Score" value={`${lead.ai_score} / 100`} />
-            <Row label="Recommendation" value={lead.ai_recommendation} />
-            <Row label="Reasoning" value={lead.ai_reasoning} />
-            <Row label="Scored at" value={lead.ai_scored_at} />
-          </>
+        {error && (
+          <div className="mt-3 rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+            {error}
+          </div>
         )}
-      </DetailCard>
+        {saving && <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">Saving…</div>}
 
-      {/* Opening hours + reviews + extra — collapsible */}
-      <OpeningHoursTable hours={lead.opening_hours as Record<string, string> | null} />
-      <ReviewsList
-        reviews={
-          (lead.reviews ?? null) as
-            | {
-                author: string | null;
-                text: string | null;
-                relative_date: string | null;
-                rating: number | null;
-              }[]
-            | null
-        }
-      />
-      <AboutAttributesPanel
-        attributes={
-          (lead.extra && typeof lead.extra === "object" && "attributes" in lead.extra
-            ? (lead.extra.attributes as Record<string, Record<string, boolean>>)
-            : null) ?? null
-        }
-      />
-      {/* Keep raw extra JSON as a debug aid */}
-      <CollapsibleJson title="Raw extra (debug)" data={lead.extra} />
-    </div>
+        {/* Pipeline status editors */}
+        <section className="mt-5 space-y-3">
+          <h3 className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-semibold">
+            Pipeline
+          </h3>
+          <SelectField<LeadStatus>
+            label="Lead status"
+            value={leadStatus}
+            options={LEAD_STATUS_LABEL}
+            onChange={setLeadStatus}
+          />
+          <SelectField<WebsiteBuildStatus>
+            label="Website build"
+            value={websiteBuildStatus}
+            options={WEBSITE_BUILD_STATUS_LABEL}
+            onChange={setWebsiteBuildStatus}
+          />
+          <SelectField<AiWorkflowStatus>
+            label="AI workflow"
+            value={aiWorkflowStatus}
+            options={AI_WORKFLOW_STATUS_LABEL}
+            onChange={setAiWorkflowStatus}
+          />
+          <SelectField<LeadContactType>
+            label="Contact type"
+            value={leadContactType}
+            options={LEAD_CONTACT_TYPE_LABEL}
+            onChange={setLeadContactType}
+          />
+          <SelectField<PaymentStatus>
+            label="Payment"
+            value={paymentStatus}
+            options={PAYMENT_STATUS_LABEL}
+            onChange={setPaymentStatus}
+          />
+          <div>
+            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+              Notes
+            </label>
+            <textarea
+              rows={3}
+              className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 resize-none"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+        </section>
+
+        {/* Gate on local state so the field appears immediately when the user
+          switches to Accepted, even before they click Save. */}
+        {leadStatus === "accepted" && (
+          <section className="mt-5">
+            <h3 className="text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-semibold mb-2">
+              Closed deal
+            </h3>
+            <div className="rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-3 space-y-2">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Deal amount (EUR)
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-500 dark:text-zinc-400">€</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="flex-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  value={closedAmount}
+                  placeholder="0.00"
+                  onChange={(e) => setClosedAmount(e.target.value)}
+                />
+              </div>
+              {lead.closed_at && (
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                  First closed on {new Date(lead.closed_at).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        <LocationSection lead={lead} onPatched={onPatched} />
+
+        <ContactSection lead={lead} onPatched={onPatched} />
+
+        {/* AI scoring */}
+        <DetailCard title="AI scoring">
+          {lead.ai_score == null ? (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 italic">Not scored yet.</p>
+          ) : (
+            <>
+              <Row label="Score" value={`${lead.ai_score} / 100`} />
+              <Row label="Scored at" value={lead.ai_scored_at} />
+            </>
+          )}
+        </DetailCard>
+
+        <DesignPromptSection lead={lead} onPatched={onPatched} />
+
+        <OpeningHoursSection lead={lead} onPatched={onPatched} />
+        <ReviewsList
+          reviews={
+            (lead.reviews ?? null) as
+              | {
+                  author: string | null;
+                  text: string | null;
+                  relative_date: string | null;
+                  rating: number | null;
+                }[]
+              | null
+          }
+        />
+        <AboutSection lead={lead} onPatched={onPatched} />
+        {/* Keep raw extra JSON as a debug aid */}
+        <CollapsibleJson title="Raw extra (debug)" data={lead.extra} />
+      </div>
+    </EditingSectionProvider>
   );
 }
 
