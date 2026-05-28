@@ -52,6 +52,7 @@ def handle_reaction_added(event: dict) -> None:
             repo=project["github_repo"],
             base_branch=project["production_branch"],
             head_branch=project["repo_branch"],
+            target_sha=issue.get("agent_commit_sha"),
         )
     except github_merge.GitHubError as e:
         _post_thread_reply(msg_ts, f"❌ Production merge failed: {e}")
@@ -148,7 +149,10 @@ def _find_issue_by_slack_ts(ts: str) -> dict | None:
     sb = get_supabase_admin()
     result = (
         sb.table("project_issues")
-        .select("id, project_id, title, description, status, created_by, slack_resolved_ts")
+        .select(
+            "id, project_id, title, description, status, created_by, "
+            "slack_resolved_ts, agent_commit_sha"
+        )
         .eq("slack_resolved_ts", ts)
         .maybe_single()
         .execute()

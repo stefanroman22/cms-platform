@@ -22,18 +22,26 @@ class GitHubError(Exception):
     pass
 
 
-def fast_forward(*, repo: str, base_branch: str, head_branch: str) -> dict:
-    """PATCH `base_branch` ref to point at HEAD of `head_branch`.
+def fast_forward(
+    *, repo: str, base_branch: str, head_branch: str, target_sha: str | None = None
+) -> dict:
+    """PATCH `base_branch` ref to point at `target_sha` (if provided) or HEAD of `head_branch`.
 
-    `repo` is "owner/name". Returns the GitHub API JSON response.
-    Raises GitHubError on any non-2xx response.
+    `repo` is "owner/name". When `target_sha` is provided, the GET on
+    `head_branch` is skipped — callers use this to pin promotion to a specific
+    commit instead of trusting "whatever's on head_branch right now," which
+    matters when head_branch may have drifted between solver run and approval.
+    Returns the GitHub API JSON response. Raises GitHubError on any non-2xx.
     """
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         raise GitHubError("GITHUB_TOKEN not configured")
 
-    head = _get(f"{_GH_API}/repos/{repo}/git/refs/heads/{head_branch}", token)
-    new_sha = head["object"]["sha"]
+    if target_sha:
+        new_sha = target_sha
+    else:
+        head = _get(f"{_GH_API}/repos/{repo}/git/refs/heads/{head_branch}", token)
+        new_sha = head["object"]["sha"]
 
     body = json.dumps({"sha": new_sha, "force": False}).encode()
     req = urllib.request.Request(
