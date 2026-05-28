@@ -14,7 +14,10 @@
 
    a. Read the file.
 
-   b. Identify the *generalisable lesson*. Look at the section headed `## Generalisable lesson` if present. If that section is empty or the file is marked `## (optional) Discard if not generalisable`, drop the lesson but still archive the file.
+   b. Identify the *generalisable lesson(s)*. Two sources, in priority order:
+      - **`## Iterations sent to Claude Design`** — each `### Iteration N` block is a correction prompt Stefan sent to Claude Design. Each one is a signal that the *generated design prompt* under-specified something the agent controls. For each iteration, ask: "what should the design prompt have said so this correction was unnecessary?" That answer is the lesson. Look for the recurring theme across iterations (e.g., three iterations all darkening the hero → the prompt should default barber heroes to a dark overlay). Lessons target the PROMPT, not the website.
+      - **`## (optional) Direct notes / lessons in my own words`** — take these verbatim as lessons (Stefan already generalised them).
+      If both sections are empty/placeholder, OR the file is marked under `## (optional) Discard if not generalisable`, drop the lesson but still archive the file.
 
    c. Determine which heading in `LEARNINGS.md` to write under:
       - If the lesson references a specific category (the per-lead file's lead is in a category, **and** the lesson talks about category-specific patterns), use `## Category: <bucket>`.

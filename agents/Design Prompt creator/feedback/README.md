@@ -1,42 +1,47 @@
 # Feedback — how it works
 
-After every run, the agent creates a blank template in `pending/` for the lead it just processed. You edit it whenever you have something to say (no time limit — leave it for days if you want).
+After every run, the agent creates a blank template in `pending/` for the lead it just processed. You edit it whenever you have something to say (no time limit — leave it for days if you want). You can also just paste your iterations directly in the Claude Code chat and the agent will record + distill them for you.
+
+## The core idea
+
+You take the generated prompt into Claude Design and iterate — sending correction prompts until the design is right. **Every correction you send is a signal that the *generated design prompt* under-specified something.** The agent learns from those corrections so the next prompt it writes pre-empts them. The agent improves its *prompt-writing*, not the website directly.
 
 ## Workflow
 
-1. The agent emits `pending/lead_<id>_<date>.md` with this skeleton:
+1. The agent emits `pending/lead_<id>_<date>.md` with an "Iterations" skeleton.
+
+2. As you correct the design in Claude Design, paste each correction prompt — verbatim — under a `### Iteration N` heading:
 
    ```markdown
-   # Feedback — Lead <id> (<business_name>)
+   ## Iterations sent to Claude Design
 
-   Generated: <date>
+   ### Iteration 1
+   Make the hero darker and drop the image carousel — it feels generic. Use a single full-bleed photo.
 
-   ## What I changed before sending to Claude Design
+   ### Iteration 2
+   The service prices look like a spreadsheet. Make them an editorial list, right-aligned prices, more air between rows.
 
-   - …
-
-   ## Why
-
-   - …
-
-   ## Generalisable lesson
-
-   - …
-
-   ## (optional) Discard if not generalisable
-
-   - Leave this section if the change was purely lead-specific
+   ### Iteration 3
+   Still too much rounding on the buttons. Sharp corners everywhere.
    ```
 
-2. You review the prompt in the dashboard / claude.ai/design. If you edit anything before sending it to Claude Design, jot the change + the reason here.
+3. On the agent's **next run** (any lead), Phase 2 reads all pending files, infers the recurring gap behind each iteration, and writes a lesson to `LEARNINGS.md`. Example lessons distilled from the above:
+   - "For barber/salon heroes, default to a single full-bleed dark-overlay photo — never a carousel."
+   - "Render service prices as a right-aligned editorial list with generous row spacing, not a dense table."
+   - "Re-state the sharp-corner rule explicitly in the design_system radius block; downstream Claude keeps rounding buttons."
 
-3. **Most important section**: `## Generalisable lesson`. The agent's Phase 2 reads this on the next run and distills it into `LEARNINGS.md`. If the change was purely lead-specific (e.g., "lead is in Amsterdam, swapped the city name in copy"), leave the `## (optional) Discard if not generalisable` line — the agent will drop the lesson but still archive the file.
+4. Phase 2 then archives the consumed file to `archive/<YYYY-MM>/`.
 
-4. Next time you run the agent (any lead), Phase 2 picks up ALL pending files, updates `LEARNINGS.md`, and moves them to `archive/<YYYY-MM>/`.
+## Two ways to give feedback
 
-## Tips for good lessons
+- **In chat**: paste "Iteration 1: …, Iteration 2: …" straight into Claude Code. The agent interprets live, updates `LEARNINGS.md`, and — if a gap is structural — edits the relevant phase doc or the `lead-to-design-prompt` skill so the fix is permanent.
+- **In the file**: write the iterations into `pending/lead_<id>_<date>.md`. Consumed on the next run.
 
-- **Specific over vague.** "Default away from Inter for boutique cafes" beats "use better fonts".
-- **Sourced.** The agent auto-adds the date + lead id when it copies your lesson into LEARNINGS.
-- **One lesson per file.** If you have multiple unrelated lessons, edit the file to list each clearly so Phase 2 distills them as separate entries.
-- **Skip the file** if you have nothing useful to say. Empty `## Generalisable lesson` + the discard line means Phase 2 archives without learning anything.
+Both routes end up in the same place: distilled lessons in `LEARNINGS.md` + (where warranted) structural edits to the agent.
+
+## Tips for good signal
+
+- **Paste corrections verbatim.** Don't pre-summarise — the raw correction prompt carries more signal than "I fixed the hero".
+- **Order matters.** Iteration 1 → N shows what the prompt missed first vs what only surfaced late.
+- **Repeated corrections across leads are gold.** If you darken the hero on three different barbershops, that's a strong default to bake into the prompt.
+- **Skip the file** if you have nothing useful — an empty iterations section + the "Discard" line means Phase 2 archives without learning.

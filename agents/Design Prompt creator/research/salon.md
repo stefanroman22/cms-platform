@@ -1,10 +1,40 @@
 # Research — Salon
 
-**Last refreshed:** (never)
+**Last refreshed:** 2026-05-21
 
 ## Reference brands
 
-(none yet — Phase 4 populates this on first run that meets the freshness rules)
+### Fellow Barber · https://fellowbarber.com
+- **Type:** barber
+- **Typography:** Modern geometric sans (display) + clean web sans (body)
+- **Palette:** White / black / muted gold accent / gray
+- **Layout:** Product grid 3–4 col, modular "Featured" curated collections, social-proof strip with press logos mid-page, integrated booking in nav, hero with career messaging + image
+- **Notable:** Press credibility shown mid-page (not relegated to footer); "Sold out" product visibility preserved for aspirational signalling; homepage gives equal weight to "Book" and "Shop" (multi-revenue stream); extensive whitespace conveys premium positioning
+- **Researched:** 2026-05-21
+
+### Huckle · https://wearehuckle.com/
+- **Type:** barber
+- **Typography:** Clean geometric sans throughout (display + body, single-family discipline)
+- **Palette:** Black/charcoal / off-white / no chromatic accent — imagery drives the visual interest
+- **Layout:** Hero image with overlaid text establishing the brand promise, modular card-based locations/news sections, full-width imagery breaking up text blocks, newsletter signup repeated strategically (top and footer)
+- **Notable:** Positions as a *cultural destination* ("Where Great Hair Meets Real Culture & Community") — record store mentions, news/events programming. Zero barbershop clichés (no vintage blades, no retro styling). Contemporary cool via restraint + cultural credibility.
+- **Researched:** 2026-05-21
+
+### Barber & Co Miami · https://www.barberandco.com
+- **Type:** barber
+- **Typography:** Serif wordmark (classic heritage feel) + sans for UI elements (likely system fonts)
+- **Palette:** Beige/cream / dark grey / white / black
+- **Layout:** Minimalist grid; no traditional hero splash — instead a "dual-logo treatment" with beige and dark-grey alternation. Modular product cards. Dual-location structure prominently featured.
+- **Notable:** Scandinavian-influenced minimalism, monochromatic discipline. A "Lab" section hints at product transparency (uncommon for the category). Separates "Shops" from "Bars/Gift Shop" — multi-service business differentiated via navigation, not chrome.
+- **Researched:** 2026-05-21
+
+### Murdock London · https://www.murdocklondon.com
+- **Type:** barber
+- **Typography:** Modern sans-serif display (likely custom or premium) + clean sans body. Headers in measured uppercase ("barbering. it's what we do best") for typographic authority.
+- **Palette:** Black / white / gold-tan accent / dark gray
+- **Layout:** Full-width hero banner rotating product spotlights → 3-column bestseller grid → barbering messaging → trending products → journal → footer. Vertical modular stack with generous whitespace between sections.
+- **Notable:** Sticky nav for persistent booking access. Dual imagery per product (product + lifestyle). Journal/content section establishes brand authority beyond retail. Location cards with photographic backgrounds differentiate each shop without changing the chrome. Masculine without resorting to barber-pole graphics or retro hand-lettering.
+- **Researched:** 2026-05-21
 
 ## Common patterns observed
 

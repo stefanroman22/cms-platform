@@ -67,7 +67,14 @@
 
 5. If extraction fails (no fenced xml block) → show the first 500 chars of the skill output and ask: *"The skill output has no ```xml block. Retry / save-as-is / abort?"*  Halt for answer.
 
-6. Echo: *"Phase 5: generated `<N>` chars of XML."*
+6. **Universal-block sanity check.** Grep the extracted XML for these four tags:
+   `<universal_ux_requirements>`, `<intro_loader>`, `<themed_scrollbar>`, `<page_transitions>`.
+   These are non-negotiable, category-agnostic baseline UX behaviours every build must ship
+   (intro loader, themed scrollbar, smooth page-fade transitions).
+   - If ANY tag is missing → echo: *"Phase 5: extracted XML is missing `<tagname>`. The skill must emit `<universal_ux_requirements>` literally from `references/prompt-skeleton.xml.md`. Retry / save-as-is / abort?"* Halt for answer.
+   - On retry, re-invoke the skill once. If still missing on retry, default to **abort** — do not silently writeback a non-conformant prompt.
+
+7. Echo: *"Phase 5: generated `<N>` chars of XML."*
 
 ## Outputs
 
@@ -79,6 +86,7 @@
 |---|---|
 | Skill invocation fails | "Phase 5: lead-to-design-prompt skill failed: `<error>`. Retry?" Halt. |
 | No fenced xml block in output | "Phase 5: model output has no `\`\`\`xml` block. First 500 chars: `<excerpt>`. Retry / save-as-is / abort?" Halt. |
+| Missing universal UX block | "Phase 5: extracted XML is missing `<tagname>`. The skill must emit `<universal_ux_requirements>` literally from `references/prompt-skeleton.xml.md`. Retry / save-as-is / abort?" Retry once → on second miss, default abort. |
 | `reuse_from_lead` references a missing prompt | "Lead `<X>` has no `design_prompt`. Pick a different reference, or proceed without?" |
 
 ## Self-improvement hook

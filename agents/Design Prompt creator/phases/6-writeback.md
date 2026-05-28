@@ -55,21 +55,29 @@
 
    Generated: <YYYY-MM-DD HH:MM>
 
-   ## What I changed before sending to Claude Design
+   ## How to use this file
 
-   - (e.g., "Replaced the suggested Cormorant + Inter pair with Söhne + EB Garamond")
+   Paste each correction prompt you sent to Claude Design, in order, under "Iterations". Each correction is a signal that the *generated design prompt* under-specified something — the agent reads these on its next run, infers the recurring gap, and distills a lesson into `LEARNINGS.md` so future prompts pre-empt it.
 
-   ## Why
+   You don't have to fill the other sections — the iterations alone are enough.
 
-   - (e.g., "Inter is on our anti-slop list; Söhne fits the brief better")
+   ## Iterations sent to Claude Design
 
-   ## Generalisable lesson
+   ### Iteration 1
+   (paste the prompt you sent to Claude Design to fix something — verbatim)
 
-   - (e.g., "Default away from Inter for boutique businesses even if 'modern'")
+   ### Iteration 2
+   (paste the next correction prompt, if any)
+
+   <!-- add ### Iteration 3, 4, … as you go -->
+
+   ## (optional) Direct notes / lessons in my own words
+
+   - (anything you want to state explicitly)
 
    ## (optional) Discard if not generalisable
 
-   - Leave this section if the change was purely lead-specific
+   - Leave this line if the iterations were purely lead-specific (e.g. a typo in the address) and shouldn't become a general lesson.
    ```
 
    If a file with the same name already exists (re-run on same date), append `_<HHMMSS>` to the filename: `lead_<lead_id>_<YYYY-MM-DD>_<HHMMSS>.md`.
