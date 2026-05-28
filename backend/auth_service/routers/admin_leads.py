@@ -138,3 +138,14 @@ async def patch_lead(lead_id: str, body: LeadUpdate, request: Request) -> LeadOu
     if not res.data:
         raise HTTPException(status_code=500, detail="Update failed")
     return LeadOut(**res.data[0])
+
+
+@router.delete("/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_lead(lead_id: str, request: Request) -> None:
+    """Hard-delete a lead. The delete returns the removed rows, so an empty
+    result means the id did not exist."""
+    await admin_user_via_bearer_or_sid(request)
+    sb = get_supabase_admin()
+    res = sb.table("leads").delete().eq("id", lead_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead not found")

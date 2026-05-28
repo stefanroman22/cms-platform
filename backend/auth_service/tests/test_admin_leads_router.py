@@ -310,6 +310,30 @@ def test_patch_design_prompt_preserves_allowed_formatting(
     assert 'target="_blank"' in saved
 
 
+def test_delete_lead_requires_admin(client, auth_as, client_user):
+    auth_as(client_user)
+    resp = client.delete("/admin/leads/lead-1")
+    assert resp.status_code == 403
+
+
+def test_delete_lead_happy_path(mock_supabase, client, auth_as, admin_user):
+    """A successful hard-delete returns 204 with no body."""
+    auth_as(admin_user)
+    mock_supabase.execute.return_value = MagicMock(data=[{"id": "lead-1"}])
+    resp = client.delete("/admin/leads/lead-1")
+    assert resp.status_code == 204
+    assert resp.content == b""
+
+
+def test_delete_lead_not_found_returns_404(mock_supabase, client, auth_as, admin_user):
+    """Deleting a missing id returns 404 — the delete affected no rows."""
+    auth_as(admin_user)
+    mock_supabase.execute.return_value = MagicMock(data=[])
+    resp = client.delete("/admin/leads/does-not-exist")
+    assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
+
+
 def test_patch_about_attributes_merges_into_extra(mock_supabase, client, auth_as, admin_user):
     """about_attributes is a virtual field: the router fetches the current
     row's extra, replaces extra.attributes with the new map, and writes the

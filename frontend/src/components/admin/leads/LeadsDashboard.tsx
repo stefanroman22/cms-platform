@@ -64,6 +64,11 @@ export function LeadsDashboard() {
     refresh();
   }
 
+  function handleDeleted() {
+    setSelectedLead(null);
+    refresh();
+  }
+
   async function handleStatusChange(leadId: string, next: LeadStatus) {
     const res = await fetch(`/api/admin/leads/${leadId}`, {
       method: "PATCH",
@@ -133,6 +138,7 @@ export function LeadsDashboard() {
         lead={selectedLead}
         onClose={() => setSelectedLead(null)}
         onPatched={handlePatched}
+        onDeleted={handleDeleted}
       />
     </div>
   );

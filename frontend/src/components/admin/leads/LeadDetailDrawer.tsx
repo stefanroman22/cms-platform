@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { ExternalLink, Save, X } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ExternalLink, Loader2, Save, Trash2, X } from "lucide-react";
 import {
   AI_WORKFLOW_STATUS_LABEL,
   LEAD_CONTACT_TYPE_LABEL,
@@ -29,6 +29,7 @@ interface Props {
   lead: Lead | null;
   onClose: () => void;
   onPatched: (updated: Lead) => void;
+  onDeleted: (deletedId: string) => void;
 }
 
 const DRAWER_VARIANTS = {
@@ -41,7 +42,7 @@ const BACKDROP_VARIANTS = {
   visible: { opacity: 1 },
 };
 
-export function LeadDetailDrawer({ lead, onClose, onPatched }: Props) {
+export function LeadDetailDrawer({ lead, onClose, onPatched, onDeleted }: Props) {
   return (
     <AnimatePresence>
       {lead && (
@@ -63,9 +64,9 @@ export function LeadDetailDrawer({ lead, onClose, onPatched }: Props) {
             animate="visible"
             exit="hidden"
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="fixed right-0 top-0 z-50 h-full w-full md:w-[40rem] overflow-y-auto bg-white dark:bg-zinc-950 shadow-2xl"
+            className="lead-drawer no-scrollbar fixed right-0 top-0 z-50 h-full w-full md:w-[40rem] overflow-y-auto bg-white dark:bg-zinc-950 shadow-2xl"
           >
-            <DrawerBody lead={lead} onClose={onClose} onPatched={onPatched} />
+            <DrawerBody lead={lead} onClose={onClose} onPatched={onPatched} onDeleted={onDeleted} />
           </motion.aside>
         </>
       )}
@@ -77,10 +78,12 @@ function DrawerBody({
   lead,
   onClose,
   onPatched,
+  onDeleted,
 }: {
   lead: Lead;
   onClose: () => void;
   onPatched: (updated: Lead) => void;
+  onDeleted: (deletedId: string) => void;
 }) {
   // Local copies for every editable field — manual save only. Closing the
   // drawer (X or backdrop) discards any pending edits; only the Save button
@@ -100,6 +103,13 @@ function DrawerBody({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Subtle press feedback, disabled when the user prefers reduced motion.
+  // Hover keeps the CSS color change only — no scale on hover.
+  const prefersReduced = useReducedMotion();
+  const press = prefersReduced ? {} : { whileTap: { scale: 0.97 } };
 
   // Reset every editor when the drawer is reused for a different lead.
   useEffect(() => {
@@ -111,6 +121,8 @@ function DrawerBody({
     setNotes(lead.notes ?? "");
     setClosedAmount(lead.closed_amount != null ? String(lead.closed_amount) : "");
     setError(null);
+    setConfirmingDelete(false);
+    setDeleting(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
 
@@ -165,6 +177,27 @@ function DrawerBody({
     }
   }
 
+  async function handleDelete() {
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/leads/${lead.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok && res.status !== 204) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail.detail ?? `Delete failed (${res.status})`);
+      }
+      // Parent unmounts the drawer and refreshes the list.
+      onDeleted(lead.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+      setDeleting(false);
+      setConfirmingDelete(false);
+    }
+  }
+
   return (
     <EditingSectionProvider>
       <div className="p-5">
@@ -194,12 +227,23 @@ function DrawerBody({
               onClick={() => {
                 handleSave().catch(() => {});
               }}
-              disabled={saving}
+              disabled={saving || deleting}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 cursor-pointer transition-colors"
             >
               <Save className="h-3.5 w-3.5" />
               Save
             </button>
+            <motion.button
+              {...press}
+              type="button"
+              onClick={() => setConfirmingDelete(true)}
+              disabled={saving || deleting}
+              aria-label="Delete lead"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40 cursor-pointer transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </motion.button>
             <button
               type="button"
               onClick={onClose}
@@ -210,6 +254,53 @@ function DrawerBody({
             </button>
           </div>
         </div>
+
+        <AnimatePresence initial={false}>
+          {confirmingDelete && (
+            <motion.div
+              key="confirm-delete"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: prefersReduced ? 0 : 0.24, ease: "easeOut" }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3 rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 px-3 py-3">
+                <p className="text-xs text-red-700 dark:text-red-300">
+                  Delete <span className="font-semibold">{lead.business_name}</span> permanently?
+                  This removes the lead from the database and cannot be undone.
+                </p>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <motion.button
+                    {...press}
+                    type="button"
+                    onClick={() => {
+                      handleDelete().catch(() => {});
+                    }}
+                    disabled={deleting}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    {deleting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                    {deleting ? "Deleting…" : "Delete permanently"}
+                  </motion.button>
+                  <motion.button
+                    {...press}
+                    type="button"
+                    onClick={() => setConfirmingDelete(false)}
+                    disabled={deleting}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {error && (
           <div className="mt-3 rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-700 dark:text-red-300">
