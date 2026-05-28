@@ -46,8 +46,11 @@ PLACE_ADDRESS_BUTTON = 'button[data-item-id="address"]'
 PLACE_WEBSITE_BUTTON = 'a[data-item-id="authority"]'
 PLACE_PHONE_BUTTON = 'button[data-item-id*="phone"]'
 PLACE_MENU_BUTTON = 'a[data-item-id="menu"]'
-PLACE_HOURS_BUTTON = 'div[data-item-id="oh"] button, button[data-item-id="oh"]'
-PLACE_HOURS_TABLE = 'table[aria-label*="hours"], table[aria-label*="openingstijden"]'
+# Hours: each day is a "copy open hours" button carrying data-value="Day, hours"
+# (present in the DOM even when the week dropdown is visually collapsed).
+PLACE_HOURS_COPY_BUTTONS = 'button[jsaction*="openhours"][data-value]'
+# FRAGILE fallback — weekday table when copy-buttons are absent.
+PLACE_HOURS_TABLE = "table.eK4R0e"
 PLACE_DESCRIPTION = "div.PYvSYb"  # FRAGILE — editorial summary
 
 # Reviews tab.
@@ -59,11 +62,21 @@ REVIEWS_TAB_BUTTON = (
     '[role="tab"][aria-label="Reviews"],'
     'button[jsaction*="reviewChart"]'
 )
-REVIEW_CARD = 'div[data-review-id], div[jsaction*="reviewerLink"]'
-REVIEW_AUTHOR = "div.d4r55"  # FRAGILE
+# Outer review card only — it carries BOTH data-review-id and aria-label
+# (the author name). The inner content wrapper also has data-review-id but no
+# aria-label, so requiring aria-label de-duplicates each review.
+REVIEW_CARD = "div[data-review-id][aria-label]"
+REVIEW_AUTHOR = "div.d4r55"  # FRAGILE fallback; author is normally the card aria-label
 REVIEW_RATING = 'span[role="img"][aria-label*="star"], span[role="img"][aria-label*="ster"]'
 REVIEW_RELATIVE_DATE = "span.rsqaWe"  # FRAGILE
-REVIEW_TEXT = "span.wiI7pd, div[data-review-id] span[jscontroller]"
+REVIEW_TEXT = "span.wiI7pd"
+# Sort control + "Newest" option.
+REVIEW_SORT_BUTTON = 'button[aria-label="Sort reviews"], button[aria-label*="Sort"]'
+REVIEW_SORT_MENUITEM = '[role="menuitemradio"]'
+# Reveal the review's original language (Google auto-translates to the hl locale).
+# This toggle is a role="switch" button whose label is visible TEXT ("Translated
+# by Google ・ See original (…)"), NOT an aria-label — match its stable jsaction.
+REVIEW_SEE_ORIGINAL = 'button[jsaction*="showReviewInOriginal"]'
 
 # Photos.
 PHOTO_BUTTONS = "button[data-photo-index] img"
@@ -78,6 +91,9 @@ ABOUT_TAB_BUTTON = (
     '[role="tab"][aria-label^="About "],'
     '[role="tab"][aria-label="About"]'
 )
+
+# The opened About tab renders a region whose aria-label starts with "About".
+ABOUT_PANEL = 'div[role="region"][aria-label^="About"]'
 
 # About-tab structure (best-effort): when the tab is opened, the right-
 # hand panel contains rows. Each visible attribute exposes its label via

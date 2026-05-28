@@ -1,13 +1,23 @@
 """Offline tests for pure helpers inside google_maps.py — no Playwright."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from scraper.google_maps import (
+    _about_available,
     _build_queries,
+    _group_about_items,
+    _parse_hours_pairs,
     _parse_rating,
     _parse_review_count,
+    _parse_star_rating,
     _passes_filters,
     _search_url,
     _split_address,
     _strip_icon_prefix,
+    _with_hl,
+    scrape,
 )
 from scraper.models import Lead, ScrapeFilters, ScrapeParams
 
@@ -187,20 +197,224 @@ def test_default_opening_hours_has_seven_days():
     assert all(v == "___" for v in hours.values())
 
 
-def test_reviews_sort_prefers_text_then_rating():
-    """In-memory check that the same logic used inside _extract_reviews
-    prefers a 4-star with text over a 5-star without text."""
-    reviews = [
-        {"author": "A", "text": None, "rating": 5},
-        {"author": "B", "text": "great place", "rating": 4},
-        {"author": "C", "text": "loved it", "rating": 5},
-    ]
-    reviews.sort(
-        key=lambda r: (1 if r.get("text") else 0, r.get("rating") or -1),
-        reverse=True,
+def test_parse_star_rating():
+    assert _parse_star_rating("5 stars") == 5
+    assert _parse_star_rating("1 star") == 1
+    assert _parse_star_rating("4,0 sterren") == 4  # NL aria fallback
+    assert _parse_star_rating(None) is None
+    assert _parse_star_rating("no number here") is None
+
+
+def _stub_lead() -> Lead:
+    return Lead(
+        external_id="0x47c63f:0xabc",
+        business_name="Caffe Lentini",
+        name_normalized="caffe lentini",
+        web_presence="none",
     )
-    # Order should be: C (text + 5), B (text + 4), A (no text + 5)
-    assert [r["author"] for r in reviews] == ["C", "B", "A"]
+
+
+@pytest.mark.asyncio
+async def test_scrape_direct_url_skips_search_and_yields_one_lead(monkeypatch):
+    """When direct_url is set: no query loop, no feed scroll, one place visit."""
+    params = ScrapeParams(
+        direct_url="https://www.google.com/maps/place/Caffe+Lentini/data=!1s0x47c63f:0xabc"
+    )
+
+    build_queries_calls: list = []
+    collect_links_calls: list = []
+    scrape_one_calls: list[str] = []
+
+    def fake_build_queries(p):
+        build_queries_calls.append(p)
+        return ["should not be called"]
+
+    async def fake_collect_links(page, max_results):
+        collect_links_calls.append(max_results)
+        return ["should not be called"]
+
+    async def fake_scrape_one(ctx, url, p, job_id):
+        scrape_one_calls.append(url)
+        return _stub_lead()
+
+    monkeypatch.setattr("scraper.google_maps._build_queries", fake_build_queries)
+    monkeypatch.setattr("scraper.google_maps._collect_place_links", fake_collect_links)
+    monkeypatch.setattr("scraper.google_maps._scrape_one_place", fake_scrape_one)
+    monkeypatch.setattr("scraper.google_maps.expand_if_short", lambda u: u)
+
+    # Stub Playwright so no real browser is launched.
+    fake_browser = AsyncMock()
+    fake_ctx = AsyncMock()
+    fake_browser.new_context = AsyncMock(return_value=fake_ctx)
+    fake_pw_chromium = AsyncMock()
+    fake_pw_chromium.launch = AsyncMock(return_value=fake_browser)
+    fake_pw = MagicMock()
+    fake_pw.chromium = fake_pw_chromium
+    fake_pw_cm = AsyncMock()
+    fake_pw_cm.__aenter__ = AsyncMock(return_value=fake_pw)
+    fake_pw_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("scraper.google_maps.async_playwright", return_value=fake_pw_cm):
+        leads = [lead async for lead in scrape(params)]
+
+    assert len(leads) == 1
+    assert leads[0].external_id == "0x47c63f:0xabc"
+    # Search path was NOT exercised.
+    assert build_queries_calls == []
+    assert collect_links_calls == []
+    # Single place visit using the user-supplied URL.
+    assert scrape_one_calls == [params.direct_url]
+
+
+@pytest.mark.asyncio
+async def test_scrape_direct_url_bypasses_filters(monkeypatch):
+    """When direct_url is set, _passes_filters must NOT be called — the
+    user explicitly chose this lead; do not silently filter it out."""
+    params = ScrapeParams(
+        direct_url="https://www.google.com/maps/place/Foo/data=!1s0x1:0x2",
+        filters={"min_reviews": 9999},  # would normally reject everything
+    )
+
+    filter_calls: list = []
+
+    def fake_passes_filters(lead, f):
+        filter_calls.append((lead.external_id, f))
+        return True
+
+    async def fake_scrape_one(ctx, url, p, job_id):
+        # Return a lead that would FAIL the filter (review_count below min).
+        return Lead(
+            external_id="0x1:0x2",
+            business_name="x",
+            name_normalized="x",
+            review_count=1,
+        )
+
+    monkeypatch.setattr("scraper.google_maps._scrape_one_place", fake_scrape_one)
+    monkeypatch.setattr("scraper.google_maps._passes_filters", fake_passes_filters)
+    monkeypatch.setattr("scraper.google_maps.expand_if_short", lambda u: u)
+
+    fake_browser = AsyncMock()
+    fake_ctx = AsyncMock()
+    fake_browser.new_context = AsyncMock(return_value=fake_ctx)
+    fake_pw_chromium = AsyncMock()
+    fake_pw_chromium.launch = AsyncMock(return_value=fake_browser)
+    fake_pw = MagicMock()
+    fake_pw.chromium = fake_pw_chromium
+    fake_pw_cm = AsyncMock()
+    fake_pw_cm.__aenter__ = AsyncMock(return_value=fake_pw)
+    fake_pw_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("scraper.google_maps.async_playwright", return_value=fake_pw_cm):
+        leads = [lead async for lead in scrape(params)]
+
+    assert len(leads) == 1
+    assert filter_calls == []  # filter MUST NOT be called in direct_url mode
+
+
+@pytest.mark.asyncio
+async def test_scrape_direct_url_expands_short_url(monkeypatch):
+    """maps.app.goo.gl URLs are expanded before being visited."""
+    params = ScrapeParams(direct_url="https://maps.app.goo.gl/abc123")
+    expanded = "https://www.google.com/maps/place/Foo/data=!1s0x1:0x2"
+
+    expand_calls: list[str] = []
+    scrape_one_calls: list[str] = []
+
+    def fake_expand(u):
+        expand_calls.append(u)
+        return expanded
+
+    async def fake_scrape_one(ctx, url, p, job_id):
+        scrape_one_calls.append(url)
+        return _stub_lead()
+
+    monkeypatch.setattr("scraper.google_maps.expand_if_short", fake_expand)
+    monkeypatch.setattr("scraper.google_maps._scrape_one_place", fake_scrape_one)
+
+    fake_browser = AsyncMock()
+    fake_ctx = AsyncMock()
+    fake_browser.new_context = AsyncMock(return_value=fake_ctx)
+    fake_pw_chromium = AsyncMock()
+    fake_pw_chromium.launch = AsyncMock(return_value=fake_browser)
+    fake_pw = MagicMock()
+    fake_pw.chromium = fake_pw_chromium
+    fake_pw_cm = AsyncMock()
+    fake_pw_cm.__aenter__ = AsyncMock(return_value=fake_pw)
+    fake_pw_cm.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("scraper.google_maps.async_playwright", return_value=fake_pw_cm):
+        leads = [lead async for lead in scrape(params)]
+
+    assert expand_calls == ["https://maps.app.goo.gl/abc123"]
+    assert scrape_one_calls == [expanded]
+    assert len(leads) == 1
+
+
+def test_with_hl_adds_param_when_absent():
+    out = _with_hl("https://www.google.com/maps/place/X/data=!1s0x1:0x2", "en")
+    assert "hl=en" in out
+    assert out.startswith("https://www.google.com/maps/place/X/data=!1s0x1:0x2")
+
+
+def test_with_hl_overrides_existing_hl_and_keeps_other_params():
+    out = _with_hl("https://www.google.com/maps/place/X/data=!1s0x1?hl=nl&entry=ttu", "en")
+    assert "hl=en" in out
+    assert "hl=nl" not in out
+    assert "entry=ttu" in out
+
+
+def test_with_hl_preserves_data_path_segment():
+    out = _with_hl("https://www.google.com/maps/place/Foo/data=!4m6!3m5!1s0xabc:0xdef", "en")
+    assert "data=!4m6!3m5!1s0xabc:0xdef" in out
+    assert out.endswith("hl=en")
+
+
+def test_parse_hours_pairs_basic():
+    out = _parse_hours_pairs(["Thursday, 12–7 pm", "Monday, Closed", "Saturday, 9 am–5 pm"])
+    assert out["Thursday"] == "12–7 pm"
+    assert out["Monday"] == "Closed"
+    assert out["Saturday"] == "9 am–5 pm"
+    assert out["Sunday"] == "___"
+
+
+def test_parse_hours_pairs_split_daily_hours_keeps_full_value():
+    out = _parse_hours_pairs(["Monday, 9 am–12 pm, 1–5 pm"])
+    assert out["Monday"] == "9 am–12 pm, 1–5 pm"
+
+
+def test_parse_hours_pairs_returns_none_when_nothing_maps():
+    assert _parse_hours_pairs([]) is None
+    assert _parse_hours_pairs(["garbage with no comma"]) is None
+
+
+def test_about_available_from_aria():
+    assert _about_available("Has in-store shopping") is True
+    assert _about_available("Accepts credit cards") is True
+    assert _about_available("Good for quick visit") is True
+    assert _about_available("No delivery") is False
+    assert _about_available("No toilet") is False
+
+
+def test_group_about_items_groups_by_section_and_flags():
+    items = [
+        {
+            "section": "Service options",
+            "label": "In-store shopping",
+            "aria": "Has in-store shopping",
+        },
+        {"section": "Service options", "label": "Delivery", "aria": "No delivery"},
+        {"section": "Amenities", "label": "Toilet", "aria": "No toilet"},
+    ]
+    out = _group_about_items(items)
+    assert out["Service options"]["In-store shopping"] is True
+    assert out["Service options"]["Delivery"] is False
+    assert out["Amenities"]["Toilet"] is False
+
+
+def test_group_about_items_skips_empty_labels():
+    out = _group_about_items([{"section": "X", "label": "", "aria": "Has x"}])
+    assert out == {}
 
 
 def test_every_scrape_params_field_is_referenced_in_engine():
@@ -210,8 +424,8 @@ def test_every_scrape_params_field_is_referenced_in_engine():
 
     from scraper import google_maps
 
-    # review_limit is a no-op since the top-3-by-stars rewrite; kept on
-    # the model for API compatibility. All other fields must be wired.
+    # review_limit is a no-op since reviews are fixed at the 3 newest >=4-star reviews
+    # kept on the model for API compatibility. All other fields must be wired.
     whitelist = {"review_limit"}
     engine_src = inspect.getsource(google_maps)
     missing: list[str] = []

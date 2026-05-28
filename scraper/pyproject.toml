@@ -12,8 +12,6 @@ dependencies = [
     "tenacity==9.0.0",
     "rapidfuzz==3.10.1",
     "supabase==2.29.0",
-    "gspread==6.1.4",
-    "google-auth==2.36.0",
     "python-dotenv==1.0.1",
 ]
 
@@ -47,11 +45,6 @@ python_version = "3.11"
 strict = true
 mypy_path = "src"
 explicit_package_bases = true
-
-[[tool.mypy.overrides]]
-module = ["gspread", "google.*"]
-ignore_missing_imports = true
-follow_imports = "skip"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

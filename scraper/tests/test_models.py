@@ -35,6 +35,28 @@ def test_scrape_filters_all_optional_off_by_default():
     assert f.web_presence == ["none", "social_only"]
 
 
+def test_scrape_params_direct_url_optional_defaults_to_none():
+    p = ScrapeParams()
+    assert p.direct_url is None
+
+
+def test_scrape_params_accepts_direct_url():
+    p = ScrapeParams(direct_url="https://www.google.com/maps/place/Foo/data=!1s0x47c63f...")
+    assert p.direct_url == "https://www.google.com/maps/place/Foo/data=!1s0x47c63f..."
+
+
+def test_scrape_params_direct_url_with_other_fields():
+    """direct_url coexists with the normal search params — same model, no separate type."""
+    p = ScrapeParams(
+        category="restaurants",
+        country="NL",
+        cities=["Lelystad"],
+        direct_url="https://maps.app.goo.gl/abc",
+    )
+    assert p.direct_url == "https://maps.app.goo.gl/abc"
+    assert p.cities == ["Lelystad"]
+
+
 def test_lead_extra_defaults_to_empty_dict():
     lead = Lead(
         external_id="0x1234:0xabcd",

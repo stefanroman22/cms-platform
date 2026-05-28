@@ -10,9 +10,6 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_SERVICE_KEY: str = ""
 
-    GOOGLE_SHEETS_CREDENTIALS_JSON: str = ""
-    GOOGLE_SHEET_ID: str = ""
-
     SCRAPER_HEADLESS: bool = True
     SCRAPER_LOCALE_DEFAULT: str = "en"
     SCRAPER_USER_AGENT: str = (

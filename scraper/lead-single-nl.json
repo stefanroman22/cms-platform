@@ -1,0 +1,42 @@
+[
+  {
+    "external_id": "0x47c7b913f52b9671:0xf9f9170c363873d9",
+    "scrape_job_id": null,
+    "primary_source": "google_maps",
+    "source_url": "https://www.google.com/maps/place/Lekkeristic+Magazin+romanesc+si+maghiar+-+Magyar+es+roman+bolt/@52.1907099,5.963634,17z/data=!3m1!4b1!4m6!3m5!1s0x47c7b913f52b9671:0xf9f9170c363873d9!8m2!3d52.1907099!4d5.9662089!16s%2Fg%2F11s0vd_x71?entry=ttu&g_ep=EgoyMDI2MDUyMC4wIKXMDSoASAFQAw%3D%3D",
+    "lead_type": "website",
+    "category": "Kruidenier",
+    "business_name": "Lekkeristic Magazin romanesc si maghiar - Magyar es roman bolt",
+    "name_normalized": "lekkeristic magazin romanesc si maghiar magyar es roman bolt",
+    "description": "Not found",
+    "about": null,
+    "country": "NL",
+    "region": null,
+    "city": "Nederland",
+    "address": "Hofveld 123, 7333 BK Apeldoorn, Nederland",
+    "postal_code": null,
+    "lat": 52.1907099,
+    "lng": 5.9662089,
+    "phone": null,
+    "email": null,
+    "website_url": null,
+    "facebook_url": "https://www.facebook.com/Lekkeristic-107488235035173/",
+    "instagram_url": null,
+    "menu_url": null,
+    "web_presence": "social_only",
+    "rating": 4.8,
+    "review_count": 55,
+    "reviews": [],
+    "opening_hours": {
+      "Monday": "___",
+      "Tuesday": "___",
+      "Wednesday": "___",
+      "Thursday": "___",
+      "Friday": "___",
+      "Saturday": "___",
+      "Sunday": "___"
+    },
+    "photo_urls": [],
+    "extra": {}
+  }
+]

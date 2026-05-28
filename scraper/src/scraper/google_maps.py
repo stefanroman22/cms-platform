@@ -12,6 +12,7 @@ import random
 import re
 from collections.abc import AsyncIterator
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from loguru import logger
 from playwright.async_api import (
@@ -33,6 +34,7 @@ from .dedup import (
     peek_external_id,
 )
 from .models import Lead, ScrapeFilters, ScrapeParams
+from .urls import expand_if_short
 
 # ──────────────────────────────────────────────────────────────────────
 # Helpers (timing + browser lifecycle)
@@ -158,32 +160,30 @@ async def _safe_attr(page: Page, selector: str, attr: str) -> str | None:
 
 
 async def _extract_opening_hours(page: Page) -> dict[str, str] | None:
-    """Open the hours expansion if present, return {day_name: hours}."""
+    """Read the 7-day hours. Primary source is the per-day 'copy open hours'
+    buttons (data-value='Day, hours') which exist in the DOM regardless of the
+    week dropdown's collapsed/expanded state. Falls back to the weekday table."""
+    # Primary: copy-buttons carry a visibility-independent data-value.
     try:
-        btn = page.locator(selectors.PLACE_HOURS_BUTTON).first
-        if await btn.count() == 0:
-            return None
-        await btn.click(timeout=2000)
-        await page.wait_for_selector(selectors.PLACE_HOURS_TABLE, timeout=2000)
+        btns = await page.locator(selectors.PLACE_HOURS_COPY_BUTTONS).element_handles()
+        pairs = [dv for b in btns if (dv := await b.get_attribute("data-value"))]
+        parsed = _parse_hours_pairs(pairs)
+        if parsed:
+            return parsed
+    except Exception:
+        pass
+    # Fallback: weekday table — first cell is the day, second the hours.
+    try:
         rows = await page.locator(f"{selectors.PLACE_HOURS_TABLE} tr").element_handles()
-        hours: dict[str, str] = {}
+        pairs = []
         for r in rows:
-            cells = await r.query_selector_all("td, th")
+            cells = await r.query_selector_all("td")
             if len(cells) >= 2:
-                day_text = (await cells[0].inner_text()).strip()
-                value_text = (await cells[1].inner_text()).strip()
-                if day_text:
-                    hours[day_text] = value_text
-        if not hours:
-            return None
-        # Merge into the skeleton so every canonical day key is present.
-        skeleton = _default_opening_hours()
-        for k, v in hours.items():
-            for canon in skeleton.keys():
-                if canon.lower() in k.lower():
-                    skeleton[canon] = v
-                    break
-        return skeleton
+                day = (await cells[0].inner_text()).strip()
+                hours = (await cells[1].inner_text()).strip()
+                if day and hours:
+                    pairs.append(f"{day}, {hours}")
+        return _parse_hours_pairs(pairs)
     except Exception:
         return None
 
@@ -197,31 +197,6 @@ async def _card_text(card: ElementHandle, selector: str) -> str | None:
         return (await el.inner_text()).strip()
     except Exception:
         return None
-
-
-async def _review_from_card(card: ElementHandle) -> dict[str, Any]:
-    """Pull author, text, relative_date, rating (1-5 int) out of one card.
-    Rating is parsed from the aria-label on the star span (REVIEW_RATING
-    selector); falls back to None if not parseable."""
-    rating: int | None = None
-    try:
-        star_el = await card.query_selector(selectors.REVIEW_RATING)
-        if star_el is not None:
-            aria = await star_el.get_attribute("aria-label")
-            if aria:
-                import re
-
-                m = re.search(r"(\d+)\s*(star|ster)", aria, re.IGNORECASE)
-                if m:
-                    rating = int(m.group(1))
-    except Exception:
-        rating = None
-    return {
-        "author": await _card_text(card, selectors.REVIEW_AUTHOR),
-        "text": await _card_text(card, selectors.REVIEW_TEXT),
-        "relative_date": await _card_text(card, selectors.REVIEW_RELATIVE_DATE),
-        "rating": rating,
-    }
 
 
 async def _open_reviews_tab(page: Page) -> bool:
@@ -238,73 +213,158 @@ async def _open_reviews_tab(page: Page) -> bool:
         return False
 
 
+async def _sort_reviews_newest(page: Page) -> None:
+    """Switch the reviews sort to 'Newest'. Best-effort: if the control or
+    option is missing we leave the default order (caller still filters)."""
+    try:
+        await page.locator(selectors.REVIEW_SORT_BUTTON).first.click(timeout=2000)
+        await (
+            page.locator(selectors.REVIEW_SORT_MENUITEM)
+            .filter(has_text="Newest")
+            .first.click(timeout=2000)
+        )
+        # The pane re-renders client-side; give it a beat to reorder.
+        await page.wait_for_timeout(1200)
+    except Exception:
+        logger.debug("could not set reviews sort to Newest")
+
+
+async def _review_rating(card: ElementHandle) -> int | None:
+    try:
+        star = await card.query_selector(selectors.REVIEW_RATING)
+        if star is None:
+            return None
+        return _parse_star_rating(await star.get_attribute("aria-label"))
+    except Exception:
+        return None
+
+
+async def _expand_review(card: ElementHandle) -> None:
+    """Reveal the original language (undo Google's auto-translation) and
+    expand truncated text, so the stored review is the full original text."""
+    try:
+        see_original = await card.query_selector(selectors.REVIEW_SEE_ORIGINAL)
+        if see_original is not None:
+            before = await _card_text(card, selectors.REVIEW_TEXT)
+            await see_original.click(timeout=1500)
+            # The translated→original swap is client-side and may lag a beat;
+            # poll up to ~1.5s for the text to actually change before reading.
+            for _ in range(15):
+                await asyncio.sleep(0.1)
+                if (await _card_text(card, selectors.REVIEW_TEXT)) != before:
+                    break
+    except Exception:
+        pass
+    # Click a "More"/"See more" button by text — class is volatile.
+    try:
+        await card.evaluate("""(el) => {
+                const b = [...el.querySelectorAll('button')].find((x) => {
+                    const t = (x.getAttribute('aria-label') || x.innerText || '')
+                        .trim().toLowerCase();
+                    return t === 'more' || t === 'see more';
+                });
+                if (b) b.click();
+            }""")
+    except Exception:
+        pass
+
+
 async def _extract_reviews(page: Page, limit: int) -> list[dict[str, Any]]:
-    """Open the Reviews tab if present, return TOP 3 reviews by star
-    rating. `limit` is ignored from the spec — kept as a no-op for API
-    compatibility — we always return 3."""
+    """Return the 3 newest reviews that have text and a rating >= 4, in
+    original language, de-duplicated by review id. `limit` is ignored (kept
+    for API compatibility) — the spec fixes the count at 3."""
     if not await _open_reviews_tab(page):
         return []
+    await _sort_reviews_newest(page)
 
-    # Cap candidates: scrolling the reviews pane would yield more, but
-    # the top-rated are usually rendered first by Google's default sort.
     cards = await page.locator(selectors.REVIEW_CARD).element_handles()
-    candidates: list[dict[str, Any]] = []
-    for card in cards[:30]:
-        candidates.append(await _review_from_card(card))
+    selected: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for card in cards:
+        rid = await card.get_attribute("data-review-id")
+        if rid:
+            if rid in seen_ids:
+                continue
+            seen_ids.add(rid)
+        rating = await _review_rating(card)
+        if rating is None or rating < 4:
+            continue
+        await _expand_review(card)
+        text = await _card_text(card, selectors.REVIEW_TEXT)
+        if not text:
+            continue  # spec: skip rating-only reviews
+        author = await card.get_attribute("aria-label") or await _card_text(
+            card, selectors.REVIEW_AUTHOR
+        )
+        selected.append(
+            {
+                "author": author,
+                "text": text,
+                "relative_date": await _card_text(card, selectors.REVIEW_RELATIVE_DATE),
+                "rating": rating,
+            }
+        )
+        if len(selected) >= 3:
+            break
+    return selected
 
-    # Sort: reviews with text rank above star-only; within each bucket,
-    # higher rating first. Achieved by sorting on a tuple (has_text, rating).
-    candidates.sort(
-        key=lambda r: (1 if r.get("text") else 0, r.get("rating") or -1),
-        reverse=True,
-    )
-    return candidates[:3]
+
+def _about_available(aria: str) -> bool:
+    """Google encodes a negated attribute as 'No <thing>' in the attribute
+    span's aria-label (e.g. 'No delivery'). Everything else ('Has X',
+    'Accepts X', 'Good for X') means the attribute is available."""
+    return re.match(r"^no\b", (aria or "").strip(), re.IGNORECASE) is None
+
+
+def _group_about_items(items: list[dict[str, Any]]) -> dict[str, dict[str, bool]]:
+    """Group flat About items [{section,label,aria}] into
+    {section: {label: available_bool}}. Empty labels are dropped."""
+    out: dict[str, dict[str, bool]] = {}
+    for it in items:
+        label = (it.get("label") or "").strip()
+        if not label:
+            continue
+        section = (it.get("section") or "Other").strip() or "Other"
+        out.setdefault(section, {})[label] = _about_available(it.get("aria") or label)
+    return out
+
+
+_ABOUT_EXTRACT_JS = """() => {
+    const panel = document.querySelector('div[role="region"][aria-label^="About"]');
+    if (!panel) return [];
+    const items = [];
+    let section = "Other";
+    for (const node of panel.querySelectorAll('h2, ul li')) {
+        if (node.tagName.toLowerCase() === 'h2') {
+            section = (node.innerText || '').trim() || section;
+            continue;
+        }
+        const span = node.querySelector('span[aria-label]');
+        if (!span) continue;
+        const label = (span.innerText || '').trim();
+        if (!label) continue;
+        items.push({ section, label, aria: span.getAttribute('aria-label') || label });
+    }
+    return items;
+}"""
 
 
 async def _extract_about_attributes(page: Page) -> dict[str, dict[str, bool]]:
     """Open the About tab and read attributes grouped by section heading.
-    Returns {} when the tab is absent or unparseable.
+    Returns {} when the tab is absent or the panel never renders.
 
-    Shape:
-        {
-            "Accessibility": {"Wheelchair-accessible car park": True, ...},
-            "Amenities": {"Toilet": True},
-            "Payments": {"Debit cards": True, ...},
-            ...
-        }
+    Shape: {"Service options": {"In-store shopping": True, "Delivery": False}, ...}
     """
     try:
         btn = page.locator(selectors.ABOUT_TAB_BUTTON).first
         if await btn.count() == 0:
             return {}
         await btn.click(timeout=2000)
-        await page.wait_for_load_state("networkidle", timeout=3000)
-
-        # Walk the About panel in-page so we capture the grouped structure
-        # (section heading → attribute labels) in one round-trip.
-        grouped = await page.evaluate("""() => {
-                const panel = document.querySelector('div[role="region"][aria-label*="About"]')
-                    || document.querySelector('div[role="region"]');
-                if (!panel) return {};
-                const out = {};
-                let current = "Other";
-                for (const node of panel.querySelectorAll('h2, h3, [role="heading"], li')) {
-                    const tag = node.tagName.toLowerCase();
-                    if (tag === 'h2' || tag === 'h3' || node.getAttribute('role') === 'heading') {
-                        current = (node.innerText || '').trim() || current;
-                        continue;
-                    }
-                    const aria = node.getAttribute('aria-label');
-                    const label = (aria || node.innerText || '').trim();
-                    if (!label) continue;
-                    const isNo = /^no\\s+/i.test(label);
-                    const key = label.replace(/^no\\s+/i, '').trim();
-                    if (!out[current]) out[current] = {};
-                    out[current][key] = !isNo;
-                }
-                return out;
-            }""")
-        return grouped or {}
+        # Wait for the *About* region specifically — never fall back to an
+        # arbitrary region (the first region on the page is the map search box).
+        await page.wait_for_selector(selectors.ABOUT_PANEL, timeout=4000)
+        items = await page.evaluate(_ABOUT_EXTRACT_JS)
+        return _group_about_items(items or [])
     except Exception:
         return {}
 
@@ -340,6 +400,26 @@ def _default_opening_hours() -> dict[str, str]:
     }
 
 
+def _parse_hours_pairs(pairs: list[str]) -> dict[str, str] | None:
+    """Map ['Thursday, 12–7 pm', 'Monday, Closed', ...] into the 7-day
+    skeleton. Each entry is 'Day, hours' split on the FIRST ', ' so split
+    daily hours ('9 am–12 pm, 1–5 pm') survive intact. Returns None when no
+    weekday matched (so the caller can fall back to the placeholder skeleton)."""
+    skeleton = _default_opening_hours()
+    matched = False
+    for raw in pairs:
+        if not raw or ", " not in raw:
+            continue
+        day, hours = raw.split(", ", 1)
+        day, hours = day.strip(), hours.strip()
+        for canon in skeleton:
+            if canon.lower() == day.lower():
+                skeleton[canon] = hours
+                matched = True
+                break
+    return skeleton if matched else None
+
+
 def _split_address(address: str | None) -> tuple[str | None, str | None]:
     """Best-effort split of the trailing comma-separated segment into
     (postal_code, city). Handles Dutch `NNNN AA City` postal-code format
@@ -363,6 +443,15 @@ def _parse_rating(rating_text: str | None) -> float | None:
         return float(rating_text.replace(",", "."))
     except ValueError:
         return None
+
+
+def _parse_star_rating(aria: str | None) -> int | None:
+    """Pull the integer star count from a review star aria-label such as
+    '5 stars' / '1 star' / '4,0 sterren'. Returns None if no digit present."""
+    if not aria:
+        return None
+    m = re.search(r"(\d+)", aria)
+    return int(m.group(1)) if m else None
 
 
 def _parse_review_count(text: str | None) -> int | None:
@@ -402,7 +491,9 @@ async def _scrape_one_place(
 ) -> Lead | None:
     page = await ctx.new_page()
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=20_000)
+        await page.goto(
+            _with_hl(url, params.language), wait_until="domcontentloaded", timeout=20_000
+        )
         await _accept_consent(page)
         await page.wait_for_selector(selectors.PLACE_TITLE, timeout=10_000)
         await _polite_delay()
@@ -538,6 +629,17 @@ def _search_url(query: str, language: str, country: str) -> str:
     return f"https://www.google.com/maps/search/{slug}/?hl={language}&gl={country}"
 
 
+def _with_hl(url: str, language: str) -> str:
+    """Force the Google Maps UI language via the `hl` query param so place
+    pages render in `language` (category, weekday names, attribute labels)
+    instead of geo-defaulting to the local language (e.g. Dutch in NL).
+    Overrides any existing hl; leaves the `data=!...` path blob untouched."""
+    parts = urlparse(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "hl"]
+    query.append(("hl", language))
+    return urlunparse(parts._replace(query=urlencode(query)))
+
+
 async def scrape(
     params: ScrapeParams,
     scrape_job_id: str | None = None,
@@ -545,8 +647,18 @@ async def scrape(
 ) -> AsyncIterator[Lead]:
     """Top-level async generator. Yields Lead objects one at a time so
     sinks can stream and the pipeline can update counters in real time.
+
+    When `params.direct_url` is set: skip the search/feed loop entirely
+    and visit only that URL. Filters are bypassed — the caller explicitly
+    chose this lead via the `scrape-url` CLI command.
     """
     use_headless = settings.SCRAPER_HEADLESS if headless is None else headless
+
+    # Expand + validate direct_url BEFORE launching Chromium — a bad URL
+    # should fail in ms via urllib, not after ~5s of browser startup.
+    expanded_direct_url: str | None = None
+    if params.direct_url:
+        expanded_direct_url = expand_if_short(params.direct_url)
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
@@ -556,11 +668,24 @@ async def scrape(
         ctx = await _new_context(browser, params.language, params.country)
         page = await ctx.new_page()
 
-        # Run-wide dedup so cartesian queries (cities × areas) and overlapping
-        # neighbourhoods don't yield the same business twice. Peek the feature
-        # id BEFORE visiting to save the ~5-10s place-page cost.
-        seen_ids: set[str] = set()
         try:
+            # ─── Single-URL mode ───────────────────────────────────────
+            if expanded_direct_url is not None:
+                logger.info("direct-url scrape: {}", expanded_direct_url)
+                try:
+                    lead = await _scrape_one_place(ctx, expanded_direct_url, params, scrape_job_id)
+                except Exception as exc:  # noqa: BLE001 — surface but don't crash sinks
+                    logger.warning("direct-url place {} failed: {}", expanded_direct_url, exc)
+                    return
+                if lead is not None:
+                    yield lead
+                return
+
+            # ─── Search-feed mode (unchanged) ──────────────────────────
+            # Run-wide dedup so cartesian queries (cities × areas) and overlapping
+            # neighbourhoods don't yield the same business twice. Peek the feature
+            # id BEFORE visiting to save the ~5-10s place-page cost.
+            seen_ids: set[str] = set()
             for query in _build_queries(params):
                 logger.info("query: {}", query)
                 await page.goto(

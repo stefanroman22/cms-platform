@@ -6,7 +6,7 @@ Step-by-step guide for deploying the scraper as a systemd-timer cron worker on a
 
 - Ubuntu 22.04+ (or any systemd-based Linux)
 - Python 3.11+ available as `python3.11`
-- Network access to Supabase + Google APIs + Google Maps
+- Network access to Supabase + Google Maps
 - Sudo access
 
 Install system-level Chromium dependencies (Playwright pulls down its own Chromium, but the OS-level libs are needed):
@@ -48,17 +48,6 @@ sudo $EDITOR /etc/scraper.env   # fill in real values
 sudo chmod 640 /etc/scraper.env
 sudo chown root:scraper /etc/scraper.env
 ```
-
-Place the Google service-account JSON at `/etc/scraper/google-sa.json`:
-
-```bash
-sudo install -d -o root -g scraper -m 750 /etc/scraper
-sudo $EDITOR /etc/scraper/google-sa.json   # paste the JSON
-sudo chmod 640 /etc/scraper/google-sa.json
-sudo chown root:scraper /etc/scraper/google-sa.json
-```
-
-Make sure `/etc/scraper.env` points `GOOGLE_SHEETS_CREDENTIALS_JSON=/etc/scraper/google-sa.json`.
 
 ## 5. Install systemd units
 
@@ -136,4 +125,4 @@ Then wait for the next 30-min tick (or run `run-pending` manually). Verify:
 
 - Job transitions `pending` → `running` → `done` in the dashboard / via `GET /admin/scrape-jobs`
 - `results_inserted > 0`
-- Leads appear in Supabase `leads` table AND the Google Sheet
+- Leads appear in Supabase `leads` table

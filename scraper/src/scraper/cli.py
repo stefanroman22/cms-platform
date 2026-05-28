@@ -21,27 +21,37 @@ from .models import ScrapeFilters, ScrapeParams
 from .pipeline import run_pipeline
 from .sinks.base import Sink
 from .sinks.json_sink import JsonSink
-from .sinks.sheets_sink import SheetsSink
 from .sinks.supabase_sink import SupabaseSink
+from .urls import InvalidMapsURLError, is_google_maps_url
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 _DEFAULT_WEB_PRESENCE: list[str] = ["none", "social_only"]
 
 
-def _build_sinks(
-    *, dry_run: bool, supabase: bool, sheet: bool, out_path: Path | None
-) -> list[Sink]:
+def _build_sinks(*, dry_run: bool, supabase: bool, out_path: Path | None) -> list[Sink]:
     sinks: list[Sink] = []
     if dry_run:
         sinks.append(JsonSink(out_path or Path("./leads-dry-run.json")))
         return sinks
     if supabase:
         sinks.append(SupabaseSink())
-    if sheet:
-        sinks.append(SheetsSink())
     if not sinks:
-        raise typer.BadParameter("at least one sink required (Supabase, sheet, or --dry-run)")
+        raise typer.BadParameter("at least one sink required (Supabase or --dry-run)")
+    return sinks
+
+
+def _build_sinks_single(*, dry_run: bool, supabase: bool, out_path: Path | None) -> list[Sink]:
+    """Sinks for single-URL mode. Defaults differ from `_build_sinks`
+    only in the dry-run output filename."""
+    sinks: list[Sink] = []
+    if dry_run:
+        sinks.append(JsonSink(out_path or Path("./lead-single.json")))
+        return sinks
+    if supabase:
+        sinks.append(SupabaseSink())
+    if not sinks:
+        raise typer.BadParameter("at least one sink required (Supabase or --dry-run)")
     return sinks
 
 
@@ -64,7 +74,6 @@ def scrape(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     no_headless: Annotated[bool, typer.Option("--no-headless")] = False,
     no_supabase: Annotated[bool, typer.Option("--no-supabase")] = False,
-    no_sheet: Annotated[bool, typer.Option("--no-sheet")] = False,
     out: Annotated[Path | None, typer.Option("--out")] = None,
 ) -> None:
     """Run a scrape with the given parameters and write to selected sinks."""
@@ -86,13 +95,49 @@ def scrape(
             web_presence=list(web_presence),  # type: ignore[arg-type]
         ),
     )
-    sinks = _build_sinks(
-        dry_run=dry_run, supabase=not no_supabase, sheet=not no_sheet, out_path=out
-    )
+    sinks = _build_sinks(dry_run=dry_run, supabase=not no_supabase, out_path=out)
     if no_headless:
         settings.SCRAPER_HEADLESS = False
 
     counters = asyncio.run(run_pipeline(params, sinks))
+    typer.echo(json.dumps(counters.__dict__))
+
+
+@app.command("scrape-url")
+def scrape_url(
+    url: Annotated[str, typer.Argument(help="Google Maps URL of a single business.")],
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    no_headless: Annotated[bool, typer.Option("--no-headless")] = False,
+    no_supabase: Annotated[bool, typer.Option("--no-supabase")] = False,
+    out: Annotated[Path | None, typer.Option("--out")] = None,
+    language: Annotated[str, typer.Option("--language")] = "en",
+    country: Annotated[str, typer.Option("--country")] = "NL",
+) -> None:
+    """Scrape a single business by Google Maps URL.
+
+    Useful for ad-hoc lead lookup and for testing the extraction pipeline
+    against a known place page without running a full search.
+    """
+    if not is_google_maps_url(url):
+        raise typer.BadParameter(
+            f"not a Google Maps URL: {url!r}. Expected google.com/maps/..., "
+            "maps.app.goo.gl/..., or goo.gl/maps/..."
+        )
+
+    params = ScrapeParams(
+        country=country,
+        language=language,
+        direct_url=url,
+    )
+    sinks = _build_sinks_single(dry_run=dry_run, supabase=not no_supabase, out_path=out)
+    if no_headless:
+        settings.SCRAPER_HEADLESS = False
+
+    try:
+        counters = asyncio.run(run_pipeline(params, sinks))
+    except InvalidMapsURLError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
     typer.echo(json.dumps(counters.__dict__))
 
 
@@ -127,7 +172,7 @@ def run_pending() -> None:
 
     try:
         params = ScrapeParams.model_validate(job["params"])
-        sinks: list[Sink] = [SupabaseSink(), SheetsSink()]
+        sinks: list[Sink] = [SupabaseSink()]
         counters = asyncio.run(run_pipeline(params, sinks, scrape_job_id=job_id))
         sb.table("scrape_jobs").update(
             {

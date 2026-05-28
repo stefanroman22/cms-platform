@@ -41,6 +41,11 @@ class ScrapeParams(BaseModel):
     with_reviews: bool = True
     review_limit: int = 10
     filters: ScrapeFilters = Field(default_factory=ScrapeFilters)
+    # Single-URL mode. When set, the scrape engine skips the search/feed
+    # loop and visits this URL directly. Used by the `scrape-url` CLI
+    # command. Filters are bypassed in this mode — the user explicitly
+    # chose this lead.
+    direct_url: str | None = None
 
 
 class Lead(BaseModel):

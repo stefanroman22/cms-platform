@@ -1,0 +1,90 @@
+[
+  {
+    "external_id": "0x47c7b913f52b9671:0xf9f9170c363873d9",
+    "scrape_job_id": null,
+    "primary_source": "google_maps",
+    "source_url": "https://www.google.com/maps/place/Lekkeristic+Magazin+romanesc+si+maghiar+-+Magyar+es+roman+bolt/@52.1907099,5.963634,17z/data=!4m16!1m9!3m8!1s0x47c7b913f52b9671:0xf9f9170c363873d9!2sLekkeristic+Magazin+romanesc+si+maghiar+-+Magyar+es+roman+bolt!8m2!3d52.1907099!4d5.9662089!9m1!1b1!16s%2Fg%2F11s0vd_x71!3m5!1s0x47c7b913f52b9671:0xf9f9170c363873d9!8m2!3d52.1907099!4d5.9662089!16s%2Fg%2F11s0vd_x71?entry=ttu",
+    "lead_type": "website",
+    "category": "Grocery store",
+    "business_name": "Lekkeristic Magazin romanesc si maghiar - Magyar es roman bolt",
+    "name_normalized": "lekkeristic magazin romanesc si maghiar magyar es roman bolt",
+    "description": "Not found",
+    "about": null,
+    "country": "NL",
+    "region": null,
+    "city": "Apeldoorn",
+    "address": "Hofveld 123, 7333 BK Apeldoorn",
+    "postal_code": "7333 BK",
+    "lat": 52.1907099,
+    "lng": 5.9662089,
+    "phone": null,
+    "email": null,
+    "website_url": null,
+    "facebook_url": "https://www.facebook.com/Lekkeristic-107488235035173/",
+    "instagram_url": null,
+    "menu_url": null,
+    "web_presence": "social_only",
+    "rating": 4.8,
+    "review_count": 56,
+    "reviews": [
+      {
+        "author": "Zsolt Orosz",
+        "text": "Szuper j\u00f3 minden.",
+        "relative_date": "a month ago",
+        "rating": 5
+      },
+      {
+        "author": "Basam abdullah",
+        "text": "Good",
+        "relative_date": "2 months ago",
+        "rating": 5
+      },
+      {
+        "author": "Ilona Ap\u00e1tin\u00e9 Makai",
+        "text": "Szuper. \u00c1r, min\u0151s\u00e9g!!! Na xe ami a legfontosabb kedvesek, seg\u00edt\u0151k\u00e9szek!!! Minden csillagos 10\u2606\u2606\u2606\u2606\u2606\u2606\u2606\u2606\u2606",
+        "relative_date": "4 months ago",
+        "rating": 5
+      }
+    ],
+    "opening_hours": {
+      "Monday": "Closed",
+      "Tuesday": "12\u20137\u202fpm",
+      "Wednesday": "12\u20137\u202fpm",
+      "Thursday": "12\u20137\u202fpm",
+      "Friday": "12\u20137\u202fpm",
+      "Saturday": "9\u202fam\u20135\u202fpm",
+      "Sunday": "12\u20135\u202fpm"
+    },
+    "photo_urls": [],
+    "extra": {
+      "attributes": {
+        "Accessibility": {
+          "Wheelchair-accessible car park": true,
+          "Wheelchair-accessible entrance": true
+        },
+        "Service options": {
+          "In-store shopping": true,
+          "Delivery": false
+        },
+        "Highlights": {
+          "Great produce": true
+        },
+        "Amenities": {
+          "Toilet": false
+        },
+        "Planning": {
+          "Quick visit": true
+        },
+        "Payments": {
+          "Credit cards": true,
+          "Debit cards": true,
+          "NFC mobile payments": true
+        },
+        "Parking": {
+          "Free parking lot": true,
+          "On-site parking": true
+        }
+      }
+    }
+  }
+]
