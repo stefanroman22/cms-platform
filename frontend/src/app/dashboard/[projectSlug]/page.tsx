@@ -1,24 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ChevronRight, Settings, Globe, ExternalLink } from "lucide-react";
+import { ArrowLeft, ChevronRight, Globe, ExternalLink } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { useUser } from "@/context/user";
-import { ServiceGrid } from "@/components/dashboard/ServiceGrid";
-import type { ServiceCardService } from "@/components/dashboard/ServiceCard";
-import { IssueForm } from "@/components/dashboard/IssueForm";
-import { IssueList } from "@/components/dashboard/IssueList";
 import { PreviewPublishBar } from "@/components/dashboard/PreviewPublishBar";
 import { ArcSpinner } from "@/components/ui/ArcSpinner";
-import {
-  dashboardInputCn,
-  dashboardFieldLabelCn,
-  dashboardSectionCardCn,
-  dashboardErrorBannerCn,
-} from "@/lib/styles";
-import * as cache from "@/lib/cache";
+import { SectionRail } from "@/components/dashboard/SectionRail";
+import { SectionPanel } from "@/components/dashboard/SectionPanel";
+import { DashboardSection } from "@/components/dashboard/DashboardSection";
+import { CmsSection } from "@/components/dashboard/CmsSection";
+import { AutoFixSection } from "@/components/dashboard/AutoFixSection";
+import { ProjectSettingsSection } from "@/components/dashboard/ProjectSettingsSection";
+import { visibleSections } from "@/components/dashboard/sectionConfig";
+import { useProjectView } from "@/components/dashboard/hooks/useProjectView";
 
 interface ProjectInfo {
   name: string;
@@ -26,24 +23,13 @@ interface ProjectInfo {
   website_url?: string | null;
 }
 
-function fetchServices(projectSlug: string): Promise<ServiceCardService[]> {
-  return fetch(`/api/projects/${projectSlug}/services`, {
-    credentials: "include",
-    cache: "no-store",
-  }).then(async (r) => {
-    if (!r.ok) {
-      const body = await r.json().catch(() => ({}));
-      throw new Error(body.detail ?? "Failed to load services.");
-    }
-    return r.json();
-  });
-}
-
 function fetchProjects(): Promise<ProjectInfo[]> {
   return fetch(`/api/projects`, { credentials: "include", cache: "no-store" }).then((r) =>
     r.json()
   );
 }
+
+type SettingsFromApi = { website_url: string | null; allowed_origins: string[] | null };
 
 export default function ProjectWorkspacePage({
   params,
@@ -54,23 +40,8 @@ export default function ProjectWorkspacePage({
   const { user } = useUser();
   const isAdmin = user?.is_admin ?? false;
 
-  const servicesKey = `services:${projectSlug}`;
-  const {
-    data: services,
-    loading: servicesLoading,
-    error,
-    refresh: refreshServices,
-  } = useQuery<ServiceCardService[]>(servicesKey, () => fetchServices(projectSlug), {
-    ttl: 60 * 1000,
-  });
-
-  // Shared cache key with the projects-overview page. Both pages read the
-  // same array; this page derives its single project locally. Storing a
-  // single object under "projects" used to overwrite the overview's array
-  // and crash `.filter()` on next navigation.
-  // 5-min TTL — projects-list rate of change is near zero on real
-  // workloads; bumping from 2 → 5 min cuts redundant refetches in half
-  // when a user pages between projects.
+  // Shared cache key with the projects-overview page: both read the same
+  // array; this page derives its single project locally.
   const { data: projectsList, loading: projectsLoading } = useQuery<ProjectInfo[]>(
     "projects",
     fetchProjects,
@@ -82,138 +53,36 @@ export default function ProjectWorkspacePage({
     : undefined;
   const projectName = project?.name ?? projectSlug;
 
-  // ── Project settings (admin only) ────────────────────────────────────────
-  //
-  // Backed by the shared `useQuery` cache so navigating Project A → B → A
-  // returns instantly from cache (5-min TTL, key `settings:<slug>`). The
-  // hook fetches whenever the user is admin — settings are now always
-  // visible (no toggle drawer) so we always need the data on hand.
-  //
-  // Saving the form invalidates the cache so the next visit revalidates.
-
-  const [settingsSaving, setSettingsSaving] = useState(false);
-  const [settingsMsg, setSettingsMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-
-  const settingsEnabled = isAdmin;
-  const settingsKey = `settings:${projectSlug}`;
-
-  type SettingsFromApi = { website_url: string | null; allowed_origins: string[] | null };
-  const { data: settingsRaw, loading: settingsQueryLoading } = useQuery<SettingsFromApi>(
-    settingsKey,
+  // Live-website card fallback for admins viewing another owner's project
+  // (where `project` is absent from /projects). Shares the `settings:<slug>`
+  // cache key with ProjectSettingsSection. Read-only here.
+  const { data: settingsRaw } = useQuery<SettingsFromApi>(
+    `settings:${projectSlug}`,
     () =>
       fetch(`/api/projects/${projectSlug}/settings`, { credentials: "include" }).then((r) =>
         r.json()
       ),
-    { ttl: 5 * 60 * 1000, enabled: settingsEnabled }
+    { ttl: 5 * 60 * 1000, enabled: isAdmin }
   );
 
-  // Editable form mirror — populated from the cached/fetched API data,
-  // mutated locally as the admin types, written back on save.
-  const [settingsDraft, setSettingsDraft] = useState<{
-    website_url: string;
-    allowed_origins: string;
-  } | null>(null);
-
-  // Re-sync draft whenever the underlying cached data changes (initial
-  // load, or revalidation after TTL expires). Don't clobber an
-  // in-progress edit; the draft only re-syncs from null.
-  useEffect(() => {
-    if (settingsRaw && settingsDraft === null) {
-      setSettingsDraft({
-        website_url: settingsRaw.website_url ?? "",
-        allowed_origins: (settingsRaw.allowed_origins ?? []).join("\n"),
-      });
-    }
-  }, [settingsRaw, settingsDraft]);
-
-  // Loading state used by the "Loading project settings…" placeholder.
-  const settingsLoading = settingsQueryLoading && settingsDraft === null;
-
-  // Convenience: live-website fallback consults the same cached data.
-  const settings = settingsRaw
-    ? {
-        website_url: settingsRaw.website_url ?? "",
-        allowed_origins: (settingsRaw.allowed_origins ?? []).join("\n"),
-      }
-    : null;
-
-  async function handleSaveSettings(e: React.FormEvent) {
-    e.preventDefault();
-    if (!settingsDraft) return;
-    setSettingsSaving(true);
-    setSettingsMsg(null);
-    try {
-      const r = await fetch(`/api/projects/${projectSlug}/settings`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          website_url: settingsDraft.website_url.trim() || null,
-          allowed_origins: settingsDraft.allowed_origins
-            .split("\n")
-            .map((s) => s.trim())
-            .filter(Boolean),
-        }),
-      });
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        throw new Error(body.detail ?? "Failed to save settings.");
-      }
-      // Push the just-saved values back into the cache so the next read
-      // (or the live-website card sharing this key) reflects them
-      // immediately, no round-trip needed. Also invalidate the projects
-      // list — `website_url` is denormalised there, so a stale list
-      // would show the old URL on the dashboard until TTL expires.
-      cache.set(settingsKey, {
-        website_url: settingsDraft.website_url.trim() || null,
-        allowed_origins: settingsDraft.allowed_origins
-          .split("\n")
-          .map((s) => s.trim())
-          .filter(Boolean),
-      });
-      cache.invalidate("projects");
-      setSettingsMsg({ type: "ok", text: "Settings saved." });
-    } catch (err) {
-      setSettingsMsg({ type: "err", text: err instanceof Error ? err.message : "Save failed." });
-    } finally {
-      setSettingsSaving(false);
-    }
-  }
-
-  const [issueRefreshKey, setIssueRefreshKey] = useState(0);
-
-  // ── Remove service ───────────────────────────────────────────────────────
-  const [removingKey, setRemovingKey] = useState<string | null>(null);
-
-  async function handleRemoveService(serviceKey: string) {
-    if (!confirm(`Remove service "${serviceKey}"? This will also delete its content.`)) return;
-    setRemovingKey(serviceKey);
-    try {
-      await fetch(`/api/projects/${projectSlug}/services/${serviceKey}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      cache.invalidate(servicesKey);
-      refreshServices();
-    } finally {
-      setRemovingKey(null);
-    }
-  }
+  const { activeView, setView } = useProjectView(isAdmin);
+  const sections = visibleSections(isAdmin);
 
   return (
     <div className="p-4 md:p-8">
       <PreviewPublishBar projectSlug={projectSlug} projectName={project?.name ?? projectSlug} />
+
       {/* Breadcrumb */}
       <div className="mb-6 flex items-center gap-1.5 text-sm text-zinc-400 dark:text-zinc-500">
         <Link
           href="/dashboard"
-          className="flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+          className="flex items-center gap-1 transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Projects
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-zinc-700 font-medium dark:text-zinc-200">{projectName}</span>
+        <span className="font-medium text-zinc-700 dark:text-zinc-200">{projectName}</span>
       </div>
 
       <div className="mb-8">
@@ -221,28 +90,12 @@ export default function ProjectWorkspacePage({
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Manage content and settings for this project.
         </p>
-        {/* Live website card.
-            Loading rule: while we don't yet know if a URL exists for this
-            project (project list still loading, OR admin's settings fetch
-            still in flight), reserve the space + show a small inline arc
-            spinner matching the post-login `LoadingScreen` design.
-            When data arrives:
-              • URL present → fade the card in.
-              • URL absent  → fade the placeholder out cleanly, render nothing.
-            `AnimatePresence mode="wait"` ensures the spinner exits before the
-            card enters so the column never has two boxes at once. */}
+
+        {/* Live website card (unchanged behavior). */}
         {(() => {
-          // URL resolution rules:
-          //   • Owner / admin-on-own-project: `/projects` is canonical.
-          //     `project` is defined; `project.website_url` is the answer.
-          //     If null → no URL → render nothing, NEVER show spinner
-          //     (we already know the answer; spinner would be a lie).
-          //   • Admin-on-other-owner's-project: `project` is undefined;
-          //     fall back to settings (fetched by effect above). Spinner
-          //     during that fetch only.
           const projectInList = project !== undefined;
-          const liveUrl = project?.website_url || settings?.website_url || null;
-          const adminFallbackPending = isAdmin && !projectInList && settings === null;
+          const liveUrl = project?.website_url || settingsRaw?.website_url || null;
+          const adminFallbackPending = isAdmin && !projectInList && settingsRaw === undefined;
           const liveUrlLoading = (projectsLoading && !projectInList) || adminFallbackPending;
           if (!liveUrlLoading && !liveUrl) return null;
 
@@ -303,117 +156,29 @@ export default function ProjectWorkspacePage({
         })()}
       </div>
 
-      {error && <p className="mb-6 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {/* ── Section shell: rail + animated panel ───────────────────────── */}
+      <div className="flex flex-col gap-6 md:flex-row md:gap-8">
+        <div className="md:w-56 md:shrink-0">
+          <div className="md:sticky md:top-24">
+            <SectionRail sections={sections} activeView={activeView} onSelect={setView} />
+          </div>
+        </div>
 
-      {/* Loading skeleton */}
-      {servicesLoading && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="h-32 rounded-xl border border-zinc-200 bg-white animate-pulse dark:border-zinc-800 dark:bg-zinc-900"
+        <SectionPanel activeView={activeView}>
+          {activeView === "dashboard" && <DashboardSection onGoToCms={() => setView("cms")} />}
+          {activeView === "cms" && <CmsSection projectSlug={projectSlug} isAdmin={isAdmin} />}
+          {activeView === "autofix" && (
+            <AutoFixSection
+              projectSlug={projectSlug}
+              isAdmin={isAdmin}
+              currentUserId={user?.id ?? null}
             />
-          ))}
-        </div>
-      )}
-
-      {/* Service grid (page-grouped + email section) */}
-      {!servicesLoading && (
-        <ServiceGrid
-          services={services ?? []}
-          projectSlug={projectSlug}
-          isAdmin={isAdmin}
-          removingKey={removingKey}
-          onRemove={handleRemoveService}
-        />
-      )}
-
-      {/* ── Issues ────────────────────────────────────────────────────── */}
-      <div className="mt-12">
-        <IssueForm projectSlug={projectSlug} onSubmitted={() => setIssueRefreshKey((k) => k + 1)} />
-        <IssueList
-          projectSlug={projectSlug}
-          refreshTrigger={issueRefreshKey}
-          isAdmin={isAdmin}
-          currentUserId={user?.id ?? null}
-        />
+          )}
+          {activeView === "settings" && isAdmin && (
+            <ProjectSettingsSection projectSlug={projectSlug} />
+          )}
+        </SectionPanel>
       </div>
-
-      {/* ── Admin: Project Settings (always visible) ──────────────────── */}
-      {isAdmin && (
-        <div className="mt-12 max-w-lg">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-4">
-            <Settings className="h-4 w-4" />
-            Project Settings
-          </h2>
-          {settingsLoading && (
-            <div className="rounded-xl border border-zinc-200 bg-white/40 px-6 py-8 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400 flex items-center gap-3">
-              <ArcSpinner size={20} />
-              Loading project settings…
-            </div>
-          )}
-          {!settingsLoading && settingsDraft !== null && (
-            <div className={`${dashboardSectionCardCn} p-6`}>
-              <form onSubmit={handleSaveSettings} className="space-y-4">
-                {settingsMsg && (
-                  <div
-                    className={
-                      settingsMsg.type === "ok"
-                        ? "rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 px-4 py-2.5 text-sm text-green-700 dark:text-green-300"
-                        : dashboardErrorBannerCn
-                    }
-                  >
-                    {settingsMsg.text}
-                  </div>
-                )}
-
-                <div>
-                  <label className={dashboardFieldLabelCn}>Website URL</label>
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1.5">
-                    The production URL of the client&apos;s website.
-                  </p>
-                  <input
-                    type="url"
-                    value={settingsDraft.website_url}
-                    onChange={(e) =>
-                      setSettingsDraft((s) => s && { ...s, website_url: e.target.value })
-                    }
-                    placeholder="https://example.com"
-                    className={dashboardInputCn}
-                  />
-                </div>
-
-                <div>
-                  <label className={dashboardFieldLabelCn}>Allowed origins</label>
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-1.5">
-                    One origin per line. Form submissions from unlisted origins will be rejected.
-                    Leave empty to allow any origin.
-                  </p>
-                  <textarea
-                    rows={4}
-                    value={settingsDraft.allowed_origins}
-                    onChange={(e) =>
-                      setSettingsDraft((s) => s && { ...s, allowed_origins: e.target.value })
-                    }
-                    placeholder={"https://example.com\nhttps://www.example.com"}
-                    className={`${dashboardInputCn} font-mono text-xs resize-y`}
-                  />
-                </div>
-
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="submit"
-                    disabled={settingsSaving}
-                    className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-700 dark:hover:bg-zinc-600 cursor-pointer"
-                  >
-                    {settingsSaving ? "Saving…" : "Save settings"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
