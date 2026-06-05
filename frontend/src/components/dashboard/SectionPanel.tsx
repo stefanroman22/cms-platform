@@ -2,9 +2,10 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
+import type { SectionKey } from "./sectionConfig";
 
 interface SectionPanelProps {
-  activeView: string;
+  activeView: SectionKey;
   children: ReactNode;
 }
 

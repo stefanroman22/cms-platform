@@ -96,7 +96,7 @@ export function ProjectSettingsSection({ projectSlug }: ProjectSettingsSectionPr
   return (
     <div className="max-w-lg">
       <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-        <Settings className="h-4 w-4" />
+        <Settings aria-hidden="true" className="h-4 w-4" />
         Project Settings
       </h2>
 

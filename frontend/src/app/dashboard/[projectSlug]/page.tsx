@@ -95,7 +95,7 @@ export default function ProjectWorkspacePage({
         {(() => {
           const projectInList = project !== undefined;
           const liveUrl = project?.website_url || settingsRaw?.website_url || null;
-          const adminFallbackPending = isAdmin && !projectInList && settingsRaw === undefined;
+          const adminFallbackPending = isAdmin && !projectInList && settingsRaw === null;
           const liveUrlLoading = (projectsLoading && !projectInList) || adminFallbackPending;
           if (!liveUrlLoading && !liveUrl) return null;
 
