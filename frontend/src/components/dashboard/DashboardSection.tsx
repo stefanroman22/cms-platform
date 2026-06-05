@@ -17,7 +17,7 @@ export function DashboardSection({ onGoToCms }: DashboardSectionProps) {
     <div className={`${dashboardSectionCardCn} px-6 py-16`}>
       <div className="mx-auto flex max-w-md flex-col items-center text-center">
         <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-          <BarChart3 className="h-6 w-6" />
+          <BarChart3 aria-hidden="true" className="h-6 w-6" />
         </span>
         <span className="mt-4 inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-medium text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300">
           Coming soon
@@ -31,7 +31,7 @@ export function DashboardSection({ onGoToCms }: DashboardSectionProps) {
         </p>
         <button type="button" onClick={onGoToCms} className={`${dashboardPrimaryBtnCn} mt-6`}>
           Go to CMS
-          <ArrowRight className="h-4 w-4" />
+          <ArrowRight aria-hidden="true" className="h-4 w-4" />
         </button>
       </div>
     </div>

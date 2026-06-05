@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import type { SectionDef, SectionKey } from "./sectionConfig";
 
 interface SectionRailProps {
@@ -18,6 +18,7 @@ interface SectionRailProps {
  */
 export function SectionRail({ sections, activeView, onSelect }: SectionRailProps) {
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const reduce = useReducedMotion();
 
   function onKeyDown(e: React.KeyboardEvent, index: number) {
     let next: number;
@@ -63,7 +64,11 @@ export function SectionRail({ sections, activeView, onSelect }: SectionRailProps
               <motion.span
                 layoutId="section-rail-active"
                 className="absolute inset-0 rounded-lg bg-zinc-100 dark:bg-zinc-800"
-                transition={{ type: "spring", stiffness: 480, damping: 36, mass: 0.6 }}
+                transition={
+                  reduce
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 480, damping: 36, mass: 0.6 }
+                }
               />
             )}
             <span
@@ -74,7 +79,7 @@ export function SectionRail({ sections, activeView, onSelect }: SectionRailProps
                   : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200")
               }
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
               {section.label}
               {section.adminOnly && (
                 <span className="ml-0.5 rounded-full bg-zinc-200/70 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:bg-zinc-700/70 dark:text-zinc-400">

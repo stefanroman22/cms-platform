@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 
 interface SectionPanelProps {
@@ -14,6 +14,7 @@ interface SectionPanelProps {
  * before the new one enters) — identical to ServiceGrid's tab swap.
  */
 export function SectionPanel({ activeView, children }: SectionPanelProps) {
+  const reduce = useReducedMotion();
   return (
     <div
       role="tabpanel"
@@ -24,9 +25,9 @@ export function SectionPanel({ activeView, children }: SectionPanelProps) {
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={activeView}
-          initial={{ opacity: 0, y: 6 }}
+          initial={{ opacity: 0, y: reduce ? 0 : 6 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
+          exit={{ opacity: 0, y: reduce ? 0 : -6 }}
           transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
         >
           {children}
