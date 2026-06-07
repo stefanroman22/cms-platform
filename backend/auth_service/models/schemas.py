@@ -1,7 +1,7 @@
 import re
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, EmailStr, Field, field_validator
+from pydantic import AfterValidator, BaseModel, EmailStr, Field, field_validator, model_validator
 
 # ── Shared validators ────────────────────────────────────────────────────────
 
@@ -134,6 +134,10 @@ class ServiceDetailOut(BaseModel):
     schema: dict
     content: dict
     last_updated: str | None
+    locale: str | None = None
+    default_locale: str | None = None
+    locales: list[str] | None = None
+    translation_status: dict | None = None
 
 
 class ContentSaveRequest(BaseModel):
@@ -218,6 +222,37 @@ class ProjectSettingsIn(BaseModel):
                 raise ValueError("allowed_origins entry too long")
             out.append(checked)
         return out
+
+
+class ProjectLocalesOut(BaseModel):
+    default_locale: str
+    locales: list[str]
+
+
+class ProjectLocalesIn(BaseModel):
+    default_locale: str = Field(
+        min_length=2, max_length=10, pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
+    )
+    locales: list[str] = Field(min_length=1, max_length=20)
+
+    @field_validator("locales", mode="after")
+    @classmethod
+    def _validate_locales(cls, v: list[str]) -> list[str]:
+        import re
+
+        seen = []
+        for code in v:
+            if not re.match(r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$", code):
+                raise ValueError(f"invalid locale code: {code!r}")
+            if code not in seen:
+                seen.append(code)
+        return seen
+
+    @model_validator(mode="after")
+    def _default_in_locales(self):
+        if self.default_locale not in self.locales:
+            raise ValueError("default_locale must be one of locales")
+        return self
 
 
 # ── Admin client management ──────────────────────────────────────────────────
@@ -329,6 +364,13 @@ class AdminProjectPatchIn(BaseModel):
     # let an admin (or stolen Bearer key) fix the token to a value
     # they already know — token-fixation against /content/{slug}/draft.
     # Audit finding BE-004.
+    # Locale fields — plain column write, NO translate-on-add side-effect.
+    # The connector uses these to mark a project multilingual AFTER it has
+    # already seeded per-locale content_entries itself.
+    default_locale: str | None = Field(
+        default=None, min_length=2, max_length=10, pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
+    )
+    locales: list[str] | None = Field(default=None, max_length=20)
 
     @field_validator("production_url", "preview_url", "website_url", mode="after")
     @classmethod
@@ -353,6 +395,26 @@ class AdminProjectPatchIn(BaseModel):
         if not re.fullmatch(r"[A-Za-z0-9._/-]+", v):
             raise ValueError("production_branch contains invalid characters")
         return v
+
+    @field_validator("locales", mode="after")
+    @classmethod
+    def _validate_locales(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
+        seen: list[str] = []
+        for code in v:
+            if not re.match(r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$", code):
+                raise ValueError(f"invalid locale code: {code!r}")
+            if code not in seen:
+                seen.append(code)
+        return seen
+
+    @model_validator(mode="after")
+    def _default_in_locales(self):
+        if self.default_locale is not None and self.locales is not None:
+            if self.default_locale not in self.locales:
+                raise ValueError("default_locale must be one of locales")
+        return self
 
 
 class AdminProjectDetailOut(BaseModel):
@@ -484,6 +546,7 @@ class LeadOut(BaseModel):
     closed_amount: float | None = None
     closed_at: str | None = None
     notes: str | None = None
+    languages: list[str] = Field(default_factory=list)
     created_at: str
     updated_at: str
 
@@ -523,8 +586,35 @@ class LeadUpdate(BaseModel):
     # opening hours — full replacement of the day -> string map
     opening_hours: dict[str, str] | None = None
 
+    # languages — target website locales; full replacement of the list.
+    # [] clears all languages. Structural validation only (the frontend
+    # autocomplete constrains values to the ISO 639-1 list).
+    languages: list[str] | None = None
+
     # about — virtual field; router merges into extra.attributes (handled in a later task)
     about_attributes: dict[str, dict[str, bool]] | None = None
+
+    @field_validator("languages", mode="after")
+    @classmethod
+    def _normalize_languages(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in v:
+            if not isinstance(raw, str):
+                raise ValueError("each language must be a string")
+            name = raw.strip()
+            if not name:
+                continue
+            if len(name) > 60:
+                raise ValueError("language name too long (max 60 chars)")
+            if name not in seen:
+                seen.add(name)
+                cleaned.append(name)
+        if len(cleaned) > 50:
+            raise ValueError("too many languages (max 50)")
+        return cleaned
 
 
 class ScrapeJobOut(BaseModel):

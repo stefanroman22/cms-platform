@@ -17,6 +17,7 @@ def _lead_row(**overrides):
         "payment_status": "not_applicable",
         "extra": {},
         "photo_urls": [],
+        "languages": [],
         "address": None,
         "city": None,
         "country": None,
@@ -369,3 +370,52 @@ def test_patch_about_attributes_merges_into_extra(mock_supabase, client, auth_as
     assert "about_attributes" not in captured["payload"]
     assert captured["payload"]["extra"]["attributes"] == new_attrs
     assert captured["payload"]["extra"]["scraped_at"] == "2026-05-17"
+
+
+def test_patch_languages_sets_list(mock_supabase, client, auth_as, admin_user):
+    """languages is a full replacement of the string array."""
+    auth_as(admin_user)
+    updated = _lead_row(languages=["Romanian", "Dutch"])
+    mock_supabase.execute.return_value = MagicMock(data=[updated])
+    resp = client.patch("/admin/leads/lead-1", json={"languages": ["Romanian", "Dutch"]})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["languages"] == ["Romanian", "Dutch"]
+
+
+def test_patch_languages_can_be_cleared_to_empty(mock_supabase, client, auth_as, admin_user):
+    """Sending an empty list clears all languages."""
+    auth_as(admin_user)
+    updated = _lead_row(languages=[])
+    mock_supabase.execute.return_value = MagicMock(data=[updated])
+    resp = client.patch("/admin/leads/lead-1", json={"languages": []})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["languages"] == []
+
+
+def test_patch_languages_dedupes_and_trims(mock_supabase, client, auth_as, admin_user):
+    """Duplicate / whitespace-padded / empty entries are normalized before write."""
+    auth_as(admin_user)
+    captured = {}
+
+    def capture_update(payload):
+        captured["payload"] = payload
+        chain = MagicMock()
+        chain.eq.return_value.execute.return_value = MagicMock(
+            data=[_lead_row(languages=payload["languages"])]
+        )
+        return chain
+
+    mock_supabase.update.side_effect = capture_update
+    resp = client.patch(
+        "/admin/leads/lead-1",
+        json={"languages": [" Romanian ", "Romanian", "", "Dutch"]},
+    )
+    assert resp.status_code == 200, resp.text
+    assert captured["payload"]["languages"] == ["Romanian", "Dutch"]
+
+
+def test_patch_languages_rejects_overlong_name(client, auth_as, admin_user):
+    """A single absurdly long entry is rejected with 422 (junk guard)."""
+    auth_as(admin_user)
+    resp = client.patch("/admin/leads/lead-1", json={"languages": ["x" * 61]})
+    assert resp.status_code == 422

@@ -35,7 +35,7 @@ async def publish_project(project_slug: str, request: Request):
     # compare in Python.
     entries_result = (
         sb.table("content_entries")
-        .select("project_service_id, draft_content, published_content")
+        .select("id, project_service_id, locale, draft_content, published_content")
         .in_("project_service_id", svc_ids)
         .execute()
     )
@@ -46,8 +46,8 @@ async def publish_project(project_slug: str, request: Request):
         if e.get("draft_content") != e.get("published_content")
     ]
 
-    # Per-row update (supabase-py has no bulk-update-from-column-value; loop is
-    # fine for typical <50 services per project).
+    # Per-row update keyed on the row id — never on project_service_id, which
+    # would overwrite every locale of the service with one locale's draft.
     now = datetime.now(UTC).isoformat()
     for entry in to_publish:
         sb.table("content_entries").update(
@@ -55,7 +55,7 @@ async def publish_project(project_slug: str, request: Request):
                 "published_content": entry["draft_content"],
                 "updated_at": now,
             }
-        ).eq("project_service_id", entry["project_service_id"]).execute()
+        ).eq("id", entry["id"]).execute()
 
     # Bump project timestamp (always — even on zero-publish, this is a no-op
     # from the user's perspective but records the publish action).

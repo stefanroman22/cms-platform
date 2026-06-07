@@ -24,7 +24,7 @@ def require_project_access(project_slug: str, user: UserOut) -> dict:
     result = (
         sb.table("projects")
         .select(
-            "id, name, slug, user_id, is_active, github_repo, preview_url, production_url, production_branch, repo_branch"
+            "id, name, slug, user_id, is_active, github_repo, preview_url, production_url, production_branch, repo_branch, default_locale, locales"
         )
         .eq("slug", project_slug)
         .eq("is_active", True)
@@ -73,3 +73,19 @@ async def admin_user_via_bearer_or_sid(request: Request):
             detail="Admin access required",
         )
     return user
+
+
+async def user_via_bearer_or_session(request: Request) -> "UserOut":
+    """Resolve the acting user for endpoints used BOTH by the dashboard (human
+    session cookie) AND by the Connector agent (admin bearer API key).
+
+    - Authorization: Bearer <admin api key>  -> validated admin user (automation).
+    - Otherwise -> the session-cookie user (dashboard).
+    Callers still pass the result to require_project_access for owner-or-admin checks.
+    """
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        return await admin_user_via_bearer_or_sid(
+            request
+        )  # bearer admin-key path (rate-limited + validated)
+    return await require_user(request)  # session-cookie path

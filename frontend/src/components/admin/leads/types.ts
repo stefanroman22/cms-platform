@@ -57,6 +57,7 @@ export interface Lead {
   closed_amount: number | null;
   closed_at: string | null;
   notes: string | null;
+  languages: string[];
   created_at: string;
   updated_at: string;
 }

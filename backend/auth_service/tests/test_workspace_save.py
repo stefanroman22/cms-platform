@@ -1,12 +1,14 @@
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from auth_service.models.schemas import UserOut
 
 
 def test_put_service_writes_to_draft_content_only(mock_supabase, client, auth_as, client_user):
     auth_as(client_user)
 
-    # Sequence: _resolve, upsert, get_service's resolve + fetch
+    # Sequence: _resolve, rows fetch, upsert, get_service's resolve + fetch
     mock_supabase.execute.side_effect = [
         # svc_result in save_service
         MagicMock(
@@ -20,6 +22,8 @@ def test_put_service_writes_to_draft_content_only(mock_supabase, client, auth_as
                 "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
+        # rows fetch (no existing locale rows)
+        MagicMock(data=[]),
         # upsert returns
         MagicMock(data=[{"id": "svc-1"}]),
         # get_service re-fetch
@@ -131,6 +135,8 @@ def test_put_service_with_seed_true_writes_both_columns(mock_supabase, client, a
                 "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
+        # rows fetch (no existing locale rows)
+        MagicMock(data=[]),
         MagicMock(data=[{"id": "svc-1"}]),
         MagicMock(
             data={
@@ -292,3 +298,163 @@ def test_admin_patch_project_requires_admin(mock_supabase, client, auth_as, clie
     auth_as(client_user)
     res = client.patch("/admin/projects/demo", json={"vercel_project_id": "x"})
     assert res.status_code == 403
+
+
+# ── Locale fields on admin PATCH ─────────────────────────────────────────────
+
+
+def test_admin_patch_project_sets_locales_no_translation(
+    mock_supabase, client, auth_as, admin_user
+):
+    """PATCH with default_locale + locales writes both columns and does NOT
+    touch content_entries (no upsert/insert on that table)."""
+    auth_as(admin_user)
+    mock_supabase.execute.return_value = MagicMock(data=[{"slug": "demo"}])
+
+    res = client.patch(
+        "/admin/projects/demo",
+        json={"default_locale": "ro", "locales": ["ro", "en"]},
+    )
+    assert res.status_code == 200, res.text
+
+    # The projects update must carry both locale fields.
+    updated = mock_supabase.update.call_args_list[0].args[0]
+    assert updated["default_locale"] == "ro"
+    assert updated["locales"] == ["ro", "en"]
+
+    # content_entries must NOT have been touched (no upsert anywhere).
+    content_upserts = [
+        c
+        for c in mock_supabase.upsert.call_args_list
+        if isinstance(c.args[0], dict) and "project_service_id" in c.args[0]
+    ]
+    assert content_upserts == [], "PATCH locale columns must not trigger content_entries writes"
+
+
+@pytest.mark.usefixtures("mock_supabase")
+def test_admin_patch_project_default_locale_not_in_locales_422(client, auth_as, admin_user):
+    """default_locale must be a member of locales when both are supplied."""
+    auth_as(admin_user)
+    res = client.patch(
+        "/admin/projects/demo",
+        json={"default_locale": "fr", "locales": ["ro", "en"]},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.usefixtures("mock_supabase")
+def test_admin_patch_project_invalid_locale_code_422(client, auth_as, admin_user):
+    """Locale codes must match ^[a-z]{2,3}(-[A-Za-z]{2,4})?$."""
+    auth_as(admin_user)
+    res = client.patch(
+        "/admin/projects/demo",
+        json={"default_locale": "EN", "locales": ["EN"]},
+    )
+    assert res.status_code == 422
+
+
+def test_admin_patch_project_locales_regression_vercel_fields(
+    mock_supabase, client, auth_as, admin_user
+):
+    """Existing vercel-field PATCH still works after locale fields were added."""
+    auth_as(admin_user)
+    mock_supabase.execute.return_value = MagicMock(data=[{"slug": "demo"}])
+
+    res = client.patch(
+        "/admin/projects/demo",
+        json={
+            "vercel_project_id": "prj_xyz",
+            "production_url": "https://example.vercel.app",
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    updated = mock_supabase.update.call_args_list[0].args[0]
+    assert updated["vercel_project_id"] == "prj_xyz"
+    assert updated["production_url"] == "https://example.vercel.app"
+    assert "default_locale" not in updated
+    assert "locales" not in updated
+
+
+# ── Bearer-key path (Connector agent) ────────────────────────────────────────
+
+_ADMIN_USER = UserOut(id="admin-uuid", email="admin@example.com", full_name="Admin", is_admin=True)
+_ADMIN_PROJECT = {
+    "id": "project-demo",
+    "slug": "demo",
+    "name": "Demo",
+    "github_repo": "https://github.com/test/demo",
+    "repo_branch": "cms-preview",
+    "production_branch": "master",
+    "preview_url": "https://demo-dev.vercel.app",
+    "production_url": "https://demo.vercel.app",
+    "default_locale": "en",
+    "locales": ["en"],
+}
+
+
+def test_put_service_seed_true_accepts_bearer_admin_key(mock_supabase, client):
+    """Connector sends Authorization: Bearer <admin key> + ?seed=true.
+    user_via_bearer_or_session delegates to admin_user_via_bearer_or_sid,
+    which returns the admin UserOut → seed succeeds (writes both columns)."""
+    mock_supabase.execute.side_effect = [
+        # svc_result in save_service
+        MagicMock(
+            data={
+                "id": "svc-1",
+                "service_key": "hero",
+                "label": "Hero",
+                "display_order": 1,
+                "page_name": "General",
+                "service_type_slug": "text_block",
+                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
+            }
+        ),
+        # rows fetch (no existing locale rows)
+        MagicMock(data=[]),
+        # upsert result
+        MagicMock(data=[{"id": "svc-1"}]),
+        # get_service re-fetch
+        MagicMock(
+            data={
+                "id": "svc-1",
+                "service_key": "hero",
+                "label": "Hero",
+                "display_order": 1,
+                "page_name": "General",
+                "service_type_slug": "text_block",
+                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
+                "content_entries": {
+                    "published_content": {"title": "SEEDED"},
+                    "draft_content": {"title": "SEEDED"},
+                    "updated_at": "2026-06-06T10:00:00Z",
+                },
+            }
+        ),
+    ]
+
+    with (
+        patch(
+            "auth_service.routers.workspace.user_via_bearer_or_session",
+            new=AsyncMock(return_value=_ADMIN_USER),
+        ),
+        patch(
+            "auth_service.routers.workspace.require_user",
+            new=AsyncMock(return_value=_ADMIN_USER),
+        ),
+        patch(
+            "auth_service.routers.workspace.require_project_access",
+            return_value=_ADMIN_PROJECT,
+        ),
+    ):
+        res = client.put(
+            "/projects/demo/services/hero?seed=true",
+            headers={"Authorization": "Bearer testkey"},
+            json={"content": {"title": "SEEDED"}},
+        )
+
+    assert res.status_code == 200, res.text
+
+    payload = mock_supabase.upsert.call_args_list[0].args[0]
+    assert payload.get("draft_content") == {"title": "SEEDED"}
+    assert payload.get("published_content") == {"title": "SEEDED"}

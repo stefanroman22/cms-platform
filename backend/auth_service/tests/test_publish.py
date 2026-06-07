@@ -15,12 +15,16 @@ def test_publish_copies_draft_to_published_and_bumps_timestamp(
         MagicMock(
             data=[
                 {
+                    "id": "ce-1",
                     "project_service_id": "svc-1",
+                    "locale": "en",
                     "draft_content": {"title": "A"},
                     "published_content": {"title": "OLD_A"},
                 },
                 {
+                    "id": "ce-2",
                     "project_service_id": "svc-2",
+                    "locale": "en",
                     "draft_content": {"title": "B"},
                     "published_content": {"title": "OLD_B"},
                 },
@@ -137,3 +141,43 @@ def test_rotate_preview_token_requires_admin(mock_supabase, client, auth_as, cli
 
     res = client.post("/admin/projects/demo/rotate-preview-token")
     assert res.status_code == 403
+
+
+def test_publish_updates_each_locale_row_independently(mock_supabase, client, auth_as, client_user):
+    """Two locale rows share one project_service_id. Publish must update each by
+    its own id, never clobber a sibling locale by writing on project_service_id."""
+    auth_as(client_user)
+    mock_supabase.execute.side_effect = [
+        MagicMock(data=[{"id": "svc-1"}]),
+        MagicMock(
+            data=[
+                {
+                    "id": "ce-en",
+                    "project_service_id": "svc-1",
+                    "locale": "en",
+                    "draft_content": {"title": "EN-new"},
+                    "published_content": {"title": "EN-old"},
+                },
+                {
+                    "id": "ce-nl",
+                    "project_service_id": "svc-1",
+                    "locale": "nl",
+                    "draft_content": {"title": "NL-new"},
+                    "published_content": {"title": "NL-old"},
+                },
+            ]
+        ),
+        MagicMock(data=[{"id": "ce-en"}]),
+        MagicMock(data=[{"id": "ce-nl"}]),
+        MagicMock(data=[{"last_published_at": "2026-06-05T10:00:00Z"}]),
+    ]
+
+    res = client.post("/projects/demo/publish")
+    assert res.status_code == 200
+    assert res.json()["published_count"] == 2
+
+    # Every content_entries update must be keyed on the row id, not project_service_id.
+    eq_keys = [c.args[0] for c in mock_supabase.eq.call_args_list]
+    assert "id" in eq_keys  # update path used .eq("id", ...)
+    assert "ce-en" in [c.args[1] for c in mock_supabase.eq.call_args_list if c.args[0] == "id"]
+    assert "ce-nl" in [c.args[1] for c in mock_supabase.eq.call_args_list if c.args[0] == "id"]

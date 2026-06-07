@@ -21,6 +21,7 @@ import { AnimatedSelect } from "@/components/dashboard/AnimatedSelect";
 import { EditingSectionProvider } from "./context/EditingSectionContext";
 import { LocationSection } from "./sections/LocationSection";
 import { ContactSection } from "./sections/ContactSection";
+import { LanguagesSection } from "./sections/LanguagesSection";
 import { DesignPromptSection } from "./sections/DesignPromptSection";
 import { OpeningHoursSection } from "./sections/OpeningHoursSection";
 import { AboutSection } from "./sections/AboutSection";
@@ -392,6 +393,8 @@ function DrawerBody({
         <LocationSection lead={lead} onPatched={onPatched} />
 
         <ContactSection lead={lead} onPatched={onPatched} />
+
+        <LanguagesSection lead={lead} onPatched={onPatched} />
 
         {/* AI scoring */}
         <DetailCard title="AI scoring">

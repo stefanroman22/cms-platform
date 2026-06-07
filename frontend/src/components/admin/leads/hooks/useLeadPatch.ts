@@ -32,6 +32,8 @@ export interface LeadUpdatePayload {
   opening_hours?: Record<string, string> | null;
   // about — virtual field; backend merges into extra.attributes
   about_attributes?: Record<string, Record<string, boolean>> | null;
+  // languages — full replacement of the target-locale list; [] clears all.
+  languages?: string[];
 }
 
 export interface UseLeadPatchResult {

@@ -27,12 +27,57 @@ html {
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-geist-sans);
+  --font-body: var(--font-geist-sans);
+}
+
+/* Roman Technologies landing — brass-on-near-black design system.
+   Additive color/easing tokens; intentionally does NOT redefine the
+   global --radius-* scale so the dashboard's existing rounding is
+   untouched. Hero components apply the brief's radii inline. */
+@theme {
+  --color-bg: #0a0a0b;
+  --color-surface: #141416;
+  --color-surface-warm: #f2ede4;
+  --color-text-primary: #fafaf7;
+  --color-text-secondary: #a8a39b;
+  --color-text-tertiary: #6b6862;
+  --color-border: #1f1f22;
+  /* Antique brass — the signature accent colour. */
+  --color-accent: #c9a961;
+  --color-accent-muted: #8b7a47;
+  --color-accent-glow: #c9a96133;
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Hide the native scrollbar on the landing while keeping scroll functionality.
+   Toggled on <html> by LenisProvider so it stays scoped to the marketing page. */
+html.hide-native-scrollbar {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+html.hide-native-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Buttons are interactive — always show the pointer cursor (Tailwind v4
+   preflight resets <button> to cursor:default). Project rule: every button
+   and role=button gets a pointer unless disabled. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 /* Hide scrollbar visually but keep scroll functionality */

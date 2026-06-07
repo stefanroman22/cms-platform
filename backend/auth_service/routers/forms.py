@@ -1,7 +1,9 @@
+import re
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from ..core.config import settings
 from ..core.limiter import client_ip, limiter
@@ -24,7 +26,9 @@ def _build_email_html(
     fields: dict[str, str],
     submitted_at: str,
 ) -> str:
-    rows = "".join(f"""
+    # fmt: off
+    rows = "".join(
+        f"""
         <tr>
           <td style="padding:8px 12px;font-weight:600;color:#52525b;
                      border-bottom:1px solid #f4f4f5;white-space:nowrap;
@@ -32,7 +36,10 @@ def _build_email_html(
           <td style="padding:8px 12px;color:#18181b;
                      border-bottom:1px solid #f4f4f5;word-break:break-word">{value}</td>
         </tr>
-        """ for key, value in fields.items())
+        """
+        for key, value in fields.items()
+    )
+    # fmt: on
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -224,3 +231,84 @@ async def submit_form(
         content={"success": True},
         headers={"Access-Control-Allow-Origin": origin or "*"},
     )
+
+
+# ── First-party marketing-site contact form ──────────────────────────────────
+# Distinct from the multi-tenant /{project_slug}/{form_key} endpoint above: this
+# is Roman Technologies' own contact form. It is reached through the frontend's
+# same-origin /api proxy (which does not forward Origin), so abuse protection is
+# rate-limit + honeypot + payload validation rather than origin allow-listing.
+
+MARKETING_CONTACT_RECIPIENT = "stefanromanpers@gmail.com"
+_CONTACT_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+class ContactRequest(BaseModel):
+    name: str
+    email: str
+    message: str
+    company: str = ""
+    website: str = ""  # honeypot — real users never fill this
+
+
+@router.post("/contact")
+@limiter.limit("5/10minutes", key_func=client_ip)
+async def submit_contact(request: Request, body: ContactRequest) -> JSONResponse:
+    # Honeypot — silently accept bots so they don't learn they were filtered.
+    if body.website.strip():
+        return JSONResponse(content={"success": True})
+
+    name = body.name.strip()
+    email = body.email.strip()
+    message = body.message.strip()
+    company = body.company.strip()
+
+    if not name or not message or not _CONTACT_EMAIL_RE.match(email):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid contact submission",
+        )
+
+    fields = {
+        "Name": name,
+        "Email": email,
+        **({"Company": company} if company else {}),
+        "Message": message,
+    }
+
+    # TEST-002 — skip the Resend hop on E2E bodies in preview.
+    from ..services.e2e_email_guard import short_circuit_response, should_short_circuit
+
+    if should_short_circuit(name, email, company, message):
+        short_circuit_response("forms:contact")
+        return JSONResponse(content={"success": True, "e2e_short_circuit": True})
+
+    if not settings.RESEND_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email service not configured (RESEND_API_KEY missing)",
+        )
+
+    import resend  # local import so a missing key never breaks startup
+
+    resend.api_key = settings.RESEND_API_KEY
+    submitted_at = datetime.now(UTC).strftime("%d %b %Y at %H:%M UTC")
+    html = _build_email_html("Roman Technologies", "contact", fields, submitted_at)
+
+    params: resend.Emails.SendParams = {
+        "from": f"{settings.RESEND_FROM_NAME} <{settings.RESEND_FROM_EMAIL}>",
+        "to": [MARKETING_CONTACT_RECIPIENT],
+        "subject": f"New enquiry from {name} — roman-technologies.dev",
+        "html": html,
+        "reply_to": email,
+    }
+
+    try:
+        resend.Emails.send(params)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Email delivery failed: {exc}",
+        ) from exc
+
+    return JSONResponse(content={"success": True})

@@ -6,6 +6,15 @@ from fastapi.testclient import TestClient
 from ..models.schemas import UserOut
 
 
+@pytest.fixture(autouse=True)
+def _force_null_translation_provider(monkeypatch):
+    """Hermetic translation: force NullProvider for every test so the suite never
+    depends on the dev's TRANSLATION_PROVIDER/DEEPL_API_KEY env or hits the network.
+    Tests that exercise DeepLProvider construct it explicitly with an api_key arg."""
+    monkeypatch.setenv("TRANSLATION_PROVIDER", "null")
+    monkeypatch.delenv("DEEPL_API_KEY", raising=False)
+
+
 @pytest.fixture
 def mock_supabase():
     """Patches get_supabase_admin() everywhere it's imported.
