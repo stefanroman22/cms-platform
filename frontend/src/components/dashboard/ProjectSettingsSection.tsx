@@ -11,6 +11,7 @@ import {
   dashboardErrorBannerCn,
 } from "@/lib/styles";
 import * as cache from "@/lib/cache";
+import { LanguagesPanel } from "@/components/dashboard/LanguagesPanel";
 
 type SettingsFromApi = { website_url: string | null; allowed_origins: string[] | null };
 
@@ -94,79 +95,82 @@ export function ProjectSettingsSection({ projectSlug }: ProjectSettingsSectionPr
   }
 
   return (
-    <div className="max-w-lg">
-      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-        <Settings aria-hidden="true" className="h-4 w-4" />
-        Project Settings
-      </h2>
+    <>
+      <div className="max-w-lg">
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+          <Settings aria-hidden="true" className="h-4 w-4" />
+          Project Settings
+        </h2>
 
-      {settingsLoading && (
-        <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white/40 px-6 py-8 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400">
-          <ArcSpinner size={20} />
-          Loading project settings…
-        </div>
-      )}
+        {settingsLoading && (
+          <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white/40 px-6 py-8 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400">
+            <ArcSpinner size={20} />
+            Loading project settings…
+          </div>
+        )}
 
-      {!settingsLoading && settingsDraft !== null && (
-        <div className={`${dashboardSectionCardCn} p-6`}>
-          <form onSubmit={handleSaveSettings} className="space-y-4">
-            {settingsMsg && (
-              <div
-                className={
-                  settingsMsg.type === "ok"
-                    ? "rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
-                    : dashboardErrorBannerCn
-                }
-              >
-                {settingsMsg.text}
+        {!settingsLoading && settingsDraft !== null && (
+          <div className={`${dashboardSectionCardCn} p-6`}>
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              {settingsMsg && (
+                <div
+                  className={
+                    settingsMsg.type === "ok"
+                      ? "rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
+                      : dashboardErrorBannerCn
+                  }
+                >
+                  {settingsMsg.text}
+                </div>
+              )}
+
+              <div>
+                <label className={dashboardFieldLabelCn}>Website URL</label>
+                <p className="mb-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+                  The production URL of the client&apos;s website.
+                </p>
+                <input
+                  type="url"
+                  value={settingsDraft.website_url}
+                  onChange={(e) =>
+                    setSettingsDraft((s) => s && { ...s, website_url: e.target.value })
+                  }
+                  placeholder="https://example.com"
+                  className={dashboardInputCn}
+                />
               </div>
-            )}
 
-            <div>
-              <label className={dashboardFieldLabelCn}>Website URL</label>
-              <p className="mb-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-                The production URL of the client&apos;s website.
-              </p>
-              <input
-                type="url"
-                value={settingsDraft.website_url}
-                onChange={(e) =>
-                  setSettingsDraft((s) => s && { ...s, website_url: e.target.value })
-                }
-                placeholder="https://example.com"
-                className={dashboardInputCn}
-              />
-            </div>
+              <div>
+                <label className={dashboardFieldLabelCn}>Allowed origins</label>
+                <p className="mb-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+                  One origin per line. Form submissions from unlisted origins will be rejected.
+                  Leave empty to allow any origin.
+                </p>
+                <textarea
+                  rows={4}
+                  value={settingsDraft.allowed_origins}
+                  onChange={(e) =>
+                    setSettingsDraft((s) => s && { ...s, allowed_origins: e.target.value })
+                  }
+                  placeholder={"https://example.com\nhttps://www.example.com"}
+                  className={`${dashboardInputCn} resize-y font-mono text-xs`}
+                />
+              </div>
 
-            <div>
-              <label className={dashboardFieldLabelCn}>Allowed origins</label>
-              <p className="mb-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-                One origin per line. Form submissions from unlisted origins will be rejected. Leave
-                empty to allow any origin.
-              </p>
-              <textarea
-                rows={4}
-                value={settingsDraft.allowed_origins}
-                onChange={(e) =>
-                  setSettingsDraft((s) => s && { ...s, allowed_origins: e.target.value })
-                }
-                placeholder={"https://example.com\nhttps://www.example.com"}
-                className={`${dashboardInputCn} resize-y font-mono text-xs`}
-              />
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <button
-                type="submit"
-                disabled={settingsSaving}
-                className="cursor-pointer rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-              >
-                {settingsSaving ? "Saving…" : "Save settings"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={settingsSaving}
+                  className="cursor-pointer rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                >
+                  {settingsSaving ? "Saving…" : "Save settings"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
+      <LanguagesPanel projectSlug={projectSlug} />
+    </>
   );
 }

@@ -3,13 +3,22 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { ProjectSettingsSection } from "../ProjectSettingsSection";
 
 beforeEach(() => {
-  global.fetch = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      website_url: "https://example.com",
-      allowed_origins: ["https://www.example.com"],
-    }),
-  });
+  global.fetch = vi.fn((url: string | URL | Request) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("/locales")) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ default_locale: "en", locales: ["en"] }),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      json: async () => ({
+        website_url: "https://example.com",
+        allowed_origins: ["https://www.example.com"],
+      }),
+    });
+  }) as unknown as typeof fetch;
 });
 afterEach(() => vi.restoreAllMocks());
 

@@ -14,8 +14,10 @@ import { DashboardSection } from "@/components/dashboard/DashboardSection";
 import { CmsSection } from "@/components/dashboard/CmsSection";
 import { AutoFixSection } from "@/components/dashboard/AutoFixSection";
 import { ProjectSettingsSection } from "@/components/dashboard/ProjectSettingsSection";
+import { BookingsSection } from "@/components/dashboard/booking/BookingsSection";
 import { visibleSections } from "@/components/dashboard/sectionConfig";
 import { useProjectView } from "@/components/dashboard/hooks/useProjectView";
+import { getSettings as getBookingSettings } from "@/components/dashboard/booking/api";
 
 interface ProjectInfo {
   name: string;
@@ -65,8 +67,15 @@ export default function ProjectWorkspacePage({
     { ttl: 5 * 60 * 1000, enabled: isAdmin }
   );
 
-  const { activeView, setView } = useProjectView(isAdmin);
-  const sections = visibleSections(isAdmin);
+  const { data: bookingSettings } = useQuery(
+    `booking-settings:${projectSlug}`,
+    () => getBookingSettings(projectSlug),
+    { ttl: 60 * 1000 }
+  );
+  const caps = { bookingEnabled: !!bookingSettings?.enabled };
+
+  const { activeView, setView } = useProjectView(isAdmin, caps);
+  const sections = visibleSections(isAdmin, caps);
 
   return (
     <div className="p-4 md:p-8">
@@ -173,6 +182,9 @@ export default function ProjectWorkspacePage({
               isAdmin={isAdmin}
               currentUserId={user?.id ?? null}
             />
+          )}
+          {activeView === "bookings" && (
+            <BookingsSection projectSlug={projectSlug} isAdmin={isAdmin} />
           )}
           {activeView === "settings" && isAdmin && (
             <ProjectSettingsSection projectSlug={projectSlug} />

@@ -5,6 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   DEFAULT_VIEW,
   isAccessibleView,
+  type SectionCaps,
   type SectionKey,
 } from "@/components/dashboard/sectionConfig";
 
@@ -14,7 +15,10 @@ import {
  * `?view=cms&tab=Contact` round-trip. Non-admins requesting an admin-only
  * view (e.g. settings) fall back to the default.
  */
-export function useProjectView(isAdmin: boolean): {
+export function useProjectView(
+  isAdmin: boolean,
+  caps?: SectionCaps
+): {
   activeView: SectionKey;
   setView: (view: SectionKey) => void;
 } {
@@ -23,7 +27,9 @@ export function useProjectView(isAdmin: boolean): {
   const searchParams = useSearchParams();
 
   const requested = searchParams.get("view");
-  const activeView: SectionKey = isAccessibleView(requested, isAdmin) ? requested : DEFAULT_VIEW;
+  const activeView: SectionKey = isAccessibleView(requested, isAdmin, caps)
+    ? requested
+    : DEFAULT_VIEW;
 
   const setView = useCallback(
     (view: SectionKey) => {
