@@ -76,6 +76,7 @@ surface a clear remediation. Do not silently skip.
 - Hard-coded UI affordance copy ("Loading…", "Subscribe", form-field placeholders)
 - Class names, design tokens, animation config, breakpoints
 - Test fixtures, mock data
+- The language-switcher control and its locale labels (chrome, not content) — but DO detect the locale set and import per-locale CONTENT as first-class CMS data
 
 **Decision rule when ambiguous**: "would a non-developer client reasonably ask 'can I change this myself?'" → include. Else exclude.
 
@@ -124,11 +125,41 @@ The operator typed `program` for opening hours; the website silently
 dropped it. Future generated sites must follow the heuristic-resolver
 pattern above so the same class of bug can't reappear.
 
+### Booking (headless) contract
+
+When the manifest carries a `booking` block with `"detected": true`, Phase 4 provisions the booking service and generates `lib/booking.ts` in the client repo. The following contract is binding for all generated client websites:
+
+- **API base**: `BOOKING_API_BASE` is set to the **bare backend base** (e.g. `https://cms-backend-roman.vercel.app`). `lib/booking.ts` appends `/booking/{slug}` itself — the env var must NOT include the path.
+- **Generated functions** (exported from `lib/booking.ts`):
+  - `getServices()` — `GET {BASE}/booking/{slug}/services`
+  - `getAvailability(serviceId, from, to)` — `GET {BASE}/booking/{slug}/availability?service_id=&from=&to=`
+  - `createBooking(payload)` — `POST {BASE}/booking/{slug}` — always includes `website: ""` honeypot field.
+  - `getManage(token)` — `GET {BASE}/booking/manage/{token}`
+  - `reschedule(token, slot_start)` — `POST {BASE}/booking/manage/{token}/reschedule`
+  - `cancel(token)` — `POST {BASE}/booking/manage/{token}/cancel`
+- **Honeypot**: `website: ""` is included in every `createBooking` call. The client UI must pass it silently; the backend rejects non-empty values as spam.
+- **Destination email**: booking confirmation and reminder emails go to the address in `destination_email`. If Stefan provides a client email, that address is used; otherwise it defaults to `stefanromanpers@gmail.com`.
+- **Manage flow**: reschedule and cancel are centralised on the CMS-hosted `/manage/{token}` page. Client sites link there; they do not implement manage UI themselves.
+- **Calendar provider**: always `"none"` for clients. No Google Calendar or iCal integration is set up at the client level.
+- **Logo / asset URLs**: locale-invariant — booking emails use the same logo URL regardless of the active locale; do not duplicate per locale.
+- **Provisioning order** (Phase 4 sub-steps, strictly): enable → settings → resources → services (each linked to ≥1 resource) → hours. Deviating from this order leaves availability empty.
+- **Include/exclude alignment with `prompts.py`**: scheduling intent → `booking` block; plain contact form with no scheduling intent → `email_config` service only. These are mutually exclusive. Keep this rule in sync with the `prompts.py` SYSTEM_PROMPT detection block.
+
+### Multilingual fetch contract
+
+For multilingual sites (manifest `locales` has >1 entry):
+- The site fetches **per-locale** content: `GET {base}/content/{slug}/{locale}` where `locale` comes from the active Next.js / next-intl locale context.
+- The `key_value` / `Record<string,string>` contract is **unchanged per locale** — each locale's content is its own flat `Record<string,string>` (or array shape coalesced client-side). No nested locale maps at the JS layer.
+- Locale-invariant assets (logo, file download URLs) are marked `translatable:false` in the manifest; the site fetches them from the default-locale response regardless of active locale.
+- Legacy `GET {base}/content/{slug}` (no locale segment) still returns default-locale content and must remain supported for back-compat (single-locale sites and CMS preview thumbnails).
+
 ## Glossary
 
-- **Service** — CMS content unit. Eight types: `text_block`, `image`, `gallery`, `video`, `file_download`, `key_value`, `email_config`, `repeater`.
-- **Manifest** — JSON the agent emits. Slim variant `cms.config.json` (in client repo), full variant `cms-provision.json` (admin keeps).
-- **Preview token** — opaque string in `VITE_CMS_PREVIEW_TOKEN` authenticating draft-content reads.
+- **Service** — CMS content unit. Eight types: `text_block`, `image`, `gallery`, `video`, `file_download`, `key_value`, `email_config`, `repeater`. For multilingual sites, each translatable service carries per-locale `initial_content` maps; locale-invariant assets (logo, file URLs) are marked `translatable:false`.
+- **Manifest** — JSON the agent emits. Slim variant `cms.config.json` (in client repo), full variant `cms-provision.json` (admin keeps). For multilingual sites, the manifest carries top-level `locales` (array, e.g. `["en","nl"]`) and `default_locale` (string), plus per-locale `initial_content` maps inside each service. Single-locale manifests stay flat (no per-locale nesting). The manifest may also carry an optional top-level `booking` block (see below).
+- **Booking service** — headless booking backend where one tenant equals one CMS project. The tenant is addressed by its `public_slug` (same slug as the CMS project). The booking service owns its own DB tables for resources, services, hours, and bookings; the CMS connector provisions them via admin endpoints during Phase 4.
+- **Manifest `booking` block** — optional top-level block in the manifest (parallel to `locales`). When present it signals that the site has scheduling intent and describes how to provision the booking service. Fields: `detected`, `public_slug`, `business_name`, `accent_color`, `primary_color`, `logo_url`, `locale`, `timezone`, `destination_email`, `calendar_provider`, `reminders`, `services` (list with `duration_min`), `resources` (list with `type`), `hours` (list with weekday 0=Sun..6=Sat and local `start_time`/`end_time`), and `ui_wiring` (`components` + `fallback_embed`). A plain contact form with no scheduling intent does NOT get a `booking` block — it stays on the `email_config` path.
+- **Preview token** — opaque string in `NEXT_PUBLIC_CMS_PREVIEW_TOKEN` (Next.js) or `VITE_CMS_PREVIEW_TOKEN` (Vite) authenticating draft-content reads via header `X-CMS-Preview-Token`.
 - **`folder_name`** — directory containing client website source.
 - **`<folder_name>/public/`** — static assets, where the logo lives.
 

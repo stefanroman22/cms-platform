@@ -7,8 +7,11 @@
   the flags in the scaffolding skill.
 - Install Motion, next-intl, lucide-react, shadcn/ui, Playwright (per the skill).
 - Wire next-intl: `i18n/routing.ts`, `request.ts`, `navigation.ts`, `middleware.ts`,
-  `createNextIntlPlugin` in `next.config.ts`, messages files (`[XX]` placeholders for
-  non-default locales).
+  `createNextIntlPlugin` in `next.config.ts`, messages files (non-default locale seed files
+  mirror the default locale — no `[XX]`/`[NL]` placeholders). Once the site is connected to
+  the CMS (`NEXT_PUBLIC_CMS_ENDPOINT` set), `i18n/request.ts` loads messages live from the CMS
+  per locale; the CMS auto-translates the default locale into the others. See `i18n-setup`
+  skill for full wiring details.
 - Set fonts via `next/font` in `app/[locale]/layout.tsx`.
 - Create the canonical folder structure.
 - Copy the design's mock images to `public/images/<section>/<filename>`.

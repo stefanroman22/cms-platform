@@ -43,7 +43,7 @@ The site build is complete when ALL of the following are true:
 8. .learnings/conventions.md has at least one entry timestamped today.
 9. No page produces horizontal overflow at 375px width (verified by the responsive Playwright test).
 10. The site has app/[locale]/ as the routing structure (locale prefix in URLs).
-11. messages/<locale>.json files exist for every configured locale.
+11. messages/<locale>.json seed files exist for every configured locale and contain no `[XX]`/`[NL]` placeholder strings.
 12. The locale switcher Playwright test passes.
 ```
 

@@ -13,5 +13,4 @@
   lesson should apply to every future build, also append it to
   `agents/Website Builder/learnings-template/conventions.md`.
 
-**Report to the user:** output folder path, what was built, locales scaffolded (which still need
-translation), test results, what's mock vs real, any silent judgment calls.
+**Report to the user:** output folder path, what was built, locales scaffolded, test results, what's mock vs real, any silent judgment calls. Note whether `NEXT_PUBLIC_CMS_ENDPOINT` is set (messages live from CMS) or unset (seed files active).

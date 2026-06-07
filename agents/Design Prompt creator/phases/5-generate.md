@@ -74,6 +74,10 @@
    - If ANY tag is missing → echo: *"Phase 5: extracted XML is missing `<tagname>`. The skill must emit `<universal_ux_requirements>` literally from `references/prompt-skeleton.xml.md`. Retry / save-as-is / abort?"* Halt for answer.
    - On retry, re-invoke the skill once. If still missing on retry, default to **abort** — do not silently writeback a non-conformant prompt.
 
+6b. **Language-switcher check (multilingual leads only).** If `lead.languages` has ≥ 2 entries, grep the extracted XML for the switcher requirement: a `<languages ... switcher="yes">` tag AND a "Language switcher" line in `<component_inventory>`/`<deliverables>`.
+   - If either is missing → echo: *"Phase 5: lead has `<N>` languages but the prompt has no language switcher. The skill must emit a theme-matched locale switcher in the nav (deliverable 14). Retry / save-as-is / abort?"* Halt for answer.
+   - On retry, re-invoke the skill once. If still missing, default to **abort**.
+
 7. Echo: *"Phase 5: generated `<N>` chars of XML."*
 
 ## Outputs
@@ -87,6 +91,7 @@
 | Skill invocation fails | "Phase 5: lead-to-design-prompt skill failed: `<error>`. Retry?" Halt. |
 | No fenced xml block in output | "Phase 5: model output has no `\`\`\`xml` block. First 500 chars: `<excerpt>`. Retry / save-as-is / abort?" Halt. |
 | Missing universal UX block | "Phase 5: extracted XML is missing `<tagname>`. The skill must emit `<universal_ux_requirements>` literally from `references/prompt-skeleton.xml.md`. Retry / save-as-is / abort?" Retry once → on second miss, default abort. |
+| Missing switcher on multilingual lead | "Phase 5: lead has `<N>` languages but no language switcher in the prompt (deliverable 14). Retry / save-as-is / abort?" Retry once → on second miss, default abort. |
 | `reuse_from_lead` references a missing prompt | "Lead `<X>` has no `design_prompt`. Pick a different reference, or proceed without?" |
 
 ## Self-improvement hook

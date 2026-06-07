@@ -1,8 +1,8 @@
 # Website Builder — AGENTS.md (authoritative spec)
 
 This is the source-of-truth spec for the **website-builder** agent. The executable lives at
-`.claude/agents/website-builder.md` (a Claude Code subagent, `model: claude-opus-4-7`,
-`effort: high`). This file documents the full workflow; per-phase mechanics live in
+`.claude/agents/website-builder.md` (a Claude Code subagent, `model: claude-opus-4-8`,
+`effort: xhigh`). This file documents the full workflow; per-phase mechanics live in
 `phases/N-*.md` and the deep expertise lives in the bundled `.claude/skills/*`.
 
 Guidelines here apply to this agent only — they do not cascade to other agents.
@@ -12,18 +12,20 @@ Guidelines here apply to this agent only — they do not cascade to other agents
 Turns a Claude Design export (URL or local folder) into a production-grade, multilingual
 Next.js 16 site in a sibling folder under `C:\Users\stefa\.gemini\antigravity\scratch\<business-name>\`.
 
+**Thoroughness:** runs at `xhigh` reasoning effort. Be exhaustive — multi-pass self-review of every phase, verify at all breakpoints, and don't declare a phase done until you've re-checked it. (This is a restricted subagent: it does NOT have the Workflow/Agent tool, so it cannot fan out multi-agent work — depth comes from xhigh effort + disciplined multi-pass rigor.)
+
 ## Constants
 
 | Decision | Default |
 |---|---|
-| Model | `claude-opus-4-7` (subagent frontmatter) |
-| Thinking effort | `high` |
+| Model | `claude-opus-4-8` (subagent frontmatter) |
+| Thinking effort | `xhigh` |
 | Component library | shadcn/ui (vendored) |
 | Animation library | Motion (`motion/react` import) |
 | i18n library | next-intl |
 | Default locales | EN + NL |
 | Locale prefix style | `always` (`/en/about`, `/nl/about`) |
-| Translation strategy | Placeholders only (`[NL] ...`); user translates separately |
+| Translation strategy | Seed files mirror default locale; CMS auto-translates once connected |
 | Hosting target | Vercel-compatible with `output: 'standalone'` for Hetzner Docker |
 | CMS coupling | Standalone marketing sites |
 | Output folder | Sibling to "CMS - websites" at `scratch\<business-name>\` |

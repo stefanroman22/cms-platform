@@ -1,6 +1,6 @@
 # Example prompts — website-builder agent
 
-Launch from `CMS - websites`, optionally with `claude --model claude-opus-4-7 --effort high`.
+Launch from `CMS - websites`, optionally with `claude --model claude-opus-4-8 --effort xhigh`.
 
 ## Minimal — let the agent decide
 
@@ -66,6 +66,6 @@ Read BUILD_PLAN.md and tell me which items were checked off, then summarize the 
 ```
 
 ```
-List every translation key in messages/en.json that's still [NL] in messages/nl.json.
-Output as a markdown table for my translation pipeline.
+List every translation key in messages/en.json and show its current value in messages/nl.json.
+Output as a markdown table so I can review the seed copy before connecting the CMS.
 ```

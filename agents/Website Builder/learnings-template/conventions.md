@@ -44,12 +44,14 @@ Every page lives under `app/[locale]/`. Even single-locale projects use the loca
 **Established:** initial setup
 **Source:** initial setup
 
-### Translation — placeholders, not auto-translation
+### Translation — CMS-sourced, seed files as pre-connection fallback
 
-For non-default locale message files, use `[XX] <original text>` placeholders. Never auto-translate. The user runs translation through their own pipeline (e.g., n8n).
+Non-default locale `messages/<locale>.json` files are **build-time seeds / pre-connection fallbacks**. The default-locale file holds real copy; non-default seed files mirror it (same values — no `[XX]`/`[NL]` placeholders to hand-maintain).
 
-**Rationale:** Auto-translation on marketing copy is unreliable and requires human review anyway. Placeholders make untranslated strings visually obvious during QA.
-**Established:** initial setup
+Once the site is connected to the CMS (CMS Connector agent sets `NEXT_PUBLIC_CMS_ENDPOINT`), `i18n/request.ts` loads messages live from the CMS per locale. The CMS auto-translates the default locale into the others (DeepL when configured, else echoes the source). No separate translation pipeline is needed.
+
+**Rationale:** Placeholders caused visible garbage text in QA and required a manual translation step. The CMS handles translation automatically post-connection; seeds keep the site functional before that point.
+**Established:** 2026-06-06
 **Source:** user instruction
 
 ### Metadata — viewport export separation

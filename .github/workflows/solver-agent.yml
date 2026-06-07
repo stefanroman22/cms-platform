@@ -93,7 +93,7 @@ jobs:
         run: |
           cd ./client-repo
           claude --print \
-            --model claude-opus-4-7 \
+            --model claude-opus-4-8 \
             --max-turns 80 \
             --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git show:*)" \
             --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch,WebSearch" \

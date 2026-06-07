@@ -1,12 +1,12 @@
 # Website Builder — quick reference
 
 Claude Code subagent that turns a Claude Design export into a production-ready, multilingual
-Next.js 16 site in a sibling folder under `scratch\<business-name>\`. Runs on Opus 4.7,
-effort: high.
+Next.js 16 site in a sibling folder under `scratch\<business-name>\`. Runs on Opus 4.8,
+effort: xhigh.
 
 ## How to use
 
-From `CMS - websites`, launch Claude Code (optionally `claude --model claude-opus-4-7 --effort high`),
+From `CMS - websites`, launch Claude Code (optionally `claude --model claude-opus-4-8 --effort xhigh`),
 then:
 
 > "Use the website-builder agent to fetch this design and implement it in a new folder: `<URL>`"
@@ -35,12 +35,11 @@ hreflang), Motion animations, Playwright E2E, a `.learnings/` log, `BUILD_PLAN.m
 
 ## Defaults
 
-shadcn/ui · Motion (`motion/react`) · next-intl · EN+NL · locale prefix `always` · placeholders
-(no auto-translation) · mock images kept as-is · sibling output folder · escalate after 3 retries.
+shadcn/ui · Motion (`motion/react`) · next-intl · EN+NL · locale prefix `always` · seed files mirror default locale (CMS auto-translates once connected) · mock images kept as-is · sibling output folder · escalate after 3 retries.
 
 ## Cost note
 
-Opus 4.7 + effort: high is maximum-quality, maximum-cost. A typical 3–5 page multilingual build
+Opus 4.8 + effort: xhigh is xhigh-effort, maximum-cost. A typical 3–5 page multilingual build
 runs ~$5–20 on Pro/Max plans. Overnight `/ralph-loop` runs cost more — set `--max-iterations` and
 monitor. To dial back, change the subagent frontmatter to `model: claude-sonnet-4-6` /
 `effort: medium`, or launch with those flags.

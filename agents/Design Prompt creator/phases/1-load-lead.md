@@ -19,6 +19,7 @@
    - Replace any field where the value is literally `"Not found"`, `"N/A"`, or `"-"` with `null`.
    - Expand 2-letter country ISO codes: `NL` → `Netherlands`, `BE` → `Belgium`, `DE` → `Germany`. Other codes: pass through unchanged.
    - If `lat` OR `lng` is null, set BOTH to null (the skill drops the map embed only when both are absent).
+   - Pass `languages` (a `text[]` of canonical English language names, e.g. `["Dutch","English"]`) through as-is. An empty array means no explicit locales were set — the skill treats that as a single-language site.
    - **Strip `<pre><code>` wrapper from `design_prompt` if present:** look for `^\s*<pre><code>(.+?)</code></pre>\s*$` (DOTALL). If matched, replace with the captured content. If not matched, leave as-is.
 
 3. Classify into one of the 6 category buckets (use `category` field; if ambiguous, infer from `description` + `extra.attributes`):
@@ -40,7 +41,7 @@
    phone, email, website_url, facebook_url, instagram_url,
    menu_url, web_presence, source_url,
    rating, review_count, reviews,
-   opening_hours, extra, notes
+   opening_hours, extra, notes, languages
    ```
 
    Plus inject `photo_urls` into `extra.photo_urls` if `photo_urls` is non-empty:

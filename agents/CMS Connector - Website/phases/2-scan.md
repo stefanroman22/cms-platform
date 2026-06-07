@@ -1,5 +1,7 @@
 # Phase 2 — Scan website & generate CMS integration report
 
+**Orchestration:** per the skill's *Orchestration policy (ultracode)*, fan out via the Workflow tool for non-trivial sites (large source, multiple page types, multi-locale content model, or booking detection) — adversarially verify the proposed manifest before writing the report; be exhaustive.
+
 **Goal:** Produce `cms-integration-report.md` listing every recommended CMS service, grouped into sections, written for human review.
 
 **Inputs:** `<folder_name>`, output of Phase 1, Anthropic Claude.
@@ -8,7 +10,7 @@
 
 1. Read source files via `file_reader.read_website_files`. Cap by size + count, skip excluded dirs.
 2. Detect logo: scan `<folder_name>/public/` for `.svg`, `.png`, `.jpg`, `.jpeg`, `.webp`. Prefer filenames containing `logo`, `brand`, or `mark`. Record relative path.
-3. Call Claude with `prompts.py` SYSTEM_PROMPT. **Model: `claude-opus-4-7`** — scan accuracy drives every downstream phase, so use the strongest model. Mark the system block with `cache_control: {"type": "ephemeral"}` for prompt caching on retries.
+3. Call Claude with `prompts.py` SYSTEM_PROMPT. **Model: `claude-opus-4-8`** with effort `xhigh` — scan accuracy drives every downstream phase, so use the strongest model. Mark the system block with `cache_control: {"type": "ephemeral"}` for prompt caching on retries.
 4. Compose the report (structure below).
 5. Write the report to `agents/CMS Connector - Website/cms-integration-report.md`. **Temporary** — deleted at end of Phase 6.
 6. Halt and ask user to review. Do not proceed until explicit approval.
@@ -25,6 +27,7 @@
 Generated: <UTC timestamp>
 Source: <folder_name>
 Repo: <github_repo>
+Locales: <detected locales from i18n/routing.ts> | Default: <default_locale> | Per-locale translations found: <yes/no — messages/<locale>.json present>
 
 ## Section 1 — General
 
@@ -77,6 +80,53 @@ For each:
   - For repeaters: full `item_schema` (key, label, type)
   - `initial_content`: extracted current values
 
+## Booking Service (only if `booking.detected` is true in the manifest)
+
+```markdown
+## Booking Service
+
+- **Public slug:** `<public_slug>`
+- **Business name:** `<business_name>`
+- **Brand colors:** accent `<accent_color>` | primary `<primary_color>`
+- **Locale / timezone:** `<locale>` / `<timezone>`
+- **Calendar provider:** none (headless — no calendar sync)
+- **Reminder offsets (hours before):** `<reminder_offsets list>`
+
+### Services
+
+| Name | Duration |
+|------|----------|
+| <service_name> | <duration_minutes> min |
+
+### Resources / Staff
+
+- `<resource_name>` (repeat per resource)
+
+### Weekly Hours
+
+| Day (0=Sun … 6=Sat) | Open | Close |
+|---------------------|------|-------|
+| <weekday>           | <open_time> | <close_time> |
+
+### Destination email
+
+`<destination_email>` — **Edit this to the client's actual email before Phase 4 runs.** If left blank it defaults to `stefanromanpers@gmail.com`.
+
+### Client UI wiring
+
+Components from design that will be wired to `lib/booking.ts`: `<ui_wiring.components list, or "iframe fallback">`.
+
+Public API contract the wired UI will use:
+- `GET /booking/{slug}/services` — service picker
+- `GET /booking/{slug}/availability?service_id=&from=&to=` — date/time slots
+- `POST /booking/{slug}` — submit booking → returns `booking_id` + `manage_url`
+- Reschedule / cancel → centralized CMS-hosted `/manage/{token}` page (no client-side manage UI needed)
+```
+
+> **Narrowed detection rule:** a plain contact form (name + email + message → sends an email) stays `email_config`. The `booking` block is generated **only** when the site has genuine scheduling intent — service selection, date/time picking, appointment slots.
+>
+> Stefan reviews and edits this section — especially the destination email — before Phase 4 provisions anything.
+
 ## Section: Excluded items
 
 List items the agent considered but rejected, with reason. Examples:
@@ -128,5 +178,5 @@ User must reply "approved" before Phase 3.
 When the user reviews the report and says X should have been caught (or shouldn't have been included), append to `LEARNINGS.md` under `## Phase 2 — Scan rules`. Format: `- <date>: <one-line rule>. Triggered by: <short context>.` Next run, the agent reads LEARNINGS.md and includes those rules in the SYSTEM_PROMPT for Claude.
 
 Example learned rules:
-- `- 2026-04-29: Italian/Spanish/French language toggles are configuration, not content. Triggered by: included locale strings as text_block.`
+- `- 2026-06-06: The language-SWITCHER control/labels stay excluded (chrome); DETECT the locale set from i18n/routing.ts + messages/<locale>.json and import per-locale CONTENT as first-class CMS data. Supersedes 2026-04-29 rule. Triggered by: multilingual sites have real per-locale content that must be imported.`
 - `- 2026-05-12: For e-commerce sites, always recommend a top-level shipping_policy rich-text. Triggered by: missed shipping-policy text on three runs.`

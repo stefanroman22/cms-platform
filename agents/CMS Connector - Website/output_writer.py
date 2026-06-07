@@ -27,11 +27,23 @@ def write_outputs(manifest: dict, out_dir: str | Path) -> tuple[Path, Path]:
         for svc in manifest.get("services", [])
     }
 
+    cms_endpoint = manifest.get("cms_endpoint", "https://cms-backend-roman.vercel.app/content")
+    cms_endpoint_base = cms_endpoint.rstrip("/").rsplit("/content", 1)[0]
+
     config = {
         "projectSlug": manifest["project_slug"],
-        "endpoint": manifest.get("cms_endpoint", "https://cms-backend-roman.vercel.app/content"),
+        "endpoint": cms_endpoint,
+        "locales": manifest.get("locales", ["en"]),
+        "defaultLocale": manifest.get("default_locale", "en"),
         "services": services_map,
     }
+
+    booking = manifest.get("booking", {})
+    if booking.get("detected"):
+        config["booking"] = {
+            "slug": booking.get("public_slug") or manifest["project_slug"],
+            "apiBase": cms_endpoint_base + "/booking",
+        }
 
     config_path = out_dir / "cms.config.json"
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")

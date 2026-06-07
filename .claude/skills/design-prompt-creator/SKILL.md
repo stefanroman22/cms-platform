@@ -1,6 +1,8 @@
 ---
 name: design-prompt-creator
 description: Use when the user says "Run Design Prompt Creator for lead <lead_id>" (or close paraphrase). Drives a 7-phase pipeline that researches the web for popular websites in the lead's category, invokes the lead-to-design-prompt skill with enriched context, and writes the resulting XML design prompt to leads.design_prompt via Supabase MCP. Self-learns via LEARNINGS.md (distilled feedback) and per-category research files.
+model: claude-opus-4-8
+effort: high
 ---
 
 # Design Prompt Creator (skill)
@@ -41,7 +43,7 @@ Do **not** read all phase docs up front. As you enter each phase, read only that
 - **One Read per phase doc** — do not re-Read the same phase file later in the run.
 - **No verbose narration** — one status line per phase. No "Now I will..." prelude.
 - **Tool output**: prefer `head_limit` and `offset` on Grep/Glob; never request full directory dumps.
-- **Model policy** — defaults to whatever the user is running. No model-switching mid-run.
+- **Model policy** — pinned via this skill's frontmatter: `claude-opus-4-8`, effort `high`. No model-switching mid-run.
 - **Skip the empty LEARNINGS.md** as noted above.
 
 ## Self-improvement loop
