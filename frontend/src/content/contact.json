@@ -1,0 +1,15 @@
+{
+  "hero": {
+    "eyebrow": "Contact",
+    "title": "Tell us what you're building.",
+    "lead": "Send a message or reach us directly. We usually reply within one business day, and you never need a call to get a quote."
+  },
+  "details": {
+    "email": "stefanromanpers@gmail.com",
+    "phone": "+40 751 081 184",
+    "phoneHref": "+40751081184",
+    "location": "Romania · EU",
+    "address": "",
+    "hours": "Mon–Fri · 9:00–18:00 EET"
+  }
+}

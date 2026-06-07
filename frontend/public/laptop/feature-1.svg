@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" font-family="Geist, Arial, sans-serif">
+  <rect width="1280" height="800" fill="#0E0E10"/>
+  <!-- top bar -->
+  <rect width="1280" height="60" fill="#0B0B0D"/>
+  <circle cx="30" cy="30" r="6" fill="#3a3a3e"/><circle cx="52" cy="30" r="6" fill="#3a3a3e"/><circle cx="74" cy="30" r="6" fill="#3a3a3e"/>
+  <rect x="430" y="16" width="300" height="28" rx="8" fill="#161618"/>
+  <rect x="980" y="15" width="120" height="30" rx="8" fill="#C9A961"/>
+  <text x="1040" y="35" fill="#0A0A0B" font-size="14" font-weight="700" text-anchor="middle">Publish</text>
+  <circle cx="1150" cy="30" r="14" fill="#1d1d20"/>
+  <!-- sidebar -->
+  <rect x="0" y="60" width="240" height="740" fill="#0B0B0D"/>
+  <circle cx="36" cy="102" r="14" fill="#C9A961"/>
+  <text x="60" y="108" fill="#FAFAF7" font-size="16" font-weight="700">Café Nordlys</text>
+  <rect x="20" y="150" width="200" height="40" rx="8" fill="#161618"/>
+  <rect x="20" y="154" width="3" height="32" fill="#C9A961"/>
+  <rect x="44" y="166" width="120" height="10" rx="5" fill="#cfcfd4"/>
+  <rect x="44" y="208" width="110" height="10" rx="5" fill="#4a4a50"/>
+  <rect x="44" y="248" width="130" height="10" rx="5" fill="#4a4a50"/>
+  <rect x="44" y="288" width="95" height="10" rx="5" fill="#4a4a50"/>
+  <rect x="44" y="328" width="120" height="10" rx="5" fill="#4a4a50"/>
+  <!-- main -->
+  <text x="280" y="128" fill="#FAFAF7" font-size="40" font-weight="700">All your projects, one place</text>
+  <text x="280" y="162" fill="#6b6862" font-size="18">Every page, booking and post Café Nordlys ships — managed from one dashboard.</text>
+  <!-- stat cards -->
+  <g>
+    <rect x="280" y="200" width="220" height="110" rx="14" fill="#161618" stroke="#2a2a2e"/>
+    <text x="300" y="236" fill="#8a8a90" font-size="14">Bookings today</text>
+    <text x="300" y="282" fill="#FAFAF7" font-size="34" font-weight="700">23</text>
+    <text x="470" y="282" fill="#C9A961" font-size="14" text-anchor="end">+12%</text>
+    <rect x="520" y="200" width="220" height="110" rx="14" fill="#161618" stroke="#2a2a2e"/>
+    <text x="540" y="236" fill="#8a8a90" font-size="14">Page views</text>
+    <text x="540" y="282" fill="#FAFAF7" font-size="34" font-weight="700">1,847</text>
+    <text x="710" y="282" fill="#C9A961" font-size="14" text-anchor="end">+8%</text>
+    <rect x="760" y="200" width="220" height="110" rx="14" fill="#161618" stroke="#2a2a2e"/>
+    <text x="780" y="236" fill="#8a8a90" font-size="14">Live pages</text>
+    <text x="780" y="282" fill="#FAFAF7" font-size="34" font-weight="700">42</text>
+    <text x="950" y="282" fill="#C9A961" font-size="14" text-anchor="end">+3</text>
+    <rect x="1000" y="200" width="220" height="110" rx="14" fill="#161618" stroke="#2a2a2e"/>
+    <text x="1020" y="236" fill="#8a8a90" font-size="14">Avg response</text>
+    <text x="1020" y="282" fill="#FAFAF7" font-size="34" font-weight="700">1.2s</text>
+    <text x="1200" y="282" fill="#C9A961" font-size="14" text-anchor="end">−0.3s</text>
+  </g>
+  <!-- activity panel -->
+  <rect x="280" y="340" width="940" height="380" rx="16" fill="#161618" stroke="#2a2a2e"/>
+  <text x="304" y="378" fill="#FAFAF7" font-size="16" font-weight="600">Recent activity</text>
+  <g fill="#4a4a50">
+    <rect x="304" y="408" width="40" height="40" rx="20" fill="#1f1f22"/>
+    <rect x="360" y="422" width="520" height="12" rx="6"/>
+    <rect x="1080" y="424" width="60" height="10" rx="5" fill="#3a3a3e"/>
+    <rect x="304" y="468" width="40" height="40" rx="20" fill="#1f1f22"/>
+    <rect x="360" y="482" width="600" height="12" rx="6"/>
+    <rect x="1080" y="484" width="60" height="10" rx="5" fill="#3a3a3e"/>
+    <rect x="304" y="528" width="40" height="40" rx="20" fill="#1f1f22"/>
+    <rect x="360" y="542" width="460" height="12" rx="6"/>
+    <rect x="1080" y="544" width="60" height="10" rx="5" fill="#3a3a3e"/>
+  </g>
+  <rect x="900" y="410" width="60" height="22" rx="11" fill="#C9A961" opacity="0.18"/>
+  <text x="930" y="425" fill="#C9A961" font-size="11" font-weight="700" text-anchor="middle">AUTO</text>
+  <text x="1264" y="788" fill="#33333a" font-size="13" text-anchor="end">MOCK · replace /public/laptop/feature-1.svg</text>
+</svg>
