@@ -1,23 +1,35 @@
 # Security Findings — Live Tracker
 
-**Last full review:** 2026-06-07 · **Reviewer:** multi-agent workflow (14 dimensions, adversarial verification) · **Supabase:** xeluydwpgiddbamysgyu · **Confirmed:** 55 · **Dismissed (false-positive):** 14
+**Last full review:** 2026-06-07 · **Reviewer:** multi-agent workflow (14 dimensions, adversarial verification) · **Supabase:** xeluydwpgiddbamysgyu · **Confirmed:** 56 · **Dismissed (false-positive):** 14
 
 This table is the **source of truth for status**. Detail for each finding lives in [`findings/`](./findings/) by severity. IDs are stable and never reused (see [`methodology.md`](./methodology.md) §5–6). Status: `open` · `in-progress` · `fixed` · `accepted-risk` · `false-positive` · `wont-fix`.
+
+> **Remediation 2026-06-07** — `SEC-001` (critical) and `SEC-002` (high, same chain) partially
+> remediated. **Closed:** the cross-tenant `SOLVER_GITHUB_TOKEN` theft (token stripped from
+> `.git/config` during the untrusted run + a pre-push secret-scan gate) and the trivial
+> `node -e` RCE (removed from the agent allowlist + explicit deny); plus nonce-fenced
+> untrusted-data separation in the prompt and control-char input hardening. **Residual** (Claude
+> OAuth-token exfil via the agent's still-allowed `npm run` execution) is tracked as the new
+> **`SEC-056`** (high) — closing it needs either egress isolation or removing the agent's command
+> execution, a security-vs-capability decision. Verified: 29 Solver-agent + 436 backend tests green.
 
 ## Counts by severity
 
 | Critical | High | Medium | Low | Info | Total |
 |---|---|---|---|---|---|
-| 1 | 3 | 10 | 31 | 10 | 55 |
+| 1 | 4 | 10 | 31 | 10 | 56 |
+
+_Status: 2 in-progress (SEC-001, SEC-002), 54 open._
 
 ## Open findings
 
 | ID | Sev | Title | Location | Dimension | Status |
 |---|---|---|---|---|---|
-| [SEC-001](findings/critical.md#sec-001) | critical | Client-controlled issue text reaches an LLM with arbitrary-code-execution tools (Bash node) — prompt injection → RCE on the runner with write tokens | `.github/workflows/solver-agent.yml:91-100; agents/Solver - Issues/clai…` | ci-workflows | open |
-| [SEC-002](findings/high.md#sec-002) | high | Solver Agent: client-submitted issue text is injected verbatim into an autonomous code-fixing prompt that runs with a cross-tenant GitHub write token and node/npm shell access (prompt-injection → token exfiltration) | `agents/Solver - Issues/claim_issue.py:144-150; agents/Solver - Issues/…` | agents | open |
+| [SEC-001](findings/critical.md#sec-001) | critical | Client-controlled issue text reaches an LLM with arbitrary-code-execution tools (Bash node) — prompt injection → RCE on the runner with write tokens | `.github/workflows/solver-agent.yml:91-100; agents/Solver - Issues/clai…` | ci-workflows | **in-progress** |
+| [SEC-002](findings/high.md#sec-002) | high | Solver Agent: client-submitted issue text is injected verbatim into an autonomous code-fixing prompt that runs with a cross-tenant GitHub write token and node/npm shell access (prompt-injection → token exfiltration) | `agents/Solver - Issues/claim_issue.py:144-150; agents/Solver - Issues/…` | agents | **in-progress** |
 | [SEC-003](findings/high.md#sec-003) | high | Owner can create a booking against another tenant's resource (cross-tenant write + silent DoS) via unvalidated resource_id | `backend/auth_service/routers/booking_admin.py:382-416` | authz-idor | open |
 | [SEC-004](findings/high.md#sec-004) | high | anon/authenticated can EXECUTE SECURITY DEFINER solver-claim RPCs — dequeue/poison the auto-fix queue + cross-tenant issue disclosure | `backend/migrations/2026_05_16_solver_agent_columns.sql:27-80 (repo) vs…` | supabase-db | open |
+| [SEC-056](findings/high.md#sec-056) | high | Solver agent retains command execution (`npm run`) while the Claude OAuth token is present on the runner — residual exfil path after SEC-001 hardening | `.github/workflows/solver-agent.yml:104-111` | agents | open |
 | [SEC-005](findings/medium.md#sec-005) | medium | Admin issue-status update endpoint lets the Solver mark ANY issue done cross-project, decoupled from whether the agent actually fixed it | `backend/auth_service/routers/issues.py:276-344; agents/Solver - Issues…` | agents | open |
 | [SEC-006](findings/medium.md#sec-006) | medium | Solver Agent auto-commits and force-pushes attacker-influenced file changes to cms-preview, which a single Slack ✅ promotes to client production | `agents/Solver - Issues/finalize.py:42-49; agents/Solver - Issues/repo.…` | agents | open |
 | [SEC-007](findings/medium.md#sec-007) | medium | Dependabot auto-merge self-approves and merges minor/major-range bumps without independent review; a compromised dependency can reach master/prod | `.github/workflows/dependabot-auto-merge.yml:36-50` | ci-workflows | open |

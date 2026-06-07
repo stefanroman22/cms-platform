@@ -43,6 +43,25 @@ def test_clone_and_reset_to_prod_clones_with_no_single_branch(fake_run, tmp_path
     assert "x-access-token:ghs_test@github.com/owner/name" in url
 
 
+def test_clone_strips_token_from_origin_after_clone(fake_run, tmp_path, monkeypatch):
+    """SEC-001: origin must end tokenless so the token isn't in .git/config
+    during the untrusted Claude run."""
+    monkeypatch.setattr(repo, "PREV_SHA_PATH", str(tmp_path / "prev-solver-sha"))
+    repo.clone_and_reset_to_prod(
+        repo_slug="owner/name",
+        dev_branch="cms-preview",
+        prod_branch="main",
+        dest="./client-repo",
+    )
+    set_url_calls = [c for c in fake_run if "set-url" in c["args"]]
+    assert set_url_calls, "expected origin to be rewritten after cloning"
+    final = set_url_calls[-1]["args"]
+    assert "origin" in final
+    tokenless = next(a for a in final if a.startswith("https://"))
+    assert tokenless == "https://github.com/owner/name.git"
+    assert "x-access-token" not in tokenless  # the token must be gone
+
+
 def test_clone_and_reset_configures_git_user(fake_run, tmp_path, monkeypatch):
     monkeypatch.setattr(repo, "PREV_SHA_PATH", str(tmp_path / "prev-solver-sha"))
     repo.clone_and_reset_to_prod(
@@ -189,6 +208,82 @@ def test_commit_and_push_uses_force_with_lease(fake_run, monkeypatch):
     repo.commit_and_push(path="./client-repo", issue_id="i1", issue_title="t")
     push_call = next(c for c in calls if "push" in c["args"])
     assert "--force-with-lease" in push_call["args"]
+
+
+def test_commit_and_push_reauths_origin_before_push(monkeypatch):
+    """SEC-001: the token is re-injected into origin only at push time, and the
+    set-url happens before the push."""
+    monkeypatch.setenv("SOLVER_GITHUB_TOKEN", "ghs_test")
+    calls = []
+
+    def fake(args, **kwargs):
+        calls.append(args)
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        if "rev-parse" in args:
+            result.stdout = "abc123\n"
+        if "get-url" in args:
+            result.stdout = "https://github.com/owner/name.git\n"
+        return result
+
+    monkeypatch.setattr(repo.subprocess, "run", fake)
+    repo.commit_and_push(path="./client-repo", issue_id="i1", issue_title="t")
+
+    set_url_idx = next(i for i, a in enumerate(calls) if "set-url" in a)
+    push_idx = next(i for i, a in enumerate(calls) if "push" in a)
+    assert set_url_idx < push_idx
+    authed = next(a for a in calls[set_url_idx] if a.startswith("https://"))
+    assert authed == "https://x-access-token:ghs_test@github.com/owner/name.git"
+
+
+def test_push_refused_when_diff_contains_secret(monkeypatch):
+    """SEC-001/SEC-056: a staged diff that introduces a credential is rejected
+    before commit/push."""
+    monkeypatch.setenv("SOLVER_GITHUB_TOKEN", "ghs_test")
+    calls = []
+
+    def fake(args, **kwargs):
+        calls.append(args)
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        if "diff" in args and "--cached" in args:
+            result.stdout = (
+                '+  const t = {"claudeAiOauth": {"accessToken": "sk-ant-abcdefghijklmnop"}}'
+            )
+        return result
+
+    monkeypatch.setattr(repo.subprocess, "run", fake)
+    with pytest.raises(RuntimeError, match="refusing to push"):
+        repo.commit_and_push(path="./client-repo", issue_id="i1", issue_title="t")
+    # Must abort before committing or pushing.
+    assert not any("commit" in a for a in calls)
+    assert not any("push" in a for a in calls)
+
+
+def test_push_allowed_for_clean_diff(monkeypatch):
+    """A normal website fix (no secret-shaped content) pushes as usual."""
+    monkeypatch.setenv("SOLVER_GITHUB_TOKEN", "ghs_test")
+    calls = []
+
+    def fake(args, **kwargs):
+        calls.append(args)
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        if "rev-parse" in args:
+            result.stdout = "abc123\n"
+        if "get-url" in args:
+            result.stdout = "https://github.com/owner/name.git\n"
+        if "diff" in args and "--cached" in args:
+            result.stdout = "+  <h1>Fixed hero heading</h1>"
+        return result
+
+    monkeypatch.setattr(repo.subprocess, "run", fake)
+    sha = repo.commit_and_push(path="./client-repo", issue_id="i1", issue_title="t")
+    assert sha == "abc123"
+    assert any("push" in a for a in calls)
 
 
 def test_commit_truncates_long_title(fake_run, monkeypatch):

@@ -149,3 +149,56 @@ Independently confirmed against the LIVE DB (project xeluydwpgiddbamysgyu, match
 REVOKE EXECUTE ON FUNCTION public.claim_next_solver_issue(int,int), public.claim_specific_solver_issue(uuid,int,int) FROM anon, authenticated, PUBLIC; keep GRANT only to service_role. Commit claim_specific_solver_issue to a tracked migration so repo == live (it is currently undocumented). Add a CI assertion that no SECURITY DEFINER function in public is anon/authenticated-executable. Consider a startup/CI check that re-applies the REVOKEs since CREATE OR REPLACE/re-create can silently restore PUBLIC EXECUTE.
 
 ---
+
+<a id="sec-056"></a>
+
+## SEC-056 — Solver agent retains command execution (`npm run`) while the Claude OAuth token is present on the runner (residual after SEC-001)
+
+| | |
+|---|---|
+| **Severity** | high |
+| **Status** | open |
+| **Category** | Prompt injection / secret exfiltration (residual) |
+| **Dimension** | agents |
+| **Location** | `.github/workflows/solver-agent.yml:104-111` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (derived from SEC-001 remediation) |
+| **First seen** | 2026-06-07 (filed during SEC-001 remediation) |
+
+**Description**
+
+The SEC-001 remediation removed the cross-tenant `SOLVER_GITHUB_TOKEN` from the untrusted run and
+the trivial `node -e` RCE, and added prompt fencing + a pre-push secret scan. One residual exfil path
+remains: the agent still has `Bash(npm run lint:*)`, `Bash(npm run typecheck:*)`, `Bash(npm test:*)`,
+and `Bash(npx tsc:*)` so it can self-verify its fix — but `npm run <script>` executes whatever the
+client repo's `package.json` defines (and an injected agent can `Write` a malicious script first, then
+run it). During this window the **Claude OAuth credentials file** (`$HOME/.claude/.credentials.json`)
+is on the runner because the CLI needs it. A capable injection could therefore write+run a script that
+reads that token and exfiltrates it over the network *during* the run. The pre-push secret scan only
+catches secrets written into committed files, not live network egress, so it does not cover this path.
+
+**Attack scenario**
+
+An authenticated client submits an issue whose (now nonce-fenced) text nonetheless steers the agent to
+`Write` a file `evil.cjs` that reads `$HOME/.claude/.credentials.json` and POSTs it to an attacker host,
+then run it via an allowed `npm run` script that invokes it. The Claude OAuth (Max subscription) token
+is exfiltrated. Cross-tenant GitHub write is no longer reachable (closed by SEC-001), and the malicious
+file would be caught by the pre-push secret scan, but the live network call already leaked the token.
+
+**Recommendation**
+
+Pick one of two complete-closure controls (security-vs-capability trade-off — confirm before building):
+
+1. **Network-egress isolation of the Claude step** — run it under an egress allowlist (e.g.
+   `step-security/harden-runner`, SHA-pinned, block mode) permitting only `api.anthropic.com` (+ what
+   the CLI strictly needs). Exfil to any other host fails regardless of what executes. Keeps the agent's
+   self-verification ability. **Requires a CI validation run** to confirm the allowlist is complete.
+2. **Remove the agent's command execution** — drop `npm`/`npx` from the allowlist (leaving only
+   Read/Edit/Write/Glob/Grep + read-only git, which have no network channel), and move lint/typecheck/
+   test verification to an orchestrator step that runs **after** wiping the credentials file. Closes the
+   channel fully but the agent can no longer self-verify mid-run (acceptable because `cms-preview` is
+   human-gated before production — see SEC-006).
+
+Until one ships, SEC-001 stays `in-progress`.
+
+---

@@ -5,18 +5,22 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-07**
+## Status snapshot — last full review **2026-06-07** (remediation in progress)
 
 | Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **3** | **10** | **31** | **10** | **55** | 14 |
+| **1** | **4** | **10** | **31** | **10** | **56** | 14 |
 
-All findings are currently **`open`** (this is the baseline review — nothing fixed yet).
+**2 in-progress** (`SEC-001`, `SEC-002` — partially remediated 2026-06-07), 54 open. See the
+remediation note in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
 
-### The three things to fix first
-1. **`SEC-001` (critical)** — Client issue text → LLM with `Bash(node:*)` + write tokens on the Solver CI runner = **prompt-injection → RCE**, exfiltrating the Claude OAuth token and the cross-tenant `SOLVER_GITHUB_TOKEN`, and pushing attacker code to client repos. One authenticated issue submission is enough.
-2. **`SEC-002`/`SEC-003` (high)** — same injection class in the Solver agent prompt (shared push-capable token), and **anon/authenticated can EXECUTE the `SECURITY DEFINER` `claim_*_solver_issue` RPCs** (unauthenticated cross-tenant issue disclosure + pipeline DoS via the public Supabase anon key).
-3. **`SEC-004` (high)** — Booking owner can create a booking against **another tenant's `resource_id`** (cross-tenant calendar DoS via the global GiST exclusion constraint).
+### Remediation progress
+- **`SEC-001` (critical) + `SEC-002` (high)** — *in-progress.* Closed: cross-tenant `SOLVER_GITHUB_TOKEN` theft and the `node -e` RCE; added prompt fencing, input hardening, pre-push secret-scan, and credential teardown. Residual (OAuth-token exfil via the agent's `npm run` execution) tracked as **`SEC-056`** (high), pending an egress-isolation-vs-remove-execution decision.
+
+### The next things to fix
+1. **`SEC-056` (high)** — finish closing SEC-001: egress-isolate the Solver's Claude step **or** remove its command execution (then verify in an orchestrator step after credential teardown).
+2. **`SEC-004` (high)** — **anon/authenticated can EXECUTE the `SECURITY DEFINER` `claim_*_solver_issue` RPCs** (unauthenticated cross-tenant issue disclosure + pipeline DoS via the public Supabase anon key). Pure `REVOKE`, no schema change.
+3. **`SEC-003` (high)** — Booking owner can create a booking against **another tenant's `resource_id`** (cross-tenant calendar DoS via the global GiST exclusion constraint).
 
 ## How to read this folder
 
