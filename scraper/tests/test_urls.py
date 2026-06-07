@@ -6,7 +6,30 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scraper.urls import InvalidMapsURLError, expand_if_short, is_google_maps_url
+from scraper.urls import (
+    InvalidMapsURLError,
+    canonicalize_place_url,
+    expand_if_short,
+    is_google_maps_url,
+)
+
+
+def test_canonicalize_place_url_rebuilds_minimal_from_feature_id():
+    # URL copied while viewing the reviews panel (!1b1 view flag + session query).
+    # Rebuilds to the minimal canonical place URL that reliably loads the Overview.
+    u = (
+        "https://www.google.com/maps/place/X/data=!4m8!3m7!1s0x47c7:0xc7a5!8m2!3d51.81!4d5.70"
+        "!9m1!1b1!16s%2Fg%2F11cn?entry=ttu&g_ep=ABC%3D%3D"
+    )
+    out = canonicalize_place_url(u)
+    assert out == "https://www.google.com/maps/place//data=!4m2!3m1!1s0x47c7:0xc7a5"
+    assert "!1b1" not in out and "?" not in out  # view flag + session query gone
+
+
+def test_canonicalize_place_url_no_feature_id_strips_query():
+    u = "https://www.google.com/maps/place/Y/foo?entry=ttu&g_ep=ABC"
+    assert canonicalize_place_url(u) == "https://www.google.com/maps/place/Y/foo"
+
 
 # ─── is_google_maps_url ─────────────────────────────────────────────────
 

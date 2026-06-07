@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 import random
 import re
+from collections import deque
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -25,6 +27,7 @@ from playwright.async_api import (
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from . import selectors
+from .categories import DEFAULT_CATEGORIES
 from .config import settings
 from .dedup import (
     classify_web_presence,
@@ -33,8 +36,9 @@ from .dedup import (
     parse_latlng_from_url,
     peek_external_id,
 )
+from .geo import bbox_for_place, grid_centers, split_cell
 from .models import Lead, ScrapeFilters, ScrapeParams
-from .urls import expand_if_short
+from .urls import canonicalize_place_url, expand_if_short
 
 # ──────────────────────────────────────────────────────────────────────
 # Helpers (timing + browser lifecycle)
@@ -88,15 +92,55 @@ async def _accept_consent(page: Page) -> None:
     logger.debug("no consent prompt visible")
 
 
-async def _collect_place_links(page: Page, max_results: int) -> list[str]:
+async def _warm_up(page: Page, language: str, country: str) -> None:
+    """Prime a fresh browser context before a direct-url scrape: load Maps once
+    and accept consent. A cold context hits the consent interstitial ON the place
+    URL and then renders the title but NOT the tab strip — so the Reviews tab
+    never opens and all reviews are lost. Warming up (consent handled on the home
+    page first, cookie shared context-wide) makes the place load cleanly with its
+    tabs. Best-effort; failures don't abort the scrape. The search-feed path
+    already warms the context via its feed navigation, so this is direct-url only."""
+    try:
+        await page.goto(
+            f"https://www.google.com/maps?hl={language}&gl={country}",
+            wait_until="domcontentloaded",
+            timeout=20_000,
+        )
+        await _accept_consent(page)
+        await page.wait_for_timeout(2000)
+    except Exception as exc:  # noqa: BLE001 — warm-up is best-effort
+        logger.debug("warm-up navigation failed (continuing): {}", exc)
+
+
+def _text_has_end_sentinel(text: str) -> bool:
+    """True if `text` contains any end-of-list sentinel (case-insensitive)."""
+    low = text.lower()
+    return any(sentinel in low for sentinel in selectors.RESULTS_END_TEXTS)
+
+
+async def _feed_has_end_text(page: Page) -> bool:
+    """Read the results feed's text and check for an end-of-list sentinel.
+    Complements the fragile obfuscated end-marker class."""
+    try:
+        feed = page.locator(selectors.RESULTS_FEED)
+        if await feed.count() == 0:
+            return False
+        return _text_has_end_sentinel(await feed.inner_text())
+    except Exception:
+        return False
+
+
+async def _collect_place_links(page: Page, max_results: int) -> tuple[list[str], bool]:
     """Scroll the left feed until end-marker, stable count, or max reached.
 
-    Returns up to `max_results` distinct place URLs.
-    """
+    Returns (up to max_results distinct place URLs, saturated). `saturated` is
+    True when the cap was hit without reaching the end of the list — Google had
+    more results than it showed, so the cell should be subdivided."""
     links: list[str] = []
     seen: set[str] = set()
     stable_rounds = 0
     last_count = 0
+    reached_end = False
 
     feed = page.locator(selectors.RESULTS_FEED)
     try:
@@ -104,10 +148,10 @@ async def _collect_place_links(page: Page, max_results: int) -> list[str]:
     except Exception:
         # Single-result redirect: Google sent us straight to a place page.
         if "/place/" in page.url:
-            return [page.url]
-        return []
+            return [page.url], False
+        return [], False
 
-    while len(links) < max_results and stable_rounds < 3:
+    while len(links) < max_results and stable_rounds < 5:
         anchors = await page.locator(selectors.RESULTS_ITEM_LINK).element_handles()
         for a in anchors:
             href = await a.get_attribute("href")
@@ -118,8 +162,9 @@ async def _collect_place_links(page: Page, max_results: int) -> list[str]:
                     break
 
         end_marker = page.locator(selectors.RESULTS_END_MARKER)
-        if await end_marker.count() > 0:
+        if await end_marker.count() > 0 or await _feed_has_end_text(page):
             logger.debug("reached end-of-list marker")
+            reached_end = True
             break
 
         if len(links) == last_count:
@@ -128,10 +173,11 @@ async def _collect_place_links(page: Page, max_results: int) -> list[str]:
             stable_rounds = 0
         last_count = len(links)
 
-        await feed.evaluate("(el) => el.scrollBy(0, el.scrollHeight)")
+        await feed.evaluate("(el) => el.scrollBy(0, Math.floor(el.clientHeight * 0.8))")
         await _polite_delay()
 
-    return links[:max_results]
+    saturated = len(links) >= max_results and not reached_end
+    return links[:max_results], saturated
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -200,33 +246,59 @@ async def _card_text(card: ElementHandle, selector: str) -> str | None:
 
 
 async def _open_reviews_tab(page: Page) -> bool:
-    """Click the Reviews tab and wait for cards to render. Returns True
-    on success, False when the tab isn't present or doesn't open."""
+    """Click the Reviews tab and wait for cards to render. Returns True on
+    success, False when the tab isn't present or doesn't open.
+
+    The Overview tab strip (Overview/Reviews/About) renders a beat AFTER the
+    place <h1>, so we WAIT for the tab to appear rather than checking instantly:
+    an instant count()==0 raced the cold load and bailed ~1 in 5 visits, losing
+    all reviews even for places that have them."""
     try:
         tab = page.locator(selectors.REVIEWS_TAB_BUTTON).first
-        if await tab.count() == 0:
-            return False
+        try:
+            await tab.wait_for(state="visible", timeout=5000)
+        except Exception:
+            return False  # genuinely no reviews tab (e.g. a place with no reviews)
         await tab.click(timeout=2000)
-        await page.wait_for_selector(selectors.REVIEW_CARD, timeout=3000)
+        await page.wait_for_selector(selectors.REVIEW_CARD, timeout=5000)
         return True
     except Exception:
         return False
 
 
-async def _sort_reviews_newest(page: Page) -> None:
-    """Switch the reviews sort to 'Newest'. Best-effort: if the control or
-    option is missing we leave the default order (caller still filters)."""
+async def _sort_reviews_newest(page: Page) -> bool:
+    """Switch the reviews sort to 'Newest'. Returns True on success, False when
+    there is no sort control (few-review places) or the sort can't be applied.
+
+    Guards the original bug: clicking the sort button the instant the first card
+    renders is too early — the control isn't actionable yet. We wait for the
+    button to be visible, open the menu, wait for the radio items, then click the
+    localised 'Newest' option."""
+    sort_btn = page.locator(selectors.REVIEW_SORT_BUTTON).first
     try:
-        await page.locator(selectors.REVIEW_SORT_BUTTON).first.click(timeout=2000)
+        await sort_btn.wait_for(state="visible", timeout=4000)
+    except Exception:
+        logger.debug("no reviews sort control (few reviews) — keeping default order")
+        return False
+    try:
+        # The reviews pane animates in after the tab opens; clicking the sort
+        # control before it settles silently no-ops (the original bug). A fixed
+        # settle beat — proven necessary in live testing — is the real fix.
+        await page.wait_for_timeout(2000)
+        await sort_btn.click(timeout=5000)
+        await page.wait_for_timeout(600)  # let the dropdown render
+        newest_re = re.compile("|".join(selectors.REVIEW_SORT_NEWEST_TEXTS), re.IGNORECASE)
         await (
             page.locator(selectors.REVIEW_SORT_MENUITEM)
-            .filter(has_text="Newest")
-            .first.click(timeout=2000)
+            .filter(has_text=newest_re)
+            .first.click(timeout=5000)
         )
-        # The pane re-renders client-side; give it a beat to reorder.
-        await page.wait_for_timeout(1200)
-    except Exception:
-        logger.debug("could not set reviews sort to Newest")
+        await page.wait_for_timeout(1200)  # client-side reorder
+        logger.debug("reviews sorted by Newest")
+        return True
+    except Exception as exc:  # noqa: BLE001 — best-effort; caller still extracts
+        logger.warning("reviews sort to Newest failed: {}", exc)
+        return False
 
 
 async def _review_rating(card: ElementHandle) -> int | None:
@@ -269,18 +341,32 @@ async def _expand_review(card: ElementHandle) -> None:
         pass
 
 
+_REVIEW_SCAN_CAP = 12  # newest cards to scan when hunting for high-rated reviews
+
+
+def _select_reviews(candidates: list[dict[str, Any]], limit: int = 3) -> list[dict[str, Any]]:
+    """From newest-first candidate reviews (each already >=4-star, with text),
+    prefer 5-star and backfill with 4-star, up to `limit`. Newest order is
+    preserved within each rating tier. Pure — unit-tested."""
+    five = [c for c in candidates if c.get("rating") == 5]
+    four = [c for c in candidates if c.get("rating") == 4]
+    return (five + four)[:limit]
+
+
 async def _extract_reviews(page: Page, limit: int) -> list[dict[str, Any]]:
-    """Return the 3 newest reviews that have text and a rating >= 4, in
-    original language, de-duplicated by review id. `limit` is ignored (kept
-    for API compatibility) — the spec fixes the count at 3."""
+    """Return up to 3 reviews with text, sorted newest-first, preferring 5-star
+    and backfilling with 4-star (never below 4) so businesses without 5-star
+    reviews still yield their best recent ones. `limit` is kept for API
+    compatibility — the count is fixed at 3."""
     if not await _open_reviews_tab(page):
         return []
-    await _sort_reviews_newest(page)
+    await _sort_reviews_newest(page)  # best-effort; reviews still extracted if absent
 
     cards = await page.locator(selectors.REVIEW_CARD).element_handles()
-    selected: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
-    for card in cards:
+    five_count = 0
+    for card in cards[:_REVIEW_SCAN_CAP]:
         rid = await card.get_attribute("data-review-id")
         if rid:
             if rid in seen_ids:
@@ -292,11 +378,11 @@ async def _extract_reviews(page: Page, limit: int) -> list[dict[str, Any]]:
         await _expand_review(card)
         text = await _card_text(card, selectors.REVIEW_TEXT)
         if not text:
-            continue  # spec: skip rating-only reviews
+            continue  # skip rating-only reviews
         author = await card.get_attribute("aria-label") or await _card_text(
             card, selectors.REVIEW_AUTHOR
         )
-        selected.append(
+        candidates.append(
             {
                 "author": author,
                 "text": text,
@@ -304,9 +390,11 @@ async def _extract_reviews(page: Page, limit: int) -> list[dict[str, Any]]:
                 "rating": rating,
             }
         )
-        if len(selected) >= 3:
-            break
-    return selected
+        if rating == 5:
+            five_count += 1
+            if five_count >= 3:
+                break  # three newest 5-star reviews — can't do better
+    return _select_reviews(candidates, 3)
 
 
 def _about_available(aria: str) -> bool:
@@ -529,7 +617,12 @@ async def _scrape_one_place(
 
         web_presence, fb_url, ig_url = classify_web_presence(website_url)
         postal_code, city = _split_address(address)
-        lat, lng = parse_latlng_from_url(url)
+        # Prefer the resolved page URL (Google rewrites it to include !3d/!4d
+        # coords once the place loads) — a canonicalised direct-url input may
+        # carry no coords. Fall back to the input URL for the feed path.
+        lat, lng = parse_latlng_from_url(page.url)
+        if lat is None:
+            lat, lng = parse_latlng_from_url(url)
 
         about_attrs = await _extract_about_attributes(page)
 
@@ -624,9 +717,55 @@ def _build_queries(params: ScrapeParams) -> list[str]:
 _SPACE_RE = re.compile(r"\s+")
 
 
-def _search_url(query: str, language: str, country: str) -> str:
+def _search_url(
+    query: str,
+    language: str,
+    country: str,
+    center: tuple[float, float] | None = None,
+    zoom: int = 16,
+) -> str:
     slug = _SPACE_RE.sub("+", query.strip())
-    return f"https://www.google.com/maps/search/{slug}/?hl={language}&gl={country}"
+    url = f"https://www.google.com/maps/search/{slug}/"
+    if center is not None:
+        lat, lng = center
+        url += f"@{lat},{lng},{zoom}z"  # explicit viewport — supplies the geography
+    return url + f"?hl={language}&gl={country}"
+
+
+class GridTooLargeError(ValueError):
+    """Raised when a region's grid exceeds max_cells (no checkpoint/resume yet)."""
+
+
+def _build_grid_queries(
+    params: ScrapeParams,
+) -> list[tuple[str, tuple[float, float] | None, int]]:
+    """Plan the scoped queries.
+
+    Region/bbox mode → one bare-category query per grid cell × category, each
+    scoped by a viewport centre. Otherwise → legacy text queries (centre=None).
+    Returns a fully-materialised list so an oversized grid fails before any
+    browser launch."""
+    if params.bbox is not None or params.region is not None:
+        if params.bbox is not None:
+            bbox = params.bbox
+        else:
+            assert params.region is not None
+            bbox = bbox_for_place(params.region, cache_path=Path(settings.SCRAPER_GEOCODE_CACHE))
+        cats = params.categories or DEFAULT_CATEGORIES
+        grid = list(grid_centers(*bbox, cell_km=params.grid_cell_km))
+        logger.info(
+            "grid plan: {} cells × {} categories = {} scoped queries",
+            len(grid),
+            len(cats),
+            len(grid) * len(cats),
+        )
+        if params.max_cells and len(grid) > params.max_cells:
+            raise GridTooLargeError(
+                f"grid has {len(grid)} cells > max_cells={params.max_cells}; "
+                "narrow --region/--bbox or raise --max-cells (0 = unlimited)"
+            )
+        return [(cat, center, params.grid_zoom) for center in grid for cat in cats]
+    return [(query, None, params.grid_zoom) for query in _build_queries(params)]
 
 
 def _with_hl(url: str, language: str) -> str:
@@ -658,7 +797,16 @@ async def scrape(
     # should fail in ms via urllib, not after ~5s of browser startup.
     expanded_direct_url: str | None = None
     if params.direct_url:
-        expanded_direct_url = expand_if_short(params.direct_url)
+        # Expand short links, then canonicalise to the Overview view (strip the
+        # '!1b1' reviews deep-link + session query) so a URL copied from the
+        # reviews panel still extracts the place title/details.
+        expanded_direct_url = canonicalize_place_url(expand_if_short(params.direct_url))
+
+    # Build the scoped-query plan BEFORE launching Chromium so a bad region or
+    # oversized grid fails in ms (mirrors the direct_url pre-validation above).
+    grid_queries: list[tuple[str, tuple[float, float] | None, int]] = []
+    if expanded_direct_url is None:
+        grid_queries = _build_grid_queries(params)
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
@@ -671,6 +819,9 @@ async def scrape(
         try:
             # ─── Single-URL mode ───────────────────────────────────────
             if expanded_direct_url is not None:
+                # Warm the fresh context so the place renders its tab strip
+                # (otherwise the Reviews tab never appears → 0 reviews).
+                await _warm_up(page, params.language, params.country)
                 logger.info("direct-url scrape: {}", expanded_direct_url)
                 try:
                     lead = await _scrape_one_place(ctx, expanded_direct_url, params, scrape_job_id)
@@ -686,18 +837,27 @@ async def scrape(
             # neighbourhoods don't yield the same business twice. Peek the feature
             # id BEFORE visiting to save the ~5-10s place-page cost.
             seen_ids: set[str] = set()
-            for query in _build_queries(params):
-                logger.info("query: {}", query)
+            work: deque[tuple[str, tuple[float, float] | None, int, float, int]] = deque(
+                (q, c, z, params.grid_cell_km, 0) for q, c, z in grid_queries
+            )
+            while work:
+                query_text, center, zoom, cell_km, depth = work.popleft()
+                logger.info("query: {!r} @ {} (depth {})", query_text, center, depth)
                 await page.goto(
-                    _search_url(query, params.language, params.country),
+                    _search_url(query_text, params.language, params.country, center, zoom),
                     wait_until="domcontentloaded",
                     timeout=20_000,
                 )
                 await _accept_consent(page)
                 await _polite_delay()
 
-                links = await _collect_place_links(page, params.max_results_per_area)
-                logger.info("collected {} place links for {!r}", len(links), query)
+                links, saturated = await _collect_place_links(page, params.max_results_per_area)
+                logger.info(
+                    "collected {} place links for {!r} (saturated={})",
+                    len(links),
+                    query_text,
+                    saturated,
+                )
 
                 for link in links:
                     # Pre-visit dedup: if URL carries a Google feature id and we
@@ -727,6 +887,24 @@ async def scrape(
                     seen_ids.add(lead.external_id)
                     yield lead
                     await _polite_delay()
+
+                # Cell-split: a saturated viewport cell (not legacy text mode) is
+                # subdivided into 4 quarter-cells at a tighter zoom, up to depth.
+                if (
+                    params.split_on_saturation
+                    and saturated
+                    and center is not None
+                    and depth < params.max_split_depth
+                ):
+                    subs = list(split_cell(center[0], center[1], cell_km))
+                    logger.info(
+                        "cell saturated → splitting into {} sub-cells (depth {}→{})",
+                        len(subs),
+                        depth,
+                        depth + 1,
+                    )
+                    for sub in subs:
+                        work.append((query_text, sub, zoom + 1, cell_km / 2, depth + 1))
         finally:
             await ctx.close()
             await browser.close()

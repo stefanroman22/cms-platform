@@ -32,6 +32,12 @@ backend/keys/
 # ── Git worktrees (isolated feature branches) ──────────────────
 .worktrees/
 
+# ── Transient agent / tooling artifacts (not source) ───────────
+.playwright-mcp/
+.superpowers/
+scraper.rar
+scraper/.geocode_cache.json
+
 # ─────────────────────────────────────────────────────────────
 # Frontend — Next.js
 # ─────────────────────────────────────────────────────────────

@@ -8,6 +8,8 @@ from __future__ import annotations
 import urllib.request
 from urllib.parse import urlparse
 
+from .dedup import peek_external_id
+
 _MAPS_HOST_SUFFIXES: frozenset[str] = frozenset(
     {
         "google.com",
@@ -85,9 +87,26 @@ def expand_if_short(url: str) -> str:
         method="GET",
     )
     with urllib.request.urlopen(req, timeout=_EXPAND_TIMEOUT_S) as resp:
-        final = resp.geturl()
+        final: str = resp.geturl()
 
     # After expansion, confirm we landed on a place page.
     if "/place/" not in final and "!1s" not in final:
         raise InvalidMapsURLError(f"short URL is not a place page (resolved to): {final!r}")
     return final
+
+
+def canonicalize_place_url(url: str) -> str:
+    """Rebuild a Google Maps place URL to the minimal canonical form that
+    reliably loads the full Overview view.
+
+    A URL copied from the reviews panel carries the '!1b1' view flag, which
+    deep-links into a sub-view that renders WITHOUT the place title/address/
+    website the scraper extracts. Naively trimming the data blob leaves it
+    malformed, so Google renders an empty place skeleton (the <h1> exists but is
+    empty). Rebuilding from the stable feature id (!1s0x..:0x..) yields a clean
+    place URL that fully populates title/website/phone/address. Falls back to a
+    query-stripped URL when no feature id is present."""
+    fid = peek_external_id(url)
+    if fid is None:
+        return url.split("?", 1)[0]
+    return f"https://www.google.com/maps/place//data=!4m2!3m1!1s{fid}"

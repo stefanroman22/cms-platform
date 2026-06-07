@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     SCRAPER_MIN_DELAY_MS: int = 600
     SCRAPER_MAX_DELAY_MS: int = 2200
 
+    SCRAPER_GEOCODE_CACHE: str = ".geocode_cache.json"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

@@ -1,0 +1,316 @@
+[
+  {
+    "external_id": "0xa69e0b1ef44c3c49:0xd5722ca775d30084",
+    "scrape_job_id": null,
+    "primary_source": "google_maps",
+    "source_url": "https://www.google.com/maps/place/Jesse+de+Loodgieter/data=!4m7!3m6!1s0xa69e0b1ef44c3c49:0xd5722ca775d30084!8m2!3d51.5599295!4d4.7643414!16s%2Fg%2F11nhcc9ygd!19sChIJSTxM9B4LnqYRhADTdacsctU?authuser=0&hl=en&rclk=1",
+    "lead_type": "website",
+    "category": "Plumber",
+    "business_name": "Jesse de Loodgieter",
+    "name_normalized": "jesse de loodgieter",
+    "description": "Not found",
+    "about": null,
+    "country": "NL",
+    "region": null,
+    "city": null,
+    "address": null,
+    "postal_code": null,
+    "lat": 51.5599295,
+    "lng": 4.7643414,
+    "phone": "06 10637684",
+    "email": null,
+    "website_url": null,
+    "facebook_url": null,
+    "instagram_url": null,
+    "menu_url": null,
+    "web_presence": "none",
+    "rating": null,
+    "review_count": null,
+    "reviews": [],
+    "opening_hours": {
+      "Monday": "Open 24 hours",
+      "Tuesday": "Open 24 hours",
+      "Wednesday": "Open 24 hours",
+      "Thursday": "Open 24 hours",
+      "Friday": "Open 24 hours",
+      "Saturday": "Open 24 hours",
+      "Sunday": "Open 24 hours"
+    },
+    "photo_urls": [],
+    "extra": {
+      "attributes": {
+        "Offerings": {
+          "Repair services": true
+        }
+      }
+    }
+  },
+  {
+    "external_id": "0x653687624b097c9:0x2a17b88cd947f54b",
+    "scrape_job_id": null,
+    "primary_source": "google_maps",
+    "source_url": "https://www.google.com/maps/place/mathijn+loodgieterswerken%F0%9F%94%A7/data=!4m7!3m6!1s0x653687624b097c9:0x2a17b88cd947f54b!8m2!3d51.8299504!4d5.9225717!16s%2Fg%2F11tn9w23d1!19sChIJyZewJHZoUwYRS_VH2Yy4Fyo?authuser=0&hl=en&rclk=1",
+    "lead_type": "website",
+    "category": "Plumber",
+    "business_name": "mathijn loodgieterswerken\ud83d\udd27",
+    "name_normalized": "mathijn loodgieterswerken",
+    "description": "Not found",
+    "about": null,
+    "country": "NL",
+    "region": null,
+    "city": "Beek-Ubbergen",
+    "address": "Verbindingsweg 2B, 6573 BV Beek-Ubbergen",
+    "postal_code": "6573 BV",
+    "lat": 51.8299504,
+    "lng": 5.9225717,
+    "phone": "06 55337037",
+    "email": null,
+    "website_url": null,
+    "facebook_url": null,
+    "instagram_url": null,
+    "menu_url": null,
+    "web_presence": "none",
+    "rating": null,
+    "review_count": null,
+    "reviews": [],
+    "opening_hours": {
+      "Monday": "8\u202fam\u20135\u202fpm",
+      "Tuesday": "8\u202fam\u20135\u202fpm",
+      "Wednesday": "8\u202fam\u20135\u202fpm",
+      "Thursday": "8\u202fam\u20135\u202fpm",
+      "Friday": "8\u202fam\u20135\u202fpm",
+      "Saturday": "Closed",
+      "Sunday": "Closed"
+    },
+    "photo_urls": [],
+    "extra": {
+      "attributes": {
+        "Offerings": {
+          "Repair services": true
+        }
+      }
+    }
+  },
+  {
+    "external_id": "0x47c706253fc0e2a1:0x1dfebf5359bc7846",
+    "scrape_job_id": null,
+    "primary_source": "google_maps",
+    "source_url": "https://www.google.com/maps/place/Loodgieters+en+Installateurs+W.+van+Sonsbeek%F0%9F%94%A7/data=!4m7!3m6!1s0x47c706253fc0e2a1:0x1dfebf5359bc7846!8m2!3d51.8239167!4d5.8136582!16s%2Fg%2F1thpw1k6!19sChIJoeLAPyUGx0cRRni8WVO__h0?authuser=0&hl=en&rclk=1",
+    "lead_type": "website",
+    "category": "Plumber",
+    "business_name": "Loodgieters en Installateurs W. van Sonsbeek\ud83d\udd27",
+    "name_normalized": "loodgieters en installateurs w van sonsbeek",
+    "description": "Not found",
+    "about": null,
+    "country": "NL",
+    "region": null,
+    "city": "Nijmegen",
+    "address": "Sint Teunismolenweg 50-A, 6534 AG Nijmegen",
+    "postal_code": "6534 AG",
+    "lat": 51.8239167,
+    "lng": 5.8136582,
+    "phone": null,
+    "email": null,
+    "website_url": null,
+    "facebook_url": null,
+    "instagram_url": null,
+    "menu_url": null,
+    "web_presence": "none",
+    "rating": 4.0,
+    "review_count": 4,
+    "reviews": [
+      {
+        "author": "Ruud van Loon",
+        "text": "Wij hebben onze CV installatie laten herstellen en uitbreiden, hierbij hebben we zeer deskundig advies gekregen en het resultaat mag er zijn. Ook financieel denkt dit bedrijf mee met de klant.\nAl bij al een dik compliment voor dit bedrijf en een aanrader.",
+        "relative_date": "3 years ago",
+        "rating": 5
+      },
+      {
+        "author": "Thijs van der Meer",
+        "text": "Snel en vakkundig een radiator verwijderd die last-minute in de weg bleek te zitten voor werkzaamheden sloopbedrijf, erg tevreden!",
+        "relative_date": "3 years ago",
+        "rating": 5
+      },
+      {
+        "author": "Rob Gesthuizen",
+        "text": "Snel accuraat  geholpen",
+        "relative_date": "2 years ago",
+        "rating": 5
+      }
+    ],
+    "opening_hours": {
+      "Monday": "___",
+      "Tuesday": "___",
+      "Wednesday": "___",
+      "Thursday": "___",
+      "Friday": "___",
+      "Saturday": "___",
+      "Sunday": "___"
+    },
+    "photo_urls": [],
+    "extra": {
+      "attributes": {
+        "Offerings": {
+          "Repair services": true
+        }
+      }
+    }
+  },
+  {
+    "external_id": "0x47c70a1e65e8ffff:0x80da261b3dec26b",
+    "scrape_job_id": null,
+    "primary_source": "google_maps",
+    "source_url": "https://www.google.com/maps/place/RSIN+nummer+852079886/data=!4m7!3m6!1s0x47c70a1e65e8ffff:0x80da261b3dec26b!8m2!3d51.8549365!4d5.9406381!16s%2Fg%2F11fm33nqh5!19sChIJ___oZR4Kx0cRa8Les2GiDQg?authuser=0&hl=en&rclk=1",
+    "lead_type": "website",
+    "category": "Plumber",
+    "business_name": "RSIN nummer 852079886",
+    "name_normalized": "rsin nummer 852079886",
+    "description": "Not found",
+    "about": null,
+    "country": "NL",
+    "region": null,
+    "city": "Ooij",
+    "address": "Prins Bernhardstraat 8, 6576 BB Ooij",
+    "postal_code": "6576 BB",
+    "lat": 51.8549365,
+    "lng": 5.9406381,
+    "phone": null,
+    "email": null,
+    "website_url": null,
+    "facebook_url": null,
+    "instagram_url": null,
+    "menu_url": null,
+    "web_presence": "none",
+    "rating": null,
+    "review_count": null,
+    "reviews": [],
+    "opening_hours": {
+      "Monday": "8\u202fam\u20138\u202fpm",
+      "Tuesday": "8\u202fam\u20138\u202fpm",
+      "Wednesday": "8\u202fam\u20138\u202fpm",
+      "Thursday": "8\u202fam\u20138\u202fpm",
+      "Friday": "8\u202fam\u20138\u202fpm",
+      "Saturday": "9\u202fam\u20136\u202fpm",
+      "Sunday": "9\u202fam\u20136\u202fpm"
+    },
+    "photo_urls": [],
+    "extra": {
+      "attributes": {
+        "Offerings": {
+          "Repair services": true
+        }
+      }
+    }
+  },
+  {
+    "external_id": "0x47c70731c6c8e7bb:0xf168196e4636c1d4",
+    "scrape_job_id": null,
+    "primary_source": "google_maps",
+    "source_url": "https://www.google.com/maps/place/JumpBox/data=!4m7!3m6!1s0x47c70731c6c8e7bb:0xf168196e4636c1d4!8m2!3d51.8285622!4d5.8168672!16s%2Fg%2F11y9qk6hnl!19sChIJu-fIxjEHx0cR1ME2Rm4ZaPE?authuser=0&hl=en&rclk=1",
+    "lead_type": "website",
+    "category": "Plumber",
+    "business_name": "JumpBox",
+    "name_normalized": "jumpbox",
+    "description": "Not found",
+    "about": null,
+    "country": "NL",
+    "region": null,
+    "city": "Nijmegen",
+    "address": "Harpstraat 35, 6544 XR Nijmegen",
+    "postal_code": "6544 XR",
+    "lat": 51.8285622,
+    "lng": 5.8168672,
+    "phone": "06 48423587",
+    "email": null,
+    "website_url": null,
+    "facebook_url": null,
+    "instagram_url": null,
+    "menu_url": null,
+    "web_presence": "none",
+    "rating": null,
+    "review_count": null,
+    "reviews": [],
+    "opening_hours": {
+      "Monday": "Open 24 hours",
+      "Tuesday": "Open 24 hours",
+      "Wednesday": "Open 24 hours",
+      "Thursday": "Open 24 hours",
+      "Friday": "Open 24 hours",
+      "Saturday": "Open 24 hours",
+      "Sunday": "Open 24 hours"
+    },
+    "photo_urls": [],
+    "extra": {
+      "attributes": {
+        "Offerings": {
+          "Repair services": true
+        }
+      }
+    }
+  },
+  {
+    "external_id": "0x47c641297dd80f97:0x88703d9818743ea9",
+    "scrape_job_id": null,
+    "primary_source": "google_maps",
+    "source_url": "https://www.google.com/maps/place/Baskaya+riooltechniek/data=!4m7!3m6!1s0x47c641297dd80f97:0x88703d9818743ea9!8m2!3d52.2165412!4d5.0887308!16s%2Fg%2F11nb8r7m77!19sChIJlw_YfSlBxkcRqT50GJg9cIg?authuser=0&hl=en&rclk=1",
+    "lead_type": "website",
+    "category": "Plumber",
+    "business_name": "Baskaya riooltechniek",
+    "name_normalized": "baskaya riooltechniek",
+    "description": "Not found",
+    "about": null,
+    "country": "NL",
+    "region": null,
+    "city": null,
+    "address": null,
+    "postal_code": null,
+    "lat": 52.2165412,
+    "lng": 5.0887308,
+    "phone": "06 39210290",
+    "email": null,
+    "website_url": null,
+    "facebook_url": null,
+    "instagram_url": null,
+    "menu_url": null,
+    "web_presence": "none",
+    "rating": 5.0,
+    "review_count": 22,
+    "reviews": [
+      {
+        "author": "Serdal Ozbek",
+        "text": "Baskaya Riooltechniek heeft mij uitstekend geholpen. Ik had een lekkage aan mijn rioolbuis en wist niet precies waar het probleem zat. Ze hebben het probleem snel opgespoord en vakkundig hersteld. Ze werken netjes, zijn betrouwbaar en denken goed mee. Ik ben zeer tevreden over de service en kan Baskaya Riooltechniek zeker aanbevelen",
+        "relative_date": "a day ago",
+        "rating": 5
+      },
+      {
+        "author": "Jan Driessen",
+        "text": "Zeer tevreden over Baskaya Riooltechniek! Vanaf het eerste contact werd ik goed geholpen en kreeg ik duidelijk advies. De werkzaamheden zijn netjes en professioneel uitgevoerd en alles verliep volgens afspraak. Fijne communicatie en een betrouwbaar bedrijf dat kwaliteit levert. Zeker een aanrader!",
+        "relative_date": "a week ago",
+        "rating": 5
+      },
+      {
+        "author": "Yunus Serdan",
+        "text": "Ik heb onlangs mijn riool laten vervangen door  Baskaya Riooltechniek en ben ontzettend tevreden over de hele ervaring. Vanaf het eerste contact kreeg ik duidelijk en professioneel advies. Er werd echt meegedacht over de beste oplossing.\n\nDe werkzaamheden zijn vakkundig uitgevoerd, netjes afgewerkt en alles verliep volgens afspraak. Je merkt direct dat ze veel ervaring hebben en kwaliteit belangrijk vinden. De communicatie was helder en vriendelijk, waardoor ik precies wist waar ik aan toe was.\n\nBen je op zoek naar een betrouwbaar bedrijf voor rioolwerkzaamheden? Dan kan ik  Baskaya Riooltechniek absoluut aanraden!",
+        "relative_date": "a week ago",
+        "rating": 5
+      }
+    ],
+    "opening_hours": {
+      "Monday": "Open 24 hours",
+      "Tuesday": "Open 24 hours",
+      "Wednesday": "Open 24 hours",
+      "Thursday": "Open 24 hours",
+      "Friday": "Open 24 hours",
+      "Saturday": "Open 24 hours",
+      "Sunday": "Open 24 hours"
+    },
+    "photo_urls": [],
+    "extra": {
+      "attributes": {
+        "Offerings": {
+          "Repair services": true
+        }
+      }
+    }
+  }
+]

@@ -10,15 +10,18 @@ import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 import typer
 from loguru import logger
 from supabase import create_client
 
+from .categories import CURATED_CATEGORIES, DEFAULT_CATEGORIES
 from .config import settings
+from .geo import grid_centers
 from .models import ScrapeFilters, ScrapeParams
 from .pipeline import run_pipeline
+from .regions import load_country
 from .sinks.base import Sink
 from .sinks.json_sink import JsonSink
 from .sinks.supabase_sink import SupabaseSink
@@ -55,30 +58,60 @@ def _build_sinks_single(*, dry_run: bool, supabase: bool, out_path: Path | None)
     return sinks
 
 
+def _parse_bbox(raw: str | None) -> tuple[float, float, float, float] | None:
+    """Parse '--bbox min_lat,min_lng,max_lat,max_lng' into a 4-tuple."""
+    if raw is None:
+        return None
+    parts = [p.strip() for p in raw.split(",")]
+    if len(parts) != 4:
+        raise typer.BadParameter(
+            "--bbox must be 'min_lat,min_lng,max_lat,max_lng' (4 comma-separated numbers)"
+        )
+    try:
+        box = (float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3]))
+    except ValueError as exc:
+        raise typer.BadParameter(f"--bbox values must be numbers: {raw!r}") from exc
+    if box[0] >= box[2] or box[1] >= box[3]:
+        raise typer.BadParameter(
+            "--bbox must satisfy min_lat<max_lat and min_lng<max_lng "
+            f"(order is min_lat,min_lng,max_lat,max_lng): {raw!r}"
+        )
+    return box
+
+
 @app.command()
 def scrape(
-    category: Annotated[str, typer.Option("--category")] = "businesses",
+    category: Annotated[list[str], typer.Option("--category")] = [],  # noqa: B006
     country: Annotated[str, typer.Option("--country")] = "NL",
     city: Annotated[list[str], typer.Option("--city")] = [],  # noqa: B006 — typer reads default
     area: Annotated[list[str], typer.Option("--area")] = [],  # noqa: B006 — typer reads default
-    max: Annotated[int, typer.Option("--max")] = 20,
+    region: Annotated[str | None, typer.Option("--region")] = None,
+    bbox: Annotated[str | None, typer.Option("--bbox")] = None,
+    grid_cell_km: Annotated[float, typer.Option("--grid-cell-km")] = 1.2,
+    grid_zoom: Annotated[int, typer.Option("--grid-zoom")] = 16,
+    max_cells: Annotated[int, typer.Option("--max-cells")] = 300,
+    max: Annotated[int, typer.Option("--max")] = 120,
     language: Annotated[str, typer.Option("--language")] = "en",
     with_reviews: Annotated[bool, typer.Option("--with-reviews/--no-with-reviews")] = True,
     review_limit: Annotated[int, typer.Option("--review-limit")] = 10,
     lead_type: Annotated[str, typer.Option("--lead-type")] = "website",
     min_rating: Annotated[float | None, typer.Option("--min-rating")] = None,
     max_rating: Annotated[float | None, typer.Option("--max-rating")] = None,
-    min_reviews: Annotated[int | None, typer.Option("--min-reviews")] = 5,
+    min_reviews: Annotated[int | None, typer.Option("--min-reviews")] = 3,
     max_reviews: Annotated[int | None, typer.Option("--max-reviews")] = None,
     web_presence: Annotated[list[str], typer.Option("--web-presence")] = _DEFAULT_WEB_PRESENCE,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     no_headless: Annotated[bool, typer.Option("--no-headless")] = False,
     no_supabase: Annotated[bool, typer.Option("--no-supabase")] = False,
+    no_split: Annotated[bool, typer.Option("--no-split")] = False,
     out: Annotated[Path | None, typer.Option("--out")] = None,
 ) -> None:
     """Run a scrape with the given parameters and write to selected sinks."""
+    parsed_bbox = _parse_bbox(bbox)
+    grid_mode = bool(region) or parsed_bbox is not None
     params = ScrapeParams(
-        category=category,
+        category=(category[0] if category else "businesses"),
+        categories=list(category) if grid_mode else [],
         country=country,
         cities=list(city),
         areas=list(area),
@@ -87,6 +120,12 @@ def scrape(
         with_reviews=with_reviews,
         review_limit=review_limit,
         lead_type=lead_type,  # type: ignore[arg-type]
+        region=region,
+        bbox=parsed_bbox,
+        grid_cell_km=grid_cell_km,
+        grid_zoom=grid_zoom,
+        max_cells=max_cells,
+        split_on_saturation=not no_split,
         filters=ScrapeFilters(
             min_rating=min_rating,
             max_rating=max_rating,
@@ -99,7 +138,11 @@ def scrape(
     if no_headless:
         settings.SCRAPER_HEADLESS = False
 
-    counters = asyncio.run(run_pipeline(params, sinks))
+    try:
+        counters = asyncio.run(run_pipeline(params, sinks))
+    except ValueError as exc:
+        # GridTooLargeError (cap) and the geocode-miss ValueError both surface here.
+        raise typer.BadParameter(str(exc)) from exc
     typer.echo(json.dumps(counters.__dict__))
 
 
@@ -141,6 +184,76 @@ def scrape_url(
     typer.echo(json.dumps(counters.__dict__))
 
 
+@app.command("scrape-country")
+def scrape_country(
+    country: Annotated[str, typer.Argument(help="ISO country code, e.g. NL")],
+    deep: Annotated[bool, typer.Option("--deep")] = False,
+    category: Annotated[list[str], typer.Option("--category")] = [],  # noqa: B006
+    grid_cell_km: Annotated[float, typer.Option("--grid-cell-km")] = 1.2,
+    limit: Annotated[int | None, typer.Option("--limit")] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    max_cells_cap: Annotated[int, typer.Option("--max-cells-cap")] = 0,
+    no_split: Annotated[bool, typer.Option("--no-split")] = False,
+) -> None:
+    """Fan a whole country out into one grid scrape job per municipality.
+
+    Enqueues pending scrape_jobs (drained by `run-pending`). --dry-run previews
+    the plan without enqueuing. --category restricts to specific categories
+    (repeatable; e.g. --category restaurant); otherwise the curated set is used,
+    or the full 46 with --deep. --grid-cell-km sets the tile size (smaller =
+    finer = fewer per-cell results, avoiding Google's ~120 cap in dense areas)."""
+    entries = load_country(country)
+    if limit is not None:
+        entries = entries[:limit]
+    cats = list(category) if category else list(DEFAULT_CATEGORIES if deep else CURATED_CATEGORIES)
+
+    rows: list[dict[str, Any]] = []
+    total_queries = 0
+    preview: list[tuple[str, int]] = []
+    skipped = 0
+    for e in entries:
+        cells = len(list(grid_centers(*e.bbox, cell_km=grid_cell_km)))
+        if max_cells_cap > 0 and cells > max_cells_cap:
+            skipped += 1  # over the cap → skip, don't enqueue a job that fails at drain time
+            continue
+        params = ScrapeParams(
+            country=country.upper(),
+            region=e.name,
+            bbox=e.bbox,
+            categories=cats,
+            grid_cell_km=grid_cell_km,
+            grid_zoom=16,
+            max_cells=cells,  # auto-scale: a planned muni never trips the engine guard
+            split_on_saturation=not no_split,
+        )
+        rows.append(
+            {
+                "status": "pending",
+                "params": params.model_dump(mode="json"),
+                "triggered_by": "country-fanout",
+            }
+        )
+        preview.append((e.name, cells))
+        total_queries += cells * len(cats)
+
+    typer.echo(
+        f"{len(rows)} municipalities, {len(cats)} categories, ~{total_queries} scoped queries"
+    )
+    if skipped:
+        typer.echo(f"  skipped {skipped} municipalities over --max-cells-cap={max_cells_cap}")
+    if dry_run:
+        for name, cells in preview[:20]:
+            typer.echo(f"  {name}: {cells} cells")
+        if len(preview) > 20:
+            typer.echo(f"  ... and {len(preview) - 20} more")
+        return
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY:
+        raise typer.BadParameter("SUPABASE_URL + SUPABASE_SERVICE_KEY required to enqueue")
+    sb = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+    sb.table("scrape_jobs").insert(rows).execute()
+    typer.echo(f"enqueued {len(rows)} scrape jobs")
+
+
 @app.command("run-pending")
 def run_pending() -> None:
     """Claim the oldest pending scrape_jobs row and run it. Called by the
@@ -162,7 +275,7 @@ def run_pending() -> None:
         logger.info("no pending scrape jobs")
         return
 
-    job = rows[0]
+    job = cast(dict[str, Any], rows[0])
     job_id = job["id"]
 
     # Claim by transitioning pending → running.

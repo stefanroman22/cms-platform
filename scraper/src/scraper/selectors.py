@@ -31,6 +31,13 @@ RESULTS_FEED = 'div[role="feed"]'
 RESULTS_ITEM_LINK = "a.hfpxzc"  # FRAGILE — anchor per place
 # FRAGILE — "You've reached the end of the list."
 RESULTS_END_MARKER = "p.HlvSq, span.HlvSq"
+# End-of-list sentinel TEXT (obfuscated classes drift; match visible text too).
+# Lowercased for case-insensitive `contains` checks.
+RESULTS_END_TEXTS: tuple[str, ...] = (
+    "you've reached the end of the list",
+    "je hebt het einde van de lijst bereikt",  # nl
+    "ende der liste",  # de
+)
 
 # Single-result redirect (the URL becomes the place page directly).
 PLACE_HEADER_SELECTOR = "h1[class]"  # any h1 with class signifies a place page
@@ -70,9 +77,13 @@ REVIEW_AUTHOR = "div.d4r55"  # FRAGILE fallback; author is normally the card ari
 REVIEW_RATING = 'span[role="img"][aria-label*="star"], span[role="img"][aria-label*="ster"]'
 REVIEW_RELATIVE_DATE = "span.rsqaWe"  # FRAGILE
 REVIEW_TEXT = "span.wiI7pd"
-# Sort control + "Newest" option.
-REVIEW_SORT_BUTTON = 'button[aria-label="Sort reviews"], button[aria-label*="Sort"]'
+# Sort control + "Newest" option. The sort button is a button[aria-label="Sort
+# reviews"] (hl=en); the dropdown items are div[role="menuitemradio"] with visible
+# text "Most relevant" / "Newest" / "Highest rating" / "Lowest rating".
+REVIEW_SORT_BUTTON = 'button[aria-label="Sort reviews"], button[aria-label="Reviews sorteren"]'
 REVIEW_SORT_MENUITEM = '[role="menuitemradio"]'
+# Localised labels for the "Newest" sort option (en + nl), matched case-insensitively.
+REVIEW_SORT_NEWEST_TEXTS: tuple[str, ...] = ("Newest", "Nieuwste", "Meest recent")
 # Reveal the review's original language (Google auto-translates to the hl locale).
 # This toggle is a role="switch" button whose label is visible TEXT ("Translated
 # by Google ・ See original (…)"), NOT an aria-label — match its stable jsaction.
