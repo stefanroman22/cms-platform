@@ -37,6 +37,8 @@ backend/keys/
 .superpowers/
 scraper.rar
 scraper/.geocode_cache.json
+# Prod data backup snapshots (contain live manage tokens — never commit)
+backend/migrations/_backup_bookings_*.json
 
 # ─────────────────────────────────────────────────────────────
 # Frontend — Next.js
