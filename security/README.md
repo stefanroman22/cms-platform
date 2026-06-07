@@ -15,10 +15,10 @@ reviewer (human or agent) exactly what to scan and how.
 remediation note in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
 
 ### Remediation progress
-- **`SEC-001` (critical) + `SEC-002` (high)** — *in-progress.* Closed: cross-tenant `SOLVER_GITHUB_TOKEN` theft and the `node -e` RCE; added prompt fencing, input hardening, pre-push secret-scan, and credential teardown. Residual (OAuth-token exfil via the agent's `npm run` execution) tracked as **`SEC-056`** (high), pending an egress-isolation-vs-remove-execution decision.
+- **`SEC-001` (critical) + `SEC-002` (high) + `SEC-056` (high)** — *in-progress, code-complete, pending one CI validation run.* Closed in code: cross-tenant `SOLVER_GITHUB_TOKEN` theft and the `node -e` RCE; added prompt fencing, input hardening, pre-push secret-scan, and credential teardown; and **egress isolation** (`step-security/harden-runner`, SHA-pinned, `block` mode) so an injected agent can't exfiltrate the Claude OAuth token. **Action needed:** one `workflow_dispatch` run of the Solver with `egress_policy=audit` to confirm the egress allowlist is complete — then all three flip to `fixed`.
 
 ### The next things to fix
-1. **`SEC-056` (high)** — finish closing SEC-001: egress-isolate the Solver's Claude step **or** remove its command execution (then verify in an orchestrator step after credential teardown).
+1. **Validate the egress allowlist** — run the Solver workflow once via `workflow_dispatch` with `egress_policy=audit`, check StepSecurity's reported destinations, add any missing legit host, then rely on `block`. Closes SEC-001/SEC-002/SEC-056.
 2. **`SEC-004` (high)** — **anon/authenticated can EXECUTE the `SECURITY DEFINER` `claim_*_solver_issue` RPCs** (unauthenticated cross-tenant issue disclosure + pipeline DoS via the public Supabase anon key). Pure `REVOKE`, no schema change.
 3. **`SEC-003` (high)** — Booking owner can create a booking against **another tenant's `resource_id`** (cross-tenant calendar DoS via the global GiST exclusion constraint).
 

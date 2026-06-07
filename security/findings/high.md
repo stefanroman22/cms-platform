@@ -201,4 +201,21 @@ Pick one of two complete-closure controls (security-vs-capability trade-off — 
 
 Until one ships, SEC-001 stays `in-progress`.
 
+### Remediation — 2026-06-07 (status: in-progress, validation pending)
+
+Implemented **option 1 (network-egress isolation)** in `.github/workflows/solver-agent.yml`:
+`step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411` (v2.19.4, SHA-pinned) is the
+first job step with `egress-policy: block` and an `allowed-endpoints` allowlist of exactly the hosts
+the job needs (github.com / api.github.com / codeload / objects.githubusercontent / release-assets,
+pypi.org + files.pythonhosted.org, registry.npmjs.org, api.anthropic.com + statsig.anthropic.com,
+`xeluydwpgiddbamysgyu.supabase.co`, cms-backend-roman.vercel.app, slack.com). Any other outbound
+connection — i.e. exfiltration to an attacker host — is dropped, even if an injected agent executes
+code. The agent keeps its lint/typecheck/test self-verification.
+
+**One operational step remains before this is `fixed`:** validate the allowlist with a single
+`workflow_dispatch` run passing `egress_policy=audit` (StepSecurity then *reports* observed
+destinations instead of blocking). If it surfaces a legitimate endpoint the allowlist is missing, add
+it; then the default `block` policy is safe to rely on. SEC-001 / SEC-002 / SEC-056 flip to `fixed`
+once that validation run is clean.
+
 ---

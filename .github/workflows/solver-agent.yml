@@ -11,7 +11,15 @@ on:
   # manual DB inserts. Minute 7 to avoid top-of-hour cron congestion.
   schedule:
     - cron: '7 * * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      egress_policy:
+        description: "harden-runner egress policy. Use 'audit' for a one-off run to capture any missing endpoints, then switch back to 'block'."
+        type: choice
+        default: block
+        options:
+          - block
+          - audit
 
 concurrency:
   group: solver-agent
@@ -26,6 +34,33 @@ jobs:
       contents: read
 
     steps:
+      # SECURITY (SEC-001 / SEC-056): the Claude step runs an autonomous agent over
+      # UNTRUSTED client issue text with the Claude OAuth credential on the runner.
+      # Block all outbound network except the exact hosts this job needs, so a
+      # prompt-injected agent cannot exfiltrate that credential to an attacker host
+      # even if it manages to execute code. egress-policy is 'block' for the real
+      # (repository_dispatch / schedule) triggers; a manual run can pass
+      # egress_policy=audit once to capture any endpoint the allowlist is missing
+      # (StepSecurity prints the observed destinations), then switch back to block.
+      - name: Harden runner (egress allowlist)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: ${{ github.event.inputs.egress_policy || 'block' }}
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            codeload.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+            registry.npmjs.org:443
+            api.anthropic.com:443
+            statsig.anthropic.com:443
+            xeluydwpgiddbamysgyu.supabase.co:443
+            cms-backend-roman.vercel.app:443
+            slack.com:443
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
