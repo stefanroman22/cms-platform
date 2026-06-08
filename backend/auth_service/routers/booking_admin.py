@@ -156,6 +156,20 @@ async def patch_settings(project_slug: str, body: SettingsPatch, request: Reques
 
 
 # ---- services ----
+def _validate_resource_ids(tenant_id: str, resource_ids: list[str]) -> None:
+    """SEC-022: every resource linked to a service must belong to this tenant.
+
+    Without this an owner of project A could link project B's resource UUID into
+    A's service (a cross-tenant association write). load_eligible/list_resources are
+    tenant-scoped, so membership proves ownership.
+    """
+    if not resource_ids:
+        return
+    owned = {r["id"] for r in booking_admin_repo.list_resources(tenant_id)}
+    if any(rid not in owned for rid in resource_ids):
+        raise HTTPException(status_code=422, detail="Unknown resource")
+
+
 @router.get("/projects/{project_slug}/bookings/services")
 async def list_services(project_slug: str, request: Request) -> JSONResponse:
     tenant_id = await _tenant(project_slug, request)
@@ -172,6 +186,7 @@ async def list_services(project_slug: str, request: Request) -> JSONResponse:
 @router.post("/projects/{project_slug}/bookings/services", status_code=status.HTTP_201_CREATED)
 async def create_service(project_slug: str, body: ServiceIn, request: Request) -> JSONResponse:
     tenant_id = await _tenant(project_slug, request)
+    _validate_resource_ids(tenant_id, body.resource_ids)
     fields = body.model_dump(exclude={"resource_ids"})
     row = booking_admin_repo.insert_service(tenant_id, fields)
     booking_admin_repo.set_service_resources(tenant_id, row["id"], body.resource_ids)
@@ -185,6 +200,7 @@ async def patch_service(
     project_slug: str, service_id: str, body: ServiceIn, request: Request
 ) -> JSONResponse:
     tenant_id = await _tenant(project_slug, request)
+    _validate_resource_ids(tenant_id, body.resource_ids)
     fields = body.model_dump(exclude={"resource_ids"})
     row = booking_admin_repo.update_service(tenant_id, service_id, fields)
     booking_admin_repo.set_service_resources(tenant_id, service_id, body.resource_ids)
@@ -380,6 +396,15 @@ async def create_appointment(
     now = datetime.now(UTC)
 
     if body.resource_id:
+        # SEC-003: a caller-supplied resource_id MUST belong to this tenant and be
+        # eligible for the service. Without this check an owner of project A could
+        # book against project B's resource_id (the FK is not tenant-composite and
+        # the no-overlap GiST exclusion constraint is global) — a cross-tenant write
+        # plus a silent calendar DoS against the victim. load_eligible_resources is
+        # strictly tenant-scoped, so membership in it proves ownership + eligibility.
+        eligible_ids = {r["id"] for r in booking_repo.load_eligible_resources(tenant_id, svc["id"])}
+        if body.resource_id not in eligible_ids:
+            raise HTTPException(status_code=422, detail="Unknown resource")
         resource_id = body.resource_id
     else:
         resource_id = _free_resource_for(cfg=cfg, service=svc, start_utc=start, now_utc=now)

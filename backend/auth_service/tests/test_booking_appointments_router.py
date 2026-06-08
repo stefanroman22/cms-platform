@@ -236,7 +236,7 @@ def test_create_appointment_booking_conflict_409(client):
 
 
 def test_create_appointment_with_explicit_resource_id(client):
-    """When resource_id is provided, _free_resource_for is NOT called."""
+    """When a tenant-eligible resource_id is provided, _free_resource_for is NOT called."""
     ru, rp = _auth()
     body = {**_CREATE_BODY, "resource_id": "res-explicit"}
     free_mock = patch("auth_service.routers.booking_admin._free_resource_for")
@@ -250,6 +250,11 @@ def test_create_appointment_with_explicit_resource_id(client):
         patch(
             "auth_service.routers.booking_admin.booking_repo.load_service", return_value=_SERVICE
         ),
+        # SEC-003: the explicit resource must be in the tenant's eligible set.
+        patch(
+            "auth_service.routers.booking_admin.booking_repo.load_eligible_resources",
+            return_value=[{"id": "res-explicit"}],
+        ),
         free_mock as fm,
         patch(
             "auth_service.routers.booking_admin.booking_repo.upsert_customer", return_value="cust1"
@@ -260,6 +265,31 @@ def test_create_appointment_with_explicit_resource_id(client):
         r = client.post("/projects/acme/bookings/appointments", json=body)
     assert r.status_code == 201
     fm.assert_not_called()
+
+
+def test_create_appointment_rejects_foreign_resource_id(client):
+    """SEC-003: a resource_id not in the tenant's eligible set is rejected (no insert)."""
+    ru, rp = _auth()
+    body = {**_CREATE_BODY, "resource_id": "res-from-another-tenant"}
+    with (
+        ru,
+        rp,
+        patch(
+            "auth_service.routers.booking_admin.booking_tenant.load_tenant_by_id",
+            return_value=_mock_tenant_config(),
+        ),
+        patch(
+            "auth_service.routers.booking_admin.booking_repo.load_service", return_value=_SERVICE
+        ),
+        patch(
+            "auth_service.routers.booking_admin.booking_repo.load_eligible_resources",
+            return_value=[{"id": "res-mine-1"}, {"id": "res-mine-2"}],
+        ),
+        patch("auth_service.routers.booking_admin.booking_repo.insert_booking") as insert_mock,
+    ):
+        r = client.post("/projects/acme/bookings/appointments", json=body)
+    assert r.status_code == 422
+    insert_mock.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ This table is the **source of truth for status**. Detail for each finding lives 
 |---|---|---|---|---|---|
 | 1 | 4 | 10 | 31 | 10 | 56 |
 
-_Status (updated 2026-06-08): **8 fixed** (SEC-001, SEC-002, SEC-056, SEC-004, SEC-013, SEC-033, SEC-042, SEC-053), **1 accepted-risk** (SEC-054 — app uses service-role not Supabase Auth, so tenant RLS owner policies are inert by design; access control is enforced in app code), 47 open. Remediation ongoing._
+_Status (updated 2026-06-08): **10 fixed** (SEC-001, SEC-002, SEC-056, SEC-004, SEC-013, SEC-033, SEC-042, SEC-053, SEC-003, SEC-022), **1 accepted-risk** (SEC-054 — app uses service-role not Supabase Auth, so tenant RLS owner policies are inert by design; access control is enforced in app code), 45 open. Remediation ongoing._
 
 > **Note (FINDINGS.md is canonical for status).** Per-finding detail files may still show their
 > original `open` status inline; this table is the source of truth.
@@ -28,7 +28,7 @@ _Status (updated 2026-06-08): **8 fixed** (SEC-001, SEC-002, SEC-056, SEC-004, S
 |---|---|---|---|---|---|
 | [SEC-001](findings/critical.md#sec-001) | critical | Client-controlled issue text reaches an LLM with arbitrary-code-execution tools (Bash node) — prompt injection → RCE on the runner with write tokens | `.github/workflows/solver-agent.yml; agents/Solver - Issues/` | ci-workflows | ✅ fixed |
 | [SEC-002](findings/high.md#sec-002) | high | Solver Agent: client-submitted issue text is injected verbatim into an autonomous code-fixing prompt that runs with a cross-tenant GitHub write token and node/npm shell access (prompt-injection → token exfiltration) | `agents/Solver - Issues/claim_issue.py; repo.py` | agents | ✅ fixed |
-| [SEC-003](findings/high.md#sec-003) | high | Owner can create a booking against another tenant's resource (cross-tenant write + silent DoS) via unvalidated resource_id | `backend/auth_service/routers/booking_admin.py:382-416` | authz-idor | open |
+| [SEC-003](findings/high.md#sec-003) | high | Owner can create a booking against another tenant's resource (cross-tenant write + silent DoS) via unvalidated resource_id | `backend/auth_service/routers/booking_admin.py` (eligible-resource check) | authz-idor | ✅ fixed |
 | [SEC-004](findings/high.md#sec-004) | high | anon/authenticated can EXECUTE SECURITY DEFINER solver-claim RPCs — dequeue/poison the auto-fix queue + cross-tenant issue disclosure | `migrations/2026_06_08_security_anon_surface_hardening.sql` | supabase-db | ✅ fixed |
 | [SEC-056](findings/high.md#sec-056) | high | Solver agent retains command execution (`npm run`) while the Claude OAuth token is present on the runner — residual exfil path after SEC-001 hardening | `.github/workflows/solver-agent.yml` (harden-runner egress block) | agents | ✅ fixed |
 | [SEC-005](findings/medium.md#sec-005) | medium | Admin issue-status update endpoint lets the Solver mark ANY issue done cross-project, decoupled from whether the agent actually fixed it | `backend/auth_service/routers/issues.py:276-344; agents/Solver - Issues…` | agents | open |
@@ -48,7 +48,7 @@ _Status (updated 2026-06-08): **8 fixed** (SEC-001, SEC-002, SEC-056, SEC-004, S
 | [SEC-019](findings/low.md#sec-019) | low | Middleware fast-path serves authenticated pages for up to 13 min after server-side session revocation | `frontend/src/middleware.ts:56-61, 19-28` | authn-session | open |
 | [SEC-020](findings/low.md#sec-020) | low | No per-account login throttling or lockout — only per-IP rate limiting | `backend/auth_service/routers/auth.py:62-68` | authn-session | open |
 | [SEC-021](findings/low.md#sec-021) | low | Session cookie missing Secure flag and uses SameSite=lax on HTTPS preview deployments | `backend/auth_service/routers/auth.py:27, 30-40` | authn-session | open |
-| [SEC-022](findings/low.md#sec-022) | low | Owner can link another tenant's resource into their own service (cross-tenant association write) via unvalidated resource_ids | `backend/auth_service/services/booking_admin_repo.py:166-177 (set_servi…` | authz-idor | open |
+| [SEC-022](findings/low.md#sec-022) | low | Owner can link another tenant's resource into their own service (cross-tenant association write) via unvalidated resource_ids | `backend/auth_service/routers/booking_admin.py` (_validate_resource_ids) | authz-idor | ✅ fixed |
 | [SEC-023](findings/low.md#sec-023) | low | Auto-rollback pushes a revert to protected master using GITHUB_TOKEN and opens issues from operator-influenced commit subjects | `.github/workflows/post-deploy-smoke.yml:32-34,118-145,148-171` | ci-workflows | open |
 | [SEC-024](findings/low.md#sec-024) | low | Two workflows use unpinned (mutable-tag) third-party actions while the rest are SHA-pinned | `.github/workflows/solver-agent.yml:29,31; .github/workflows/scraper-ci…` | ci-workflows | open |
 | [SEC-025](findings/low.md#sec-025) | low | Dependabot does not cover the scraper or the Solver agent (no automated security PRs) | `.github/dependabot.yml:8-66; scraper/pyproject.toml; agents/Solver - I…` | deps-supplychain | open |

@@ -108,6 +108,10 @@ def test_services_crud_roundtrip(client):
         ru,
         rp,
         patch(
+            "auth_service.routers.booking_admin.booking_admin_repo.list_resources",
+            return_value=[{"id": "r1"}],
+        ),
+        patch(
             "auth_service.routers.booking_admin.booking_admin_repo.insert_service",
             return_value={"id": "s1", "name": "Cut"},
         ),
@@ -118,6 +122,32 @@ def test_services_crud_roundtrip(client):
             json={"name": "Cut", "duration_min": 45, "resource_ids": ["r1"]},
         )
     assert r.status_code == 201 and r.json()["id"] == "s1"
+
+
+def test_create_service_rejects_foreign_resource_id(client):
+    """SEC-022: linking a resource not owned by the tenant is rejected (no write)."""
+    ru, rp = _auth(OWNER)
+    with (
+        ru,
+        rp,
+        patch(
+            "auth_service.routers.booking_admin.booking_admin_repo.list_resources",
+            return_value=[{"id": "r1"}],
+        ),
+        patch(
+            "auth_service.routers.booking_admin.booking_admin_repo.insert_service"
+        ) as insert_mock,
+        patch(
+            "auth_service.routers.booking_admin.booking_admin_repo.set_service_resources"
+        ) as link_mock,
+    ):
+        r = client.post(
+            "/projects/acme/bookings/services",
+            json={"name": "Cut", "duration_min": 45, "resource_ids": ["r-foreign"]},
+        )
+    assert r.status_code == 422
+    insert_mock.assert_not_called()
+    link_mock.assert_not_called()
 
 
 def test_delete_service_blocked_when_referenced(client):
