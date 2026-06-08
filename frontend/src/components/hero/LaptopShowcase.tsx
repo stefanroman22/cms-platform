@@ -168,6 +168,7 @@ export function LaptopShowcase() {
   // Snap the scroll to each feature's centre while inside this section, so a
   // fast scroll always settles on a caption instead of blowing past them.
   const lenis = useLenisInstance();
+  const snapRef = useRef<Snap | null>(null);
   useEffect(() => {
     if (!lenis || prefersReduced || !isDesktop) return;
     const section = sectionRef.current;
@@ -179,6 +180,7 @@ export function LaptopShowcase() {
       duration: 0.7,
       lerp: 0.12,
     });
+    snapRef.current = snap;
 
     let removers: Array<() => void> = [];
     const build = () => {
@@ -204,8 +206,20 @@ export function LaptopShowcase() {
       window.removeEventListener("resize", build);
       removers.forEach((r) => r());
       snap.destroy();
+      snapRef.current = null;
     };
   }, [lenis, prefersReduced, isDesktop]);
+
+  // Pause proximity-snapping during a button-driven jump (scrollToHash). Those
+  // jumps fly past this section to a target below it; without this the snap pulls
+  // the landing toward the nearest feature anchor, leaving the target section's
+  // heading ~20px off under the header.
+  useEffect(() => {
+    const snap = snapRef.current;
+    if (!snap) return;
+    if (programmatic) snap.stop();
+    else snap.start();
+  }, [programmatic]);
 
   if (!isDesktop) {
     return (
