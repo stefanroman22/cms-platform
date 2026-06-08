@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import DOMPurify from "isomorphic-dompurify";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import type { Lead } from "../types";
 import { EditableSectionShell } from "./EditableSectionShell";
@@ -120,7 +121,11 @@ function DesignPromptPreview({ html }: { html: string }) {
           <div
             ref={contentRef}
             className="prose prose-sm prose-zinc dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: html }}
+            // SEC-018/SEC-043: design_prompt is model-generated HTML derived from
+            // untrusted scraped lead data, and the agent writeback bypasses the
+            // backend bleach sanitizer. Sanitize on render so any write path is
+            // safe in the admin dashboard (strips <script>, event handlers, etc.).
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
           />
         </motion.div>
         <AnimatePresence>
