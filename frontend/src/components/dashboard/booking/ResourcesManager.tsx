@@ -15,7 +15,8 @@ interface Props {
 }
 
 /**
- * Resources list + add/edit drawer — mirrors ServicesManager pattern.
+ * Staff list + add/edit drawer — mirrors ServicesManager pattern.
+ * (Backed by the booking_resources table; the UI leads with people/staff.)
  */
 export function ResourcesManager({ projectSlug }: Props) {
   const resourcesKey = `booking-resources:${projectSlug}`;
@@ -43,21 +44,21 @@ export function ResourcesManager({ projectSlug }: Props) {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Resources</h2>
+        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Staff</h2>
         <button
           type="button"
           onClick={() => setDrawerTarget(null)}
           className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
         >
           <Plus className="h-3.5 w-3.5" />
-          Add resource
+          Add staff
         </button>
       </div>
 
       {loading && (
         <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white/40 px-6 py-8 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400">
           <ArcSpinner size={20} />
-          Loading resources…
+          Loading staff…
         </div>
       )}
 
@@ -65,7 +66,7 @@ export function ResourcesManager({ projectSlug }: Props) {
         <div
           className={`${dashboardSectionCardCn} px-6 py-8 text-center text-sm text-zinc-400 dark:text-zinc-500`}
         >
-          No resources yet. Add one to get started.
+          No staff yet. Add someone to get started.
         </div>
       )}
 

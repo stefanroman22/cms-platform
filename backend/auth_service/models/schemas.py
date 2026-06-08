@@ -642,6 +642,79 @@ class LeadUpdate(BaseModel):
         return cleaned
 
 
+class LeadReviewIn(BaseModel):
+    """A single review on the manual Add-Lead form. All fields optional so
+    half-filled rows submitted from the UI don't 422 the whole insert."""
+
+    author: str = ""
+    rating: float | None = None
+    text: str = ""
+    date: str = ""
+
+
+class LeadCreate(BaseModel):
+    """Manual lead creation from the admin dashboard. Mirrors the writable
+    columns of public.leads; only business_name is required. primary_source
+    and external_id are set by the router, not the client."""
+
+    business_name: str = Field(min_length=1, max_length=300)
+    lead_type: LeadType = "website"
+    web_presence: WebPresence = "unknown"
+
+    # identity
+    category: str | None = None
+    description: str | None = None
+    about: str | None = None
+
+    # location
+    country: str | None = None
+    region: str | None = None
+    city: str | None = None
+    address: str | None = None
+    postal_code: str | None = None
+
+    # contact & links
+    phone: str | None = None
+    email: _LeadEmail = None
+    website_url: _LeadUrl = None
+    facebook_url: _LeadUrl = None
+    instagram_url: _LeadUrl = None
+    menu_url: _LeadUrl = None
+
+    # ratings & reviews
+    rating: float | None = None
+    review_count: int | None = None
+    reviews: list[LeadReviewIn] = Field(default_factory=list)
+
+    # opening hours — flexible JSON (day->string map or raw list)
+    opening_hours: dict | list | None = None
+
+    # languages — target website locales
+    languages: list[str] = Field(default_factory=list)
+
+    notes: str | None = None
+
+    @field_validator("languages", mode="after")
+    @classmethod
+    def _normalize_languages(cls, v: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for raw in v:
+            if not isinstance(raw, str):
+                raise ValueError("each language must be a string")
+            name = raw.strip()
+            if not name:
+                continue
+            if len(name) > 60:
+                raise ValueError("language name too long (max 60 chars)")
+            if name not in seen:
+                seen.add(name)
+                cleaned.append(name)
+        if len(cleaned) > 50:
+            raise ValueError("too many languages (max 50)")
+        return cleaned
+
+
 class ScrapeJobOut(BaseModel):
     id: str
     created_at: str

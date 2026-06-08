@@ -6,6 +6,7 @@ import { Calendar, Copy, Check } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { ArcSpinner } from "@/components/ui/ArcSpinner";
 import { dashboardSectionCardCn } from "@/lib/styles";
+import { dashAccent } from "@/lib/dashboardTheme";
 import * as cache from "@/lib/cache";
 import { getSettings, enableBookings } from "./api";
 import { BookingSettingsForm } from "./BookingSettingsForm";
@@ -33,7 +34,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "appointments", label: "Appointments" },
   { key: "settings", label: "Settings" },
   { key: "services", label: "Services" },
-  { key: "resources", label: "Resources" },
+  { key: "resources", label: "Staff" },
   { key: "hours", label: "Hours" },
   { key: "policies", label: "Policies" },
   { key: "emails", label: "Emails" },
@@ -137,7 +138,7 @@ export function BookingsSection({ projectSlug, isAdmin }: Props) {
       {/* Inner tab strip */}
       <nav
         aria-label="Booking configuration tabs"
-        className="mb-6 flex gap-1 overflow-x-auto border-b border-zinc-200 pb-px dark:border-zinc-800"
+        className="no-scrollbar mb-6 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-zinc-200 pb-px dark:border-zinc-800"
       >
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
@@ -147,7 +148,7 @@ export function BookingsSection({ projectSlug, isAdmin }: Props) {
               type="button"
               onClick={() => setActiveTab(tab.key)}
               aria-current={isActive ? "page" : undefined}
-              className="relative shrink-0 cursor-pointer rounded-t-md px-3 py-2 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40"
+              className={`relative shrink-0 cursor-pointer rounded-t-md px-3 py-2 text-sm font-medium whitespace-nowrap ${dashAccent.focusRing}`}
             >
               <span
                 className={
@@ -162,7 +163,7 @@ export function BookingsSection({ projectSlug, isAdmin }: Props) {
               {isActive && (
                 <motion.span
                   layoutId="booking-tabs-underline"
-                  className="absolute inset-x-2 -bottom-px h-[2px] rounded-full bg-zinc-900 dark:bg-zinc-100"
+                  className={`absolute inset-x-2 -bottom-px h-[2px] rounded-full ${dashAccent.tabUnderline}`}
                   transition={
                     reduce
                       ? { duration: 0 }

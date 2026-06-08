@@ -20,6 +20,17 @@ def compute_booking_stats(bookings: list[dict], *, now_utc: datetime, tz_name: s
     by_status = Counter(b["status"] for b in bookings)
     by_service = Counter(b.get("service_name") or "—" for b in bookings)
 
+    # by_staff: count bookings per assigned staff resource, keeping the resolved
+    # name. Rows without a resource_id (legacy / generic) are skipped.
+    by_staff_count: Counter = Counter()
+    staff_names: dict[str, str] = {}
+    for b in bookings:
+        rid = b.get("resource_id")
+        if not rid:
+            continue
+        by_staff_count[rid] += 1
+        staff_names[rid] = b.get("resource_name") or "—"
+
     by_day: Counter = Counter()
     heat: Counter = Counter()  # key (weekday 0=Mon..6=Sun, hour)
     today = now_utc.astimezone(tz).date()
@@ -50,5 +61,9 @@ def compute_booking_stats(bookings: list[dict], *, now_utc: datetime, tz_name: s
         "by_day": [{"date": d, "count": c} for d, c in sorted(by_day.items())],
         "by_service": [{"service": s, "count": c} for s, c in by_service.most_common()],
         "by_status": [{"status": s, "count": c} for s, c in by_status.items()],
+        "by_staff": [
+            {"resource_id": rid, "resource_name": staff_names[rid], "count": c}
+            for rid, c in by_staff_count.most_common()
+        ],
         "heatmap": [{"weekday": w, "hour": h, "count": c} for (w, h), c in heat.items()],
     }

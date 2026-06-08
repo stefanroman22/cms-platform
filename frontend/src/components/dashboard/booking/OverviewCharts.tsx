@@ -4,8 +4,6 @@ import { motion, useReducedMotion } from "motion/react";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Pie,
@@ -15,12 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type {
-  BookingStatsByDay,
-  BookingStatsByService,
-  BookingStatsByStatus,
-  BookingStatsHeatmapCell,
-} from "./api";
+import type { BookingStatsByDay, BookingStatsByService, BookingStatsByStatus } from "./api";
 
 // ── Shared tooltip style ──────────────────────────────────────────────────────
 
@@ -41,9 +34,9 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
       initial={reduced ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+      className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
     >
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
         {title}
       </h3>
       {children}
@@ -51,7 +44,11 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
-// ── Bookings over time (AreaChart) ────────────────────────────────────────────
+function EmptyState({ label = "No data yet." }: { label?: string }) {
+  return <div className="py-12 text-center text-sm text-zinc-400 dark:text-zinc-500">{label}</div>;
+}
+
+// ── Bookings over time (AreaChart) — the "Trend" view ─────────────────────────
 
 interface BookingsOverTimeProps {
   data: BookingStatsByDay[];
@@ -61,11 +58,9 @@ export function BookingsOverTimeChart({ data }: BookingsOverTimeProps) {
   return (
     <ChartCard title="Bookings over time">
       {data.length === 0 ? (
-        <div className="py-12 text-center text-sm text-zinc-400 dark:text-zinc-500">
-          No bookings in this period yet.
-        </div>
+        <EmptyState label="No bookings in this period yet." />
       ) : (
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
             <defs>
               <linearGradient id="bookingGradient" x1="0" y1="0" x2="0" y2="1">
@@ -109,7 +104,7 @@ export function BookingsOverTimeChart({ data }: BookingsOverTimeProps) {
   );
 }
 
-// ── By service (BarChart, horizontal) ────────────────────────────────────────
+// ── Shared palettes ───────────────────────────────────────────────────────────
 
 const SERVICE_PALETTE = [
   "#10b981",
@@ -120,52 +115,6 @@ const SERVICE_PALETTE = [
   "#06b6d4",
   "#84cc16",
 ];
-
-interface ByServiceProps {
-  data: BookingStatsByService[];
-}
-
-export function ByServiceChart({ data }: ByServiceProps) {
-  const top = data.slice(0, 7);
-  return (
-    <ChartCard title="By service">
-      {top.length === 0 ? (
-        <div className="py-12 text-center text-sm text-zinc-400 dark:text-zinc-500">
-          No data yet.
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={Math.max(180, top.length * 38)}>
-          <BarChart data={top} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
-            <XAxis
-              type="number"
-              allowDecimals={false}
-              tick={{ fontSize: 11 }}
-              stroke="currentColor"
-              className="text-zinc-500"
-            />
-            <YAxis
-              type="category"
-              dataKey="service"
-              tick={{ fontSize: 11 }}
-              width={110}
-              stroke="currentColor"
-              className="text-zinc-500"
-            />
-            <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
-            <Bar dataKey="count" name="Bookings" animationDuration={800}>
-              {top.map((_, i) => (
-                <Cell key={i} fill={SERVICE_PALETTE[i % SERVICE_PALETTE.length]} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      )}
-    </ChartCard>
-  );
-}
-
-// ── By status (PieChart / donut) ──────────────────────────────────────────────
 
 const STATUS_COLOR: Record<string, string> = {
   confirmed: "#10b981", // emerald
@@ -179,157 +128,123 @@ function statusColor(s: string): string {
   return STATUS_COLOR[s] ?? "#a1a1aa";
 }
 
-interface ByStatusProps {
-  data: BookingStatsByStatus[];
-}
+// ── Breakdown: service + status in ONE container, colour-coded labels ─────────
+//
+// Both halves use the same visual language — a coloured dot + label text tinted to
+// match its data colour — so "Consultation" (service) and its statuses read as one
+// system. Replaces the two separate service/status cards.
 
-export function ByStatusChart({ data }: ByStatusProps) {
+function ServiceBreakdown({ data }: { data: BookingStatsByService[] }) {
+  const top = data.slice(0, 7);
+  const max = Math.max(1, ...top.map((d) => d.count));
   return (
-    <ChartCard title="By status">
-      {data.length === 0 ? (
-        <div className="py-12 text-center text-sm text-zinc-400 dark:text-zinc-500">
-          No data yet.
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={260}>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="count"
-              nameKey="status"
-              cx="50%"
-              cy="50%"
-              innerRadius="55%"
-              outerRadius="75%"
-              paddingAngle={3}
-              animationDuration={800}
-            >
-              {data.map((row, i) => (
-                <Cell key={i} fill={statusColor(row.status)} />
-              ))}
-            </Pie>
-            <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
-          </PieChart>
-        </ResponsiveContainer>
-      )}
-      {/* Legend */}
-      <div className="mt-2 flex flex-wrap gap-3 justify-center">
-        {data.map((row) => (
-          <span
-            key={row.status}
-            className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400"
-          >
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: statusColor(row.status) }}
-            />
-            <span className="capitalize">{row.status.replace("_", " ")}</span>
-            <span className="font-medium">{row.count}</span>
-          </span>
-        ))}
-      </div>
-    </ChartCard>
+    <ul className="space-y-2.5">
+      {top.map((row, i) => {
+        const color = SERVICE_PALETTE[i % SERVICE_PALETTE.length];
+        return (
+          <li key={row.service}>
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="flex min-w-0 items-center gap-1.5 font-medium" style={{ color }}>
+                <span
+                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: color }}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{row.service}</span>
+              </span>
+              <span className="shrink-0 tabular-nums text-zinc-500 dark:text-zinc-400">
+                {row.count}
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${(row.count / max) * 100}%`, backgroundColor: color }}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
-// ── Peak times heatmap (7×24 CSS grid) ───────────────────────────────────────
-
-const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-interface HeatmapProps {
-  data: BookingStatsHeatmapCell[];
+function StatusBreakdown({ data }: { data: BookingStatsByStatus[] }) {
+  return (
+    <div>
+      <ResponsiveContainer width="100%" height={180}>
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="count"
+            nameKey="status"
+            cx="50%"
+            cy="50%"
+            innerRadius="58%"
+            outerRadius="80%"
+            paddingAngle={3}
+            animationDuration={800}
+          >
+            {data.map((row, i) => (
+              <Cell key={i} fill={statusColor(row.status)} />
+            ))}
+          </Pie>
+          <Tooltip contentStyle={TOOLTIP_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
+        </PieChart>
+      </ResponsiveContainer>
+      <ul className="mt-3 space-y-1.5">
+        {data.map((row) => {
+          const color = statusColor(row.status);
+          return (
+            <li
+              key={row.status}
+              className="flex items-center justify-between gap-2 text-xs font-medium"
+            >
+              <span className="flex items-center gap-1.5 capitalize" style={{ color }}>
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: color }}
+                  aria-hidden="true"
+                />
+                {row.status.replace("_", " ")}
+              </span>
+              <span className="tabular-nums text-zinc-500 dark:text-zinc-400">{row.count}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
-export function PeakTimesHeatmap({ data }: HeatmapProps) {
-  const reduced = useReducedMotion();
+interface BreakdownProps {
+  byService: BookingStatsByService[];
+  byStatus: BookingStatsByStatus[];
+}
 
-  const maxCount = data.reduce((m, c) => Math.max(m, c.count), 0);
-
-  // Build a lookup map: `${weekday}-${hour}` → count
-  const lookup = new Map<string, number>();
-  for (const cell of data) {
-    lookup.set(`${cell.weekday}-${cell.hour}`, cell.count);
-  }
-
+export function BookingBreakdown({ byService, byStatus }: BreakdownProps) {
+  const hasService = byService.length > 0;
+  const hasStatus = byStatus.length > 0;
   return (
-    <motion.div
-      initial={reduced ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
-    >
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-        Peak times
-      </h3>
-
-      {data.length === 0 ? (
-        <div className="py-12 text-center text-sm text-zinc-400 dark:text-zinc-500">
-          No data yet.
-        </div>
+    <ChartCard title="Breakdown">
+      {!hasService && !hasStatus ? (
+        <EmptyState />
       ) : (
-        <div className="overflow-x-auto">
-          {/* Hour header row */}
-          <div className="flex items-center">
-            <div className="w-9 shrink-0" />
-            <div
-              className="grid flex-1 gap-px"
-              style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}
-            >
-              {Array.from({ length: 24 }, (_, h) => (
-                <div key={h} className="text-center text-[9px] text-zinc-400 dark:text-zinc-600">
-                  {h % 6 === 0 ? `${h}h` : ""}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Rows per weekday */}
-          {WEEKDAY_LABELS.map((label, wd) => (
-            <div key={wd} className="flex items-center gap-0.5">
-              <div className="w-9 shrink-0 pr-1 text-right text-[10px] text-zinc-500 dark:text-zinc-400">
-                {label}
-              </div>
-              <div
-                className="grid flex-1 gap-px"
-                style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}
-              >
-                {Array.from({ length: 24 }, (_, h) => {
-                  const count = lookup.get(`${wd}-${h}`) ?? 0;
-                  const opacity = maxCount > 0 ? count / maxCount : 0;
-                  return (
-                    <div
-                      key={h}
-                      title={
-                        count > 0
-                          ? `${label} ${h}:00 — ${count} booking${count !== 1 ? "s" : ""}`
-                          : undefined
-                      }
-                      className="h-4 rounded-sm"
-                      style={{
-                        backgroundColor: `rgba(16, 185, 129, ${opacity})`,
-                        border: "1px solid rgba(16,185,129,0.15)",
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          {/* Legend */}
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600">Less</span>
-            {[0.1, 0.3, 0.5, 0.7, 1].map((o) => (
-              <div
-                key={o}
-                className="h-3 w-3 rounded-sm"
-                style={{ backgroundColor: `rgba(16, 185, 129, ${o})` }}
-              />
-            ))}
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600">More</span>
-          </div>
+        <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+          <section>
+            <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              By service
+            </h4>
+            {hasService ? <ServiceBreakdown data={byService} /> : <EmptyState />}
+          </section>
+          <section>
+            <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              By status
+            </h4>
+            {hasStatus ? <StatusBreakdown data={byStatus} /> : <EmptyState />}
+          </section>
         </div>
       )}
-    </motion.div>
+    </ChartCard>
   );
 }

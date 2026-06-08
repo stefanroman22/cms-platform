@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from ..core import pg_rate_limit
 from ..core.config import settings
 from ..core.limiter import client_ip, limiter
+from ..models.booking_contract import BOOKING_CONTRACT
 from ..services import (
     booking_availability,
     booking_email,
@@ -365,6 +366,15 @@ def availability(
     return JSONResponse(content=_range_to_grouped(rng))
 
 
+@router.get("/{slug}/contract", dependencies=[Depends(_public_read_limit)])
+def public_contract(slug: str) -> JSONResponse:
+    """Machine-readable create-booking contract (version + required fields +
+    per-field types). The SDK + connector validate against this; serving it
+    behind the slug keeps the public-read surface consistent."""
+    _require_tenant(slug)
+    return JSONResponse(content=BOOKING_CONTRACT)
+
+
 class CustomerIn(BaseModel):
     name: str
     email: str
@@ -397,15 +407,34 @@ def _create_core(cfg: TenantConfig, body: CreateIn) -> JSONResponse:
     name = body.customer.name.strip()
     email = body.customer.email.strip()
     note = body.note.strip()
-    if not name or not _EMAIL_RE.match(email):
-        raise HTTPException(status_code=422, detail="Invalid booking")
+    # Field-level validation errors (which field, why) so a miswired client form
+    # gets actionable diagnostics instead of a generic 422. Order matches the
+    # contract's `required` list. Behaviour-preserving for already-valid payloads.
+    if not body.service_id.strip():
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "service_id", "message": "service_id is required"},
+        )
+    if not name:
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "customer.name", "message": "customer.name is required"},
+        )
+    if not _EMAIL_RE.match(email):
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "customer.email", "message": "customer.email is invalid"},
+        )
     service = booking_repo.load_service(cfg.tenant_id, body.service_id)
     if service is None:
         raise HTTPException(status_code=404, detail="Unknown service")
     try:
         start = datetime.fromisoformat(body.start_utc).astimezone(_UTC)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Bad start_utc") from exc
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "start_utc", "message": "start_utc must be an ISO-8601 datetime"},
+        ) from exc
 
     now = datetime.now(UTC)
     resource_id = _free_resource_for(cfg=cfg, service=service, start_utc=start, now_utc=now)
