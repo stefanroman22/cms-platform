@@ -118,6 +118,91 @@ def test_list_appointments_returns_flattened_rows(client):
     assert "booking_resources" not in a
 
 
+def test_list_appointments_prefers_booking_snapshot_name(client):
+    """The shared customer row was overwritten by a later booking ("Remus"); the
+    appointment must still display this booking's own snapshot name ("Alice")."""
+    ru, rp = _auth()
+    rows = [
+        _raw_appointment(
+            customer_name="Alice",
+            booking_customers={
+                "name": "Remus",
+                "email": "shared@example.com",
+                "phone": None,
+                "timezone": "UTC",
+            },
+        )
+    ]
+    with (
+        ru,
+        rp,
+        patch(
+            "auth_service.routers.booking_admin.booking_admin_repo.list_appointments",
+            return_value=rows,
+        ),
+    ):
+        r = client.get("/projects/acme/bookings/appointments")
+    a = r.json()["appointments"][0]
+    assert a["customer_name"] == "Alice"
+    assert a["customer_email"] == "shared@example.com"
+
+
+def test_notify_client_cancelled_uses_booking_snapshot_name():
+    from auth_service.routers.booking_admin import _notify_client_cancelled
+
+    booking = {
+        "id": "bk1",
+        "customer_id": "cust1",
+        "customer_name": "Alice",
+        "start_utc": "2026-07-01T10:00:00+00:00",
+    }
+    with (
+        patch(
+            "auth_service.routers.booking_admin.booking_tenant.load_tenant_by_id",
+            return_value=_mock_tenant_config(),
+        ),
+        patch(
+            "auth_service.routers.booking_admin.booking_repo.load_customer",
+            return_value={"name": "Remus", "email": "shared@example.com", "timezone": "UTC"},
+        ),
+        patch("auth_service.routers.booking_admin.booking_manage_email.send_cancellation") as snd,
+    ):
+        _notify_client_cancelled("t1", booking)
+    assert snd.call_args.kwargs["name"] == "Alice"
+
+
+def test_notify_client_rescheduled_uses_booking_snapshot_name():
+    from datetime import datetime
+
+    from auth_service.routers.booking_admin import _notify_client_rescheduled
+
+    booking = {
+        "id": "bk1",
+        "customer_id": "cust1",
+        "customer_name": "Alice",
+        "start_utc": "2026-07-01T10:00:00+00:00",
+    }
+    start = datetime(2026, 7, 1, 10, 0)
+    new_start = datetime(2026, 7, 2, 10, 0)
+    new_end = datetime(2026, 7, 2, 10, 30)
+    with (
+        patch(
+            "auth_service.routers.booking_admin.booking_repo.load_customer",
+            return_value={"name": "Remus", "email": "shared@example.com", "timezone": "UTC"},
+        ),
+        patch("auth_service.routers.booking_admin.booking_manage_email.send_reschedule") as snd,
+    ):
+        _notify_client_rescheduled(
+            "t1",
+            booking,
+            cfg=_mock_tenant_config(),
+            old_start=start,
+            new_start=new_start,
+            new_end=new_end,
+        )
+    assert snd.call_args.kwargs["name"] == "Alice"
+
+
 def test_list_appointments_ownership_403(client):
     with (
         patch(

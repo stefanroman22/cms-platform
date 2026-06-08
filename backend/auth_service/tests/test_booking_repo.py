@@ -60,6 +60,7 @@ def test_insert_booking_translates_exclusion_violation():
                 service_id="s1",
                 resource_id="r1",
                 customer_id="c1",
+                customer_name="Jane",
                 start_utc=datetime(2099, 1, 1, 9, 0, tzinfo=UTC),
                 end_utc=datetime(2099, 1, 1, 9, 45, tzinfo=UTC),
                 guard_start_utc=datetime(2099, 1, 1, 9, 0, tzinfo=UTC),
@@ -68,6 +69,29 @@ def test_insert_booking_translates_exclusion_violation():
                 source="widget",
                 notes=None,
             )
+
+
+def test_insert_booking_snapshots_customer_name():
+    """A booking carries its own customer_name snapshot so a later booking from the
+    same email (which overwrites the shared customer row) can't rewrite this one."""
+    sb = _exec(_sb(), [{"id": "b1"}])
+    with patch("auth_service.services.booking_repo.get_supabase_admin", return_value=sb):
+        booking_repo.insert_booking(
+            tenant_id="t1",
+            service_id="s1",
+            resource_id="r1",
+            customer_id="c1",
+            customer_name="Alice",
+            start_utc=datetime(2099, 1, 1, 9, 0, tzinfo=UTC),
+            end_utc=datetime(2099, 1, 1, 9, 45, tzinfo=UTC),
+            guard_start_utc=datetime(2099, 1, 1, 9, 0, tzinfo=UTC),
+            guard_end_utc=datetime(2099, 1, 1, 9, 45, tzinfo=UTC),
+            manage_token_hash="h",
+            source="widget",
+            notes=None,
+        )
+    inserted = sb.insert.call_args[0][0]
+    assert inserted["customer_name"] == "Alice"
 
 
 def test_load_booking_by_token_hash_found():

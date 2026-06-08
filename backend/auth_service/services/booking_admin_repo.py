@@ -326,7 +326,7 @@ def list_appointments(
         sb.table("bookings")
         .select(
             "id, status, start_utc, end_utc, reschedule_count, notes, source, "
-            "service_id, resource_id, customer_id, "
+            "service_id, resource_id, customer_id, customer_name, "
             "booking_customers(name, email, phone, timezone), "
             "booking_services(name), booking_resources(name)"
         )

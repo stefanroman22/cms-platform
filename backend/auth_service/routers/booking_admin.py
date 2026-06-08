@@ -64,7 +64,7 @@ def _notify_client_cancelled(tenant_id: str, booking: dict) -> None:
             return
         start = datetime.fromisoformat(booking["start_utc"]).astimezone(UTC)
         booking_manage_email.send_cancellation(
-            name=cust.get("name", ""),
+            name=booking.get("customer_name") or cust.get("name", ""),
             client_email=cust["email"],
             host_when=_when_label(start, cfg.timezone),
             client_when=_when_label(start, cust.get("timezone") or cfg.timezone),
@@ -94,7 +94,7 @@ def _notify_client_rescheduled(
         if not cust.get("email"):
             return
         booking_manage_email.send_reschedule(
-            name=cust.get("name", ""),
+            name=booking.get("customer_name") or cust.get("name", ""),
             client_email=cust["email"],
             old_host_when=_when_label(old_start, cfg.timezone),
             new_host_when=_when_label(new_start, cfg.timezone),
@@ -320,7 +320,7 @@ def _flatten_appointment(row: dict) -> dict:
     cust = row.get("booking_customers") or {}
     svc = row.get("booking_services") or {}
     res = row.get("booking_resources") or {}
-    out["customer_name"] = cust.get("name")
+    out["customer_name"] = row.get("customer_name") or cust.get("name")
     out["customer_email"] = cust.get("email")
     out["customer_phone"] = cust.get("phone")
     out["customer_timezone"] = cust.get("timezone")
@@ -431,6 +431,7 @@ async def create_appointment(
             service_id=svc["id"],
             resource_id=resource_id,
             customer_id=customer_id,
+            customer_name=body.customer.name,
             start_utc=start,
             end_utc=end,
             guard_start_utc=guard_start,

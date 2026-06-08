@@ -431,6 +431,7 @@ def _create_core(cfg: TenantConfig, body: CreateIn) -> JSONResponse:
             service_id=service["id"],
             resource_id=resource_id,
             customer_id=customer_id,
+            customer_name=name,
             start_utc=start,
             end_utc=end,
             guard_start_utc=guard_start,
@@ -572,7 +573,7 @@ def manage_get(token: str) -> JSONResponse:
             "status": b["status"],
             "start_utc": b["start_utc"],
             "end_utc": b["end_utc"],
-            "name": cust.get("name", ""),
+            "name": b.get("customer_name") or cust.get("name", ""),
             "visitor_timezone": cust.get("timezone") or cfg.timezone,
             "timezone": cfg.timezone,
             "reschedule_count": count,
@@ -618,7 +619,7 @@ async def manage_cancel(request: Request, token: str) -> JSONResponse:
         key_cancel = f"{b['id']}:cancel"
         if not booking_repo.notification_already_sent(key_cancel):
             booking_manage_email.send_cancellation(
-                name=cust.get("name", ""),
+                name=b.get("customer_name") or cust.get("name", ""),
                 client_email=cust.get("email", ""),
                 host_when=_when_label(start, cfg.timezone),
                 client_when=_when_label(start, cust.get("timezone") or cfg.timezone),
@@ -721,7 +722,7 @@ async def manage_reschedule(request: Request, token: str, body: RescheduleIn) ->
         key_resched = f"{b['id']}:reschedule"
         if not booking_repo.notification_already_sent(key_resched):
             booking_manage_email.send_reschedule(
-                name=cust.get("name", ""),
+                name=b.get("customer_name") or cust.get("name", ""),
                 client_email=cust.get("email", ""),
                 old_host_when=_when_label(old_start, cfg.timezone),
                 new_host_when=_when_label(new_start, cfg.timezone),
@@ -793,7 +794,7 @@ async def send_reminders(request: Request) -> JSONResponse:
             try:
                 booking_reminder_email.send(
                     to_email=cust.get("email", ""),
-                    name=cust.get("name", ""),
+                    name=b.get("customer_name") or cust.get("name", ""),
                     note=b.get("notes"),
                     when_label=_when_label(start, cust.get("timezone") or cfg.timezone),
                     meeting_url=cfg.meeting_url,

@@ -44,6 +44,7 @@ def _insert(start):
         service_id=TEST_SERVICE,
         resource_id=TEST_RESOURCE,
         customer_id=cid,
+        customer_name="IT",
         start_utc=start,
         end_utc=start + timedelta(minutes=45),
         guard_start_utc=start,

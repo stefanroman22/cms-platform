@@ -182,6 +182,43 @@ def test_reminders_sends_for_due_offset(client, monkeypatch):
     assert call_kwargs["offset_min"] == 120
 
 
+def test_reminders_use_booking_snapshot_name(client, monkeypatch):
+    """Reminder email uses the booking's snapshot name, not the (possibly
+    overwritten) shared customer row's name."""
+    monkeypatch.setattr(settings, "BOOKING_CRON_SECRET", "s3cr3t")
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "k")
+    now = datetime.now(UTC)
+    start_utc = now + timedelta(minutes=122)
+    cfg = _make_tenant_with_offsets([120])
+    due = [
+        {
+            "id": "b1",
+            "tenant_id": "t1",
+            "customer_id": "c1",
+            "customer_name": "Alice",
+            "notes": None,
+            "start_utc": start_utc.isoformat(),
+        }
+    ]
+    with (
+        patch("auth_service.routers.booking.booking_repo.due_reminders", return_value=due),
+        patch("auth_service.routers.booking.booking_tenant.load_tenant_by_id", return_value=cfg),
+        patch(
+            "auth_service.routers.booking.booking_repo.load_customer",
+            return_value={"email": "shared@a.com", "name": "Remus", "timezone": None},
+        ),
+        patch(
+            "auth_service.routers.booking.booking_repo.notification_already_sent",
+            return_value=False,
+        ),
+        patch("auth_service.routers.booking.booking_repo.record_notification"),
+        patch("auth_service.routers.booking.booking_reminder_email.send") as snd,
+    ):
+        r = client.post("/booking/cron/reminders", headers={"X-Cron-Secret": "s3cr3t"})
+    assert r.status_code == 200
+    assert snd.call_args.kwargs["name"] == "Alice"
+
+
 def test_reminders_deduped_on_second_run(client, monkeypatch):
     """Second cron run → notification_already_sent=True → nothing sent."""
     monkeypatch.setattr(settings, "BOOKING_CRON_SECRET", "s3cr3t")

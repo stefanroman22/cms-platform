@@ -196,6 +196,7 @@ def insert_booking(
     service_id: str,
     resource_id: str,
     customer_id: str,
+    customer_name: str,
     start_utc: datetime,
     end_utc: datetime,
     guard_start_utc: datetime,
@@ -214,6 +215,7 @@ def insert_booking(
                     "service_id": service_id,
                     "resource_id": resource_id,
                     "customer_id": customer_id,
+                    "customer_name": customer_name,
                     "status": "confirmed",
                     "start_utc": start_utc.isoformat(),
                     "end_utc": end_utc.isoformat(),
@@ -276,7 +278,7 @@ def due_reminders(*, now_utc: datetime, window_end_utc: datetime) -> list[dict]:
     sb = get_supabase_admin()
     res = (
         sb.table("bookings")
-        .select("id, tenant_id, customer_id, notes, start_utc")
+        .select("id, tenant_id, customer_id, customer_name, notes, start_utc")
         .eq("status", "confirmed")
         .is_("reminder_sent_at", "null")
         .gte("start_utc", now_utc.isoformat())
