@@ -7,11 +7,6 @@
  */
 import data from "./about.json";
 
-export interface Value {
-  title: string;
-  description: string;
-}
-
 export interface TeamMember {
   name: string;
   role: string;
@@ -26,7 +21,6 @@ export interface TeamMember {
 export interface AboutContent {
   hero: { eyebrow: string; title: string; lead: string };
   story: { heading: string; paragraphs: string[] };
-  values: Value[];
   team: { heading: string; subheading: string; members: TeamMember[] };
 }
 

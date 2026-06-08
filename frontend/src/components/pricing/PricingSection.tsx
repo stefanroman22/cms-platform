@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import {
   LazyMotion,
   domMax,
@@ -169,18 +170,59 @@ function BorderTrail({ size = 80 }: { size?: number }) {
   );
 }
 
+/** Tooltip max width + the minimum gap it must keep from any viewport edge.
+ *  These drive the edge-clamping math so the bubble stays fully on-screen with
+ *  breathing room, no matter how long the text or how narrow the screen. */
+const TOOLTIP_MAX_WIDTH = 260; // px
+const TOOLTIP_EDGE_PADDING = 12; // px
+
 /** Lightweight tooltip — opens on hover, focus and tap, so it works on touch
- *  too (no Radix dependency). The trigger is a real button for keyboard a11y. */
+ *  too (no Radix dependency). The trigger is a real button for keyboard a11y.
+ *  The bubble is portaled to <body> and positioned with `fixed` coordinates so
+ *  it escapes each card's `overflow-hidden` (and any other clipping ancestor),
+ *  then its centre is clamped within the padded viewport — it stays fully
+ *  visible for every feature on any screen, whatever the tooltip text. */
 function FeatureLabel({ feature }: { feature: Feature }) {
   const [open, setOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  // `left` = clamped horizontal centre; `bottom` = distance from viewport bottom
+  // up to 8px above the trigger (so the bubble sits just above the label).
+  const [pos, setPos] = React.useState<{ left: number; bottom: number } | null>(null);
+
+  const place = React.useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(TOOLTIP_MAX_WIDTH, window.innerWidth - TOOLTIP_EDGE_PADDING * 2);
+    const half = width / 2;
+    const center = r.left + r.width / 2;
+    const left = Math.min(
+      Math.max(center, TOOLTIP_EDGE_PADDING + half),
+      window.innerWidth - TOOLTIP_EDGE_PADDING - half
+    );
+    setPos({ left, bottom: window.innerHeight - r.top + 8 });
+  }, []);
+
+  // Compute on open, then keep it pinned to the trigger on scroll/resize.
+  React.useEffect(() => {
+    if (!open) return;
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, place]);
 
   if (!feature.tooltip) {
     return <span>{feature.text}</span>;
   }
 
   return (
-    <span className="relative inline-flex">
+    <span className="inline-flex">
       <button
+        ref={triggerRef}
         type="button"
         className="cursor-help border-b border-dashed border-text-tertiary/60 text-left outline-none transition-colors hover:border-accent/60 focus-visible:border-accent"
         onMouseEnter={() => setOpen(true)}
@@ -192,20 +234,31 @@ function FeatureLabel({ feature }: { feature: Feature }) {
       >
         {feature.text}
       </button>
-      <AnimatePresence>
-        {open && (
-          <m.span
-            role="tooltip"
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.18, ease: EXPO }}
-            className="absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-[15rem] -translate-x-1/2 rounded-lg border border-border bg-surface px-3 py-2 text-xs leading-snug text-text-secondary shadow-xl shadow-black/40"
-          >
-            {feature.tooltip}
-          </m.span>
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {open && pos && (
+              <m.span
+                role="tooltip"
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.18, ease: EXPO }}
+                style={{
+                  position: "fixed",
+                  left: pos.left,
+                  bottom: pos.bottom,
+                  x: "-50%",
+                  maxWidth: TOOLTIP_MAX_WIDTH,
+                }}
+                className="pointer-events-none z-50 block w-max rounded-lg border border-border bg-surface px-3 py-2 text-xs leading-snug text-text-secondary shadow-xl shadow-black/40"
+              >
+                {feature.tooltip}
+              </m.span>
+            )}
+          </AnimatePresence>,
+          document.body
         )}
-      </AnimatePresence>
     </span>
   );
 }

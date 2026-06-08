@@ -11,31 +11,13 @@
       "Every project is built to be owned by you, reviewed by a human before it ships, and backed by managed hosting and monitoring. No lock-in, no surprises — just software that works, and a team that actually answers."
     ]
   },
-  "values": [
-    {
-      "title": "Human-reviewed",
-      "description": "Every major release is checked by a person — not just shipped by a machine."
-    },
-    {
-      "title": "EU-based & GDPR-first",
-      "description": "Your data stays in the EU, and every product is built to meet GDPR from day one."
-    },
-    {
-      "title": "Managed end-to-end",
-      "description": "Hosting, security and monitoring are included. We keep it running so you don't have to."
-    },
-    {
-      "title": "Fair & transparent",
-      "description": "Clear quotes before anything starts, priced to respect your budget."
-    }
-  ],
   "team": {
     "heading": "Meet the team",
     "subheading": "A small, senior team that ships — engineering, security and strategy under one roof.",
     "members": [
       {
         "name": "Stefan Roman",
-        "role": "CEO & Cofounder",
+        "role": "CEO & Founder",
         "description": "Leads strategy and client relationships, oversees delivery end-to-end, and makes sure every release ships correct, on time, and aligned with what the business actually needs.",
         "image": "/team/stefan-roman.jpg",
         "email": "stefan@roman-technologies.dev",
@@ -45,7 +27,7 @@
         "name": "Alexandru Aioanei",
         "role": "Full Stack (AI) Developer",
         "description": "Builds features end-to-end across frontend and backend, and integrates AI workflows and agents into client products — turning ideas into working, maintainable software.",
-        "image": "/team/alexandru-aioanei.svg",
+        "image": "/team/alexandru-aioanei.png",
         "email": "alex03aioanei@gmail.com",
         "linkedin": "https://www.linkedin.com/in/alexandru-aioanei-7a8370255/"
       },

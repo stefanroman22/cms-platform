@@ -16,7 +16,7 @@ const TRUST = [
 const EYEBROW_TEXT = "Roman Technologies";
 const HEADLINE_TEXT = "We make your idea or need come alive";
 const SUBTEXT =
-  "Custom websites, apps and AI workflows for ambitious companies — at a price that respects your budget.";
+  "Custom websites, apps, AI Agents and workflows for ambitious companies, at a price that respects your budget.";
 
 const EXPO = [0.16, 1, 0.3, 1] as const;
 
