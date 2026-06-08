@@ -3,8 +3,15 @@
 
 export const LEAD_TYPE_LABEL = {
   website: "Website",
-  automation: "AI Automation",
-  both: "Website + AI",
+  automation: "AI Workflow",
+  both: "Website + AI Workflow",
+} as const;
+
+// Product badge palette — gold accent reserved for the "both" (full) product.
+export const LEAD_TYPE_BADGE_CN = {
+  website: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  automation: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  both: "bg-accent/15 text-accent dark:bg-accent/15 dark:text-accent",
 } as const;
 
 export const WEB_PRESENCE_LABEL = {

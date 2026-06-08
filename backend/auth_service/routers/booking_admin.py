@@ -574,6 +574,7 @@ async def get_booking_stats(
     request: Request,
     from_: str | None = Query(None, alias="from"),
     to: str | None = Query(None),
+    resource_id: str | None = Query(None),
 ) -> JSONResponse:
     tenant_id = await _tenant(project_slug, request)
     cfg = booking_tenant.load_tenant_by_id(tenant_id)
@@ -582,7 +583,9 @@ async def get_booking_stats(
     now = datetime.now(UTC)
     date_from = from_ or (now - timedelta(days=90)).date().isoformat()
     date_to = to or (now + timedelta(days=90)).date().isoformat()
-    rows = booking_admin_repo.list_bookings_for_stats(tenant_id, date_from, date_to)
+    rows = booking_admin_repo.list_bookings_for_stats(
+        tenant_id, date_from, date_to, resource_id=resource_id
+    )
     return JSONResponse(content=compute_booking_stats(rows, now_utc=now, tz_name=cfg.timezone))
 
 

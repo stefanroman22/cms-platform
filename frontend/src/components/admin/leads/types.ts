@@ -67,6 +67,42 @@ export interface LeadsListResponse {
   total: number;
 }
 
+// A single review row in the manual Add-Lead form. Mirrors backend LeadReviewIn.
+export interface LeadReviewInput {
+  author: string;
+  rating: number | null;
+  text: string;
+  date: string;
+}
+
+// Payload for POST /api/admin/leads. Mirrors backend LeadCreate — only
+// business_name is required; primary_source/external_id are set server-side.
+export interface LeadCreateInput {
+  business_name: string;
+  lead_type: LeadType;
+  web_presence: WebPresence;
+  category?: string | null;
+  description?: string | null;
+  about?: string | null;
+  country?: string | null;
+  region?: string | null;
+  city?: string | null;
+  address?: string | null;
+  postal_code?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website_url?: string | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  menu_url?: string | null;
+  rating?: number | null;
+  review_count?: number | null;
+  reviews?: LeadReviewInput[];
+  opening_hours?: Record<string, string> | null;
+  languages?: string[];
+  notes?: string | null;
+}
+
 export interface LeadFiltersState {
   country: string;
   city: string;

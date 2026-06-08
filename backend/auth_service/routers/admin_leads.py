@@ -3,11 +3,13 @@ Writes are limited to pipeline-status and scraped-data fields (LeadUpdate)."""
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
-from ..models.schemas import LeadOut, LeadUpdate
+from ..models.schemas import LeadCreate, LeadOut, LeadUpdate
 from ..services.html_sanitizer import sanitize_design_prompt
 from ..services.supabase_client import get_supabase_admin
 from .deps import admin_user_via_bearer_or_sid
@@ -93,6 +95,31 @@ async def list_leads(
     res = q.execute()
     items = [LeadOut(**row).model_dump() for row in (res.data or [])]
     return {"items": items, "total": getattr(res, "count", None) or len(items)}
+
+
+@router.post("", response_model=LeadOut, status_code=status.HTTP_201_CREATED)
+async def create_lead(body: LeadCreate, request: Request) -> LeadOut:
+    """Manually create a lead from the admin dashboard. Leads are otherwise
+    100% scraper-sourced; a manual insert sets primary_source='manual' and a
+    generated external_id so it never collides with scraper dedup."""
+    await admin_user_via_bearer_or_sid(request)
+    sb = get_supabase_admin()
+
+    row = dict(body.model_dump(exclude_none=True))
+    # _LeadEmail/_LeadUrl are annotated str types; Supabase wants plain strings.
+    for key in ("email", "website_url", "facebook_url", "instagram_url", "menu_url"):
+        if key in row and row[key] is not None:
+            row[key] = str(row[key])
+
+    row["primary_source"] = "manual"
+    row["external_id"] = f"manual:{uuid4()}"
+    # name_normalized is NOT NULL; mirror the scraper's lower+collapse-whitespace.
+    row["name_normalized"] = re.sub(r"\s+", " ", body.business_name.lower()).strip()
+
+    res = sb.table("leads").insert(row).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Insert failed")
+    return LeadOut(**res.data[0])
 
 
 @router.get("/{lead_id}", response_model=LeadOut)

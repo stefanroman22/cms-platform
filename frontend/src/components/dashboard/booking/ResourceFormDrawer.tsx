@@ -25,7 +25,7 @@ type Draft = {
 function resourceToDraft(r: BookingResource): Draft {
   return {
     name: r.name,
-    type: r.type ?? "generic",
+    type: r.type ?? "staff",
     capacity: String(r.capacity ?? 1),
     is_active: r.is_active ?? true,
     sort_order: String(r.sort_order ?? 0),
@@ -34,7 +34,7 @@ function resourceToDraft(r: BookingResource): Draft {
 
 const emptyDraft: Draft = {
   name: "",
-  type: "generic",
+  type: "staff",
   capacity: "1",
   is_active: true,
   sort_order: "0",
@@ -51,7 +51,8 @@ const BACKDROP_VARIANTS = {
 };
 
 /**
- * Add/edit resource drawer — mirrors LeadDetailDrawer pattern.
+ * Add/edit staff drawer — mirrors LeadDetailDrawer pattern.
+ * (Backed by the booking_resources table; the UI leads with people/staff.)
  */
 export function ResourceFormDrawer({ projectSlug, resource, onClose, onSaved }: Props) {
   return (
@@ -154,7 +155,7 @@ function DrawerBody({ projectSlug, resource, onClose, onSaved }: Props) {
     <div className="p-5">
       <div className="flex items-start justify-between gap-2">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          {isNew ? "Add resource" : "Edit resource"}
+          {isNew ? "Add staff" : "Edit staff"}
         </h2>
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -174,7 +175,7 @@ function DrawerBody({ projectSlug, resource, onClose, onSaved }: Props) {
               type="button"
               onClick={() => setConfirmDelete(true)}
               disabled={saving || deleting}
-              aria-label="Delete resource"
+              aria-label="Delete staff"
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -204,8 +205,8 @@ function DrawerBody({ projectSlug, resource, onClose, onSaved }: Props) {
           >
             <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-3 dark:border-red-900 dark:bg-red-950/40">
               <p className="text-xs text-red-700 dark:text-red-300">
-                Delete <span className="font-semibold">{resource?.name}</span> permanently? If the
-                resource has bookings, deactivate it instead.
+                Delete <span className="font-semibold">{resource?.name}</span> permanently? If this
+                staff member has bookings, deactivate them instead.
               </p>
               <div className="mt-2.5 flex items-center gap-2">
                 <motion.button
@@ -252,7 +253,7 @@ function DrawerBody({ projectSlug, resource, onClose, onSaved }: Props) {
             type="text"
             value={draft.name}
             onChange={(e) => setField("name", e.target.value)}
-            placeholder="Staff"
+            placeholder="e.g. Jane Doe"
             className={dashboardInputCn}
           />
         </div>
@@ -273,7 +274,7 @@ function DrawerBody({ projectSlug, resource, onClose, onSaved }: Props) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={dashboardFieldLabelCn}>Capacity</label>
+            <label className={dashboardFieldLabelCn}>How many can work in parallel</label>
             <input
               type="number"
               min={1}

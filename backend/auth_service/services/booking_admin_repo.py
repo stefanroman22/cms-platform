@@ -363,19 +363,26 @@ def get_booking(tenant_id: str, booking_id: str) -> dict | None:
 
 
 def list_bookings_for_stats(
-    tenant_id: str, date_from: str | None, date_to: str | None
+    tenant_id: str,
+    date_from: str | None,
+    date_to: str | None,
+    *,
+    resource_id: str | None = None,
 ) -> list[dict]:
     sb = get_supabase_admin()
     q = (
         sb.table("bookings")
-        .select("status, start_utc, booking_services(name)")
+        .select("status, start_utc, resource_id, booking_services(name), booking_resources(name)")
         .eq("tenant_id", tenant_id)
     )
     if date_from:
         q = q.gte("start_utc", date_from)
     if date_to:
         q = q.lte("start_utc", date_to)
+    if resource_id:
+        q = q.eq("resource_id", resource_id)
     rows = q.execute().data or []
     for r in rows:
         r["service_name"] = (r.get("booking_services") or {}).get("name")
+        r["resource_name"] = (r.get("booking_resources") or {}).get("name")
     return rows

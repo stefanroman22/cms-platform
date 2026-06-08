@@ -107,7 +107,14 @@ include. Otherwise exclude.
   integration time; list the source file paths to connect in \
   `ui_wiring.components`. Set `fallback_embed: true` ONLY when scheduling intent \
   is detected but no usable booking UI exists in the source. \
-  `calendar_provider` is always `"none"` for clients.
+  `calendar_provider` is always `"none"` for clients. \
+  Emit a `field_mapping` object inside the `booking` block that maps EVERY \
+  required contract field (`service_id`, `start_utc`, `customer.name`, \
+  `customer.email`) to the client form's corresponding field name/id (the SDK \
+  validates+normalizes against these before sending). Map optional contract \
+  fields (`resource_id`, `note`, `customer.phone`, `customer.locale`, \
+  `customer.tz`) too when the client form exposes them. Every required field MUST \
+  be mapped — an unmapped required field fails the provisioning test matrix.
 
 ## Output
 
@@ -143,6 +150,12 @@ Return only:
     "services":  [{ "name": "Consultation", "duration_min": 30 }],
     "resources": [{ "name": "Staff", "type": "staff" }],
     "hours":     [{ "weekday": 1, "start_time": "09:00", "end_time": "17:00" }],
+    "field_mapping": {
+      "service_id": "<client form field for the chosen service>",
+      "start_utc": "<client form field for the chosen slot start>",
+      "customer.name": "<client form field for the customer name>",
+      "customer.email": "<client form field for the customer email>"
+    },
     "ui_wiring": { "components": ["<paths of the client's booking UI to wire>"], "fallback_embed": false }
   },
   "excluded": [
