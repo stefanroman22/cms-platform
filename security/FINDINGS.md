@@ -4,16 +4,12 @@
 
 This table is the **source of truth for status**. Detail for each finding lives in [`findings/`](./findings/) by severity. IDs are stable and never reused (see [`methodology.md`](./methodology.md) §5–6). Status: `open` · `in-progress` · `fixed` · `accepted-risk` · `false-positive` · `wont-fix`.
 
-> **Remediation 2026-06-07** — `SEC-001` (critical), `SEC-002` (high, same chain), and the residual
-> `SEC-056` (high) are remediated in code; awaiting one CI validation run. **Closed:** cross-tenant
-> `SOLVER_GITHUB_TOKEN` theft (token stripped from `.git/config` during the untrusted run + a pre-push
-> secret-scan gate), the `node -e` RCE (removed from the agent allowlist + explicit deny), nonce-fenced
-> untrusted-data separation, and control-char input hardening. **Egress isolation** (the chosen full
-> closure for SEC-056) is implemented: `step-security/harden-runner` (SHA-pinned, `block` mode) on the
-> Solver job allows only the hosts it needs, so an injected agent cannot exfiltrate the Claude OAuth
-> token. **Validation pending:** one `workflow_dispatch` run with `egress_policy=audit` to confirm the
-> allowlist is complete, then all three flip to `fixed`. Verified: 29 Solver-agent + 436 backend tests
-> green; workflow YAML valid.
+> **Remediation 2026-06-07 — `SEC-001` (critical) + `SEC-002` + `SEC-056` (high): FIXED.** The full
+> Solver hardening shipped (commits `fix(security): SEC-001` + `SEC-056`) and the egress allowlist was
+> validated by a `workflow_dispatch` `egress_policy=audit` run (clean). Closed: cross-tenant
+> `SOLVER_GITHUB_TOKEN` theft, the `node -e` RCE, prompt-injection break-out (nonce-fenced untrusted
+> data), control-char input, and OAuth-token exfil (harden-runner egress block, now in `block` mode).
+> Verified: 29 Solver-agent + 436 backend tests green.
 
 ## Counts by severity
 
@@ -21,17 +17,20 @@ This table is the **source of truth for status**. Detail for each finding lives 
 |---|---|---|---|---|---|
 | 1 | 4 | 10 | 31 | 10 | 56 |
 
-_Status: 3 in-progress (SEC-001, SEC-002, SEC-056 — code-complete, pending one CI validation run), 53 open._
+_Status (updated 2026-06-08): **8 fixed** (SEC-001, SEC-002, SEC-056, SEC-004, SEC-013, SEC-033, SEC-042, SEC-053), **1 accepted-risk** (SEC-054 — app uses service-role not Supabase Auth, so tenant RLS owner policies are inert by design; access control is enforced in app code), 47 open. Remediation ongoing._
+
+> **Note (FINDINGS.md is canonical for status).** Per-finding detail files may still show their
+> original `open` status inline; this table is the source of truth.
 
 ## Open findings
 
 | ID | Sev | Title | Location | Dimension | Status |
 |---|---|---|---|---|---|
-| [SEC-001](findings/critical.md#sec-001) | critical | Client-controlled issue text reaches an LLM with arbitrary-code-execution tools (Bash node) — prompt injection → RCE on the runner with write tokens | `.github/workflows/solver-agent.yml:91-100; agents/Solver - Issues/clai…` | ci-workflows | **in-progress** |
-| [SEC-002](findings/high.md#sec-002) | high | Solver Agent: client-submitted issue text is injected verbatim into an autonomous code-fixing prompt that runs with a cross-tenant GitHub write token and node/npm shell access (prompt-injection → token exfiltration) | `agents/Solver - Issues/claim_issue.py:144-150; agents/Solver - Issues/…` | agents | **in-progress** |
+| [SEC-001](findings/critical.md#sec-001) | critical | Client-controlled issue text reaches an LLM with arbitrary-code-execution tools (Bash node) — prompt injection → RCE on the runner with write tokens | `.github/workflows/solver-agent.yml; agents/Solver - Issues/` | ci-workflows | ✅ fixed |
+| [SEC-002](findings/high.md#sec-002) | high | Solver Agent: client-submitted issue text is injected verbatim into an autonomous code-fixing prompt that runs with a cross-tenant GitHub write token and node/npm shell access (prompt-injection → token exfiltration) | `agents/Solver - Issues/claim_issue.py; repo.py` | agents | ✅ fixed |
 | [SEC-003](findings/high.md#sec-003) | high | Owner can create a booking against another tenant's resource (cross-tenant write + silent DoS) via unvalidated resource_id | `backend/auth_service/routers/booking_admin.py:382-416` | authz-idor | open |
-| [SEC-004](findings/high.md#sec-004) | high | anon/authenticated can EXECUTE SECURITY DEFINER solver-claim RPCs — dequeue/poison the auto-fix queue + cross-tenant issue disclosure | `backend/migrations/2026_05_16_solver_agent_columns.sql:27-80 (repo) vs…` | supabase-db | open |
-| [SEC-056](findings/high.md#sec-056) | high | Solver agent retains command execution (`npm run`) while the Claude OAuth token is present on the runner — residual exfil path after SEC-001 hardening | `.github/workflows/solver-agent.yml` (harden-runner egress block) | agents | **in-progress** |
+| [SEC-004](findings/high.md#sec-004) | high | anon/authenticated can EXECUTE SECURITY DEFINER solver-claim RPCs — dequeue/poison the auto-fix queue + cross-tenant issue disclosure | `migrations/2026_06_08_security_anon_surface_hardening.sql` | supabase-db | ✅ fixed |
+| [SEC-056](findings/high.md#sec-056) | high | Solver agent retains command execution (`npm run`) while the Claude OAuth token is present on the runner — residual exfil path after SEC-001 hardening | `.github/workflows/solver-agent.yml` (harden-runner egress block) | agents | ✅ fixed |
 | [SEC-005](findings/medium.md#sec-005) | medium | Admin issue-status update endpoint lets the Solver mark ANY issue done cross-project, decoupled from whether the agent actually fixed it | `backend/auth_service/routers/issues.py:276-344; agents/Solver - Issues…` | agents | open |
 | [SEC-006](findings/medium.md#sec-006) | medium | Solver Agent auto-commits and force-pushes attacker-influenced file changes to cms-preview, which a single Slack ✅ promotes to client production | `agents/Solver - Issues/finalize.py:42-49; agents/Solver - Issues/repo.…` | agents | open |
 | [SEC-007](findings/medium.md#sec-007) | medium | Dependabot auto-merge self-approves and merges minor/major-range bumps without independent review; a compromised dependency can reach master/prod | `.github/workflows/dependabot-auto-merge.yml:36-50` | ci-workflows | open |
@@ -40,7 +39,7 @@ _Status: 3 in-progress (SEC-001, SEC-002, SEC-056 — code-complete, pending one
 | [SEC-010](findings/medium.md#sec-010) | medium | In-memory rate limiter resets per serverless invocation and is not shared across instances on Vercel, neutering every slowapi limit (login, forms, booking, admin bearer) | `backend/auth_service/core/limiter.py:21; backend/auth_service/core/bea…` | ratelimit-dos | open |
 | [SEC-011](findings/medium.md#sec-011) | medium | No per-account lockout or throttle on /auth/login (only forgeable per-IP limit) | `backend/auth_service/routers/auth.py:54-77; backend/auth_service/servi…` | ratelimit-dos | open |
 | [SEC-012](findings/medium.md#sec-012) | medium | Unauthenticated booking availability endpoints have no rate limit despite expensive per-day computation and DB I/O | `backend/auth_service/routers/booking.py:337-351 (/booking/{slug}/avail…` | ratelimit-dos | open |
-| [SEC-013](findings/medium.md#sec-013) | medium | slack_processed_events has RLS disabled and full anon DML grants — idempotency table is readable, writable and truncatable via PostgREST | `backend/migrations/2026_05_15_slack_inbound_s1_5.sql:33-39; live pg_cl…` | supabase-db | open |
+| [SEC-013](findings/medium.md#sec-013) | medium | slack_processed_events has RLS disabled and full anon DML grants — idempotency table is readable, writable and truncatable via PostgREST | `migrations/2026_06_08_security_anon_surface_hardening.sql` | supabase-db | ✅ fixed |
 | [SEC-014](findings/medium.md#sec-014) | medium | HTML/email-template injection: form submission field keys AND values interpolated raw (unescaped) into the email sent to the project owner | `backend/auth_service/routers/forms.py:30-41 (also :44-87, used by both…` | xss-html | open |
 | [SEC-015](findings/low.md#sec-015) | low | admin_api_keys have no rotation, listing, or revocation endpoint and no enforced expiry | `backend/auth_service/services/admin_keys.py:53-82; backend/auth_servic…` | admin-priv | open |
 | [SEC-016](findings/low.md#sec-016) | low | CMS Connector concatenates untrusted client-website source files into the scan prompt with no data/instruction separation | `agents/CMS Connector - Website/prompts.py:201-214; agents/CMS Connecto…` | agents | open |
@@ -60,7 +59,7 @@ _Status: 3 in-progress (SEC-001, SEC-002, SEC-056 — code-complete, pending one
 | [SEC-030](findings/low.md#sec-030) | low | Public booking GET endpoints (manage/availability/config) have no rate limiting | `backend/auth_service/routers/booking.py:534-571, 305-351, 805-839` | public-tokens | open |
 | [SEC-031](findings/low.md#sec-031) | low | Reminder cron endpoint uses non-constant-time secret comparison | `backend/auth_service/routers/booking.py:745-749` | public-tokens | open |
 | [SEC-032](findings/low.md#sec-032) | low | Unvalidated user-controlled Reply-To on multi-tenant form email | `backend/auth_service/routers/forms.py:182, 214-220` | public-tokens | open |
-| [SEC-033](findings/low.md#sec-033) | low | slack_processed_events dedup table is anon-reachable (RLS disabled) — event suppression / poisoning surface | `backend/auth_service/services/slack_events_dedup.py:20-47` | public-tokens | open |
+| [SEC-033](findings/low.md#sec-033) | low | slack_processed_events dedup table is anon-reachable (RLS disabled) — event suppression / poisoning surface | `migrations/2026_06_08_security_anon_surface_hardening.sql` | public-tokens | ✅ fixed |
 | [SEC-034](findings/low.md#sec-034) | low | Authenticated translation endpoints trigger paid DeepL work with no rate limit (cost/DoS amplification) | `backend/auth_service/routers/workspace.py:211-323 (save_service auto-t…` | ratelimit-dos | open |
 | [SEC-035](findings/low.md#sec-035) | low | Public booking manage-token GET endpoint is unauthenticated and unlimited, enabling token-enumeration / scraping attempts | `backend/auth_service/routers/booking.py:534-571 (GET /booking/manage/{…` | ratelimit-dos | open |
 | [SEC-036](findings/low.md#sec-036) | low | Country-code path component in region loader allows directory traversal (operator-gated) | `scraper/src/scraper/regions/__init__.py:29-32 (load_country)` | scraper | open |
@@ -69,7 +68,7 @@ _Status: 3 in-progress (SEC-001, SEC-002, SEC-056 — code-complete, pending one
 | [SEC-039](findings/low.md#sec-039) | low | Credentialed CORS reflects Access-Control-Allow-Origin to any attacker-registered *.vercel.app subdomain | `backend/auth_service/main.py:59-90` | secrets-config | open |
 | [SEC-040](findings/low.md#sec-040) | low | Frontend CSP permits 'unsafe-inline' and 'unsafe-eval' on script-src and broad connect-src https: | `frontend/next.config.ts:41,49` | secrets-config | open |
 | [SEC-041](findings/low.md#sec-041) | low | Public forms endpoints leak raw upstream exception text in 502 responses | `backend/auth_service/routers/forms.py:224-228, 308-312` | secrets-config | open |
-| [SEC-042](findings/low.md#sec-042) | low | SECURITY DEFINER view tenant_rls_status is anon-readable and exposes RLS posture of tenant tables | `backend/migrations/2026_05_09_tenant_tables_rls.sql:168-185; live pg_c…` | supabase-db | open |
+| [SEC-042](findings/low.md#sec-042) | low | SECURITY DEFINER view tenant_rls_status is anon-readable and exposes RLS posture of tenant tables | `migrations/2026_06_08_security_anon_surface_hardening.sql` | supabase-db | ✅ fixed |
 | [SEC-043](findings/low.md#sec-043) | low | Design-prompt agent writeback bypasses the bleach sanitizer that protects the admin dangerouslySetInnerHTML sink | `agents/Design Prompt creator/phases/6-writeback.md:37 (raw SQL UPDATE …` | xss-html | open |
 | [SEC-044](findings/low.md#sec-044) | low | Tenant email_copy overrides inserted unescaped into booking emails (headings/subtitles) | `backend/auth_service/services/booking_i18n.py:59-70 (tt) consumed at b…` | xss-html | open |
 | [SEC-045](findings/low.md#sec-045) | low | Tenant-controlled booking brand fields (accent color, business_name, logo_url) interpolated raw into email HTML with no validation | `backend/auth_service/services/email_layout.py:64-74 (header), 79-84 (f…` | xss-html | open |
@@ -80,8 +79,8 @@ _Status: 3 in-progress (SEC-001, SEC-002, SEC-056 — code-complete, pending one
 | [SEC-050](findings/info.md#sec-050) | info | Backend application security-headers middleware omits Content-Security-Policy by design (relies on edge config) | `backend/auth_service/core/security_headers.py:9,13-30` | secrets-config | open |
 | [SEC-051](findings/info.md#sec-051) | info | Historical Supabase Postgres DB password was committed in .env.example files (rotated; remains in git history) | `docs/superpowers/plans/2026-04-30-env-config-hygiene.md:19-20,182` | secrets-config | open |
 | [SEC-052](findings/info.md#sec-052) | info | Short-link redirect expansion validates only a substring of the resolved URL, not its host | `scraper/src/scraper/urls.py:84-95` | ssrf-outbound | open |
-| [SEC-053](findings/info.md#sec-053) | info | SECURITY DEFINER claim functions have mutable search_path (function_search_path_mutable) | `backend/migrations/2026_05_16_solver_agent_columns.sql:27-77; live pg_…` | supabase-db | open |
-| [SEC-054](findings/info.md#sec-054) | info | Tenant-table RLS owner policies are inert because the app does not use Supabase Auth JWTs (auth.uid() always NULL) | `backend/migrations/2026_05_09_tenant_tables_rls.sql:35-159 (and 2026_0…` | supabase-db | open |
+| [SEC-053](findings/info.md#sec-053) | info | SECURITY DEFINER claim functions have mutable search_path (function_search_path_mutable) | `migrations/2026_06_08_security_anon_surface_hardening.sql` | supabase-db | ✅ fixed |
+| [SEC-054](findings/info.md#sec-054) | info | Tenant-table RLS owner policies are inert because the app does not use Supabase Auth JWTs (auth.uid() always NULL) | `backend/migrations/2026_05_09_tenant_tables_rls.sql` | supabase-db | accepted-risk |
 | [SEC-055](findings/info.md#sec-055) | info | Widget posts resize messages with wildcard target origin | `frontend/src/app/(widget)/w/[slug]/page.tsx:18-19` | xss-html | open |
 
 ## Dismissed (adversarially verified as false positives / non-issues)
