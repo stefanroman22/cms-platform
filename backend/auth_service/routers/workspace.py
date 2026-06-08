@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 
+from ..core import pg_rate_limit
 from ..core.limiter import limiter
 from ..models.schemas import (
     AdminProjectCreateIn,
@@ -226,6 +227,17 @@ async def save_service(
     default_locale = project.get("default_locale") or "en"
     locales = project.get("locales") or [default_locale]
     loc = locale or default_locale
+
+    # SEC-034: a save on a multi-locale project triggers paid machine translation.
+    # Bound the spend with a generous per-project limit (well above real editing
+    # cadence) so a buggy client or abuse can't amplify DeepL cost.
+    if len(locales) > 1:
+        pg_rate_limit.enforce(
+            f"save_translate:{project['id']}",
+            limit=120,
+            window_seconds=60,
+            detail="Saving too fast. Please wait a moment and try again.",
+        )
 
     sb = get_supabase_admin()
 

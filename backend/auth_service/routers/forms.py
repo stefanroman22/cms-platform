@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from ..core import pg_rate_limit
 from ..core.config import settings
 from ..core.limiter import client_ip, limiter
 from ..services.supabase_client import get_supabase_admin
@@ -137,6 +138,15 @@ async def submit_form(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Origin not allowed for this project",
         )
+
+    # SEC-010: shared (cross-instance) limit on top of the per-process slowapi one,
+    # so form-submission email spam can't be amplified across serverless instances.
+    pg_rate_limit.enforce(
+        f"forms:{_form_bucket(request)}",
+        limit=5,
+        window_seconds=600,
+        detail="Too many submissions. Please try again later.",
+    )
 
     # ── 3. Resolve the email_config service for this form_key ─────────────────
     svc_result = (

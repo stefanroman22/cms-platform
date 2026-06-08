@@ -13,10 +13,11 @@ import secrets
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from ..core import pg_rate_limit
 from ..core.config import settings
 from ..core.limiter import client_ip, limiter
 from ..services import (
@@ -303,7 +304,19 @@ def _when_label(start_utc: datetime, tz_name: str) -> str:
 # ---------- slug-scoped public API ----------
 
 
-@router.get("/{slug}/config")
+def _public_read_limit(request: Request) -> None:
+    """SEC-010/012/030/035: shared per-IP limit on the unauthenticated booking read
+    endpoints (config/services/availability/manage). Backed by the Postgres limiter
+    so it holds across serverless instances; generous enough for real widget use."""
+    pg_rate_limit.enforce(
+        f"booking_read:{client_ip(request)}",
+        limit=120,
+        window_seconds=60,
+        detail="Too many requests. Please slow down and try again.",
+    )
+
+
+@router.get("/{slug}/config", dependencies=[Depends(_public_read_limit)])
 def public_config(slug: str) -> JSONResponse:
     cfg = booking_tenant.load_tenant_by_slug(slug)
     if cfg is None:
@@ -321,7 +334,7 @@ def public_config(slug: str) -> JSONResponse:
     )
 
 
-@router.get("/{slug}/services")
+@router.get("/{slug}/services", dependencies=[Depends(_public_read_limit)])
 def list_services(slug: str) -> JSONResponse:
     cfg = _require_tenant(slug)
     services = booking_repo.load_active_services(cfg.tenant_id)
@@ -335,7 +348,7 @@ def list_services(slug: str) -> JSONResponse:
     )
 
 
-@router.get("/{slug}/availability")
+@router.get("/{slug}/availability", dependencies=[Depends(_public_read_limit)])
 def availability(
     slug: str, service_id: str, from_: str = Query(..., alias="from"), to: str = Query(...)
 ) -> JSONResponse:
@@ -532,7 +545,7 @@ def _load_for_manage(token: str):
 # NOTE: GET to match the existing /contact manage page's contract (zero frontend
 # change in P1). Before finalizing, open frontend/src/app/(marketing)/manage/[token]/page.tsx
 # and confirm every field it reads is present in this response.
-@router.get("/manage/{token}")
+@router.get("/manage/{token}", dependencies=[Depends(_public_read_limit)])
 def manage_get(token: str) -> JSONResponse:
     b, cfg, policy = _load_for_manage(token)
     if not b or cfg is None:
