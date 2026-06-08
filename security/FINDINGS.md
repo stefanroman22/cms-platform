@@ -17,7 +17,7 @@ This table is the **source of truth for status**. Detail for each finding lives 
 |---|---|---|---|---|---|
 | 1 | 4 | 10 | 31 | 10 | 56 |
 
-_Status (updated 2026-06-08): **26 fixed** (+ SEC-010/011/012/020/030/034/035 — Postgres shared rate limiter + login lockout), **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS), 28 open. Remediation ongoing._
+_Status (updated 2026-06-08): **28 fixed** (+ SEC-021/019 auth-session), **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS), 26 open. Remediation ongoing._
 
 > **Note (FINDINGS.md is canonical for status).** Per-finding detail files may still show their
 > original `open` status inline; this table is the source of truth.
@@ -45,9 +45,9 @@ _Status (updated 2026-06-08): **26 fixed** (+ SEC-010/011/012/020/030/034/035 �
 | [SEC-016](findings/low.md#sec-016) | low | CMS Connector concatenates untrusted client-website source files into the scan prompt with no data/instruction separation | `agents/CMS Connector - Website/prompts.py:201-214; agents/CMS Connecto…` | agents | open |
 | [SEC-017](findings/low.md#sec-017) | low | Client-controlled issue title/description reflected into Slack mrkdwn notifications (limited injection) | `backend/auth_service/services/slack_notify.py:92-103,141` | agents | open |
 | [SEC-018](findings/low.md#sec-018) | low | Design Prompt agent writes model-generated HTML (derived from untrusted scraped lead data) to leads.design_prompt, rendered in the admin dashboard via dangerouslySetInnerHTML with no sanitizer | `agents/Design Prompt creator/phases/6-writeback.md:9-41; agents/Design…` | agents | open |
-| [SEC-019](findings/low.md#sec-019) | low | Middleware fast-path serves authenticated pages for up to 13 min after server-side session revocation | `frontend/src/middleware.ts:56-61, 19-28` | authn-session | open |
+| [SEC-019](findings/low.md#sec-019) | low | Middleware fast-path serves authenticated pages for up to 13 min after server-side session revocation | `frontend/src/middleware.ts` (TTL 13min→60s) | authn-session | ✅ fixed |
 | [SEC-020](findings/low.md#sec-020) | low | No per-account login throttling or lockout — only per-IP rate limiting | `backend/auth_service/routers/auth.py (Postgres login lockout)` | authn-session | ✅ fixed |
-| [SEC-021](findings/low.md#sec-021) | low | Session cookie missing Secure flag and uses SameSite=lax on HTTPS preview deployments | `backend/auth_service/routers/auth.py:27, 30-40` | authn-session | open |
+| [SEC-021](findings/low.md#sec-021) | low | Session cookie missing Secure flag and uses SameSite=lax on HTTPS preview deployments | `backend/auth_service/routers/auth.py` (Secure on prod+preview) | authn-session | ✅ fixed |
 | [SEC-022](findings/low.md#sec-022) | low | Owner can link another tenant's resource into their own service (cross-tenant association write) via unvalidated resource_ids | `backend/auth_service/routers/booking_admin.py` (_validate_resource_ids) | authz-idor | ✅ fixed |
 | [SEC-023](findings/low.md#sec-023) | low | Auto-rollback pushes a revert to protected master using GITHUB_TOKEN and opens issues from operator-influenced commit subjects | `.github/workflows/post-deploy-smoke.yml:32-34,118-145,148-171` | ci-workflows | open |
 | [SEC-024](findings/low.md#sec-024) | low | Two workflows use unpinned (mutable-tag) third-party actions while the rest are SHA-pinned | `.github/workflows/solver-agent.yml:29,31; .github/workflows/scraper-ci…` | ci-workflows | open |

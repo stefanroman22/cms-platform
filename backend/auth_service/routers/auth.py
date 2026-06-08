@@ -35,13 +35,20 @@ _LOGIN_FAIL_WINDOW_SECONDS = 900  # 15 minutes
 IS_PROD = settings.ENVIRONMENT == "production"
 
 
+# SEC-021: preview deployments are served over HTTPS too, so the session cookie
+# must carry the Secure flag there as well — not only in production. SameSite stays
+# `lax` outside production because the preview frontend and backend are different
+# origins and `strict` would stop the cookie from being sent on those requests.
+_IS_HTTPS_ENV = settings.ENVIRONMENT in ("production", "preview")
+
+
 def _set_session_cookie(response: Response, raw_sid: str, remember_me: bool) -> None:
     days = REMEMBER_ME_DAYS if remember_me else DEFAULT_DAYS
     response.set_cookie(
         key=SESSION_COOKIE,
         value=raw_sid,
         httponly=True,
-        secure=IS_PROD,
+        secure=_IS_HTTPS_ENV,
         samesite="strict" if IS_PROD else "lax",
         max_age=days * 24 * 60 * 60,
         path="/",
