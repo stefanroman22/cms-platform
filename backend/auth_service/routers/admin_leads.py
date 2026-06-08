@@ -14,6 +14,25 @@ from .deps import admin_user_via_bearer_or_sid
 
 router = APIRouter(prefix="/admin/leads", tags=["admin", "leads"])
 
+# SEC-028: columns the list endpoint may sort by. Anything else falls back to
+# created_at so a caller-supplied `sort` can't inject into the PostgREST order.
+_SORTABLE_COLUMNS = frozenset(
+    {
+        "created_at",
+        "updated_at",
+        "business_name",
+        "rating",
+        "review_count",
+        "ai_score",
+        "lead_status",
+        "lead_type",
+        "category",
+        "city",
+        "country",
+        "closed_amount",
+    }
+)
+
 
 @router.get("", response_model=dict)
 async def list_leads(
@@ -66,6 +85,10 @@ async def list_leads(
     if search:
         q = q.ilike("business_name", f"%{search}%")
 
+    # SEC-028: `sort` is a caller-controlled column name passed to PostgREST
+    # .order(); allowlist it so it can't be used for filter/column injection.
+    if sort not in _SORTABLE_COLUMNS:
+        sort = "created_at"
     q = q.order(sort, desc=desc).range(offset, offset + limit - 1)
     res = q.execute()
     items = [LeadOut(**row).model_dump() for row in (res.data or [])]

@@ -1,4 +1,5 @@
 import html
+import logging
 import re
 from datetime import UTC, datetime
 
@@ -10,6 +11,7 @@ from ..core.config import settings
 from ..core.limiter import client_ip, limiter
 from ..services.supabase_client import get_supabase_admin
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["forms"])
 
 # A single, header-injection-safe email address (no whitespace/CRLF/commas).
@@ -235,9 +237,12 @@ async def submit_form(
     try:
         resend.Emails.send(params)
     except Exception as exc:
+        # SEC-041: log the upstream error server-side; return a generic message so
+        # the public submitter never sees raw provider/exception text.
+        logger.exception("Resend send failed")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Email delivery failed: {exc}",
+            detail="Email delivery failed. Please try again later.",
         ) from exc
 
     return JSONResponse(
@@ -319,9 +324,12 @@ async def submit_contact(request: Request, body: ContactRequest) -> JSONResponse
     try:
         resend.Emails.send(params)
     except Exception as exc:
+        # SEC-041: log the upstream error server-side; return a generic message so
+        # the public submitter never sees raw provider/exception text.
+        logger.exception("Resend send failed")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Email delivery failed: {exc}",
+            detail="Email delivery failed. Please try again later.",
         ) from exc
 
     return JSONResponse(content={"success": True})

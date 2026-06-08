@@ -6,6 +6,7 @@ enabled-no-policy). The slot engine and DB I/O live in the booking_* services.""
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 import re
 import secrets
@@ -745,7 +746,11 @@ async def manage_reschedule(request: Request, token: str, body: RescheduleIn) ->
 @router.post("/cron/reminders")
 async def send_reminders(request: Request) -> JSONResponse:
     secret = request.headers.get("x-cron-secret", "")
-    if not settings.BOOKING_CRON_SECRET or secret != settings.BOOKING_CRON_SECRET:
+    # SEC-031/SEC-038: constant-time compare so the secret can't be recovered by
+    # timing the response.
+    if not settings.BOOKING_CRON_SECRET or not hmac.compare_digest(
+        secret, settings.BOOKING_CRON_SECRET
+    ):
         raise HTTPException(status_code=403, detail="Forbidden")
     now = datetime.now(UTC)
     # Scan a window wide enough to cover the largest possible offset + 5-min send window.
