@@ -1,0 +1,44 @@
+{
+  "hero": {
+    "eyebrow": "About us",
+    "title": "Software that respects your time, your budget, and your data.",
+    "lead": "Roman Technologies is an EU-based software studio. We design and build custom websites, applications and AI workflows for ambitious companies — then host, secure and maintain them, so you can focus on your business instead of your stack."
+  },
+  "story": {
+    "heading": "Who we are",
+    "paragraphs": [
+      "We started Roman Technologies on a simple conviction: small and growing businesses deserve the same quality of software as enterprises — without the enterprise price tag or the agency runaround.",
+      "Every project is built to be owned by you, reviewed by a human before it ships, and backed by managed hosting and monitoring. No lock-in, no surprises — just software that works, and a team that actually answers."
+    ]
+  },
+  "team": {
+    "heading": "Meet the team",
+    "subheading": "A small, senior team that ships — engineering, security and strategy under one roof.",
+    "members": [
+      {
+        "name": "Stefan Roman",
+        "role": "CEO & Founder",
+        "description": "Leads strategy and client relationships, oversees delivery end-to-end, and makes sure every release ships correct, on time, and aligned with what the business actually needs.",
+        "image": "/team/stefan-roman.jpg",
+        "email": "stefan@roman-technologies.dev",
+        "linkedin": "https://www.linkedin.com/in/stefan-roman-1911a9211/"
+      },
+      {
+        "name": "Alexandru Aioanei",
+        "role": "Full Stack (AI) Developer",
+        "description": "Builds features end-to-end across frontend and backend, and integrates AI workflows and agents into client products — turning ideas into working, maintainable software.",
+        "image": "/team/alexandru-aioanei.png",
+        "email": "alex03aioanei@gmail.com",
+        "linkedin": "https://www.linkedin.com/in/alexandru-aioanei-7a8370255/"
+      },
+      {
+        "name": "Laurian Duma",
+        "role": "GDPR & Security Compliance Engineer",
+        "description": "Owns data protection and security: runs reviews and threat modelling, keeps every product GDPR-compliant, and makes sure client data stays locked down and EU-resident.",
+        "image": "/team/laurian-duma.jpeg",
+        "email": "d_laurian@yahoo.com",
+        "linkedin": "https://www.linkedin.com/in/laurian-duma/"
+      }
+    ]
+  }
+}

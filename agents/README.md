@@ -6,6 +6,7 @@ Catalog of all agents in this repo. Each agent owns its own folder with its own 
 |-------|--------|-------|---------|
 | **CMS Connector — Website** | [`CMS Connector - Website/`](./CMS%20Connector%20-%20Website/) | [`.claude/skills/cms-connector-website/SKILL.md`](../.claude/skills/cms-connector-website/SKILL.md) | Import a client website to GitHub, scan it for editable content, generate a markdown integration report for human review, provision CMS services + Vercel preview, run a test matrix. Self-improves via `LEARNINGS.md`. |
 | **Solver — Issues** | [`Solver - Issues/`](./Solver%20-%20Issues/) | [`.claude/skills/solver-issues/SKILL.md`](../.claude/skills/solver-issues/SKILL.md) | Autonomous code-fixing worker. Triggered by GitHub Actions cron every 15 min. Claims pending CMS issues (priority-ordered), runs Claude Code action against a cloned client repo, commits the fix to `cms-preview`, then routes back into the S1.5 approval flow. |
+| **Website Builder** | [`Website Builder/`](./Website%20Builder/) | [`.claude/agents/website-builder.md`](../.claude/agents/website-builder.md) (subagent) | Turns a Claude Design export (URL or local folder) into a production-ready, multilingual Next.js 16 site in a sibling `scratch\<business-name>\` folder — i18n (next-intl), SEO + hreflang, Motion animations, responsive + a11y audit, Playwright self-tests. Runs as an Opus-4.7 / effort:high subagent. Self-improves via `LEARNINGS.md` + per-build `.learnings/`. |
 
 ## Adding a new agent
 

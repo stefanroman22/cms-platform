@@ -54,17 +54,32 @@ const securityHeaders = [
   },
 ];
 
+/**
+ * Embeddable paths (/w/* widget page + /embed.js loader) need different
+ * headers: no X-Frame-Options (would block the iframe) and
+ * frame-ancestors * (allow any site to embed the booking widget).
+ * Everything else keeps the strict headers unchanged.
+ */
+const embeddableHeaders = securityHeaders
+  .filter((h) => h.key !== "X-Frame-Options")
+  .map((h) =>
+    h.key === "Content-Security-Policy"
+      ? { key: h.key, value: h.value.replace("frame-ancestors 'none'", "frame-ancestors *") }
+      : h
+  );
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
-      {
-        // Apply to every path, including /api/* (server-side proxy) and
-        // static assets. Vercel still serves PNGs / SVGs without these
-        // headers when the request hits the CDN edge before Next.js;
-        // that's acceptable for public assets.
-        source: "/:path*",
-        headers: securityHeaders,
-      },
+      // Embeddable paths — no X-Frame-Options, permissive frame-ancestors.
+      { source: "/embed.js", headers: embeddableHeaders },
+      { source: "/w/:path*", headers: embeddableHeaders },
+      // Everything ELSE keeps the strict headers. This MUST exclude the
+      // embeddable paths via a negative-lookahead: Next.js applies *all*
+      // matching header rules (it does not stop at the first match), so a
+      // plain "/:path*" catch-all would re-add X-Frame-Options: DENY to /w/*
+      // and re-block the iframe. (Documented Next.js "match all except" form.)
+      { source: "/((?!w/|embed\\.js).*)", headers: securityHeaders },
     ];
   },
 };

@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
+from ..core import pg_rate_limit
 from ..core.config import settings
 from ..core.limiter import limiter
 from ..models.schemas import (
@@ -24,7 +25,21 @@ from ..services.sessions import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 SESSION_COOKIE = "sid"
+
+# SEC-011/SEC-020: per-account login lockout. After this many failed attempts for
+# one email within the window, further attempts are refused (shared across Vercel
+# instances via the Postgres limiter). Generous enough to tolerate typos but far
+# below any realistic brute-force throughput.
+_LOGIN_FAIL_LIMIT = 10
+_LOGIN_FAIL_WINDOW_SECONDS = 900  # 15 minutes
 IS_PROD = settings.ENVIRONMENT == "production"
+
+
+# SEC-021: preview deployments are served over HTTPS too, so the session cookie
+# must carry the Secure flag there as well — not only in production. SameSite stays
+# `lax` outside production because the preview frontend and backend are different
+# origins and `strict` would stop the cookie from being sent on those requests.
+_IS_HTTPS_ENV = settings.ENVIRONMENT in ("production", "preview")
 
 
 def _set_session_cookie(response: Response, raw_sid: str, remember_me: bool) -> None:
@@ -33,7 +48,7 @@ def _set_session_cookie(response: Response, raw_sid: str, remember_me: bool) -> 
         key=SESSION_COOKIE,
         value=raw_sid,
         httponly=True,
-        secure=IS_PROD,
+        secure=_IS_HTTPS_ENV,
         samesite="strict" if IS_PROD else "lax",
         max_age=days * 24 * 60 * 60,
         path="/",
@@ -61,11 +76,24 @@ def _client_meta(request: Request) -> tuple[str | None, str | None]:
 # password keyspace) but tolerates the legitimate-typo case.
 @limiter.limit("30/minute")
 async def login(body: LoginRequest, request: Request, response: Response):
+    fail_bucket = f"login_fail:{body.email.strip().lower()}"
+    if pg_rate_limit.over_limit(fail_bucket, _LOGIN_FAIL_LIMIT, _LOGIN_FAIL_WINDOW_SECONDS):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please wait a few minutes and try again.",
+        )
+
     user = await authenticate_user(body.email, body.password)
     if not user:
+        # Count the failure (per-account) and reject. The over_limit gate above
+        # locks the account out once the threshold is crossed.
+        pg_rate_limit.allow(fail_bucket, _LOGIN_FAIL_LIMIT, _LOGIN_FAIL_WINDOW_SECONDS)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
         )
+
+    # Successful login clears the account's failure counter.
+    pg_rate_limit.reset(fail_bucket)
 
     user_agent, ip = _client_meta(request)
     raw_sid, _expires_at = await create_session(

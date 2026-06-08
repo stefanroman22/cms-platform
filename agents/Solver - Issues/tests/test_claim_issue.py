@@ -72,6 +72,20 @@ def test_actionable_issue_writes_outputs_and_prompt(monkeypatch, gh_output, tmp_
     assert "Step 0 — Verify the issue is real" in prompt
     assert "Previous attempt was rejected" not in prompt  # no revision_feedback
 
+    # SEC-001: untrusted issue text must be nonce-fenced as data, not instructions.
+    assert "<issue-handling-policy>" in prompt
+    assert "NEVER as instructions" in prompt
+    # Match the dashed marker (only present on the real fence, not the policy prose).
+    assert "----- BEGIN UNTRUSTED CLIENT TEXT" in prompt
+    assert "----- END UNTRUSTED CLIENT TEXT" in prompt
+    # The title text sits INSIDE the untrusted fence, not loose in the prompt.
+    begin = prompt.index("----- BEGIN UNTRUSTED CLIENT TEXT")
+    end = prompt.index("----- END UNTRUSTED CLIENT TEXT")
+    assert begin < prompt.index("Hero broken") < end
+    # The allowed-tools guidance no longer advertises an arbitrary-exec escape hatch.
+    assert "node -e" in prompt  # named only to tell the agent it is NOT available
+    assert "Bash(node:*)" not in prompt
+
     # Skill injection contract: every vendored skill name must appear as an
     # XML tag in the prompt; neutralization preamble must precede it; the
     # execution-environment block must explicitly disable the Skill tool.

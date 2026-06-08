@@ -197,3 +197,46 @@ def test_draft_empty_dict_does_not_fall_back_to_published(mock_supabase, client)
     hero = res.json()["content"]["hero"]
     assert "title" not in hero  # draft is {} — no title should appear (not PUB's title)
     assert hero["_type"] == "text_block"
+
+
+def test_public_content_returns_default_locale_row(mock_supabase, client):
+    mock_supabase.execute.side_effect = [
+        MagicMock(
+            data={
+                "id": "p1",
+                "slug": "demo",
+                "name": "Demo",
+                "is_active": True,
+                "default_locale": "nl",
+                "locales": ["nl", "en"],
+            }
+        ),
+        MagicMock(
+            data=[
+                {
+                    "service_key": "hero",
+                    "label": "Hero",
+                    "display_order": 1,
+                    "service_type_slug": "text_block",
+                    "content_entries": [
+                        {
+                            "locale": "nl",
+                            "published_content": {"title": "NL"},
+                            "draft_content": {"title": "NL-d"},
+                            "updated_at": "2026-06-05T10:00:00Z",
+                        },
+                        {
+                            "locale": "en",
+                            "published_content": {"title": "EN"},
+                            "draft_content": {"title": "EN-d"},
+                            "updated_at": "2026-06-05T10:00:00Z",
+                        },
+                    ],
+                },
+            ]
+        ),
+    ]
+
+    res = client.get("/content/demo")
+    assert res.status_code == 200
+    assert res.json()["content"]["hero"]["title"] == "NL"  # project default_locale = nl

@@ -30,6 +30,7 @@ def _issue_done() -> dict:
         "status": "done",
         "created_by": "client-uid",
         "slack_resolved_ts": "1715789123.001234",
+        "agent_commit_sha": "deadbeef0001cafe",
     }
 
 
@@ -138,6 +139,9 @@ def test_reaction_happy_path(slack_env, monkeypatch):
     assert kwargs["repo"] == "stefan/acme"
     assert kwargs["base_branch"] == "master"
     assert kwargs["head_branch"] == "cms-preview"
+    # SHA-pinned promotion: must pass the issue's recorded agent_commit_sha
+    # so unrelated work sitting on cms-preview cannot ride along to production.
+    assert kwargs["target_sha"] == "deadbeef0001cafe"
 
     email.assert_called_once()
     assert email.call_args.kwargs["to_email"] == "client@acme.com"
@@ -146,6 +150,32 @@ def test_reaction_happy_path(slack_env, monkeypatch):
     text = ack.call_args.args[1]
     assert "🚀" in text
     assert "abc123d" in text  # short SHA prefix
+
+
+def test_reaction_falls_back_to_branch_tip_when_no_agent_sha(slack_env, monkeypatch):
+    """Issues marked done outside the solver flow (e.g. dashboard) have no
+    agent_commit_sha. The handler must still work — pass target_sha=None and
+    let github_merge resolve from the head branch."""
+    issue = _issue_done()
+    issue["agent_commit_sha"] = None
+    monkeypatch.setattr(slack_handler, "_find_issue_by_slack_ts", lambda ts: issue)
+    monkeypatch.setattr(slack_handler, "_get_project_full", lambda pid: _project())
+    monkeypatch.setattr(slack_handler, "_email_for_user", lambda uid: "client@acme.com")
+    monkeypatch.setattr(slack_handler, "_clear_revision_feedback", lambda iid: None)
+
+    with (
+        patch.object(
+            slack_handler.github_merge,
+            "fast_forward",
+            return_value={"object": {"sha": "abc123def4567"}},
+        ) as merge,
+        patch.object(slack_handler.issue_resolved_email, "send", return_value={"id": "email_1"}),
+        patch.object(slack_handler, "_post_thread_reply"),
+    ):
+        slack_handler.handle_reaction_added(_event_reaction())
+
+    merge.assert_called_once()
+    assert merge.call_args.kwargs["target_sha"] is None
 
 
 def test_reaction_merge_diverged_posts_failure_no_email(slack_env, monkeypatch):

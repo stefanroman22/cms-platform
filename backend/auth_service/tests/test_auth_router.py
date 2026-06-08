@@ -51,6 +51,10 @@ def auth_deps(monkeypatch):
     monkeypatch.setattr("auth_service.routers.auth.revoke_session", fake_revoke_session)
     monkeypatch.setattr("auth_service.routers.auth.revoke_all_for_user", fake_revoke_all)
     monkeypatch.setattr("auth_service.routers.auth.change_user_password", fake_change_pw)
+    # Isolate login tests from the Postgres login-lockout limiter (SEC-011).
+    monkeypatch.setattr("auth_service.core.pg_rate_limit.over_limit", lambda *a, **k: False)
+    monkeypatch.setattr("auth_service.core.pg_rate_limit.allow", lambda *a, **k: True)
+    monkeypatch.setattr("auth_service.core.pg_rate_limit.reset", lambda *a, **k: None)
 
 
 def test_login_success_sets_sid_cookie_with_httponly(client, auth_deps):
@@ -94,6 +98,29 @@ def test_login_default_sets_30_day_max_age(client, auth_deps):
     set_cookie = res.headers.get("set-cookie", "")
     # 30 days = 2_592_000 seconds
     assert "Max-Age=2592000" in set_cookie
+
+
+def test_login_locked_account_returns_429(client, auth_deps, monkeypatch):
+    """SEC-011: once the per-account failure threshold is crossed, login is refused."""
+    monkeypatch.setattr("auth_service.core.pg_rate_limit.over_limit", lambda *a, **k: True)
+    res = client.post(
+        "/auth/login",
+        json={"email": "admin@example.com", "password": "correct-password"},
+    )
+    assert res.status_code == 429
+    assert "sid=" not in res.headers.get("set-cookie", "")
+
+
+def test_login_failure_registers_attempt(client, auth_deps, monkeypatch):
+    """SEC-011: a wrong password counts against the account's failure budget."""
+    calls = []
+    monkeypatch.setattr(
+        "auth_service.core.pg_rate_limit.allow",
+        lambda bucket, *a, **k: calls.append(bucket) or True,
+    )
+    res = client.post("/auth/login", json={"email": "admin@example.com", "password": "wrong"})
+    assert res.status_code == 401
+    assert calls == ["login_fail:admin@example.com"]
 
 
 def test_logout_revokes_session_and_clears_cookie(client, auth_deps):

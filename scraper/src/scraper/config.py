@@ -10,9 +10,6 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_SERVICE_KEY: str = ""
 
-    GOOGLE_SHEETS_CREDENTIALS_JSON: str = ""
-    GOOGLE_SHEET_ID: str = ""
-
     SCRAPER_HEADLESS: bool = True
     SCRAPER_LOCALE_DEFAULT: str = "en"
     SCRAPER_USER_AGENT: str = (
@@ -22,6 +19,8 @@ class Settings(BaseSettings):
 
     SCRAPER_MIN_DELAY_MS: int = 600
     SCRAPER_MAX_DELAY_MS: int = 2200
+
+    SCRAPER_GEOCODE_CACHE: str = ".geocode_cache.json"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

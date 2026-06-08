@@ -32,6 +32,14 @@ backend/keys/
 # ── Git worktrees (isolated feature branches) ──────────────────
 .worktrees/
 
+# ── Transient agent / tooling artifacts (not source) ───────────
+.playwright-mcp/
+.superpowers/
+scraper.rar
+scraper/.geocode_cache.json
+# Prod data backup snapshots (contain live manage tokens — never commit)
+backend/migrations/_backup_bookings_*.json
+
 # ─────────────────────────────────────────────────────────────
 # Frontend — Next.js
 # ─────────────────────────────────────────────────────────────

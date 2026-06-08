@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" font-family="Geist, Arial, sans-serif">
+  <rect width="1280" height="800" fill="#0E0E10"/>
+  <rect width="1280" height="60" fill="#0B0B0D"/>
+  <circle cx="30" cy="30" r="6" fill="#3a3a3e"/><circle cx="52" cy="30" r="6" fill="#3a3a3e"/><circle cx="74" cy="30" r="6" fill="#3a3a3e"/>
+  <text x="120" y="35" fill="#8a8a90" font-size="15">Infrastructure · Status</text>
+  <!-- title -->
+  <text x="64" y="124" fill="#FAFAF7" font-size="40" font-weight="700">Hosted, secured, monitored</text>
+  <text x="64" y="158" fill="#6b6862" font-size="18">Uptime, backups and security patches handled for you — around the clock.</text>
+  <!-- status pills -->
+  <g font-size="14" font-weight="600">
+    <rect x="64" y="190" width="180" height="44" rx="12" fill="#C9A961" opacity="0.14"/>
+    <circle cx="92" cy="212" r="6" fill="#C9A961"/><text x="112" y="217" fill="#C9A961">Operational</text>
+    <rect x="260" y="190" width="160" height="44" rx="12" fill="#161618" stroke="#2a2a2e"/>
+    <circle cx="288" cy="212" r="6" fill="#C9A961"/><text x="308" y="217" fill="#cfcfd4">SSL valid</text>
+    <rect x="436" y="190" width="190" height="44" rx="12" fill="#161618" stroke="#2a2a2e"/>
+    <circle cx="464" cy="212" r="6" fill="#C9A961"/><text x="484" y="217" fill="#cfcfd4">Backups daily</text>
+  </g>
+  <!-- uptime chart panel -->
+  <rect x="64" y="262" width="1152" height="320" rx="16" fill="#161618" stroke="#2a2a2e"/>
+  <text x="92" y="300" fill="#FAFAF7" font-size="16" font-weight="600">Uptime — last 30 days</text>
+  <text x="1090" y="300" fill="#C9A961" font-size="22" font-weight="700">99.98%</text>
+  <!-- gridlines -->
+  <g stroke="#222226" stroke-width="1">
+    <line x1="92" y1="350" x2="1188" y2="350"/><line x1="92" y1="420" x2="1188" y2="420"/><line x1="92" y1="490" x2="1188" y2="490"/><line x1="92" y1="540" x2="1188" y2="540"/>
+  </g>
+  <!-- area + line -->
+  <path d="M92 470 L220 440 L348 455 L476 410 L604 430 L732 380 L860 400 L988 360 L1116 375 L1188 365 L1188 540 L92 540 Z" fill="#C9A961" opacity="0.10"/>
+  <path d="M92 470 L220 440 L348 455 L476 410 L604 430 L732 380 L860 400 L988 360 L1116 375 L1188 365" fill="none" stroke="#C9A961" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="988" cy="360" r="5" fill="#C9A961"/>
+  <!-- bottom metric cards -->
+  <g>
+    <rect x="64" y="606" width="368" height="110" rx="14" fill="#161618" stroke="#2a2a2e"/>
+    <text x="88" y="642" fill="#8a8a90" font-size="14">Response time</text>
+    <text x="88" y="690" fill="#FAFAF7" font-size="32" font-weight="700">112 ms</text>
+    <rect x="456" y="606" width="368" height="110" rx="14" fill="#161618" stroke="#2a2a2e"/>
+    <text x="480" y="642" fill="#8a8a90" font-size="14">Threats blocked</text>
+    <text x="480" y="690" fill="#FAFAF7" font-size="32" font-weight="700">1,204</text>
+    <rect x="848" y="606" width="368" height="110" rx="14" fill="#161618" stroke="#2a2a2e"/>
+    <text x="872" y="642" fill="#8a8a90" font-size="14">Last backup</text>
+    <text x="872" y="690" fill="#FAFAF7" font-size="32" font-weight="700">2h ago</text>
+  </g>
+  <text x="1264" y="788" fill="#33333a" font-size="13" text-anchor="end">MOCK · replace /public/laptop/feature-3.svg</text>
+</svg>

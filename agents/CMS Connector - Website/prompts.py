@@ -67,14 +67,15 @@ Repeater field types: `string`, `richtext`, `url`, `tags`.
 - UI affordance copy ("Loading…", "Subscribe", form-field placeholders)
 - CSS class names, design tokens, animation config, breakpoints, theme files
 - Test fixtures, mock data, storybook entries
-- i18n locale toggles or language-switcher labels (configuration, not content)
+- The language-switcher control and its locale labels (chrome, not content)
 
 When ambiguous: would a non-developer reasonably ask "can I change this myself?" → \
 include. Otherwise exclude.
 
 ## Other rules
 
-- `service_key`: snake_case, lowercase, URL-safe.
+- `service_key`: snake_case, lowercase, URL-safe, stable across reruns — these keys \
+  double as next-intl message namespaces resolved via `t("<service_key>.<field>")`.
 - `display_order`: 1, 2, 3... in the order they appear in the report.
 - `initial_content`: extract current values verbatim, preserving data types.
 - `page_name`: title-case page name where the content lives ("Home", "About", \
@@ -83,6 +84,30 @@ include. Otherwise exclude.
 - Detect framework: look for `next.config`, `vite.config`, `astro.config`, \
   `nuxt.config`, `svelte.config`. Return one of: `next`, `vite-react`, `astro`, \
   `nuxt`, `svelte`, `other`.
+- Detect locales: read `i18n/routing.ts` for `defineRouting({ locales, defaultLocale })` \
+  to extract the locale array and default. Cross-check against the filenames present \
+  under `messages/` (each `<locale>.json` is evidence of a real locale). If neither \
+  source exists, treat the site as single-locale: `locales` = one code read from the \
+  `<html lang>` attribute of the entry file (fall back to `"en"`), \
+  `default_locale` = that same code. Report `"locales": [...]` and \
+  `"default_locale": "..."` at the top level of the manifest.
+- Detect booking / scheduling intent: emit a top-level `"booking"` block (see \
+  schema below) when ANY of the following signals are present — a calendar or \
+  date-time slot picker; an "appointment / book a call / book a table / reserve / \
+  schedule" user flow; a services-with-durations + staff + opening-hours pattern; \
+  or an existing booking widget component. A plain contact form with no scheduling \
+  intent stays on the `email_config` path — booking is ONLY for scheduling. \
+  When the intent is ambiguous, emit the `booking` block with `"detected": true` \
+  and add an open question; the human review gate decides. Extract demo values for \
+  all fields where possible (business_name, brand colors, logo, services list with \
+  duration_min, resource/staff names, opening hours as weekday 0=Sun..6=Sat with \
+  local start/end times, locale, timezone). Leave `destination_email` empty — \
+  Stefan sets the client email in the report; it defaults to his email at provision. \
+  The client's booking UI components are WIRED to the headless booking API at \
+  integration time; list the source file paths to connect in \
+  `ui_wiring.components`. Set `fallback_embed: true` ONLY when scheduling intent \
+  is detected but no usable booking UI exists in the source. \
+  `calendar_provider` is always `"none"` for clients.
 
 ## Output
 
@@ -91,6 +116,8 @@ Return only:
 {
   "project_slug": "<provided slug>",
   "framework": "<detected>",
+  "locales": ["en"],
+  "default_locale": "en",
   "cms_endpoint": "https://cms-backend-roman.vercel.app/content",
   "services": [
     {
@@ -100,9 +127,24 @@ Return only:
       "display_order": 1,
       "page_name": "Home",
       "item_schema": [{"key":"...","label":"...","type":"string|richtext|url|tags"}],
-      "initial_content": {}
+      "initial_content": {},
+      "translatable": true
     }
   ],
+  "booking": {
+    "detected": true,
+    "public_slug": "<project-slug>",
+    "business_name": "...",
+    "accent_color": "#...", "primary_color": "#...", "logo_url": "...",
+    "locale": "en", "timezone": "Europe/Berlin",
+    "destination_email": "",
+    "calendar_provider": "none",
+    "reminders": { "enabled": true, "offsets_min": [1440, 120] },
+    "services":  [{ "name": "Consultation", "duration_min": 30 }],
+    "resources": [{ "name": "Staff", "type": "staff" }],
+    "hours":     [{ "weekday": 1, "start_time": "09:00", "end_time": "17:00" }],
+    "ui_wiring": { "components": ["<paths of the client's booking UI to wire>"], "fallback_embed": false }
+  },
   "excluded": [
     {"item": "<short description>", "reason": "<short>"}
   ],
@@ -112,7 +154,22 @@ Return only:
 }
 
 `item_schema` is required only for `repeater`. `excluded` and `open_questions` are \
-arrays — empty if none. NO additional keys, NO markdown, NO commentary outside JSON."""
+arrays — empty if none.
+
+For `initial_content`: when only one locale is detected, use a flat object of field \
+values (single-locale form, backward-compatible). When multiple locales are detected, \
+use a per-locale map `{ "<locale>": { ...field values } }` populated from the \
+corresponding `messages/<locale>.json` so existing human translations are imported. \
+Single-locale output MUST use the flat form — never wrap a single locale in a map.
+
+`translatable` (optional, default `true`): set to `false` for locale-invariant \
+services such as logos, image URLs, and file-download URLs that should not be \
+duplicated per locale. A service marked `translatable: false` (locale-invariant \
+assets like logos, image/file URLs) always uses the flat single-locale \
+`initial_content` form even in a multi-locale manifest — it is seeded once for \
+the default locale and not duplicated per locale.
+
+NO additional keys, NO markdown, NO commentary outside JSON."""
 
 
 def _read_learnings() -> str:

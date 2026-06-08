@@ -111,3 +111,35 @@ export function createSlideIn({
     },
   };
 }
+
+// ── Lead editing — section reveal + row add/remove + inline error ──────────────
+
+/** Section body crossfade between read view and edit form (lead drawer). */
+export const editReveal: Variants = {
+  hidden: { height: 0, opacity: 0 },
+  visible: {
+    height: "auto",
+    opacity: 1,
+    transition: { duration: 0.22, ease: "easeOut" },
+  },
+};
+
+/** Per-row add/remove animation for editable lists (e.g. About attributes). */
+export const rowAdd: Variants = {
+  hidden: { x: -8, opacity: 0 },
+  visible: {
+    x: 0,
+    opacity: 1,
+    transition: { duration: 0.18, ease: "easeOut" },
+  },
+};
+
+/** Inline validation error fade-in under a field. */
+export const errorBlip: Variants = {
+  hidden: { y: -2, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: { duration: 0.16, ease: "easeOut" },
+  },
+};

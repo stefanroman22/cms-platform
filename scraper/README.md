@@ -9,7 +9,7 @@
 - Python 3.11 or newer.
 - Playwright Chromium browser (installed via `python -m playwright install chromium`).
 - On Linux hosts, the matching system libraries for headless Chrome (installed with `--with-deps`, requires `sudo`).
-- A Supabase project with the `leads` schema from Phase A applied, and a Google service-account JSON for the Sheets mirror.
+- A Supabase project with the `leads` schema from Phase A applied.
 
 ## Local development
 
@@ -21,15 +21,13 @@ source venv/Scripts/activate   # or venv/bin/activate on Linux/macOS
 pip install -e ".[dev]"
 python -m playwright install --with-deps chromium
 cp .env.example .env
-# Fill in SUPABASE_URL, SUPABASE_SERVICE_KEY, and the Google Sheets values in .env
+# Fill in SUPABASE_URL and SUPABASE_SERVICE_KEY in .env
 ```
 
 ## Env vars
 
 - `SUPABASE_URL` — Supabase project URL; target of the primary upsert sink.
 - `SUPABASE_SERVICE_KEY` — service-role key used server-side by the scraper to bypass RLS.
-- `GOOGLE_SHEETS_CREDENTIALS_JSON` — absolute path to the Google service-account JSON file.
-- `GOOGLE_SHEET_ID` — ID of the spreadsheet that mirrors the leads table for human review.
 - `SCRAPER_HEADLESS` — `true` in prod; set `false` locally to watch Chromium drive.
 - `SCRAPER_LOCALE_DEFAULT` — Accept-Language / UI locale fallback when a job does not specify one.
 - `SCRAPER_USER_AGENT` — UA string Playwright sends on every request.
@@ -39,15 +37,41 @@ cp .env.example .env
 
 The package exposes a Typer-based CLI registered as the `scraper` entry point.
 
-### scrape
+### Quick run (defaults)
 
-Runs a single ad-hoc scrape for a given `lead_type` and country code. Useful for manual testing and one-off harvests.
+All fields are optional. With zero arguments the scraper runs against
+**Netherlands**, category **"businesses"**, **all cities country-wide**,
+**reviews on (top 3 by stars)**, and the **no-website filter**.
 
 ```bash
-python -m scraper.cli scrape restaurants NL --city Lelystad --max 10 --dry-run
+python -m scraper.cli scrape --dry-run
 ```
 
-`--dry-run` writes results to a local JSON file instead of Supabase + Sheets; omit it for a real run.
+Override any field with the matching `--option`. See `scrape --help` for the full list.
+
+### scrape
+
+Runs a single ad-hoc scrape. Useful for manual testing and one-off harvests.
+
+```bash
+python -m scraper.cli scrape --category restaurants --country NL --city Lelystad --max 10 --dry-run
+```
+
+`--dry-run` writes results to a local JSON file instead of Supabase; omit it for a real run.
+
+### scrape-url
+
+Scrape a single business by its Google Maps URL. Useful for ad-hoc lead lookup or for verifying the extraction pipeline against a known place page.
+
+```bash
+python -m scraper.cli scrape-url "https://maps.app.goo.gl/abc123" --dry-run
+```
+
+Accepts full URLs (`google.com/maps/place/...`), legacy short links (`goo.gl/maps/...`), and mobile share links (`maps.app.goo.gl/...`). Short links are expanded automatically.
+
+Supabase is used by default; pass `--no-supabase` to skip it. `--dry-run` writes to `./lead-single.json` by default (use `--out` to override).
+
+Filters from the search-mode `scrape` command are bypassed — the user has explicitly chosen this lead, so it is always written to the configured sinks.
 
 ### run-pending
 
@@ -61,13 +85,12 @@ python -m scraper.cli run-pending
 
 - **JSON** — used by `--dry-run`; one file per invocation under `./out/`.
 - **Supabase** — primary sink; upserts on `external_id` so re-runs are idempotent.
-- **Google Sheets** — append-by-header mirror so non-technical reviewers can triage leads in-browser.
 
 ## Architecture
 
 - `google_maps.py` — Playwright engine; owns browser lifecycle and result-card scraping.
 - `pipeline.py` — orchestrates job → engine → sinks, handles retries and pacing.
-- `sinks/` — pluggable output adapters (JSON / Supabase / Sheets) behind a common `Sink` interface.
+- `sinks/` — pluggable output adapters (JSON / Supabase) behind a common `Sink` interface.
 - `selectors.py` — centralised DOM selectors; the only file that should change when Google rearranges its markup.
 
 ## Extension points

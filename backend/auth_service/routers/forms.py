@@ -1,13 +1,22 @@
+import html
+import logging
+import re
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
+from ..core import pg_rate_limit
 from ..core.config import settings
 from ..core.limiter import client_ip, limiter
 from ..services.supabase_client import get_supabase_admin
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["forms"])
+
+# A single, header-injection-safe email address (no whitespace/CRLF/commas).
+_EMAIL_RE = re.compile(r"[^@\s,]+@[^@\s,]+\.[^@\s,]+")
 
 
 def _form_bucket(request: Request) -> str:
@@ -24,15 +33,24 @@ def _build_email_html(
     fields: dict[str, str],
     submitted_at: str,
 ) -> str:
-    rows = "".join(f"""
+    # SEC-009 / SEC-014: field keys+values are untrusted (anyone who can POST the
+    # form controls them). Escape every interpolated value so a submitted
+    # "<script>"/HTML payload renders as text in the owner's inbox instead of
+    # executing / injecting markup.
+    # fmt: off
+    rows = "".join(
+        f"""
         <tr>
           <td style="padding:8px 12px;font-weight:600;color:#52525b;
                      border-bottom:1px solid #f4f4f5;white-space:nowrap;
-                     vertical-align:top">{key}</td>
+                     vertical-align:top">{html.escape(key)}</td>
           <td style="padding:8px 12px;color:#18181b;
-                     border-bottom:1px solid #f4f4f5;word-break:break-word">{value}</td>
+                     border-bottom:1px solid #f4f4f5;word-break:break-word">{html.escape(value)}</td>
         </tr>
-        """ for key, value in fields.items())
+        """
+        for key, value in fields.items()
+    )
+    # fmt: on
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -49,9 +67,9 @@ def _build_email_html(
         <tr>
           <td style="background:#18181b;padding:24px 32px">
             <p style="margin:0;color:#fff;font-size:14px;font-weight:600;
-                      letter-spacing:0.05em;text-transform:uppercase">{project_name}</p>
+                      letter-spacing:0.05em;text-transform:uppercase">{html.escape(project_name)}</p>
             <p style="margin:4px 0 0;color:#a1a1aa;font-size:12px">
-              New form submission — <span style="font-family:monospace">{form_key}</span>
+              New form submission — <span style="font-family:monospace">{html.escape(form_key)}</span>
             </p>
           </td>
         </tr>
@@ -121,6 +139,15 @@ async def submit_form(
             detail="Origin not allowed for this project",
         )
 
+    # SEC-010: shared (cross-instance) limit on top of the per-process slowapi one,
+    # so form-submission email spam can't be amplified across serverless instances.
+    pg_rate_limit.enforce(
+        f"forms:{_form_bucket(request)}",
+        limit=5,
+        window_seconds=600,
+        detail="Too many submissions. Please try again later.",
+    )
+
     # ── 3. Resolve the email_config service for this form_key ─────────────────
     svc_result = (
         sb.table("project_services")
@@ -172,7 +199,12 @@ async def submit_form(
         )
 
     # ── 5. Build reply-to from common field names ─────────────────────────────
+    # SEC-032: reply_to is attacker-controlled form input. Only pass it through if
+    # it is a single well-formed address — a fullmatch rejects CRLF/comma header-
+    # injection and malformed values, which are dropped rather than forwarded.
     reply_to = fields.get("email") or fields.get("Email") or fields.get("email_address") or None
+    if reply_to is not None and not _EMAIL_RE.fullmatch(reply_to.strip()):
+        reply_to = None
 
     # ── 6. Send via Resend ────────────────────────────────────────────────────
     # TEST-002 — skip the Resend hop in preview when the body carries
@@ -197,7 +229,7 @@ async def submit_form(
     resend.api_key = settings.RESEND_API_KEY
 
     submitted_at = datetime.now(UTC).strftime("%d %b %Y at %H:%M UTC")
-    html = _build_email_html(
+    email_html = _build_email_html(
         project_name=project["name"],
         form_key=form_key,
         fields=fields,
@@ -208,19 +240,106 @@ async def submit_form(
         "from": f"{settings.RESEND_FROM_NAME} <{settings.RESEND_FROM_EMAIL}>",
         "to": [destination],
         "subject": f"New message from {project['name']} — {form_key}",
-        "html": html,
+        "html": email_html,
         **({"reply_to": reply_to} if reply_to else {}),
     }
 
     try:
         resend.Emails.send(params)
     except Exception as exc:
+        # SEC-041: log the upstream error server-side; return a generic message so
+        # the public submitter never sees raw provider/exception text.
+        logger.exception("Resend send failed")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Email delivery failed: {exc}",
+            detail="Email delivery failed. Please try again later.",
         ) from exc
 
     return JSONResponse(
         content={"success": True},
         headers={"Access-Control-Allow-Origin": origin or "*"},
     )
+
+
+# ── First-party marketing-site contact form ──────────────────────────────────
+# Distinct from the multi-tenant /{project_slug}/{form_key} endpoint above: this
+# is Roman Technologies' own contact form. It is reached through the frontend's
+# same-origin /api proxy (which does not forward Origin), so abuse protection is
+# rate-limit + honeypot + payload validation rather than origin allow-listing.
+
+MARKETING_CONTACT_RECIPIENT = "stefanromanpers@gmail.com"
+_CONTACT_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+class ContactRequest(BaseModel):
+    name: str
+    email: str
+    message: str
+    company: str = ""
+    website: str = ""  # honeypot — real users never fill this
+
+
+@router.post("/contact")
+@limiter.limit("5/10minutes", key_func=client_ip)
+async def submit_contact(request: Request, body: ContactRequest) -> JSONResponse:
+    # Honeypot — silently accept bots so they don't learn they were filtered.
+    if body.website.strip():
+        return JSONResponse(content={"success": True})
+
+    name = body.name.strip()
+    email = body.email.strip()
+    message = body.message.strip()
+    company = body.company.strip()
+
+    if not name or not message or not _CONTACT_EMAIL_RE.match(email):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid contact submission",
+        )
+
+    fields = {
+        "Name": name,
+        "Email": email,
+        **({"Company": company} if company else {}),
+        "Message": message,
+    }
+
+    # TEST-002 — skip the Resend hop on E2E bodies in preview.
+    from ..services.e2e_email_guard import short_circuit_response, should_short_circuit
+
+    if should_short_circuit(name, email, company, message):
+        short_circuit_response("forms:contact")
+        return JSONResponse(content={"success": True, "e2e_short_circuit": True})
+
+    if not settings.RESEND_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email service not configured (RESEND_API_KEY missing)",
+        )
+
+    import resend  # local import so a missing key never breaks startup
+
+    resend.api_key = settings.RESEND_API_KEY
+    submitted_at = datetime.now(UTC).strftime("%d %b %Y at %H:%M UTC")
+    html = _build_email_html("Roman Technologies", "contact", fields, submitted_at)
+
+    params: resend.Emails.SendParams = {
+        "from": f"{settings.RESEND_FROM_NAME} <{settings.RESEND_FROM_EMAIL}>",
+        "to": [MARKETING_CONTACT_RECIPIENT],
+        "subject": f"New enquiry from {name} — roman-technologies.dev",
+        "html": html,
+        "reply_to": email,
+    }
+
+    try:
+        resend.Emails.send(params)
+    except Exception as exc:
+        # SEC-041: log the upstream error server-side; return a generic message so
+        # the public submitter never sees raw provider/exception text.
+        logger.exception("Resend send failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Email delivery failed. Please try again later.",
+        ) from exc
+
+    return JSONResponse(content={"success": True})

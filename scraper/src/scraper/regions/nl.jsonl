@@ -1,0 +1,342 @@
+{"name": "Amsterdam", "country_code": "NL", "code": "GM0363", "bbox": [52.277977, 4.728758, 52.431064, 5.107674], "centroid": [52.35452, 4.918216], "population": 917923, "source": "pdok-cbs-2025"}
+{"name": "Rotterdam", "country_code": "NL", "code": "GM0599", "bbox": [51.842119, 3.962385, 52.00164, 4.601808], "centroid": [51.92188, 4.282097], "population": 655468, "source": "pdok-cbs-2025"}
+{"name": "Utrecht", "country_code": "NL", "code": "GM0344", "bbox": [52.026282, 4.970096, 52.142051, 5.195154], "centroid": [52.084166, 5.082625], "population": 359370, "source": "pdok-cbs-2025"}
+{"name": "Eindhoven", "country_code": "NL", "code": "GM0772", "bbox": [51.400113, 5.356717, 51.497068, 5.546778], "centroid": [51.448591, 5.451748], "population": 243730, "source": "pdok-cbs-2025"}
+{"name": "Groningen", "country_code": "NL", "code": "GM0014", "bbox": [53.106203, 6.462746, 53.312796, 6.772527], "centroid": [53.209499, 6.617637], "population": 233273, "source": "pdok-cbs-2025"}
+{"name": "Tilburg", "country_code": "NL", "code": "GM0855", "bbox": [51.529507, 4.947846, 51.641661, 5.210711], "centroid": [51.585584, 5.079278], "population": 227707, "source": "pdok-cbs-2025"}
+{"name": "Almere", "country_code": "NL", "code": "GM0034", "bbox": [52.303101, 5.122665, 52.435426, 5.379156], "centroid": [52.369264, 5.250911], "population": 214715, "source": "pdok-cbs-2025"}
+{"name": "Breda", "country_code": "NL", "code": "GM0758", "bbox": [51.485548, 4.657985, 51.643056, 4.871684], "centroid": [51.564302, 4.764834], "population": 184126, "source": "pdok-cbs-2025"}
+{"name": "Nijmegen", "country_code": "NL", "code": "GM0268", "bbox": [51.790589, 5.75762, 51.89462, 5.908249], "centroid": [51.842605, 5.832934], "population": 177359, "source": "pdok-cbs-2025"}
+{"name": "Apeldoorn", "country_code": "NL", "code": "GM0200", "bbox": [52.073339, 5.72639, 52.28567, 6.078484], "centroid": [52.179504, 5.902437], "population": 164781, "source": "pdok-cbs-2025"}
+{"name": "Arnhem", "country_code": "NL", "code": "GM0202", "bbox": [51.933464, 5.802961, 52.077891, 5.99034], "centroid": [52.005677, 5.89665], "population": 164096, "source": "pdok-cbs-2025"}
+{"name": "Haarlem", "country_code": "NL", "code": "GM0392", "bbox": [52.338906, 4.599551, 52.42857, 4.68692], "centroid": [52.383738, 4.643236], "population": 162543, "source": "pdok-cbs-2025"}
+{"name": "Enschede", "country_code": "NL", "code": "GM0153", "bbox": [52.161205, 6.755893, 52.285505, 6.981101], "centroid": [52.223355, 6.868497], "population": 159732, "source": "pdok-cbs-2025"}
+{"name": "Haarlemmermeer", "country_code": "NL", "code": "GM0394", "bbox": [52.214476, 4.55047, 52.433336, 4.819061], "centroid": [52.323906, 4.684766], "population": 157789, "source": "pdok-cbs-2025"}
+{"name": "Amersfoort", "country_code": "NL", "code": "GM0307", "bbox": [52.108385, 5.306458, 52.219155, 5.484318], "centroid": [52.16377, 5.395388], "population": 157462, "source": "pdok-cbs-2025"}
+{"name": "Zaanstad", "country_code": "NL", "code": "GM0479", "bbox": [52.416662, 4.674848, 52.521233, 4.862804], "centroid": [52.468948, 4.768826], "population": 156901, "source": "pdok-cbs-2025"}
+{"name": "'s-Hertogenbosch", "country_code": "NL", "code": "GM0796", "bbox": [51.663996, 5.206494, 51.76503, 5.499655], "centroid": [51.714513, 5.353075], "population": 155490, "source": "pdok-cbs-2025"}
+{"name": "Zwolle", "country_code": "NL", "code": "GM0193", "bbox": [52.440531, 6.00362, 52.587809, 6.210811], "centroid": [52.51417, 6.107216], "population": 129840, "source": "pdok-cbs-2025"}
+{"name": "Zoetermeer", "country_code": "NL", "code": "GM0637", "bbox": [52.031281, 4.415231, 52.093291, 4.55718], "centroid": [52.062286, 4.486205], "population": 125267, "source": "pdok-cbs-2025"}
+{"name": "Leeuwarden", "country_code": "NL", "code": "GM0080", "bbox": [53.04585, 5.631993, 53.294722, 5.949657], "centroid": [53.170286, 5.790825], "population": 124481, "source": "pdok-cbs-2025"}
+{"name": "Leiden", "country_code": "NL", "code": "GM0546", "bbox": [52.118952, 4.438865, 52.184622, 4.524038], "centroid": [52.151787, 4.481451], "population": 124093, "source": "pdok-cbs-2025"}
+{"name": "Dordrecht", "country_code": "NL", "code": "GM0505", "bbox": [51.717351, 4.621222, 51.823351, 4.884642], "centroid": [51.770351, 4.752932], "population": 122070, "source": "pdok-cbs-2025"}
+{"name": "Maastricht", "country_code": "NL", "code": "GM0935", "bbox": [50.803805, 5.638864, 50.912003, 5.762923], "centroid": [50.857904, 5.700894], "population": 120227, "source": "pdok-cbs-2025"}
+{"name": "Ede", "country_code": "NL", "code": "GM0228", "bbox": [51.990951, 5.546745, 52.152229, 5.951463], "centroid": [52.07159, 5.749104], "population": 118530, "source": "pdok-cbs-2025"}
+{"name": "Westland", "country_code": "NL", "code": "GM1783", "bbox": [51.9414, 4.125302, 52.05645, 4.309819], "centroid": [51.998925, 4.217561], "population": 114887, "source": "pdok-cbs-2025"}
+{"name": "Alphen aan den Rijn", "country_code": "NL", "code": "GM0484", "bbox": [52.05857, 4.530103, 52.167505, 4.760076], "centroid": [52.113037, 4.645089], "population": 114182, "source": "pdok-cbs-2025"}
+{"name": "Alkmaar", "country_code": "NL", "code": "GM0361", "bbox": [52.519236, 4.708305, 52.682374, 4.926924], "centroid": [52.600805, 4.817614], "population": 109896, "source": "pdok-cbs-2025"}
+{"name": "Delft", "country_code": "NL", "code": "GM0503", "bbox": [51.966316, 4.320218, 52.032599, 4.407911], "centroid": [51.999458, 4.364064], "population": 109435, "source": "pdok-cbs-2025"}
+{"name": "Emmen", "country_code": "NL", "code": "GM0114", "bbox": [52.63271, 6.826363, 52.873012, 7.09274], "centroid": [52.752861, 6.959551], "population": 107024, "source": "pdok-cbs-2025"}
+{"name": "Venlo", "country_code": "NL", "code": "GM0983", "bbox": [51.27755, 6.071903, 51.507817, 6.226768], "centroid": [51.392683, 6.149335], "population": 101988, "source": "pdok-cbs-2025"}
+{"name": "Deventer", "country_code": "NL", "code": "GM0150", "bbox": [52.217441, 6.101321, 52.320855, 6.381852], "centroid": [52.269148, 6.241586], "population": 101236, "source": "pdok-cbs-2025"}
+{"name": "Amstelveen", "country_code": "NL", "code": "GM0362", "bbox": [52.242014, 4.794698, 52.330567, 4.909135], "centroid": [52.286291, 4.851916], "population": 94435, "source": "pdok-cbs-2025"}
+{"name": "Helmond", "country_code": "NL", "code": "GM0794", "bbox": [51.438042, 5.570155, 51.509217, 5.73609], "centroid": [51.473629, 5.653123], "population": 92627, "source": "pdok-cbs-2025"}
+{"name": "Oss", "country_code": "NL", "code": "GM0828", "bbox": [51.725866, 5.353514, 51.830604, 5.711229], "centroid": [51.778235, 5.532372], "population": 92526, "source": "pdok-cbs-2025"}
+{"name": "Purmerend", "country_code": "NL", "code": "GM0439", "bbox": [52.470405, 4.833909, 52.614107, 5.024699], "centroid": [52.542256, 4.929304], "population": 92240, "source": "pdok-cbs-2025"}
+{"name": "Sittard-Geleen", "country_code": "NL", "code": "GM1883", "bbox": [50.946398, 5.758, 51.072609, 5.905515], "centroid": [51.009504, 5.831758], "population": 91743, "source": "pdok-cbs-2025"}
+{"name": "Hilversum", "country_code": "NL", "code": "GM0402", "bbox": [52.177834, 5.102065, 52.285462, 5.21896], "centroid": [52.231648, 5.160513], "population": 91235, "source": "pdok-cbs-2025"}
+{"name": "Dijk en Waard", "country_code": "NL", "code": "GM1980", "bbox": [52.632678, 4.728853, 52.731411, 4.89988], "centroid": [52.682045, 4.814366], "population": 91146, "source": "pdok-cbs-2025"}
+{"name": "Súdwest-Fryslân", "country_code": "NL", "code": "GM1900", "bbox": [52.848135, 5.165883, 53.153815, 5.788153], "centroid": [53.000975, 5.477018], "population": 89999, "source": "pdok-cbs-2025"}
+{"name": "Hoeksche Waard", "country_code": "NL", "code": "GM1963", "bbox": [51.695134, 4.230412, 51.837046, 4.631126], "centroid": [51.76609, 4.430769], "population": 88047, "source": "pdok-cbs-2025"}
+{"name": "Heerlen", "country_code": "NL", "code": "GM0917", "bbox": [50.818402, 5.895504, 50.936612, 6.026378], "centroid": [50.877507, 5.960941], "population": 86936, "source": "pdok-cbs-2025"}
+{"name": "Nissewaard", "country_code": "NL", "code": "GM1930", "bbox": [51.78534, 4.185273, 51.872986, 4.432483], "centroid": [51.829163, 4.308878], "population": 85440, "source": "pdok-cbs-2025"}
+{"name": "Lelystad", "country_code": "NL", "code": "GM0995", "bbox": [52.384548, 5.258423, 52.692186, 5.605871], "centroid": [52.538367, 5.432147], "population": 83033, "source": "pdok-cbs-2025"}
+{"name": "Meierijstad", "country_code": "NL", "code": "GM1948", "bbox": [51.521377, 5.371174, 51.655702, 5.656516], "centroid": [51.58854, 5.513845], "population": 81647, "source": "pdok-cbs-2025"}
+{"name": "Schiedam", "country_code": "NL", "code": "GM0606", "bbox": [51.896736, 4.350671, 51.963407, 4.417713], "centroid": [51.930072, 4.384192], "population": 79279, "source": "pdok-cbs-2025"}
+{"name": "Roosendaal", "country_code": "NL", "code": "GM1674", "bbox": [51.451487, 4.306909, 51.569235, 4.523191], "centroid": [51.510361, 4.41505], "population": 77200, "source": "pdok-cbs-2025"}
+{"name": "Leidschendam-Voorburg", "country_code": "NL", "code": "GM1916", "bbox": [52.056255, 4.335213, 52.12898, 4.493018], "centroid": [52.092618, 4.414116], "population": 76433, "source": "pdok-cbs-2025"}
+{"name": "Voorne aan Zee", "country_code": "NL", "code": "GM1992", "bbox": [51.804305, 3.993527, 51.936142, 4.239384], "centroid": [51.870223, 4.116455], "population": 74283, "source": "pdok-cbs-2025"}
+{"name": "Vlaardingen", "country_code": "NL", "code": "GM0622", "bbox": [51.894103, 4.267571, 51.951507, 4.370622], "centroid": [51.922805, 4.319097], "population": 73924, "source": "pdok-cbs-2025"}
+{"name": "Gouda", "country_code": "NL", "code": "GM0513", "bbox": [51.996258, 4.659454, 52.04012, 4.757327], "centroid": [52.018189, 4.708391], "population": 73681, "source": "pdok-cbs-2025"}
+{"name": "Hoorn", "country_code": "NL", "code": "GM0405", "bbox": [52.629919, 5.013535, 52.684365, 5.119413], "centroid": [52.657142, 5.066474], "population": 73619, "source": "pdok-cbs-2025"}
+{"name": "Almelo", "country_code": "NL", "code": "GM0141", "bbox": [52.289974, 6.597705, 52.39908, 6.721011], "centroid": [52.344527, 6.659358], "population": 73132, "source": "pdok-cbs-2025"}
+{"name": "Assen", "country_code": "NL", "code": "GM0106", "bbox": [52.932516, 6.483948, 53.061759, 6.632646], "centroid": [52.997137, 6.558297], "population": 68836, "source": "pdok-cbs-2025"}
+{"name": "Velsen", "country_code": "NL", "code": "GM0453", "bbox": [52.410831, 4.532078, 52.48932, 4.721983], "centroid": [52.450076, 4.62703], "population": 68617, "source": "pdok-cbs-2025"}
+{"name": "Bergen op Zoom", "country_code": "NL", "code": "GM0748", "bbox": [51.439667, 4.2188, 51.570658, 4.372642], "centroid": [51.505162, 4.295721], "population": 67514, "source": "pdok-cbs-2025"}
+{"name": "Capelle aan den IJssel", "country_code": "NL", "code": "GM0502", "bbox": [51.906205, 4.537186, 51.965492, 4.619489], "centroid": [51.935848, 4.578337], "population": 67319, "source": "pdok-cbs-2025"}
+{"name": "Veenendaal", "country_code": "NL", "code": "GM0345", "bbox": [51.996958, 5.512592, 52.049373, 5.590242], "centroid": [52.023166, 5.551417], "population": 66912, "source": "pdok-cbs-2025"}
+{"name": "Katwijk", "country_code": "NL", "code": "GM0537", "bbox": [52.155654, 4.374378, 52.21972, 4.46637], "centroid": [52.187687, 4.420374], "population": 66607, "source": "pdok-cbs-2025"}
+{"name": "Stichtse Vecht", "country_code": "NL", "code": "GM1904", "bbox": [52.116759, 4.909638, 52.28932, 5.120529], "centroid": [52.20304, 5.015083], "population": 65108, "source": "pdok-cbs-2025"}
+{"name": "Zeist", "country_code": "NL", "code": "GM0355", "bbox": [52.058647, 5.192751, 52.171251, 5.332608], "centroid": [52.114949, 5.26268], "population": 65043, "source": "pdok-cbs-2025"}
+{"name": "Nieuwegein", "country_code": "NL", "code": "GM0356", "bbox": [51.997452, 5.062511, 52.062222, 5.130993], "centroid": [52.029837, 5.096752], "population": 63866, "source": "pdok-cbs-2025"}
+{"name": "Westerkwartier", "country_code": "NL", "code": "GM1969", "bbox": [53.087151, 6.175235, 53.341027, 6.511444], "centroid": [53.214089, 6.343339], "population": 63678, "source": "pdok-cbs-2025"}
+{"name": "Lansingerland", "country_code": "NL", "code": "GM1621", "bbox": [51.960286, 4.424446, 52.061741, 4.565043], "centroid": [52.011014, 4.494744], "population": 63363, "source": "pdok-cbs-2025"}
+{"name": "Hardenberg", "country_code": "NL", "code": "GM0160", "bbox": [52.465604, 6.303064, 52.674049, 6.766693], "centroid": [52.569827, 6.534878], "population": 61357, "source": "pdok-cbs-2025"}
+{"name": "Midden-Groningen", "country_code": "NL", "code": "GM1952", "bbox": [53.070973, 6.639468, 53.298276, 6.965846], "centroid": [53.184624, 6.802657], "population": 60726, "source": "pdok-cbs-2025"}
+{"name": "Barneveld", "country_code": "NL", "code": "GM0203", "bbox": [52.100494, 5.472434, 52.242503, 5.811933], "centroid": [52.171499, 5.642183], "population": 59992, "source": "pdok-cbs-2025"}
+{"name": "Roermond", "country_code": "NL", "code": "GM0957", "bbox": [51.158822, 5.917243, 51.258682, 6.086023], "centroid": [51.208752, 6.001633], "population": 58763, "source": "pdok-cbs-2025"}
+{"name": "Gooise Meren", "country_code": "NL", "code": "GM1942", "bbox": [52.255796, 5.012793, 52.365532, 5.230352], "centroid": [52.310664, 5.121572], "population": 58524, "source": "pdok-cbs-2025"}
+{"name": "Doetinchem", "country_code": "NL", "code": "GM0222", "bbox": [51.922782, 6.144689, 51.994261, 6.416082], "centroid": [51.958521, 6.280386], "population": 58270, "source": "pdok-cbs-2025"}
+{"name": "Vijfheerenlanden", "country_code": "NL", "code": "GM1961", "bbox": [51.857361, 4.926301, 52.003027, 5.180226], "centroid": [51.930194, 5.053264], "population": 57829, "source": "pdok-cbs-2025"}
+{"name": "Krimpenerwaard", "country_code": "NL", "code": "GM1931", "bbox": [51.889383, 4.576329, 52.022272, 4.877793], "centroid": [51.955827, 4.727061], "population": 56622, "source": "pdok-cbs-2025"}
+{"name": "Den Helder", "country_code": "NL", "code": "GM0400", "bbox": [52.878627, 4.709041, 52.966097, 4.809988], "centroid": [52.922362, 4.759514], "population": 56582, "source": "pdok-cbs-2025"}
+{"name": "Altena", "country_code": "NL", "code": "GM1959", "bbox": [51.710882, 4.676304, 51.828315, 5.142714], "centroid": [51.769598, 4.909509], "population": 56352, "source": "pdok-cbs-2025"}
+{"name": "Oosterhout", "country_code": "NL", "code": "GM0826", "bbox": [51.578442, 4.78108, 51.686018, 4.93441], "centroid": [51.63223, 4.857745], "population": 56206, "source": "pdok-cbs-2025"}
+{"name": "Smallingerland", "country_code": "NL", "code": "GM0090", "bbox": [53.070872, 5.870313, 53.159505, 6.185716], "centroid": [53.115188, 6.028015], "population": 56040, "source": "pdok-cbs-2025"}
+{"name": "Pijnacker-Nootdorp", "country_code": "NL", "code": "GM1926", "bbox": [51.968199, 4.372658, 52.054054, 4.476706], "centroid": [52.011126, 4.424682], "population": 55674, "source": "pdok-cbs-2025"}
+{"name": "Hoogeveen", "country_code": "NL", "code": "GM0118", "bbox": [52.654507, 6.403599, 52.800557, 6.632413], "centroid": [52.727532, 6.518006], "population": 55603, "source": "pdok-cbs-2025"}
+{"name": "Kampen", "country_code": "NL", "code": "GM0166", "bbox": [52.474058, 5.785527, 52.6248, 6.033039], "centroid": [52.549429, 5.909283], "population": 54474, "source": "pdok-cbs-2025"}
+{"name": "Terneuzen", "country_code": "NL", "code": "GM0715", "bbox": [51.200163, 3.644233, 51.365409, 4.005693], "centroid": [51.282786, 3.824963], "population": 54463, "source": "pdok-cbs-2025"}
+{"name": "Woerden", "country_code": "NL", "code": "GM0632", "bbox": [52.064951, 4.79208, 52.162051, 5.005007], "centroid": [52.113501, 4.898543], "population": 52694, "source": "pdok-cbs-2025"}
+{"name": "West Betuwe", "country_code": "NL", "code": "GM1960", "bbox": [51.804186, 4.993967, 51.935483, 5.415234], "centroid": [51.869834, 5.2046], "population": 51496, "source": "pdok-cbs-2025"}
+{"name": "Heerenveen", "country_code": "NL", "code": "GM0074", "bbox": [52.911741, 5.795525, 53.085136, 6.205424], "centroid": [52.998438, 6.000474], "population": 50650, "source": "pdok-cbs-2025"}
+{"name": "Goeree-Overflakkee", "country_code": "NL", "code": "GM1924", "bbox": [51.654528, 3.838533, 51.849928, 4.403638], "centroid": [51.752228, 4.121085], "population": 50589, "source": "pdok-cbs-2025"}
+{"name": "Houten", "country_code": "NL", "code": "GM0321", "bbox": [51.959433, 5.119563, 52.056757, 5.271407], "centroid": [52.008095, 5.195485], "population": 50223, "source": "pdok-cbs-2025"}
+{"name": "Weert", "country_code": "NL", "code": "GM0988", "bbox": [51.18042, 5.566044, 51.290575, 5.791769], "centroid": [51.235497, 5.678906], "population": 50011, "source": "pdok-cbs-2025"}
+{"name": "Harderwijk", "country_code": "NL", "code": "GM0243", "bbox": [52.301493, 5.575755, 52.378842, 5.712804], "centroid": [52.340167, 5.644279], "population": 50000, "source": "pdok-cbs-2025"}
+{"name": "Utrechtse Heuvelrug", "country_code": "NL", "code": "GM1581", "bbox": [51.97073, 5.247423, 52.086353, 5.529348], "centroid": [52.028542, 5.388385], "population": 49946, "source": "pdok-cbs-2025"}
+{"name": "Waalwijk", "country_code": "NL", "code": "GM0867", "bbox": [51.651532, 4.91799, 51.723042, 5.111506], "centroid": [51.687287, 5.014748], "population": 48815, "source": "pdok-cbs-2025"}
+{"name": "Barendrecht", "country_code": "NL", "code": "GM0489", "bbox": [51.829854, 4.479872, 51.874027, 4.571386], "centroid": [51.851941, 4.525629], "population": 48643, "source": "pdok-cbs-2025"}
+{"name": "Hollands Kroon", "country_code": "NL", "code": "GM1911", "bbox": [52.706832, 4.758854, 52.999867, 5.166762], "centroid": [52.85335, 4.962808], "population": 48583, "source": "pdok-cbs-2025"}
+{"name": "Overbetuwe", "country_code": "NL", "code": "GM1734", "bbox": [51.870265, 5.646323, 51.973558, 5.897918], "centroid": [51.921912, 5.772121], "population": 48214, "source": "pdok-cbs-2025"}
+{"name": "Zutphen", "country_code": "NL", "code": "GM0301", "bbox": [52.088733, 6.14039, 52.169801, 6.328315], "centroid": [52.129267, 6.234352], "population": 48111, "source": "pdok-cbs-2025"}
+{"name": "Het Hogeland", "country_code": "NL", "code": "GM1966", "bbox": [53.249449, 6.179446, 53.554046, 6.88347], "centroid": [53.401747, 6.531458], "population": 47834, "source": "pdok-cbs-2025"}
+{"name": "Noordoostpolder", "country_code": "NL", "code": "GM0171", "bbox": [52.610744, 5.593321, 52.843983, 6.013874], "centroid": [52.727364, 5.803598], "population": 47583, "source": "pdok-cbs-2025"}
+{"name": "Soest", "country_code": "NL", "code": "GM0342", "bbox": [52.110272, 5.243172, 52.204549, 5.349926], "centroid": [52.157411, 5.296549], "population": 46906, "source": "pdok-cbs-2025"}
+{"name": "Lingewaard", "country_code": "NL", "code": "GM1705", "bbox": [51.854449, 5.856948, 51.960415, 6.046285], "centroid": [51.907432, 5.951616], "population": 46822, "source": "pdok-cbs-2025"}
+{"name": "Ridderkerk", "country_code": "NL", "code": "GM0597", "bbox": [51.83873, 4.549254, 51.903031, 4.647294], "centroid": [51.870881, 4.598274], "population": 46671, "source": "pdok-cbs-2025"}
+{"name": "Schagen", "country_code": "NL", "code": "GM0441", "bbox": [52.691405, 4.645761, 52.883622, 4.849725], "centroid": [52.787514, 4.747743], "population": 46532, "source": "pdok-cbs-2025"}
+{"name": "Waadhoeke", "country_code": "NL", "code": "GM1949", "bbox": [53.12415, 5.437988, 53.338916, 5.749302], "centroid": [53.231533, 5.593645], "population": 46149, "source": "pdok-cbs-2025"}
+{"name": "Peel en Maas", "country_code": "NL", "code": "GM1894", "bbox": [51.265759, 5.832074, 51.395729, 6.123252], "centroid": [51.330744, 5.977663], "population": 45555, "source": "pdok-cbs-2025"}
+{"name": "Veldhoven", "country_code": "NL", "code": "GM0861", "bbox": [51.37646, 5.315895, 51.438909, 5.429851], "centroid": [51.407684, 5.372873], "population": 45500, "source": "pdok-cbs-2025"}
+{"name": "Noardeast-Fryslân", "country_code": "NL", "code": "GM1970", "bbox": [53.243503, 5.71737, 53.414655, 6.294016], "centroid": [53.329079, 6.005693], "population": 45481, "source": "pdok-cbs-2025"}
+{"name": "Kerkrade", "country_code": "NL", "code": "GM0928", "bbox": [50.843805, 6.000567, 50.90577, 6.088101], "centroid": [50.874787, 6.044334], "population": 45442, "source": "pdok-cbs-2025"}
+{"name": "Eemsdelta", "country_code": "NL", "code": "GM1979", "bbox": [53.237077, 6.592565, 53.42242, 7.099964], "centroid": [53.329748, 6.846265], "population": 45394, "source": "pdok-cbs-2025"}
+{"name": "Medemblik", "country_code": "NL", "code": "GM0420", "bbox": [52.664409, 4.971887, 52.774643, 5.271966], "centroid": [52.719526, 5.121927], "population": 45165, "source": "pdok-cbs-2025"}
+{"name": "Zuidplas", "country_code": "NL", "code": "GM1892", "bbox": [51.933492, 4.546339, 52.065527, 4.688684], "centroid": [51.999509, 4.617511], "population": 45064, "source": "pdok-cbs-2025"}
+{"name": "Heusden", "country_code": "NL", "code": "GM0797", "bbox": [51.635956, 5.08176, 51.743074, 5.251569], "centroid": [51.689515, 5.166665], "population": 45005, "source": "pdok-cbs-2025"}
+{"name": "Zwijndrecht", "country_code": "NL", "code": "GM0642", "bbox": [51.800804, 4.553609, 51.847117, 4.671709], "centroid": [51.82396, 4.612659], "population": 44775, "source": "pdok-cbs-2025"}
+{"name": "De Ronde Venen", "country_code": "NL", "code": "GM0736", "bbox": [52.161461, 4.79443, 52.303677, 5.021866], "centroid": [52.232569, 4.908148], "population": 44720, "source": "pdok-cbs-2025"}
+{"name": "Vlissingen", "country_code": "NL", "code": "GM0718", "bbox": [51.434702, 3.52663, 51.482271, 3.714883], "centroid": [51.458486, 3.620757], "population": 44358, "source": "pdok-cbs-2025"}
+{"name": "Steenwijkerland", "country_code": "NL", "code": "GM1708", "bbox": [52.641367, 5.795178, 52.854215, 6.201731], "centroid": [52.747791, 5.998455], "population": 44341, "source": "pdok-cbs-2025"}
+{"name": "Molenlanden", "country_code": "NL", "code": "GM1978", "bbox": [51.831994, 4.61925, 51.950928, 5.027387], "centroid": [51.891461, 4.823318], "population": 44130, "source": "pdok-cbs-2025"}
+{"name": "Zevenaar", "country_code": "NL", "code": "GM0299", "bbox": [51.840721, 5.987063, 52.014997, 6.167913], "centroid": [51.927859, 6.077488], "population": 44096, "source": "pdok-cbs-2025"}
+{"name": "Noordwijk", "country_code": "NL", "code": "GM0575", "bbox": [52.207356, 4.405463, 52.328198, 4.563707], "centroid": [52.267777, 4.484585], "population": 44062, "source": "pdok-cbs-2025"}
+{"name": "Etten-Leur", "country_code": "NL", "code": "GM0777", "bbox": [51.517205, 4.59042, 51.634587, 4.694624], "centroid": [51.575896, 4.642522], "population": 43869, "source": "pdok-cbs-2025"}
+{"name": "Berkelland", "country_code": "NL", "code": "GM1859", "bbox": [52.020601, 6.400539, 52.182488, 6.760573], "centroid": [52.101544, 6.580556], "population": 43846, "source": "pdok-cbs-2025"}
+{"name": "Venray", "country_code": "NL", "code": "GM0984", "bbox": [51.446557, 5.838237, 51.570243, 6.141092], "centroid": [51.5084, 5.989665], "population": 43713, "source": "pdok-cbs-2025"}
+{"name": "Nijkerk", "country_code": "NL", "code": "GM0267", "bbox": [52.165815, 5.393212, 52.263542, 5.634862], "centroid": [52.214678, 5.514037], "population": 43600, "source": "pdok-cbs-2025"}
+{"name": "Rheden", "country_code": "NL", "code": "GM0275", "bbox": [51.974406, 5.951526, 52.088244, 6.137469], "centroid": [52.031325, 6.044498], "population": 43525, "source": "pdok-cbs-2025"}
+{"name": "De Bilt", "country_code": "NL", "code": "GM0310", "bbox": [52.084895, 5.09489, 52.204274, 5.23093], "centroid": [52.144585, 5.16291], "population": 43384, "source": "pdok-cbs-2025"}
+{"name": "Horst aan de Maas", "country_code": "NL", "code": "GM1507", "bbox": [51.378049, 5.874964, 51.524777, 6.178712], "centroid": [51.451413, 6.026838], "population": 42487, "source": "pdok-cbs-2025"}
+{"name": "Dronten", "country_code": "NL", "code": "GM0303", "bbox": [52.370526, 5.565421, 52.615594, 5.863513], "centroid": [52.49306, 5.714467], "population": 42011, "source": "pdok-cbs-2025"}
+{"name": "Tiel", "country_code": "NL", "code": "GM0281", "bbox": [51.851801, 5.328084, 51.922761, 5.47245], "centroid": [51.887281, 5.400267], "population": 41920, "source": "pdok-cbs-2025"}
+{"name": "Beverwijk", "country_code": "NL", "code": "GM0375", "bbox": [52.45552, 4.581337, 52.501744, 4.707968], "centroid": [52.478632, 4.644652], "population": 41863, "source": "pdok-cbs-2025"}
+{"name": "Wijchen", "country_code": "NL", "code": "GM0296", "bbox": [51.772851, 5.597976, 51.867362, 5.800948], "centroid": [51.820106, 5.699462], "population": 41261, "source": "pdok-cbs-2025"}
+{"name": "Huizen", "country_code": "NL", "code": "GM0406", "bbox": [52.267116, 5.184703, 52.315914, 5.28781], "centroid": [52.291515, 5.236256], "population": 41090, "source": "pdok-cbs-2025"}
+{"name": "Geldrop-Mierlo", "country_code": "NL", "code": "GM1771", "bbox": [51.403193, 5.525177, 51.460509, 5.656468], "centroid": [51.431851, 5.590822], "population": 40066, "source": "pdok-cbs-2025"}
+{"name": "Wageningen", "country_code": "NL", "code": "GM0289", "bbox": [51.936409, 5.60594, 52.000708, 5.724363], "centroid": [51.968559, 5.665151], "population": 39635, "source": "pdok-cbs-2025"}
+{"name": "Oude IJsselstreek", "country_code": "NL", "code": "GM1509", "bbox": [51.827263, 6.289654, 51.978219, 6.532829], "centroid": [51.902741, 6.411242], "population": 39346, "source": "pdok-cbs-2025"}
+{"name": "Heemskerk", "country_code": "NL", "code": "GM0396", "bbox": [52.486333, 4.586563, 52.531752, 4.720367], "centroid": [52.509042, 4.653465], "population": 39191, "source": "pdok-cbs-2025"}
+{"name": "Goes", "country_code": "NL", "code": "GM0664", "bbox": [51.479122, 3.705538, 51.552369, 3.971466], "centroid": [51.515745, 3.838502], "population": 38594, "source": "pdok-cbs-2025"}
+{"name": "Oldambt", "country_code": "NL", "code": "GM1895", "bbox": [53.110833, 6.90373, 53.26713, 7.227498], "centroid": [53.188982, 7.065614], "population": 38277, "source": "pdok-cbs-2025"}
+{"name": "Rijssen-Holten", "country_code": "NL", "code": "GM1742", "bbox": [52.242166, 6.32653, 52.326462, 6.554009], "centroid": [52.284314, 6.440269], "population": 38204, "source": "pdok-cbs-2025"}
+{"name": "Raalte", "country_code": "NL", "code": "GM0177", "bbox": [52.300597, 6.144147, 52.474389, 6.40517], "centroid": [52.387493, 6.274658], "population": 37911, "source": "pdok-cbs-2025"}
+{"name": "Teylingen", "country_code": "NL", "code": "GM1525", "bbox": [52.179851, 4.455648, 52.254992, 4.561661], "centroid": [52.217422, 4.508655], "population": 37791, "source": "pdok-cbs-2025"}
+{"name": "Gorinchem", "country_code": "NL", "code": "GM0512", "bbox": [51.818857, 4.921822, 51.863629, 5.031414], "centroid": [51.841243, 4.976618], "population": 37410, "source": "pdok-cbs-2025"}
+{"name": "Landgraaf", "country_code": "NL", "code": "GM0882", "bbox": [50.870219, 5.990626, 50.934701, 6.094148], "centroid": [50.90246, 6.042387], "population": 37262, "source": "pdok-cbs-2025"}
+{"name": "Moerdijk", "country_code": "NL", "code": "GM1709", "bbox": [51.606748, 4.372876, 51.719067, 4.709879], "centroid": [51.662908, 4.541377], "population": 37185, "source": "pdok-cbs-2025"}
+{"name": "Edam-Volendam", "country_code": "NL", "code": "GM0385", "bbox": [52.484926, 4.94937, 52.612454, 5.085691], "centroid": [52.54869, 5.017531], "population": 36268, "source": "pdok-cbs-2025"}
+{"name": "Bronckhorst", "country_code": "NL", "code": "GM1876", "bbox": [51.967979, 6.110883, 52.137712, 6.475773], "centroid": [52.052846, 6.293328], "population": 36087, "source": "pdok-cbs-2025"}
+{"name": "Castricum", "country_code": "NL", "code": "GM0383", "bbox": [52.526728, 4.598302, 52.592578, 4.781622], "centroid": [52.559653, 4.689962], "population": 36086, "source": "pdok-cbs-2025"}
+{"name": "Beekdaelen", "country_code": "NL", "code": "GM1954", "bbox": [50.880648, 5.796555, 50.988417, 6.026801], "centroid": [50.934532, 5.911678], "population": 36065, "source": "pdok-cbs-2025"}
+{"name": "Leudal", "country_code": "NL", "code": "GM1640", "bbox": [51.151303, 5.74564, 51.316577, 6.011012], "centroid": [51.23394, 5.878326], "population": 36045, "source": "pdok-cbs-2025"}
+{"name": "Montferland", "country_code": "NL", "code": "GM1955", "bbox": [51.867626, 6.089515, 51.9805, 6.33228], "centroid": [51.924063, 6.210897], "population": 36031, "source": "pdok-cbs-2025"}
+{"name": "Hellendoorn", "country_code": "NL", "code": "GM0163", "bbox": [52.318218, 6.333502, 52.461699, 6.598148], "centroid": [52.389959, 6.465825], "population": 35932, "source": "pdok-cbs-2025"}
+{"name": "Coevorden", "country_code": "NL", "code": "GM0109", "bbox": [52.627005, 6.576429, 52.878692, 6.861876], "centroid": [52.752848, 6.719152], "population": 35317, "source": "pdok-cbs-2025"}
+{"name": "Bodegraven-Reeuwijk", "country_code": "NL", "code": "GM1901", "bbox": [52.013242, 4.659967, 52.122288, 4.873201], "centroid": [52.067765, 4.766584], "population": 35278, "source": "pdok-cbs-2025"}
+{"name": "Hof van Twente", "country_code": "NL", "code": "GM1735", "bbox": [52.163166, 6.416395, 52.30861, 6.75296], "centroid": [52.235888, 6.584678], "population": 35040, "source": "pdok-cbs-2025"}
+{"name": "Berg en Dal", "country_code": "NL", "code": "GM1945", "bbox": [51.741028, 5.879109, 51.881603, 6.063486], "centroid": [51.811315, 5.971297], "population": 35010, "source": "pdok-cbs-2025"}
+{"name": "Tynaarlo", "country_code": "NL", "code": "GM1730", "bbox": [53.026106, 6.4803, 53.198309, 6.776509], "centroid": [53.112208, 6.628405], "population": 34592, "source": "pdok-cbs-2025"}
+{"name": "Meppel", "country_code": "NL", "code": "GM0119", "bbox": [52.667988, 6.120377, 52.773055, 6.2867], "centroid": [52.720522, 6.203539], "population": 34386, "source": "pdok-cbs-2025"}
+{"name": "Schouwen-Duiveland", "country_code": "NL", "code": "GM1676", "bbox": [51.597038, 3.678964, 51.758399, 4.194137], "centroid": [51.677718, 3.936551], "population": 34065, "source": "pdok-cbs-2025"}
+{"name": "Lochem", "country_code": "NL", "code": "GM0262", "bbox": [52.096908, 6.156351, 52.246112, 6.494372], "centroid": [52.17151, 6.325361], "population": 33948, "source": "pdok-cbs-2025"}
+{"name": "IJsselstein", "country_code": "NL", "code": "GM0353", "bbox": [51.991233, 4.978392, 52.061143, 5.077717], "centroid": [52.026188, 5.028055], "population": 33819, "source": "pdok-cbs-2025"}
+{"name": "Twenterand", "country_code": "NL", "code": "GM1700", "bbox": [52.383659, 6.447465, 52.494981, 6.717708], "centroid": [52.43932, 6.582586], "population": 33699, "source": "pdok-cbs-2025"}
+{"name": "Maassluis", "country_code": "NL", "code": "GM0556", "bbox": [51.905335, 4.212718, 51.947991, 4.292611], "centroid": [51.926663, 4.252664], "population": 33567, "source": "pdok-cbs-2025"}
+{"name": "Midden-Drenthe", "country_code": "NL", "code": "GM1731", "bbox": [52.73569, 6.35956, 53.005406, 6.72838], "centroid": [52.870548, 6.54397], "population": 33381, "source": "pdok-cbs-2025"}
+{"name": "Epe", "country_code": "NL", "code": "GM0232", "bbox": [52.255807, 5.840832, 52.398437, 6.094779], "centroid": [52.327122, 5.967806], "population": 33198, "source": "pdok-cbs-2025"}
+{"name": "Boxtel", "country_code": "NL", "code": "GM0757", "bbox": [51.543523, 5.246177, 51.634634, 5.4052], "centroid": [51.589078, 5.325689], "population": 32973, "source": "pdok-cbs-2025"}
+{"name": "Deurne", "country_code": "NL", "code": "GM0762", "bbox": [51.352534, 5.717214, 51.504144, 5.931286], "centroid": [51.428339, 5.82425], "population": 32437, "source": "pdok-cbs-2025"}
+{"name": "Oisterwijk", "country_code": "NL", "code": "GM0824", "bbox": [51.507588, 5.130195, 51.624928, 5.278743], "centroid": [51.566258, 5.204469], "population": 32373, "source": "pdok-cbs-2025"}
+{"name": "Papendrecht", "country_code": "NL", "code": "GM0590", "bbox": [51.820416, 4.669161, 51.849093, 4.743394], "centroid": [51.834755, 4.706278], "population": 32171, "source": "pdok-cbs-2025"}
+{"name": "Aalsmeer", "country_code": "NL", "code": "GM0358", "bbox": [52.216354, 4.670348, 52.305776, 4.823842], "centroid": [52.261065, 4.747095], "population": 31991, "source": "pdok-cbs-2025"}
+{"name": "Stadskanaal", "country_code": "NL", "code": "GM0037", "bbox": [52.919038, 6.861287, 53.073703, 7.100014], "centroid": [52.99637, 6.980651], "population": 31754, "source": "pdok-cbs-2025"}
+{"name": "Echt-Susteren", "country_code": "NL", "code": "GM1711", "bbox": [51.028537, 5.795105, 51.135959, 6.036461], "centroid": [51.082248, 5.915783], "population": 31751, "source": "pdok-cbs-2025"}
+{"name": "Oldenzaal", "country_code": "NL", "code": "GM0173", "bbox": [52.282168, 6.859782, 52.33346, 6.950195], "centroid": [52.307814, 6.904989], "population": 31701, "source": "pdok-cbs-2025"}
+{"name": "Vught", "country_code": "NL", "code": "GM0865", "bbox": [51.612538, 5.154452, 51.690031, 5.32119], "centroid": [51.651284, 5.237821], "population": 31669, "source": "pdok-cbs-2025"}
+{"name": "Bernheze", "country_code": "NL", "code": "GM1721", "bbox": [51.626686, 5.423389, 51.740597, 5.600588], "centroid": [51.683641, 5.511988], "population": 31455, "source": "pdok-cbs-2025"}
+{"name": "Renkum", "country_code": "NL", "code": "GM0274", "bbox": [51.959126, 5.713639, 52.02407, 5.87086], "centroid": [51.991598, 5.79225], "population": 31417, "source": "pdok-cbs-2025"}
+{"name": "Waddinxveen", "country_code": "NL", "code": "GM0627", "bbox": [52.01168, 4.591089, 52.077046, 4.706039], "centroid": [52.044363, 4.648564], "population": 31342, "source": "pdok-cbs-2025"}
+{"name": "Diemen", "country_code": "NL", "code": "GM0384", "bbox": [52.313979, 4.942693, 52.356102, 5.034943], "centroid": [52.33504, 4.988818], "population": 31334, "source": "pdok-cbs-2025"}
+{"name": "Hendrik-Ido-Ambacht", "country_code": "NL", "code": "GM0531", "bbox": [51.823589, 4.600155, 51.869711, 4.672606], "centroid": [51.84665, 4.636381], "population": 31258, "source": "pdok-cbs-2025"}
+{"name": "Valkenswaard", "country_code": "NL", "code": "GM0858", "bbox": [51.262285, 5.387802, 51.378335, 5.527179], "centroid": [51.32031, 5.457491], "population": 31221, "source": "pdok-cbs-2025"}
+{"name": "Noordenveld", "country_code": "NL", "code": "GM1699", "bbox": [52.985524, 6.305274, 53.203822, 6.540084], "centroid": [53.094673, 6.422679], "population": 31214, "source": "pdok-cbs-2025"}
+{"name": "Gemert-Bakel", "country_code": "NL", "code": "GM1652", "bbox": [51.48421, 5.651356, 51.598208, 5.852572], "centroid": [51.541209, 5.751964], "population": 30760, "source": "pdok-cbs-2025"}
+{"name": "Leusden", "country_code": "NL", "code": "GM0327", "bbox": [52.089334, 5.31092, 52.161449, 5.51408], "centroid": [52.125391, 5.4125], "population": 30544, "source": "pdok-cbs-2025"}
+{"name": "Halderberge", "country_code": "NL", "code": "GM1655", "bbox": [51.549256, 4.426675, 51.6304, 4.613892], "centroid": [51.589828, 4.520283], "population": 30430, "source": "pdok-cbs-2025"}
+{"name": "Best", "country_code": "NL", "code": "GM0753", "bbox": [51.483833, 5.349485, 51.548353, 5.447506], "centroid": [51.516093, 5.398496], "population": 30216, "source": "pdok-cbs-2025"}
+{"name": "Uithoorn", "country_code": "NL", "code": "GM0451", "bbox": [52.206767, 4.723764, 52.260984, 4.852157], "centroid": [52.233876, 4.787961], "population": 30206, "source": "pdok-cbs-2025"}
+{"name": "Opsterland", "country_code": "NL", "code": "GM0086", "bbox": [52.964373, 5.927581, 53.129214, 6.332056], "centroid": [53.046793, 6.129819], "population": 29812, "source": "pdok-cbs-2025"}
+{"name": "Oost Gelre", "country_code": "NL", "code": "GM1586", "bbox": [51.962547, 6.4592, 52.06804, 6.687981], "centroid": [52.015294, 6.573591], "population": 29574, "source": "pdok-cbs-2025"}
+{"name": "Sint-Michielsgestel", "country_code": "NL", "code": "GM0845", "bbox": [51.600224, 5.303797, 51.701479, 5.456872], "centroid": [51.650851, 5.380334], "population": 29498, "source": "pdok-cbs-2025"}
+{"name": "Zaltbommel", "country_code": "NL", "code": "GM0297", "bbox": [51.737607, 5.000363, 51.826848, 5.288436], "centroid": [51.782227, 5.1444], "population": 29447, "source": "pdok-cbs-2025"}
+{"name": "Krimpen aan den IJssel", "country_code": "NL", "code": "GM0542", "bbox": [51.902367, 4.549239, 51.93105, 4.643019], "centroid": [51.916709, 4.596129], "population": 29410, "source": "pdok-cbs-2025"}
+{"name": "Nieuwkoop", "country_code": "NL", "code": "GM0569", "bbox": [52.106508, 4.681209, 52.228742, 4.892178], "centroid": [52.167625, 4.786694], "population": 29151, "source": "pdok-cbs-2025"}
+{"name": "Culemborg", "country_code": "NL", "code": "GM0216", "bbox": [51.919645, 5.142432, 51.978758, 5.270373], "centroid": [51.949201, 5.206403], "population": 29121, "source": "pdok-cbs-2025"}
+{"name": "Winterswijk", "country_code": "NL", "code": "GM0294", "bbox": [51.896064, 6.629071, 52.040065, 6.832801], "centroid": [51.968064, 6.730936], "population": 29022, "source": "pdok-cbs-2025"}
+{"name": "Dalfsen", "country_code": "NL", "code": "GM0148", "bbox": [52.424492, 6.162496, 52.599171, 6.38415], "centroid": [52.511831, 6.273323], "population": 28901, "source": "pdok-cbs-2025"}
+{"name": "Nunspeet", "country_code": "NL", "code": "GM0302", "bbox": [52.267146, 5.678923, 52.406868, 5.880952], "centroid": [52.337007, 5.779937], "population": 28021, "source": "pdok-cbs-2025"}
+{"name": "Achtkarspelen", "country_code": "NL", "code": "GM0059", "bbox": [53.144994, 6.019791, 53.26989, 6.235101], "centroid": [53.207442, 6.127446], "population": 27900, "source": "pdok-cbs-2025"}
+{"name": "Brunssum", "country_code": "NL", "code": "GM0899", "bbox": [50.926439, 5.928468, 50.962502, 6.0182], "centroid": [50.944471, 5.973334], "population": 27670, "source": "pdok-cbs-2025"}
+{"name": "Veendam", "country_code": "NL", "code": "GM0047", "bbox": [53.032408, 6.801674, 53.128833, 6.961735], "centroid": [53.08062, 6.881704], "population": 27616, "source": "pdok-cbs-2025"}
+{"name": "Hulst", "country_code": "NL", "code": "GM0677", "bbox": [51.241194, 3.94178, 51.406689, 4.234696], "centroid": [51.323942, 4.088238], "population": 27575, "source": "pdok-cbs-2025"}
+{"name": "Heemstede", "country_code": "NL", "code": "GM0397", "bbox": [52.322205, 4.590187, 52.363405, 4.641033], "centroid": [52.342805, 4.61561], "population": 27545, "source": "pdok-cbs-2025"}
+{"name": "Kaag en Braassem", "country_code": "NL", "code": "GM1884", "bbox": [52.152249, 4.538153, 52.233842, 4.729562], "centroid": [52.193046, 4.633858], "population": 27541, "source": "pdok-cbs-2025"}
+{"name": "Leiderdorp", "country_code": "NL", "code": "GM0547", "bbox": [52.131933, 4.514831, 52.182117, 4.571481], "centroid": [52.157025, 4.543156], "population": 27377, "source": "pdok-cbs-2025"}
+{"name": "Drimmelen", "country_code": "NL", "code": "GM1719", "bbox": [51.629141, 4.645136, 51.766569, 4.853125], "centroid": [51.697855, 4.749131], "population": 27325, "source": "pdok-cbs-2025"}
+{"name": "Aalten", "country_code": "NL", "code": "GM0197", "bbox": [51.853823, 6.464384, 51.974364, 6.668733], "centroid": [51.914094, 6.566558], "population": 27120, "source": "pdok-cbs-2025"}
+{"name": "Ermelo", "country_code": "NL", "code": "GM0233", "bbox": [52.2394, 5.54808, 52.328382, 5.761449], "centroid": [52.283891, 5.654764], "population": 27016, "source": "pdok-cbs-2025"}
+{"name": "Buren", "country_code": "NL", "code": "GM0214", "bbox": [51.873486, 5.241923, 51.985947, 5.586617], "centroid": [51.929717, 5.41427], "population": 27009, "source": "pdok-cbs-2025"}
+{"name": "Wassenaar", "country_code": "NL", "code": "GM0629", "bbox": [52.094773, 4.302636, 52.186899, 4.443939], "centroid": [52.140836, 4.373288], "population": 26949, "source": "pdok-cbs-2025"}
+{"name": "Gilze en Rijen", "country_code": "NL", "code": "GM0784", "bbox": [51.510081, 4.82926, 51.616295, 4.979565], "centroid": [51.563188, 4.904412], "population": 26723, "source": "pdok-cbs-2025"}
+{"name": "Dinkelland", "country_code": "NL", "code": "GM1774", "bbox": [52.272961, 6.759036, 52.469767, 7.072207], "centroid": [52.371364, 6.915621], "population": 26606, "source": "pdok-cbs-2025"}
+{"name": "Dongen", "country_code": "NL", "code": "GM0766", "bbox": [51.607364, 4.904279, 51.678918, 5.004492], "centroid": [51.643141, 4.954385], "population": 26368, "source": "pdok-cbs-2025"}
+{"name": "Westerwolde", "country_code": "NL", "code": "GM1950", "bbox": [52.838197, 7.014799, 53.160776, 7.217446], "centroid": [52.999486, 7.116123], "population": 26215, "source": "pdok-cbs-2025"}
+{"name": "Beuningen", "country_code": "NL", "code": "GM0209", "bbox": [51.832291, 5.667852, 51.895648, 5.825694], "centroid": [51.86397, 5.746773], "population": 26157, "source": "pdok-cbs-2025"}
+{"name": "Weststellingwerf", "country_code": "NL", "code": "GM0098", "bbox": [52.800855, 5.818129, 52.943014, 6.247259], "centroid": [52.871935, 6.032694], "population": 26130, "source": "pdok-cbs-2025"}
+{"name": "Tholen", "country_code": "NL", "code": "GM0716", "bbox": [51.487676, 3.983873, 51.653596, 4.237324], "centroid": [51.570636, 4.110598], "population": 26085, "source": "pdok-cbs-2025"}
+{"name": "Eijsden-Margraten", "country_code": "NL", "code": "GM1903", "bbox": [50.754764, 5.68206, 50.85529, 5.864134], "centroid": [50.805027, 5.773097], "population": 25900, "source": "pdok-cbs-2025"}
+{"name": "Albrandswaard", "country_code": "NL", "code": "GM0613", "bbox": [51.831645, 4.383229, 51.872992, 4.492227], "centroid": [51.852319, 4.437728], "population": 25814, "source": "pdok-cbs-2025"}
+{"name": "Voorschoten", "country_code": "NL", "code": "GM0626", "bbox": [52.101471, 4.401159, 52.149777, 4.469239], "centroid": [52.125624, 4.435199], "population": 25650, "source": "pdok-cbs-2025"}
+{"name": "Borger-Odoorn", "country_code": "NL", "code": "GM1681", "bbox": [52.804635, 6.724651, 52.993354, 7.045532], "centroid": [52.898994, 6.885091], "population": 25598, "source": "pdok-cbs-2025"}
+{"name": "Sliedrecht", "country_code": "NL", "code": "GM0610", "bbox": [51.815199, 4.729638, 51.84664, 4.811415], "centroid": [51.830919, 4.770527], "population": 25597, "source": "pdok-cbs-2025"}
+{"name": "Ooststellingwerf", "country_code": "NL", "code": "GM0085", "bbox": [52.906356, 6.084848, 53.07528, 6.427615], "centroid": [52.990818, 6.256232], "population": 25464, "source": "pdok-cbs-2025"}
+{"name": "Maasdriel", "country_code": "NL", "code": "GM0263", "bbox": [51.73358, 5.173863, 51.837659, 5.416222], "centroid": [51.78562, 5.295042], "population": 25452, "source": "pdok-cbs-2025"}
+{"name": "Aa en Hunze", "country_code": "NL", "code": "GM1680", "bbox": [52.86816, 6.561505, 53.094762, 6.935685], "centroid": [52.981461, 6.748595], "population": 25399, "source": "pdok-cbs-2025"}
+{"name": "Duiven", "country_code": "NL", "code": "GM0226", "bbox": [51.912334, 5.965775, 51.981859, 6.068631], "centroid": [51.947096, 6.017203], "population": 25066, "source": "pdok-cbs-2025"}
+{"name": "Oegstgeest", "country_code": "NL", "code": "GM0579", "bbox": [52.162053, 4.435017, 52.204669, 4.497562], "centroid": [52.183361, 4.466289], "population": 25064, "source": "pdok-cbs-2025"}
+{"name": "Baarn", "country_code": "NL", "code": "GM0308", "bbox": [52.16538, 5.212075, 52.23283, 5.335542], "centroid": [52.199105, 5.273808], "population": 24792, "source": "pdok-cbs-2025"}
+{"name": "Voorst", "country_code": "NL", "code": "GM0285", "bbox": [52.143938, 6.024802, 52.330907, 6.194363], "centroid": [52.237423, 6.109583], "population": 24790, "source": "pdok-cbs-2025"}
+{"name": "Neder-Betuwe", "country_code": "NL", "code": "GM1740", "bbox": [51.889009, 5.453384, 51.954001, 5.711177], "centroid": [51.921505, 5.58228], "population": 24648, "source": "pdok-cbs-2025"}
+{"name": "Wierden", "country_code": "NL", "code": "GM0189", "bbox": [52.269317, 6.468189, 52.417514, 6.631783], "centroid": [52.343416, 6.549986], "population": 24538, "source": "pdok-cbs-2025"}
+{"name": "Wijdemeren", "country_code": "NL", "code": "GM1696", "bbox": [52.16593, 5.021293, 52.285143, 5.145703], "centroid": [52.225536, 5.083498], "population": 24463, "source": "pdok-cbs-2025"}
+{"name": "De Wolden", "country_code": "NL", "code": "GM1690", "bbox": [52.61225, 6.21632, 52.798978, 6.530556], "centroid": [52.705614, 6.373438], "population": 24374, "source": "pdok-cbs-2025"}
+{"name": "Putten", "country_code": "NL", "code": "GM0273", "bbox": [52.202337, 5.474193, 52.291812, 5.683643], "centroid": [52.247074, 5.578918], "population": 24365, "source": "pdok-cbs-2025"}
+{"name": "Steenbergen", "country_code": "NL", "code": "GM0851", "bbox": [51.544003, 4.190163, 51.657136, 4.443999], "centroid": [51.60057, 4.317081], "population": 24310, "source": "pdok-cbs-2025"}
+{"name": "Haaksbergen", "country_code": "NL", "code": "GM0158", "bbox": [52.118105, 6.624485, 52.206331, 6.889752], "centroid": [52.162218, 6.757118], "population": 24229, "source": "pdok-cbs-2025"}
+{"name": "Heiloo", "country_code": "NL", "code": "GM0399", "bbox": [52.578738, 4.670614, 52.624986, 4.752137], "centroid": [52.601862, 4.711376], "population": 24144, "source": "pdok-cbs-2025"}
+{"name": "Goirle", "country_code": "NL", "code": "GM0785", "bbox": [51.471108, 4.962572, 51.540133, 5.110645], "centroid": [51.50562, 5.036608], "population": 23952, "source": "pdok-cbs-2025"}
+{"name": "Maasgouw", "country_code": "NL", "code": "GM1641", "bbox": [51.099555, 5.807833, 51.216025, 5.955475], "centroid": [51.15779, 5.881654], "population": 23947, "source": "pdok-cbs-2025"}
+{"name": "Wijk bij Duurstede", "country_code": "NL", "code": "GM0352", "bbox": [51.955097, 5.242355, 52.027001, 5.415276], "centroid": [51.991049, 5.328815], "population": 23925, "source": "pdok-cbs-2025"}
+{"name": "Oldebroek", "country_code": "NL", "code": "GM0269", "bbox": [52.391393, 5.842365, 52.522025, 6.036939], "centroid": [52.456709, 5.939652], "population": 23760, "source": "pdok-cbs-2025"}
+{"name": "Nuenen, Gerwen en Nederwetten", "country_code": "NL", "code": "GM0820", "bbox": [51.433675, 5.505524, 51.538075, 5.605201], "centroid": [51.485875, 5.555363], "population": 23702, "source": "pdok-cbs-2025"}
+{"name": "Borne", "country_code": "NL", "code": "GM0147", "bbox": [52.283113, 6.689482, 52.341207, 6.80213], "centroid": [52.31216, 6.745806], "population": 23668, "source": "pdok-cbs-2025"}
+{"name": "Loon op Zand", "country_code": "NL", "code": "GM0809", "bbox": [51.605681, 4.987266, 51.676834, 5.106137], "centroid": [51.641258, 5.046702], "population": 23504, "source": "pdok-cbs-2025"}
+{"name": "Bloemendaal", "country_code": "NL", "code": "GM0377", "bbox": [52.309298, 4.541323, 52.438037, 4.631647], "centroid": [52.373668, 4.586485], "population": 23478, "source": "pdok-cbs-2025"}
+{"name": "Elburg", "country_code": "NL", "code": "GM0230", "bbox": [52.357873, 5.756913, 52.470551, 5.924339], "centroid": [52.414212, 5.840626], "population": 23429, "source": "pdok-cbs-2025"}
+{"name": "Sluis", "country_code": "NL", "code": "GM1714", "bbox": [51.24161, 3.358381, 51.407492, 3.71241], "centroid": [51.324551, 3.535395], "population": 23386, "source": "pdok-cbs-2025"}
+{"name": "Rucphen", "country_code": "NL", "code": "GM0840", "bbox": [51.473312, 4.485405, 51.568559, 4.64011], "centroid": [51.520936, 4.562758], "population": 23080, "source": "pdok-cbs-2025"}
+{"name": "Lisse", "country_code": "NL", "code": "GM0553", "bbox": [52.222206, 4.513495, 52.286644, 4.572749], "centroid": [52.254425, 4.543122], "population": 22982, "source": "pdok-cbs-2025"}
+{"name": "Koggenland", "country_code": "NL", "code": "GM1598", "bbox": [52.595286, 4.862699, 52.69991, 5.038928], "centroid": [52.647598, 4.950814], "population": 22940, "source": "pdok-cbs-2025"}
+{"name": "Reimerswaal", "country_code": "NL", "code": "GM0703", "bbox": [51.374811, 3.993001, 51.51973, 4.277425], "centroid": [51.447271, 4.135213], "population": 22896, "source": "pdok-cbs-2025"}
+{"name": "Losser", "country_code": "NL", "code": "GM0168", "bbox": [52.220737, 6.934657, 52.379847, 7.072765], "centroid": [52.300292, 7.003711], "population": 22888, "source": "pdok-cbs-2025"}
+{"name": "Zeewolde", "country_code": "NL", "code": "GM0050", "bbox": [52.252613, 5.301244, 52.442632, 5.622984], "centroid": [52.347623, 5.462114], "population": 22879, "source": "pdok-cbs-2025"}
+{"name": "Zwartewaterland", "country_code": "NL", "code": "GM1896", "bbox": [52.551841, 5.971343, 52.667937, 6.166815], "centroid": [52.609889, 6.069079], "population": 22823, "source": "pdok-cbs-2025"}
+{"name": "Borsele", "country_code": "NL", "code": "GM0654", "bbox": [51.385005, 3.69568, 51.502456, 3.933321], "centroid": [51.443731, 3.8145], "population": 22818, "source": "pdok-cbs-2025"}
+{"name": "Laarbeek", "country_code": "NL", "code": "GM1659", "bbox": [51.494883, 5.533082, 51.569678, 5.686004], "centroid": [51.53228, 5.609543], "population": 22805, "source": "pdok-cbs-2025"}
+{"name": "Hillegom", "country_code": "NL", "code": "GM0534", "bbox": [52.27124, 4.542319, 52.318383, 4.611676], "centroid": [52.294811, 4.576997], "population": 22197, "source": "pdok-cbs-2025"}
+{"name": "Woensdrecht", "country_code": "NL", "code": "GM0873", "bbox": [51.354352, 4.263732, 51.466801, 4.431691], "centroid": [51.410576, 4.347712], "population": 22028, "source": "pdok-cbs-2025"}
+{"name": "Bunschoten", "country_code": "NL", "code": "GM0313", "bbox": [52.205528, 5.310662, 52.273611, 5.403642], "centroid": [52.23957, 5.357152], "population": 22019, "source": "pdok-cbs-2025"}
+{"name": "Zundert", "country_code": "NL", "code": "GM0879", "bbox": [51.422015, 4.529896, 51.549799, 4.743983], "centroid": [51.485907, 4.636939], "population": 21988, "source": "pdok-cbs-2025"}
+{"name": "Veere", "country_code": "NL", "code": "GM0717", "bbox": [51.462924, 3.433263, 51.650338, 3.731667], "centroid": [51.556631, 3.582465], "population": 21953, "source": "pdok-cbs-2025"}
+{"name": "Geertruidenberg", "country_code": "NL", "code": "GM0779", "bbox": [51.671836, 4.82361, 51.719999, 4.933169], "centroid": [51.695917, 4.878389], "population": 21770, "source": "pdok-cbs-2025"}
+{"name": "Stede Broec", "country_code": "NL", "code": "GM0532", "bbox": [52.677613, 5.185373, 52.717696, 5.259249], "centroid": [52.697655, 5.222311], "population": 21743, "source": "pdok-cbs-2025"}
+{"name": "Tubbergen", "country_code": "NL", "code": "GM0183", "bbox": [52.329665, 6.669908, 52.478132, 6.949225], "centroid": [52.403899, 6.809566], "population": 21315, "source": "pdok-cbs-2025"}
+{"name": "Urk", "country_code": "NL", "code": "GM0184", "bbox": [52.637717, 5.591473, 52.6833, 5.655381], "centroid": [52.660508, 5.623427], "population": 21227, "source": "pdok-cbs-2025"}
+{"name": "Cranendonck", "country_code": "NL", "code": "GM1706", "bbox": [51.220909, 5.515772, 51.353877, 5.672109], "centroid": [51.287393, 5.593941], "population": 21001, "source": "pdok-cbs-2025"}
+{"name": "Brummen", "country_code": "NL", "code": "GM0213", "bbox": [52.059181, 6.006085, 52.16206, 6.217899], "centroid": [52.11062, 6.111992], "population": 20884, "source": "pdok-cbs-2025"}
+{"name": "Roerdalen", "country_code": "NL", "code": "GM1669", "bbox": [51.096531, 5.913886, 51.194413, 6.180723], "centroid": [51.145472, 6.047305], "population": 20580, "source": "pdok-cbs-2025"}
+{"name": "Bladel", "country_code": "NL", "code": "GM1728", "bbox": [51.305665, 5.183215, 51.4365, 5.313649], "centroid": [51.371083, 5.248432], "population": 20529, "source": "pdok-cbs-2025"}
+{"name": "Rhenen", "country_code": "NL", "code": "GM0340", "bbox": [51.943125, 5.477664, 52.018516, 5.627309], "centroid": [51.98082, 5.552486], "population": 20203, "source": "pdok-cbs-2025"}
+{"name": "Alblasserdam", "country_code": "NL", "code": "GM0482", "bbox": [51.83865, 4.626392, 51.881212, 4.70024], "centroid": [51.859931, 4.663316], "population": 20136, "source": "pdok-cbs-2025"}
+{"name": "Drechterland", "country_code": "NL", "code": "GM0498", "bbox": [52.61988, 5.091752, 52.707452, 5.24648], "centroid": [52.663666, 5.169116], "population": 19838, "source": "pdok-cbs-2025"}
+{"name": "Westerveld", "country_code": "NL", "code": "GM1701", "bbox": [52.729308, 6.11982, 52.927641, 6.480026], "centroid": [52.828475, 6.299923], "population": 19661, "source": "pdok-cbs-2025"}
+{"name": "West Maas en Waal", "country_code": "NL", "code": "GM0668", "bbox": [51.809677, 5.400633, 51.894753, 5.609857], "centroid": [51.852215, 5.505245], "population": 19581, "source": "pdok-cbs-2025"}
+{"name": "Eersel", "country_code": "NL", "code": "GM0770", "bbox": [51.318237, 5.237597, 51.468536, 5.388906], "centroid": [51.393387, 5.313251], "population": 19528, "source": "pdok-cbs-2025"}
+{"name": "Someren", "country_code": "NL", "code": "GM0847", "bbox": [51.315093, 5.637871, 51.457714, 5.770447], "centroid": [51.386404, 5.704159], "population": 19428, "source": "pdok-cbs-2025"}
+{"name": "Midden-Delfland", "country_code": "NL", "code": "GM1842", "bbox": [51.921236, 4.233532, 52.019988, 4.402933], "centroid": [51.970612, 4.318233], "population": 19414, "source": "pdok-cbs-2025"}
+{"name": "Druten", "country_code": "NL", "code": "GM0225", "bbox": [51.836274, 5.530982, 51.901745, 5.685014], "centroid": [51.869009, 5.607998], "population": 18991, "source": "pdok-cbs-2025"}
+{"name": "Oirschot", "country_code": "NL", "code": "GM0823", "bbox": [51.425098, 5.191024, 51.552821, 5.391185], "centroid": [51.488959, 5.291105], "population": 18842, "source": "pdok-cbs-2025"}
+{"name": "Heerde", "country_code": "NL", "code": "GM0246", "bbox": [52.356513, 5.951025, 52.454807, 6.130554], "centroid": [52.40566, 6.040789], "population": 18776, "source": "pdok-cbs-2025"}
+{"name": "Bergeijk", "country_code": "NL", "code": "GM1724", "bbox": [51.261353, 5.225972, 51.383905, 5.433921], "centroid": [51.322629, 5.329946], "population": 18754, "source": "pdok-cbs-2025"}
+{"name": "Meerssen", "country_code": "NL", "code": "GM0938", "bbox": [50.866095, 5.712638, 50.943411, 5.803479], "centroid": [50.904753, 5.758059], "population": 18661, "source": "pdok-cbs-2025"}
+{"name": "Enkhuizen", "country_code": "NL", "code": "GM0388", "bbox": [52.684128, 5.218134, 52.805449, 5.307771], "centroid": [52.744789, 5.262952], "population": 18637, "source": "pdok-cbs-2025"}
+{"name": "Hardinxveld-Giessendam", "country_code": "NL", "code": "GM0523", "bbox": [51.816472, 4.803378, 51.860735, 4.926986], "centroid": [51.838603, 4.865182], "population": 18413, "source": "pdok-cbs-2025"}
+{"name": "Olst-Wijhe", "country_code": "NL", "code": "GM1773", "bbox": [52.29766, 6.066088, 52.453541, 6.235666], "centroid": [52.3756, 6.150877], "population": 18361, "source": "pdok-cbs-2025"}
+{"name": "Ommen", "country_code": "NL", "code": "GM0175", "bbox": [52.428145, 6.323412, 52.592527, 6.609645], "centroid": [52.510336, 6.466529], "population": 18295, "source": "pdok-cbs-2025"}
+{"name": "Son en Breugel", "country_code": "NL", "code": "GM0848", "bbox": [51.493927, 5.423841, 51.541848, 5.546272], "centroid": [51.517887, 5.485057], "population": 17552, "source": "pdok-cbs-2025"}
+{"name": "Waalre", "country_code": "NL", "code": "GM0866", "bbox": [51.366239, 5.417572, 51.405349, 5.516417], "centroid": [51.385794, 5.466994], "population": 17544, "source": "pdok-cbs-2025"}
+{"name": "Waterland", "country_code": "NL", "code": "GM0852", "bbox": [52.415129, 4.946876, 52.494733, 5.13938], "centroid": [52.454931, 5.043128], "population": 17312, "source": "pdok-cbs-2025"}
+{"name": "Staphorst", "country_code": "NL", "code": "GM0180", "bbox": [52.581246, 6.095917, 52.692155, 6.32929], "centroid": [52.636701, 6.212604], "population": 17261, "source": "pdok-cbs-2025"}
+{"name": "Nederweert", "country_code": "NL", "code": "GM0946", "bbox": [51.237066, 5.643995, 51.346877, 5.877822], "centroid": [51.291971, 5.760908], "population": 17171, "source": "pdok-cbs-2025"}
+{"name": "Zandvoort", "country_code": "NL", "code": "GM0473", "bbox": [52.313997, 4.493971, 52.401396, 4.591659], "centroid": [52.357696, 4.542815], "population": 17168, "source": "pdok-cbs-2025"}
+{"name": "Gennep", "country_code": "NL", "code": "GM0907", "bbox": [51.643782, 5.919469, 51.748023, 6.044938], "centroid": [51.695903, 5.982203], "population": 17035, "source": "pdok-cbs-2025"}
+{"name": "Asten", "country_code": "NL", "code": "GM0743", "bbox": [51.333804, 5.693983, 51.440065, 5.870358], "centroid": [51.386935, 5.78217], "population": 16817, "source": "pdok-cbs-2025"}
+{"name": "Heumen", "country_code": "NL", "code": "GM0252", "bbox": [51.752212, 5.729745, 51.809859, 5.893408], "centroid": [51.781035, 5.811577], "population": 16569, "source": "pdok-cbs-2025"}
+{"name": "Valkenburg aan de Geul", "country_code": "NL", "code": "GM0994", "bbox": [50.829548, 5.749327, 50.892188, 5.887991], "centroid": [50.860868, 5.818659], "population": 16365, "source": "pdok-cbs-2025"}
+{"name": "Wormerland", "country_code": "NL", "code": "GM0880", "bbox": [52.468498, 4.788756, 52.542601, 4.934703], "centroid": [52.505549, 4.861729], "population": 16333, "source": "pdok-cbs-2025"}
+{"name": "Heeze-Leende", "country_code": "NL", "code": "GM1658", "bbox": [51.295202, 5.473602, 51.422456, 5.654706], "centroid": [51.358829, 5.564154], "population": 16243, "source": "pdok-cbs-2025"}
+{"name": "Harlingen", "country_code": "NL", "code": "GM0072", "bbox": [53.143334, 5.402803, 53.209839, 5.496372], "centroid": [53.176586, 5.449587], "population": 15807, "source": "pdok-cbs-2025"}
+{"name": "Hilvarenbeek", "country_code": "NL", "code": "GM0798", "bbox": [51.42824, 5.048791, 51.545919, 5.251249], "centroid": [51.487079, 5.15002], "population": 15698, "source": "pdok-cbs-2025"}
+{"name": "Bunnik", "country_code": "NL", "code": "GM0312", "bbox": [51.997779, 5.15303, 52.080562, 5.27991], "centroid": [52.039171, 5.21647], "population": 15341, "source": "pdok-cbs-2025"}
+{"name": "Westervoort", "country_code": "NL", "code": "GM0293", "bbox": [51.938767, 5.949392, 51.98065, 6.003143], "centroid": [51.959709, 5.976268], "population": 15014, "source": "pdok-cbs-2025"}
+{"name": "Lopik", "country_code": "NL", "code": "GM0331", "bbox": [51.93803, 4.834115, 52.025566, 5.062638], "centroid": [51.981798, 4.948376], "population": 14456, "source": "pdok-cbs-2025"}
+{"name": "Gulpen-Wittem", "country_code": "NL", "code": "GM1729", "bbox": [50.750366, 5.819523, 50.84884, 5.983517], "centroid": [50.799603, 5.90152], "population": 14206, "source": "pdok-cbs-2025"}
+{"name": "Ouder-Amstel", "country_code": "NL", "code": "GM0437", "bbox": [52.250743, 4.870121, 52.338638, 4.95524], "centroid": [52.29469, 4.912681], "population": 14125, "source": "pdok-cbs-2025"}
+{"name": "Montfoort", "country_code": "NL", "code": "GM0335", "bbox": [52.010014, 4.868225, 52.079866, 5.01801], "centroid": [52.04494, 4.943118], "population": 13896, "source": "pdok-cbs-2025"}
+{"name": "Texel", "country_code": "NL", "code": "GM0448", "bbox": [52.959888, 4.662809, 53.185341, 4.908336], "centroid": [53.072614, 4.785573], "population": 13656, "source": "pdok-cbs-2025"}
+{"name": "Woudenberg", "country_code": "NL", "code": "GM0351", "bbox": [52.043237, 5.2983, 52.117423, 5.497876], "centroid": [52.08033, 5.398088], "population": 13639, "source": "pdok-cbs-2025"}
+{"name": "Uitgeest", "country_code": "NL", "code": "GM0450", "bbox": [52.494954, 4.690585, 52.551623, 4.782476], "centroid": [52.523289, 4.73653], "population": 13632, "source": "pdok-cbs-2025"}
+{"name": "Beesel", "country_code": "NL", "code": "GM0889", "bbox": [51.24256, 6.005762, 51.297454, 6.124756], "centroid": [51.270007, 6.065259], "population": 13450, "source": "pdok-cbs-2025"}
+{"name": "Reusel-De Mierden", "country_code": "NL", "code": "GM1667", "bbox": [51.310317, 5.071181, 51.432174, 5.204698], "centroid": [51.371245, 5.137939], "population": 13127, "source": "pdok-cbs-2025"}
+{"name": "Kapelle", "country_code": "NL", "code": "GM0678", "bbox": [51.448451, 3.907733, 51.528466, 4.017389], "centroid": [51.488458, 3.962561], "population": 12882, "source": "pdok-cbs-2025"}
+{"name": "Voerendaal", "country_code": "NL", "code": "GM0986", "bbox": [50.83966, 5.861617, 50.904844, 5.969361], "centroid": [50.872252, 5.915489], "population": 12466, "source": "pdok-cbs-2025"}
+{"name": "Hattem", "country_code": "NL", "code": "GM0244", "bbox": [52.443779, 6.00079, 52.509607, 6.103547], "centroid": [52.476693, 6.052168], "population": 12228, "source": "pdok-cbs-2025"}
+{"name": "Pekela", "country_code": "NL", "code": "GM0765", "bbox": [53.013862, 6.905525, 53.119198, 7.042609], "centroid": [53.06653, 6.974067], "population": 12176, "source": "pdok-cbs-2025"}
+{"name": "Opmeer", "country_code": "NL", "code": "GM0432", "bbox": [52.671766, 4.898668, 52.755297, 5.011163], "centroid": [52.713531, 4.954916], "population": 12009, "source": "pdok-cbs-2025"}
+{"name": "Blaricum", "country_code": "NL", "code": "GM0376", "bbox": [52.254663, 5.203822, 52.304927, 5.328666], "centroid": [52.279795, 5.266244], "population": 11952, "source": "pdok-cbs-2025"}
+{"name": "Landsmeer", "country_code": "NL", "code": "GM0415", "bbox": [52.411608, 4.893077, 52.490435, 4.95086], "centroid": [52.451021, 4.921969], "population": 11565, "source": "pdok-cbs-2025"}
+{"name": "Doesburg", "country_code": "NL", "code": "GM0221", "bbox": [51.995605, 6.109591, 52.042083, 6.177296], "centroid": [52.018844, 6.143443], "population": 11064, "source": "pdok-cbs-2025"}
+{"name": "Boekel", "country_code": "NL", "code": "GM0755", "bbox": [51.58236, 5.626567, 51.629031, 5.758614], "centroid": [51.605695, 5.69259], "population": 10959, "source": "pdok-cbs-2025"}
+{"name": "Simpelveld", "country_code": "NL", "code": "GM0965", "bbox": [50.801471, 5.953262, 50.86008, 6.024757], "centroid": [50.830775, 5.98901], "population": 10477, "source": "pdok-cbs-2025"}
+{"name": "Alphen-Chaam", "country_code": "NL", "code": "GM1723", "bbox": [51.45679, 4.746995, 51.55727, 5.016522], "centroid": [51.50703, 4.881758], "population": 10373, "source": "pdok-cbs-2025"}
+{"name": "Oudewater", "country_code": "NL", "code": "GM0589", "bbox": [51.986143, 4.798701, 52.063447, 4.926681], "centroid": [52.024795, 4.862691], "population": 10138, "source": "pdok-cbs-2025"}
+{"name": "Scherpenzeel", "country_code": "NL", "code": "GM0279", "bbox": [52.069452, 5.459243, 52.111098, 5.53916], "centroid": [52.090275, 5.499201], "population": 10128, "source": "pdok-cbs-2025"}
+{"name": "Vaals", "country_code": "NL", "code": "GM0981", "bbox": [50.752759, 5.92054, 50.803369, 6.027864], "centroid": [50.778064, 5.974202], "population": 10084, "source": "pdok-cbs-2025"}
+{"name": "Oostzaan", "country_code": "NL", "code": "GM0431", "bbox": [52.424462, 4.84295, 52.479827, 4.906469], "centroid": [52.452144, 4.87471], "population": 9689, "source": "pdok-cbs-2025"}
+{"name": "Eemnes", "country_code": "NL", "code": "GM0317", "bbox": [52.21946, 5.222901, 52.281645, 5.331241], "centroid": [52.250553, 5.277071], "population": 9362, "source": "pdok-cbs-2025"}
+{"name": "Zoeterwoude", "country_code": "NL", "code": "GM0638", "bbox": [52.080511, 4.470826, 52.147398, 4.550733], "centroid": [52.113955, 4.510779], "population": 8843, "source": "pdok-cbs-2025"}
+{"name": "Mook en Middelaar", "country_code": "NL", "code": "GM0944", "bbox": [51.717671, 5.864468, 51.77859, 5.938298], "centroid": [51.74813, 5.901383], "population": 7909, "source": "pdok-cbs-2025"}
+{"name": "Noord-Beveland", "country_code": "NL", "code": "GM1695", "bbox": [51.526025, 3.633625, 51.605858, 3.899625], "centroid": [51.565942, 3.766625], "population": 7581, "source": "pdok-cbs-2025"}
+{"name": "Baarle-Nassau", "country_code": "NL", "code": "GM0744", "bbox": [51.393687, 4.766615, 51.480736, 5.010976], "centroid": [51.437211, 4.888796], "population": 6899, "source": "pdok-cbs-2025"}
+{"name": "Renswoude", "country_code": "NL", "code": "GM0339", "bbox": [52.039469, 5.495575, 52.10542, 5.562746], "centroid": [52.072444, 5.52916], "population": 5556, "source": "pdok-cbs-2025"}
+{"name": "Terschelling", "country_code": "NL", "code": "GM0093", "bbox": [53.2493, 5.151464, 53.444241, 5.548737], "centroid": [53.346771, 5.350101], "population": 4870, "source": "pdok-cbs-2025"}
+{"name": "Ameland", "country_code": "NL", "code": "GM0060", "bbox": [53.424655, 5.613531, 53.471481, 5.95953], "centroid": [53.448068, 5.786531], "population": 3746, "source": "pdok-cbs-2025"}
+{"name": "Rozendaal", "country_code": "NL", "code": "GM0277", "bbox": [51.999638, 5.937099, 52.079164, 6.008987], "centroid": [52.039401, 5.973043], "population": 1726, "source": "pdok-cbs-2025"}
+{"name": "Vlieland", "country_code": "NL", "code": "GM0096", "bbox": [53.204467, 4.845012, 53.307845, 5.159758], "centroid": [53.256156, 5.002385], "population": 1194, "source": "pdok-cbs-2025"}
+{"name": "Schiermonnikoog", "country_code": "NL", "code": "GM0088", "bbox": [53.457708, 6.115395, 53.517355, 6.392577], "centroid": [53.487532, 6.253986], "population": 931, "source": "pdok-cbs-2025"}
+{"name": "'s-Gravenhage", "country_code": "NL", "code": "GM0518", "bbox": [52.014849, 4.19634, 52.128521, 4.422431], "centroid": [52.071685, 4.309386], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Beek (L.)", "country_code": "NL", "code": "GM0888", "bbox": [50.898608, 5.754844, 50.954835, 5.856928], "centroid": [50.926722, 5.805886], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Bergen (L.)", "country_code": "NL", "code": "GM0893", "bbox": [51.503081, 5.976606, 51.676164, 6.213359], "centroid": [51.589623, 6.094983], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Bergen (NH.)", "country_code": "NL", "code": "GM0373", "bbox": [52.573745, 4.609964, 52.756639, 4.75241], "centroid": [52.665192, 4.681187], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Dantumadiel", "country_code": "NL", "code": "GM1891", "bbox": [53.227947, 5.882245, 53.325497, 6.077753], "centroid": [53.276722, 5.979999], "population": null, "source": "pdok-cbs-2025"}
+{"name": "De Fryske Marren", "country_code": "NL", "code": "GM1940", "bbox": [52.803692, 5.426245, 53.05884, 5.937847], "centroid": [52.931266, 5.682046], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Hengelo (O.)", "country_code": "NL", "code": "GM0164", "bbox": [52.191065, 6.70204, 52.313586, 6.85239], "centroid": [52.252325, 6.777215], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Land van Cuijk", "country_code": "NL", "code": "GM1982", "bbox": [51.55203, 5.690858, 51.775034, 6.048119], "centroid": [51.663532, 5.869488], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Laren (NH.)", "country_code": "NL", "code": "GM0417", "bbox": [52.212129, 5.188853, 52.272909, 5.245093], "centroid": [52.242519, 5.216973], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Maashorst", "country_code": "NL", "code": "GM1991", "bbox": [51.622496, 5.561965, 51.76801, 5.750477], "centroid": [51.695253, 5.656221], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Middelburg (Z.)", "country_code": "NL", "code": "GM0687", "bbox": [51.468331, 3.575338, 51.535302, 3.746945], "centroid": [51.501816, 3.661141], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Rijswijk (ZH.)", "country_code": "NL", "code": "GM0603", "bbox": [52.012766, 4.290952, 52.061947, 4.357902], "centroid": [52.037357, 4.324427], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Stein (L.)", "country_code": "NL", "code": "GM0971", "bbox": [50.927928, 5.719902, 51.019164, 5.789195], "centroid": [50.973546, 5.754548], "population": null, "source": "pdok-cbs-2025"}
+{"name": "Tytsjerksteradiel", "country_code": "NL", "code": "GM0737", "bbox": [53.121615, 5.829701, 53.288658, 6.114593], "centroid": [53.205137, 5.972147], "population": null, "source": "pdok-cbs-2025"}

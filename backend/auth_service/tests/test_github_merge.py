@@ -53,6 +53,36 @@ def test_fast_forward_happy_path(monkeypatch):
     assert body == {"sha": "abc123def456", "force": False}
 
 
+def test_fast_forward_target_sha_skips_head_get(monkeypatch):
+    """When target_sha is provided, no GET on head_branch should fire — PATCH uses the SHA directly."""
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_test")
+
+    calls = []
+
+    def fake_urlopen(req, timeout=10):
+        url = req.full_url if hasattr(req, "full_url") else req
+        method = getattr(req, "method", None) or "GET"
+        calls.append((method, url, getattr(req, "data", None)))
+        if method == "PATCH":
+            return _FakeResp({"ref": "refs/heads/master", "object": {"sha": "deadbeef0001"}})
+        raise AssertionError(f"unexpected url/method: {method} {url}")
+
+    with patch.object(github_merge.urllib.request, "urlopen", side_effect=fake_urlopen):
+        result = github_merge.fast_forward(
+            repo="owner/repo",
+            base_branch="master",
+            head_branch="cms-preview",
+            target_sha="deadbeef0001",
+        )
+
+    assert result["object"]["sha"] == "deadbeef0001"
+    # Exactly one HTTP call — the PATCH. No GET on head branch.
+    assert len(calls) == 1
+    assert calls[0][0] == "PATCH"
+    body = json.loads(calls[0][2])
+    assert body == {"sha": "deadbeef0001", "force": False}
+
+
 def test_fast_forward_no_token_raises(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     with pytest.raises(github_merge.GitHubError, match="GITHUB_TOKEN"):

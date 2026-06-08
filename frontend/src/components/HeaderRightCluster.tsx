@@ -8,6 +8,7 @@ import { Logo } from "@/components/ui/Logo";
 import { backdrop, drawerRight, fadeIn, staggerFast } from "@/lib/animations";
 import { ctaButtonCn, navLinkCn } from "@/lib/styles";
 import { useAuth } from "@/context/auth";
+import { NavLink } from "@/components/nav/NavLink";
 import { NAV_LINKS } from "@/lib/nav-links";
 
 export function HeaderRightCluster() {
@@ -111,13 +112,13 @@ export function HeaderRightCluster() {
               >
                 {NAV_LINKS.map((link) => (
                   <motion.div key={link.label} variants={fadeIn}>
-                    <Link
+                    <NavLink
                       href={link.href}
-                      onClick={close}
+                      onNavigate={close}
                       className={`block rounded-lg px-4 py-3 text-base ${navLinkCn}`}
                     >
                       {link.label}
-                    </Link>
+                    </NavLink>
                   </motion.div>
                 ))}
 

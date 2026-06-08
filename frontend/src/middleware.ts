@@ -14,7 +14,11 @@ const CANONICAL_HOST = "roman-technologies.dev";
 // TTL must be shorter than the access token lifetime (15 min) so we never serve
 // a stale "verified" stamp after the access token has already expired.
 const VERIFIED_COOKIE = "auth_verified";
-const VERIFIED_TTL_SECONDS = 13 * 60; // 13 min  (<15 min access token)
+// SEC-019: this stamp lets the middleware skip the upstream /auth/me check, so its
+// TTL is also the window during which a server-side-revoked session keeps being
+// served protected pages. Keep it short (60s) so revocation takes effect quickly
+// while still skipping the upstream call for rapid back-to-back navigation.
+const VERIFIED_TTL_SECONDS = 60;
 
 function markVerified(response: NextResponse): void {
   response.cookies.set(VERIFIED_COOKIE, "1", {

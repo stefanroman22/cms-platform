@@ -2,12 +2,21 @@
 
 import { use, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronRight, Save, CheckCircle, AlertCircle } from "lucide-react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Save,
+  CheckCircle,
+  AlertCircle,
+  Languages,
+  RefreshCw,
+} from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { ServiceIcon } from "@/components/dashboard/ServiceIcon";
 import { EDITOR_MAP } from "@/components/dashboard/editors";
 import { PreviewPublishBar } from "@/components/dashboard/PreviewPublishBar";
+import { LocaleTabs } from "@/components/dashboard/LocaleTabs";
 import {
   dashboardSectionCardCn,
   dashboardErrorBannerCn,
@@ -24,10 +33,19 @@ interface ServiceDetail {
   schema: Record<string, unknown>;
   content: Record<string, unknown>;
   last_updated: string | null;
+  locale?: string;
+  default_locale?: string;
+  locales?: string[];
+  translation_status?: Record<string, string> | null;
 }
 
-function fetchServiceDetail(projectSlug: string, serviceKey: string): Promise<ServiceDetail> {
-  return fetch(`/api/projects/${projectSlug}/services/${serviceKey}`, {
+function fetchServiceDetail(
+  projectSlug: string,
+  serviceKey: string,
+  locale?: string
+): Promise<ServiceDetail> {
+  const q = locale ? `?locale=${encodeURIComponent(locale)}` : "";
+  return fetch(`/api/projects/${projectSlug}/services/${serviceKey}${q}`, {
     credentials: "include",
     cache: "no-store",
   }).then((r) => {
@@ -39,17 +57,19 @@ function fetchServiceDetail(projectSlug: string, serviceKey: string): Promise<Se
 async function saveContent(
   projectSlug: string,
   serviceKey: string,
-  content: Record<string, unknown>
+  content: Record<string, unknown>,
+  locale?: string
 ): Promise<void> {
-  const r = await fetch(`/api/projects/${projectSlug}/services/${serviceKey}`, {
+  const q = locale ? `?locale=${encodeURIComponent(locale)}` : "";
+  const r = await fetch(`/api/projects/${projectSlug}/services/${serviceKey}${q}`, {
     method: "PUT",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content }),
   });
   if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    throw new Error(body.detail ?? "Failed to save.");
+    const b = await r.json().catch(() => ({}));
+    throw new Error(b.detail ?? "Failed to save.");
   }
 }
 
@@ -76,22 +96,30 @@ export default function ServiceEditorPage({
 }) {
   const { projectSlug, serviceKey } = use(params);
   const router = useRouter();
-  const cacheKey = `service:${projectSlug}:${serviceKey}`;
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const localeParam = searchParams.get("locale") || "";
+  const cacheKey = `service:${projectSlug}:${serviceKey}:${localeParam || "default"}`;
 
   const {
     data: service,
     loading,
     error,
     refresh,
-  } = useQuery<ServiceDetail>(cacheKey, () => fetchServiceDetail(projectSlug, serviceKey), {
-    ttl: 60 * 1000,
-  });
+  } = useQuery<ServiceDetail>(
+    cacheKey,
+    () => fetchServiceDetail(projectSlug, serviceKey, localeParam || undefined),
+    {
+      ttl: 60 * 1000,
+    }
+  );
 
   // draft === null means no unsaved changes
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [retranslating, setRetranslating] = useState(false);
 
   const isDirty = draft !== null;
 
@@ -112,7 +140,7 @@ export default function ServiceEditorPage({
     setSaveError("");
     setSaveSuccess(false);
     try {
-      await saveContent(projectSlug, serviceKey, content);
+      await saveContent(projectSlug, serviceKey, content, localeParam || undefined);
       setSaveSuccess(true);
       setDraft(null);
       refresh();
@@ -123,6 +151,48 @@ export default function ServiceEditorPage({
       setSaving(false);
     }
   }
+
+  const setLocale = useCallback(
+    (loc: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (loc === service?.default_locale) params.delete("locale");
+      else params.set("locale", loc);
+      setDraft(null);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname, searchParams, service?.default_locale]
+  );
+
+  async function handleRetranslate() {
+    if (!activeLocale) return;
+    setRetranslating(true);
+    setSaveError("");
+    try {
+      const r = await fetch(
+        `/api/projects/${projectSlug}/services/${serviceKey}/retranslate?locale=${encodeURIComponent(activeLocale)}`,
+        { method: "POST", credentials: "include" }
+      );
+      if (!r.ok) {
+        const b = await r.json().catch(() => ({}));
+        throw new Error(b.detail ?? "Re-translate failed.");
+      }
+      setDraft(null);
+      refresh();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Re-translate failed.");
+    } finally {
+      setRetranslating(false);
+    }
+  }
+
+  const activeLocale = service?.locale ?? service?.default_locale ?? "";
+  const defaultLocale = service?.default_locale ?? "";
+  const locales = service?.locales ?? [];
+  const isNonDefault = !!activeLocale && !!defaultLocale && activeLocale !== defaultLocale;
+  const status = service?.translation_status ?? null;
+  const reviewCount = status ? Object.values(status).filter((s) => s === "stale").length : 0;
+  const manualCount = status ? Object.values(status).filter((s) => s === "manual").length : 0;
+  const autoCount = status ? Object.values(status).filter((s) => s === "auto").length : 0;
 
   const serviceLabel = service?.label ?? serviceKey;
   const EditorComponent = service ? EDITOR_MAP[service.service_type_slug] : null;
@@ -207,6 +277,63 @@ export default function ServiceEditorPage({
         )}
       </div>
 
+      {/* Locale tabs */}
+      {service && locales.length > 1 && (
+        <LocaleTabs
+          locales={locales}
+          activeLocale={activeLocale}
+          defaultLocale={defaultLocale}
+          onSelect={setLocale}
+        />
+      )}
+
+      {/* Non-default locale status banner */}
+      {service && isNonDefault && (
+        <div className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+              <Languages aria-hidden="true" className="h-4 w-4" />
+              <span>
+                Editing <span className="font-semibold uppercase">{activeLocale}</span> —
+                auto-translated from <span className="uppercase">{defaultLocale}</span>. Your edits
+                become manual overrides.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleRetranslate}
+              disabled={retranslating}
+              className="cursor-pointer inline-flex items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              <RefreshCw
+                aria-hidden="true"
+                className={`h-3.5 w-3.5 ${retranslating ? "animate-spin" : ""}`}
+              />
+              {retranslating
+                ? "Re-translating…"
+                : `Re-translate from ${defaultLocale.toUpperCase()}`}
+            </button>
+          </div>
+          {status && (
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+              <span className="rounded bg-sky-100 px-1.5 py-0.5 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                ⚡ {autoCount} auto
+              </span>
+              {manualCount > 0 && (
+                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                  ✎ {manualCount} manual
+                </span>
+              )}
+              {reviewCount > 0 && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                  ⚠ {reviewCount} need review
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Feedback */}
       {saveError && <div className={`${dashboardErrorBannerCn} mb-6`}>{saveError}</div>}
       {saveSuccess && (
@@ -224,10 +351,10 @@ export default function ServiceEditorPage({
       {/* Fetch error */}
       {!loading && error && <div className={dashboardErrorBannerCn}>{error}</div>}
 
-      {/* Editor — keyed on service.id so it re-mounts cleanly after save */}
+      {/* Editor — keyed on service.id + activeLocale so it re-mounts cleanly on locale change */}
       {!loading && service && EditorComponent && (
         <EditorComponent
-          key={service.id}
+          key={`${service.id}:${activeLocale}`}
           initialContent={service.content}
           onChange={handleChange}
           onUpload={handleUpload}

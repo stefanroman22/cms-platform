@@ -17,7 +17,7 @@ const CONTACT_ITEMS = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-white/[0.1] bg-black">
+    <footer className="border-t border-border bg-[#0e0e10]">
       <motion.div
         variants={stagger}
         initial="hidden"

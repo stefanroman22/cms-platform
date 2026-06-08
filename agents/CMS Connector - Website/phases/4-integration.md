@@ -1,5 +1,7 @@
 # Phase 4 — CMS integration
 
+**Orchestration:** per the skill's *Orchestration policy (ultracode)*, orchestrate multi-agent wiring/verification via the Workflow tool when resolving service-shape mismatches, booking/UI wiring, or env-var decisions spanning many files; be exhaustive.
+
 **Goal:** All approved services exist in the CMS, are seeded with `initial_content`. Client repo gains `cms.config.json` + `cms-provision.json`. Website is wired to the CMS. Vercel preview deployment is live.
 
 **Inputs:** approved manifest from Phase 3, GitHub repo from Phase 1, `CMS_API_TOKEN`, `VERCEL_TOKEN`, Resend env vars on backend Vercel project.
@@ -21,20 +23,75 @@ If `GET /admin/projects/<slug>` returns 404 (or empty), POST to
 developer's admin email — ownership transfers to the client in
 Phase 6). Otherwise reuse the existing row.
 
-3. **Provision services** via CMS admin API:
-   - `POST /projects/<slug>/services` per service.
-   - `PUT /projects/<slug>/services/<key>` to seed `initial_content`. Skip seeding for `email_config`.
+3. **Provision services** via CMS admin API — follow this exact order to avoid auto-translate clobbering human translations:
+   a. `POST /projects/<slug>/services` per service (create phase; no content yet).
+   b. `PUT /projects/<slug>/services/<key>` (no `?locale=` param) to seed the **default locale** content. Skip seeding for `email_config`.
+   c. For each **non-default locale** in `manifest.locales`: `PUT /projects/<slug>/services/<key>?locale=<l>` with that locale's `initial_content` slice (manual override import). This preserves existing human translations from `messages/<locale>.json`.
+   d. **LAST** — `PATCH /admin/projects/<slug>` with `{default_locale, locales}` to set the locale set on the project row. Doing this last prevents the backend from triggering auto-translate before all per-locale imports are in place.
 4. **Wire `email_config`** to Resend:
    - Set `destination_email` in the service's content.
    - Confirm backend env vars `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are set on the CMS backend Vercel project. If missing, **halt** and ask the user to set them — do not write `RESEND_API_KEY` from the agent.
    - Verify the from-domain is verified in Resend (call Resend API `/domains` if reachable; otherwise warn the user).
 5. **Vercel project setup** for the client website:
    - `find_project_by_repo` → reuse if found, else `create_project`.
-   - Set env vars: `VITE_CMS_ENDPOINT` (production + preview), `VITE_CMS_PREVIEW_TOKEN` (preview only). Reuse existing `preview_token` from CMS project row if present (idempotent).
+   - Set env vars using the **framework-aware prefix**: `NEXT_PUBLIC_*` for Next.js (`next.config.*` present), `VITE_*` for Vite-based frameworks. Concretely: `NEXT_PUBLIC_CMS_ENDPOINT` or `VITE_CMS_ENDPOINT` (production + preview); `NEXT_PUBLIC_CMS_PREVIEW_TOKEN` or `VITE_CMS_PREVIEW_TOKEN` (preview only). Reuse existing `preview_token` from CMS project row if present (idempotent).
+   - The CMS endpoint value is the **locale-less base** `{cms_endpoint_base}/content/{slug}`. Do NOT append a locale — the site's `i18n/request.ts` appends `/{locale}` at runtime.
    - Create `cms-preview` branch from production branch if missing.
    - Trigger production + preview deployments.
    - PATCH the CMS project row with `github_repo`, `production_branch` (resolved in this step from Vercel `productionBranch` or GitHub `default_branch` — see [AGENTS.md → Branch standardization](../AGENTS.md)), `vercel_project_id`, `production_url`, `preview_url`, `preview_token`.
 6. **Commit `cms.config.json`** to the client repo and push (uses Phase 1's git origin).
+
+### 4.2 — Booking provisioning (only if `booking.detected` in manifest)
+
+Run after step 3 (services provisioned). Follow this sub-order exactly — do not reorder.
+
+**a. Enable the booking backend first**
+
+```
+POST /projects/{slug}/bookings/enable
+```
+
+This must succeed before any subsequent booking calls are made. If it returns 409 (already enabled), continue.
+
+**b. PATCH settings**
+
+```
+PATCH /projects/{slug}/bookings/settings
+```
+
+Body fields (all required):
+- `destination_email` — use the value Stefan edited into the Phase-2 report; if blank/absent fall back to `stefanromanpers@gmail.com`.
+- `business_name` — from manifest `booking.business_name`.
+- `accent_color`, `primary_color` — brand colors from manifest.
+- `calendar_provider: "none"` — always `"none"` at this stage; no calendar sync.
+- `reminder_offsets` — list of hour-offsets from manifest.
+
+**c. Create resources, then services, then hours — in this order**
+
+1. `POST /projects/{slug}/bookings/resources` for each resource in `booking.resources`. Capture returned `resource_id` values.
+2. `POST /projects/{slug}/bookings/services` for each service in `booking.services`. Each service must reference at least one `resource_id` from step c-1.
+3. `PUT /projects/{slug}/bookings/hours` — post the weekly hours grid (weekday 0=Sun … 6=Sat, open/close times).
+
+**d. Generate `lib/booking.ts` + set env var**
+
+- Generate `lib/booking.ts` in the client repo. This file exports `getServices`, `getAvailability`, and `createBooking` wired to `{ENVPREFIX}BOOKING_API_BASE`.
+- Set the env var with the framework-aware prefix:
+  - Next.js → `NEXT_PUBLIC_BOOKING_API_BASE`
+  - Vite → `VITE_BOOKING_API_BASE`
+  - SvelteKit → `PUBLIC_BOOKING_API_BASE`
+- Value: the **bare backend base URL** (e.g. `https://cms-backend-roman.vercel.app`). Do NOT append `/booking/{slug}` — `lib/booking.ts` appends that path itself. Appending it here would double the path and break all booking calls.
+
+**e. Wire the design's booking UI to `lib/booking.ts`**
+
+Connect the components listed in `booking.ui_wiring.components` (or the iframe fallback) to the generated lib:
+- Service picker → `getServices()`
+- Date/time selector → `getAvailability(serviceId, from, to)`
+- Form submit → `createBooking(payload)` → on success, display the returned `manage_url`
+- Do **not** build a reschedule/cancel UI in the client repo.
+
+**f. Reschedule / cancel via centralized manage page**
+
+The `manage_url` returned by `createBooking` points to the CMS-hosted `/manage/{token}` page. Customers use that page directly for rescheduling and cancellation. No client-side manage UI is needed or should be built.
 
 ## Failure feedback
 
@@ -58,7 +115,7 @@ Phase 6). Otherwise reuse the existing row.
 Code integration is correctness-critical. Any LLM call made during this phase
 (resolving service-shape mismatches, deciding overwrite vs. skip on 409
 conflicts, debugging Vercel / Resend wiring, mapping client repo structure to
-build commands) **must use `claude-opus-4-7`**. Do not downgrade to Sonnet or
+build commands) **must use `claude-opus-4-8`** with effort `xhigh`. Do not downgrade to Sonnet or
 Haiku to save tokens — a wrong integration decision cascades through Phase 5
 and into production.
 
