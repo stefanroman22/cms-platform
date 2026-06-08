@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { PageTransition } from "@/components/nav/PageTransition";
 import { MarketingProviders } from "./providers";
 
 /**
@@ -12,7 +13,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
   return (
     <MarketingProviders>
       <Header />
-      <main className="min-h-screen pt-14 sm:pt-16">{children}</main>
+      <main className="min-h-screen pt-14 sm:pt-16">
+        <PageTransition>{children}</PageTransition>
+      </main>
       <Footer />
     </MarketingProviders>
   );
