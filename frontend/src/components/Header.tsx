@@ -36,7 +36,6 @@ export default function Header() {
   // Set the correct state on mount (handles loading already scrolled).
   useEffect(() => {
     apply(window.scrollY);
-     
   }, []);
 
   return (
