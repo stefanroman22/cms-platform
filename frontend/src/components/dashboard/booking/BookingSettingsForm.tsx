@@ -30,7 +30,6 @@ type Draft = {
   reminders_enabled: boolean;
   reminder_offsets_min: string; // comma-separated ints
   calendar_provider: string;
-  widget_color: string;
 };
 
 function settingsToDraft(s: BookingSettings): Draft {
@@ -46,7 +45,6 @@ function settingsToDraft(s: BookingSettings): Draft {
     reminders_enabled: s.reminders_enabled ?? true,
     reminder_offsets_min: (s.reminder_offsets_min ?? [1440, 120]).join(", "),
     calendar_provider: s.calendar_provider ?? "none",
-    widget_color: s.widget_color ?? "",
   };
 }
 
@@ -106,7 +104,6 @@ export function BookingSettingsForm({ projectSlug }: Props) {
         reminders_enabled: draft.reminders_enabled,
         reminder_offsets_min: offsets.length ? offsets : undefined,
         calendar_provider: draft.calendar_provider || undefined,
-        widget_color: draft.widget_color.trim() || undefined,
       });
       cache.set(cacheKey, updated);
       setMsg({ type: "ok", text: "Settings saved." });
@@ -155,30 +152,6 @@ export function BookingSettingsForm({ projectSlug }: Props) {
                 placeholder="Acme Ltd."
                 className={dashboardInputCn}
               />
-            </div>
-
-            <div>
-              <label className={dashboardFieldLabelCn}>Widget accent color</label>
-              <p className="mb-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-                Colors the public booking widget (button, dates, hover effects). Independent of the
-                email accent. Leave blank to use the site default.
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={draft.widget_color || "#c9a961"}
-                  onChange={(e) => set("widget_color", e.target.value)}
-                  className="h-8 w-10 cursor-pointer rounded border border-zinc-200 bg-transparent p-0.5 dark:border-zinc-700"
-                  aria-label="Pick widget accent color"
-                />
-                <input
-                  type="text"
-                  value={draft.widget_color}
-                  onChange={(e) => set("widget_color", e.target.value)}
-                  placeholder="#c9a961"
-                  className={`${dashboardInputCn} w-32 font-mono`}
-                />
-              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

@@ -2,14 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Plus } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
+import { dashAccent } from "@/lib/dashboardTheme";
 import { LeadStatsCards } from "./LeadStatsCards";
 import { LeadFilters } from "./LeadFilters";
 import { LeadsTable } from "./LeadsTable";
 import { LeadKanban } from "./LeadKanban";
 import { LeadDetailDrawer } from "./LeadDetailDrawer";
+import { AddLeadDrawer } from "./AddLeadDrawer";
 import { EMPTY_FILTERS } from "./types";
-import type { Lead, LeadFiltersState, LeadsListResponse } from "./types";
+import type { Lead, LeadCreateInput, LeadFiltersState, LeadsListResponse } from "./types";
 import type { LeadStatus } from "@/lib/leadEnums";
 
 const PAGE_SIZE = 50;
@@ -37,6 +40,7 @@ export function LeadsDashboard() {
   const [page, setPage] = useState(0);
   const [view, setView] = useState<"table" | "kanban">("table");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const qs = useMemo(() => buildQuery(filters, page), [filters, page]);
 
@@ -80,6 +84,21 @@ export function LeadsDashboard() {
     await refresh();
   }
 
+  async function handleCreate(payload: LeadCreateInput) {
+    const res = await fetch(`/api/admin/leads`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.detail ?? `Create failed (${res.status})`);
+    }
+    setAddOpen(false);
+    await refresh();
+  }
+
   const leads = data?.items ?? [];
   const total = data?.total ?? 0;
 
@@ -105,6 +124,14 @@ export function LeadsDashboard() {
             {v === "table" ? "Table" : "Kanban"}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className={`ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer ${dashAccent.ctaPrimary}`}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add lead
+        </button>
       </div>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -140,6 +167,7 @@ export function LeadsDashboard() {
         onPatched={handlePatched}
         onDeleted={handleDeleted}
       />
+      <AddLeadDrawer open={addOpen} onClose={() => setAddOpen(false)} onCreate={handleCreate} />
     </div>
   );
 }

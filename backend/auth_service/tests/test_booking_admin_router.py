@@ -241,10 +241,11 @@ def test_patch_settings_accepts_bearer_admin_key(client):
     upd.assert_called_once()
 
 
-def test_patch_settings_widget_color_independent_of_accent(client):
-    """widget_color (booking widget) and accent_color (emails) are separate
-    columns. Patching both passes both through; patching one leaves the other
-    untouched (exclude_unset)."""
+def test_patch_settings_ignores_widget_color(client):
+    """widget_color is no longer dashboard-editable — it is owned by the
+    client/connector. The editable SettingsPatch drops it, so a dashboard PATCH
+    carrying widget_color must never forward it to the repo (the public /config
+    read path still returns the stored value)."""
     ru, rp = _auth(OWNER)
     with (
         ru,
@@ -260,21 +261,5 @@ def test_patch_settings_widget_color_independent_of_accent(client):
         )
     assert r.status_code == 200, r.text
     fields = upd.call_args.args[1]
-    assert fields["widget_color"] == "#c9a961"
+    assert "widget_color" not in fields
     assert fields["accent_color"] == "#000000"
-
-    # Patching only the widget color must NOT touch accent_color.
-    ru2, rp2 = _auth(OWNER)
-    with (
-        ru2,
-        rp2,
-        patch(
-            "auth_service.routers.booking_admin.booking_admin_repo.update_settings",
-            return_value={"tenant_id": "t1"},
-        ) as upd2,
-    ):
-        r = client.patch("/projects/acme/bookings/settings", json={"widget_color": "#abcdef"})
-    assert r.status_code == 200, r.text
-    fields2 = upd2.call_args.args[1]
-    assert fields2["widget_color"] == "#abcdef"
-    assert "accent_color" not in fields2

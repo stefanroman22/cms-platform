@@ -9,6 +9,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+# Mirror of the backend create-booking contract
+# (backend/auth_service/models/booking_contract.py). The connector is a
+# standalone agent and cannot import the backend package, so the version +
+# required fields are duplicated here; keep them in lockstep when the contract
+# changes. These travel into cms.config.json so the booking-client SDK is
+# correctly targeted and a miswired form is caught at provisioning.
+BOOKING_CONTRACT_VERSION = "1.0.0"
+BOOKING_REQUIRED_FIELDS = ["service_id", "start_utc", "customer.name", "customer.email"]
+
 
 def write_outputs(manifest: dict, out_dir: str | Path) -> tuple[Path, Path]:
     """
@@ -44,6 +53,19 @@ def write_outputs(manifest: dict, out_dir: str | Path) -> tuple[Path, Path]:
             "slug": booking.get("public_slug") or manifest["project_slug"],
             "apiBase": cms_endpoint_base + "/booking",
         }
+        field_mapping = booking.get("field_mapping")
+        if field_mapping:
+            # Enforce the contract at provisioning: every required field must be
+            # mapped from a client form field, else fail so the test matrix
+            # surfaces the miswiring instead of shipping it to production.
+            missing = [f for f in BOOKING_REQUIRED_FIELDS if f not in field_mapping]
+            if missing:
+                raise ValueError(
+                    "booking field_mapping is missing required contract field(s): "
+                    + ", ".join(missing)
+                )
+            config["booking"]["contractVersion"] = BOOKING_CONTRACT_VERSION
+            config["booking"]["fieldMapping"] = field_mapping
 
     config_path = out_dir / "cms.config.json"
     config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")

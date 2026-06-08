@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CheckCircle, RotateCcw, Upload, X } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { ArcSpinner } from "@/components/ui/ArcSpinner";
@@ -112,6 +113,7 @@ export function EmailTemplateEditor({ projectSlug }: Props) {
   const [logoError, setLogoError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const prefersReduced = useReducedMotion();
 
   // Seed draft from loaded data (only once)
   useEffect(() => {
@@ -128,6 +130,28 @@ export function EmailTemplateEditor({ projectSlug }: Props) {
       });
     }
   }, [data, draft]);
+
+  // The mobile preview is a full-screen opaque overlay. On mobile, Back is the
+  // natural way to dismiss a full-screen view — so while the sheet is open we push a
+  // sentinel history entry and close the sheet when it's popped. Without this, Back
+  // leaves the opaque sheet covering the dashboard (a black screen in dark mode).
+  useEffect(() => {
+    if (!showPreview) return;
+    window.history.pushState({ bookingEmailPreview: true }, "");
+    const onPop = () => setShowPreview(false);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [showPreview]);
+
+  // Close the sheet and, if our sentinel entry is on top, remove it so history stays
+  // clean. Closing immediately keeps the UX snappy; the popstate listener is torn
+  // down by the effect, so the resulting pop is a harmless no-op.
+  function closePreview() {
+    setShowPreview(false);
+    if (typeof window !== "undefined" && window.history.state?.bookingEmailPreview) {
+      window.history.back();
+    }
+  }
 
   function setField<K extends keyof EmailDraft>(k: K, v: EmailDraft[K]) {
     setDraft((d) => d && { ...d, [k]: v });
@@ -240,7 +264,7 @@ export function EmailTemplateEditor({ projectSlug }: Props) {
         {/* Mobile preview toggle */}
         <button
           type="button"
-          onClick={() => setShowPreview((v) => !v)}
+          onClick={() => (showPreview ? closePreview() : setShowPreview(true))}
           className="cursor-pointer rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 lg:hidden"
         >
           {showPreview ? "Hide preview" : "Show preview"}
@@ -425,14 +449,43 @@ export function EmailTemplateEditor({ projectSlug }: Props) {
             </div>
           </div>
 
-          {/* ── Right: preview (sticky on desktop, toggled on mobile) ──── */}
-          <div
-            className={`lg:sticky lg:top-4 lg:block ${showPreview ? "block" : "hidden lg:block"}`}
-          >
+          {/* ── Right: preview (sticky on desktop only) ────────────────── */}
+          <div className="hidden lg:sticky lg:top-4 lg:block">
             <EmailPreviewFrame slug={projectSlug} caseKey={activeCase} draft={draft} />
           </div>
         </div>
       </form>
+
+      {/* Mobile full-screen preview sheet (desktop uses the split-view above) */}
+      <AnimatePresence>
+        {showPreview && (
+          <motion.div
+            key="email-preview-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Email preview"
+            initial={{ opacity: 0, y: prefersReduced ? 0 : "100%" }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: prefersReduced ? 0 : "100%" }}
+            transition={{ duration: prefersReduced ? 0 : 0.28, ease: "easeOut" }}
+            className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-zinc-950 lg:hidden"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Preview</h3>
+              <button
+                type="button"
+                onClick={closePreview}
+                className="cursor-pointer rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                Done
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <EmailPreviewFrame slug={projectSlug} caseKey={activeCase} draft={draft} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

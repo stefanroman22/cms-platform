@@ -12,7 +12,6 @@ class SettingsPatch(BaseModel):
     logo_url: str | None = None
     primary_color: str | None = None
     accent_color: str | None = None
-    widget_color: str | None = None
     email_from_name: str | None = None
     owner_notification_email: str | None = None
     meeting_url: str | None = None

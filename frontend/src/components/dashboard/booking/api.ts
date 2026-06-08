@@ -113,7 +113,12 @@ export interface EmailDraft {
 
 // ── Request body shapes (match backend Pydantic models exactly) ───────────────
 
-export type SettingsPatch = Partial<Omit<BookingSettings, "enabled" | "tenant_id">> & {
+// widget_color is intentionally excluded — widget styling is owned by the
+// client/connector, so the dashboard can no longer edit it (it stays readable
+// on BookingSettings for the public /config path).
+export type SettingsPatch = Partial<
+  Omit<BookingSettings, "enabled" | "tenant_id" | "widget_color">
+> & {
   email_copy?: Record<string, string>;
 };
 
@@ -521,6 +526,12 @@ export interface BookingStatsHeatmapCell {
   count: number;
 }
 
+export interface BookingStatsByStaff {
+  resource_id: string;
+  resource_name: string;
+  count: number;
+}
+
 export interface BookingStats {
   kpis: BookingStatsKpis;
   cancellation_rate: number;
@@ -528,13 +539,20 @@ export interface BookingStats {
   by_day: BookingStatsByDay[];
   by_service: BookingStatsByService[];
   by_status: BookingStatsByStatus[];
+  by_staff: BookingStatsByStaff[];
   heatmap: BookingStatsHeatmapCell[];
 }
 
-export async function getStats(slug: string, from?: string, to?: string): Promise<BookingStats> {
+export async function getStats(
+  slug: string,
+  from?: string,
+  to?: string,
+  resourceId?: string
+): Promise<BookingStats> {
   const params = new URLSearchParams();
   if (from) params.set("from", from);
   if (to) params.set("to", to);
+  if (resourceId) params.set("resource_id", resourceId);
   const qs = params.toString();
   const r = await fetch(`/api/projects/${slug}/bookings/stats${qs ? `?${qs}` : ""}`, {
     credentials: "include",

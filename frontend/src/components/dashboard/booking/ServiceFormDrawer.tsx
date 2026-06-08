@@ -408,7 +408,7 @@ function DrawerBody({ projectSlug, service, resources, onClose, onSaved }: Props
 
         {resources.length > 0 && (
           <div>
-            <label className={dashboardFieldLabelCn}>Assigned resources</label>
+            <label className={dashboardFieldLabelCn}>Which staff can perform this service</label>
             <div className="space-y-1.5">
               {resources.map((r) => (
                 <label

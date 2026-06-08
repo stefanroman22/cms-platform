@@ -6,10 +6,10 @@ import { LeadBadge } from "./LeadBadge";
 import {
   LEAD_STATUS_BADGE_CN,
   LEAD_STATUS_LABEL,
+  LEAD_TYPE_BADGE_CN,
+  LEAD_TYPE_LABEL,
   PAYMENT_STATUS_BADGE_CN,
   PAYMENT_STATUS_LABEL,
-  WEB_PRESENCE_BADGE_CN,
-  WEB_PRESENCE_LABEL,
 } from "@/lib/leadEnums";
 import type { Lead } from "./types";
 
@@ -74,8 +74,9 @@ export function LeadsTable({
                 </div>
               </div>
               <LeadBadge
-                label={WEB_PRESENCE_LABEL[l.web_presence]}
-                className={WEB_PRESENCE_BADGE_CN[l.web_presence]}
+                label={LEAD_TYPE_LABEL[l.lead_type]}
+                className={LEAD_TYPE_BADGE_CN[l.lead_type]}
+                width="w-auto"
               />
             </div>
             <div className="mt-2 flex items-center gap-2">
@@ -105,7 +106,7 @@ export function LeadsTable({
               <th className="text-left px-4 py-2 font-medium">Name</th>
               <th className="text-left px-4 py-2 font-medium">City</th>
               <th className="text-left px-4 py-2 font-medium">Category</th>
-              <th className="text-left px-4 py-2 font-medium">Presence</th>
+              <th className="text-left px-4 py-2 font-medium">Product</th>
               <th className="text-right px-4 py-2 font-medium">★</th>
               <th className="text-right px-4 py-2 font-medium">Reviews</th>
               <th className="text-left px-4 py-2 font-medium">Status</th>
@@ -127,8 +128,9 @@ export function LeadsTable({
                 <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">{l.category ?? "—"}</td>
                 <td className="px-4 py-2">
                   <LeadBadge
-                    label={WEB_PRESENCE_LABEL[l.web_presence]}
-                    className={WEB_PRESENCE_BADGE_CN[l.web_presence]}
+                    label={LEAD_TYPE_LABEL[l.lead_type]}
+                    className={LEAD_TYPE_BADGE_CN[l.lead_type]}
+                    width="w-auto"
                   />
                 </td>
                 <td className="px-4 py-2 text-right text-zinc-600 dark:text-zinc-400 tabular-nums">
