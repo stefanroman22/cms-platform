@@ -12,7 +12,7 @@ dependencies = [
     "tenacity==9.0.0",
     "rapidfuzz==3.10.1",
     "supabase==2.29.0",
-    "python-dotenv==1.0.1",
+    "python-dotenv==1.2.2",
 ]
 
 [project.optional-dependencies]
