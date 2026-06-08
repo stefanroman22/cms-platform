@@ -5,6 +5,8 @@ back to 'en' for both unknown locales and missing keys."""
 
 from __future__ import annotations
 
+import html
+
 STRINGS: dict[str, dict[str, str]] = {
     "en": {
         # --- subjects (match original booking email subjects exactly) ---
@@ -56,11 +58,29 @@ def t(locale: str | None, key: str, **fmt: object) -> str:
     return raw
 
 
-def tt(overrides: dict | None, locale: str | None, key: str, **fmt: object) -> str:
+def tt(
+    overrides: dict | None,
+    locale: str | None,
+    key: str,
+    *,
+    html_escape: bool = True,
+    **fmt: object,
+) -> str:
     """Tenant override → else the locale default (t). Formats {placeholders}
-    best-effort; never raises on a missing placeholder."""
+    best-effort; never raises on a missing placeholder.
+
+    SEC-044: a tenant override is untrusted input that is interpolated into the
+    booking email HTML. By default the override TEMPLATE is HTML-escaped before
+    placeholder substitution, so a tenant cannot inject markup; placeholder values
+    (e.g. ``name``) are escaped by the caller, so they are not double-escaped. The
+    built-in locale defaults go through ``t`` and are NOT escaped (they are trusted
+    and may contain intentional entities). Pass ``html_escape=False`` for plain-text
+    contexts such as email subject lines.
+    """
     if overrides and key in overrides and overrides[key]:
         raw = str(overrides[key])
+        if html_escape:
+            raw = html.escape(raw)
         if fmt:
             try:
                 return raw.format(**fmt)

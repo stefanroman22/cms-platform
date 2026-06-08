@@ -224,7 +224,7 @@ def send_visitor_confirmation(
     )
     return _send(
         to_email=booking["email"],
-        subject=tt(copy, locale, "confirm_subject"),
+        subject=tt(copy, locale, "confirm_subject", html_escape=False),
         html_body=render_visitor_html(
             booking=booking,
             meeting_url=meeting_url,

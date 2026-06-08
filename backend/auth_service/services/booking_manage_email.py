@@ -217,7 +217,7 @@ def send_cancellation(
     )
     _safe_send(
         to_email=client_email,
-        subject=tt(copy, locale, "cancel_subject"),
+        subject=tt(copy, locale, "cancel_subject", html_escape=False),
         html_body=render_cancel_client(
             name=name, when_label=client_when, brand=brand, locale=locale, copy=copy
         ),
@@ -254,7 +254,7 @@ def send_reschedule(
     )
     _safe_send(
         to_email=client_email,
-        subject=tt(copy, locale, "reschedule_subject"),
+        subject=tt(copy, locale, "reschedule_subject", html_escape=False),
         html_body=render_reschedule_client(
             name=name,
             new_when=new_client_when,

@@ -1,3 +1,4 @@
+import html
 import re
 from datetime import UTC, datetime
 
@@ -10,6 +11,9 @@ from ..core.limiter import client_ip, limiter
 from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(tags=["forms"])
+
+# A single, header-injection-safe email address (no whitespace/CRLF/commas).
+_EMAIL_RE = re.compile(r"[^@\s,]+@[^@\s,]+\.[^@\s,]+")
 
 
 def _form_bucket(request: Request) -> str:
@@ -26,15 +30,19 @@ def _build_email_html(
     fields: dict[str, str],
     submitted_at: str,
 ) -> str:
+    # SEC-009 / SEC-014: field keys+values are untrusted (anyone who can POST the
+    # form controls them). Escape every interpolated value so a submitted
+    # "<script>"/HTML payload renders as text in the owner's inbox instead of
+    # executing / injecting markup.
     # fmt: off
     rows = "".join(
         f"""
         <tr>
           <td style="padding:8px 12px;font-weight:600;color:#52525b;
                      border-bottom:1px solid #f4f4f5;white-space:nowrap;
-                     vertical-align:top">{key}</td>
+                     vertical-align:top">{html.escape(key)}</td>
           <td style="padding:8px 12px;color:#18181b;
-                     border-bottom:1px solid #f4f4f5;word-break:break-word">{value}</td>
+                     border-bottom:1px solid #f4f4f5;word-break:break-word">{html.escape(value)}</td>
         </tr>
         """
         for key, value in fields.items()
@@ -56,9 +64,9 @@ def _build_email_html(
         <tr>
           <td style="background:#18181b;padding:24px 32px">
             <p style="margin:0;color:#fff;font-size:14px;font-weight:600;
-                      letter-spacing:0.05em;text-transform:uppercase">{project_name}</p>
+                      letter-spacing:0.05em;text-transform:uppercase">{html.escape(project_name)}</p>
             <p style="margin:4px 0 0;color:#a1a1aa;font-size:12px">
-              New form submission — <span style="font-family:monospace">{form_key}</span>
+              New form submission — <span style="font-family:monospace">{html.escape(form_key)}</span>
             </p>
           </td>
         </tr>
@@ -179,7 +187,12 @@ async def submit_form(
         )
 
     # ── 5. Build reply-to from common field names ─────────────────────────────
+    # SEC-032: reply_to is attacker-controlled form input. Only pass it through if
+    # it is a single well-formed address — a fullmatch rejects CRLF/comma header-
+    # injection and malformed values, which are dropped rather than forwarded.
     reply_to = fields.get("email") or fields.get("Email") or fields.get("email_address") or None
+    if reply_to is not None and not _EMAIL_RE.fullmatch(reply_to.strip()):
+        reply_to = None
 
     # ── 6. Send via Resend ────────────────────────────────────────────────────
     # TEST-002 — skip the Resend hop in preview when the body carries
@@ -204,7 +217,7 @@ async def submit_form(
     resend.api_key = settings.RESEND_API_KEY
 
     submitted_at = datetime.now(UTC).strftime("%d %b %Y at %H:%M UTC")
-    html = _build_email_html(
+    email_html = _build_email_html(
         project_name=project["name"],
         form_key=form_key,
         fields=fields,
@@ -215,7 +228,7 @@ async def submit_form(
         "from": f"{settings.RESEND_FROM_NAME} <{settings.RESEND_FROM_EMAIL}>",
         "to": [destination],
         "subject": f"New message from {project['name']} — {form_key}",
-        "html": html,
+        "html": email_html,
         **({"reply_to": reply_to} if reply_to else {}),
     }
 

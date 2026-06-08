@@ -100,7 +100,7 @@ def send(
     body = {
         "from": f"{settings.RESEND_FROM_NAME} <{settings.RESEND_FROM_EMAIL}>",
         "to": to_email,
-        "subject": tt(copy, locale, "reminder_subject"),
+        "subject": tt(copy, locale, "reminder_subject", html_escape=False),
         "html": render_html(
             name=name,
             when_label=when_label,

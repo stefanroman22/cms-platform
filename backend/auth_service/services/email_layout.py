@@ -8,11 +8,17 @@ pass no brand argument produce byte-for-byte identical output."""
 
 from __future__ import annotations
 
+import html
+import re
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime
 
 CANONICAL_URL = "https://roman-technologies.dev"
+
+# A CSS hex colour literal — the only shape a tenant accent is allowed to take, so
+# it can never break out of the style="background:{accent}" attribute (SEC-045).
+_HEX_COLOUR_RE = re.compile(r"#[0-9a-fA-F]{3,8}")
 
 
 @dataclass(frozen=True)
@@ -60,14 +66,27 @@ def safe_url(value: str | None, fallback: str = "") -> str:
     return fallback
 
 
+def _safe_accent(value: str) -> str:
+    """Tenant accent colour, restricted to a hex literal (SEC-045)."""
+    v = (value or "").strip()
+    return v if _HEX_COLOUR_RE.fullmatch(v) else DEFAULT_BRAND.accent
+
+
 def header(subtitle: str, *, brand: Brand = DEFAULT_BRAND) -> str:
-    return f"""<tr><td style="background:{brand.accent};padding:24px 32px">
+    # SEC-044 / SEC-045: business_name, logo_url, accent and the subtitle (tenant
+    # email_copy) are tenant-controlled. Escape text, allowlist the accent colour,
+    # and force logo_url to an http(s) URL so none can break out of the markup.
+    accent = _safe_accent(brand.accent)
+    logo = html.escape(safe_url(brand.logo_url, DEFAULT_BRAND.logo_url), quote=True)
+    business_name = html.escape(brand.business_name)
+    subtitle = html.escape(subtitle)
+    return f"""<tr><td style="background:{accent};padding:24px 32px">
   <table cellpadding="0" cellspacing="0"><tr>
-    <td width="44" height="44" valign="middle" style="background:{brand.accent};border-radius:10px">
-      <img src="{brand.logo_url}" width="44" height="44" alt="" style="display:block;border:0;border-radius:10px">
+    <td width="44" height="44" valign="middle" style="background:{accent};border-radius:10px">
+      <img src="{logo}" width="44" height="44" alt="" style="display:block;border:0;border-radius:10px">
     </td>
     <td style="vertical-align:middle;padding-left:14px">
-      <p style="margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-0.01em">{brand.business_name}</p>
+      <p style="margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-0.01em">{business_name}</p>
       <p style="margin:2px 0 0;color:#a1a1aa;font-size:12px">{subtitle}</p>
     </td>
   </tr></table>
@@ -75,11 +94,13 @@ def header(subtitle: str, *, brand: Brand = DEFAULT_BRAND) -> str:
 
 
 def footer(*, brand: Brand = DEFAULT_BRAND) -> str:
-    domain = brand.canonical_url.removeprefix("https://").removeprefix("http://")
+    canonical = safe_url(brand.canonical_url, DEFAULT_BRAND.canonical_url)
+    domain = html.escape(canonical.removeprefix("https://").removeprefix("http://"))
+    business_name = html.escape(brand.business_name)
     return f"""<tr><td style="padding:32px 32px 28px;border-top:1px solid #f4f4f5">
   <p style="margin:0;font-size:12px;color:#a1a1aa;line-height:1.5">
-    Sent from <a href="{brand.canonical_url}" style="color:#71717a;text-decoration:none">{domain}</a> &middot;
-    &copy; 2026 {brand.business_name}
+    Sent from <a href="{html.escape(canonical, quote=True)}" style="color:#71717a;text-decoration:none">{domain}</a> &middot;
+    &copy; 2026 {business_name}
   </p>
 </td></tr>"""
 
