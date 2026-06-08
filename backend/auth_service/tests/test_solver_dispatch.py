@@ -161,3 +161,49 @@ def test_dispatch_uses_overridable_repo(monkeypatch):
         dispatch_solver_tick(issue_id="x")
 
     assert captured["url"] == "https://api.github.com/repos/someone/other-repo/dispatches"
+
+
+def test_create_issue_posts_slack_alert_when_dispatch_fails(
+    mock_supabase, client, auth_as, client_user, monkeypatch
+):
+    """If dispatch_solver_tick raises, create_issue still returns 201 AND posts a Slack alert."""
+    auth_as(client_user)
+    mock_supabase.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "issue-99",
+                "project_id": "project-acme",
+                "title": "x",
+                "description": "y",
+                "priority": "High",
+                "created_at": "2026-05-18T10:00:00Z",
+                "created_by": client_user.id,
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_issue_created",
+        lambda **kw: "ts-created",
+    )
+
+    def boom(**kw):
+        from auth_service.services.solver_dispatch import SolverDispatchError
+
+        raise SolverDispatchError("GitHub 503 on dispatch")
+
+    monkeypatch.setattr("auth_service.routers.issues.solver_dispatch.dispatch_solver_tick", boom)
+
+    alerts: list[dict] = []
+    monkeypatch.setattr(
+        "auth_service.routers.issues.slack_notify.notify_agent_event",
+        lambda **kw: alerts.append(kw) or "ts-alert",
+    )
+
+    resp = client.post(
+        "/projects/acme/issues",
+        json={"title": "x", "description": "y", "priority": "High"},
+    )
+    assert resp.status_code == 201
+    assert len(alerts) == 1
+    assert alerts[0]["kind"] == "backend_error"
+    assert "dispatch" in alerts[0]["reason"].lower()

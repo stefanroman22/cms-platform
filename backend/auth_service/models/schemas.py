@@ -337,6 +337,17 @@ class IssueStatusRequest(BaseModel):
         return v
 
 
+class AgentEventRequest(BaseModel):
+    """Solver agent → backend event notification.
+
+    Each kind maps to a Slack thread reply under the original "New Issue"
+    message (or a top-level post if slack_created_ts is NULL on the issue).
+    """
+
+    kind: Literal["rejected", "no_diff", "agent_crashed", "backend_error"]
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
 # ── Preview / Publish ────────────────────────────────────────────────────────
 
 

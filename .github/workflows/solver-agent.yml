@@ -80,6 +80,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DISPATCH_ISSUE_ID: ${{ github.event.client_payload.issue_id }}
 
       - name: Clone client repo
         if: steps.claim.outputs.has_issue == 'true'
@@ -109,6 +110,7 @@ jobs:
           chmod 600 "$HOME/.claude/.credentials.json"
 
       - name: Run Claude headless against client repo
+        id: claude
         if: steps.claim.outputs.has_issue == 'true'
         # Direct CLI invocation. No middleware (replaces anthropics/claude-code-action@v1
         # which has broken OAuth wiring — see issues #1026, #1281). The CLI
@@ -130,20 +132,24 @@ jobs:
         # env here, and repo.py strips it from ./client-repo/.git/config after
         # cloning), so it is not reachable even if the model is injected.
         #
-        # continue-on-error lets finalize.py inspect the working tree for any
-        # changes Claude made, even if the CLI exits non-zero on edge cases
-        # (e.g., max-turns reached).
-        continue-on-error: true
+        # Captures the CLI exit code so finalize.py can distinguish "agent
+        # crashed" (exit ≠ 0) from "agent exited normally with no diff" (exit
+        # = 0, no /tmp/agent-status.md, no file changes). Without this split,
+        # all silent exits look identical in Slack.
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           cd ./client-repo
+          set +e
           claude --print \
             --model claude-opus-4-8 \
             --max-turns 80 \
             --allowed-tools "Read,Edit,Write,Glob,Grep,Bash(npm run lint:*),Bash(npm run typecheck:*),Bash(npm test:*),Bash(npx tsc:*),Bash(git diff:*),Bash(git status:*),Bash(git show:*)" \
             --disallowed-tools "Bash(git push:*),Bash(git commit:*),Bash(rm:*),Bash(node:*),WebFetch,WebSearch" \
             < /tmp/agent-prompt.md
+          EXIT_CODE=$?
+          set -e
+          echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
 
       - name: Wipe Claude credentials
         if: always() && steps.claim.outputs.has_issue == 'true'
@@ -161,6 +167,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CMS_API_TOKEN: ${{ secrets.CMS_API_TOKEN }}
           CMS_BACKEND_URL: https://cms-backend-roman.vercel.app
+          CLAUDE_EXIT_CODE: ${{ steps.claude.outputs.exit_code }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_ISSUES_CHANNEL_ID: ${{ secrets.SLACK_ISSUES_CHANNEL_ID }}
 
       - name: Release on failure
         if: failure() && steps.claim.outputs.has_issue == 'true'
@@ -171,3 +180,5 @@ jobs:
           SOLVER_MAX_RETRIES: '3'
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_ISSUES_CHANNEL_ID: ${{ secrets.SLACK_ISSUES_CHANNEL_ID }}
+          CMS_API_TOKEN: ${{ secrets.CMS_API_TOKEN }}
+          CMS_BACKEND_URL: https://cms-backend-roman.vercel.app

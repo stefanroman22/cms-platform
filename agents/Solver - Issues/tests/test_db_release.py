@@ -55,3 +55,93 @@ def test_mark_done_writes_commit_sha_and_clears_lock(stub_sb):
     assert p["agent_commit_sha"] == "abc1234def"
     assert p["agent_status"] is None
     assert p["agent_claimed_at"] is None
+
+
+def test_release_issue_emits_agent_event_when_no_marker(monkeypatch, tmp_path):
+    """Release_issue.py called from Release on failure (no marker present) → emits event."""
+    import json
+
+    import release_issue
+
+    issue_path = tmp_path / "issue.json"
+    issue_path.write_text(
+        json.dumps(
+            {
+                "id": "issue-77",
+                "title": "t",
+                "project": {"slug": "acme", "name": "Acme"},
+            }
+        )
+    )
+    marker = tmp_path / "agent-event-emitted"
+
+    monkeypatch.setattr(release_issue, "ISSUE_JSON_PATH", str(issue_path))
+    monkeypatch.setattr(release_issue, "EVENT_MARKER_PATH", str(marker))
+    monkeypatch.setenv("FAILED_STEP", "Clone client repo")
+
+    notify_calls: list[dict] = []
+    monkeypatch.setattr(
+        release_issue.backend_api,
+        "notify_agent_event",
+        lambda iid, *, kind, reason: notify_calls.append({"kind": kind, "reason": reason}),
+    )
+    monkeypatch.setattr(release_issue.db, "release_issue_failed", lambda *a, **kw: None)
+    monkeypatch.setattr(release_issue, "_current_retry_count", lambda iid: 1)
+
+    release_issue.main()
+
+    assert len(notify_calls) == 1
+    assert notify_calls[0]["kind"] == "agent_crashed"
+    assert "Clone client repo" in notify_calls[0]["reason"]
+
+
+def test_release_issue_skips_emit_when_marker_present(monkeypatch, tmp_path):
+    """When finalize.py already emitted an event (marker exists), don't double-post."""
+    import json
+
+    import release_issue
+
+    issue_path = tmp_path / "issue.json"
+    issue_path.write_text(
+        json.dumps(
+            {
+                "id": "issue-77",
+                "title": "t",
+                "project": {"slug": "acme", "name": "Acme"},
+            }
+        )
+    )
+    marker = tmp_path / "agent-event-emitted"
+    marker.write_text("1")  # finalize.py already wrote it
+
+    monkeypatch.setattr(release_issue, "ISSUE_JSON_PATH", str(issue_path))
+    monkeypatch.setattr(release_issue, "EVENT_MARKER_PATH", str(marker))
+
+    notify_calls: list = []
+    monkeypatch.setattr(
+        release_issue.backend_api,
+        "notify_agent_event",
+        lambda *a, **kw: notify_calls.append(1),
+    )
+    monkeypatch.setattr(release_issue.db, "release_issue_failed", lambda *a, **kw: None)
+    monkeypatch.setattr(release_issue, "_current_retry_count", lambda iid: 1)
+
+    release_issue.main()
+    assert notify_calls == []  # de-dup'd
+
+
+def test_release_issue_no_claim_skips_everything(monkeypatch, tmp_path):
+    """When /tmp/issue.json doesn't exist, no claim was made → exit clean."""
+    import release_issue
+
+    monkeypatch.setattr(release_issue, "ISSUE_JSON_PATH", str(tmp_path / "missing.json"))
+
+    notify_calls: list = []
+    monkeypatch.setattr(
+        release_issue.backend_api,
+        "notify_agent_event",
+        lambda *a, **kw: notify_calls.append(1),
+    )
+
+    assert release_issue.main() == 0
+    assert notify_calls == []

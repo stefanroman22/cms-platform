@@ -118,5 +118,180 @@ def test_prompt_includes_revision_feedback_when_present(monkeypatch, gh_output, 
     prompt = (tmp_files / "agent-prompt.md").read_text(encoding="utf-8")
     assert "Previous attempt was rejected" in prompt
     assert "the change you made broke the header" in prompt
-    assert "/tmp/prev-solver-sha" in prompt
-    assert "git show" in prompt
+    assert "git show HEAD" in prompt
+    assert "HEAD" in prompt
+
+
+def test_dispatch_issue_id_calls_claim_specific(monkeypatch, tmp_path):
+    import claim_issue
+
+    monkeypatch.setenv("DISPATCH_ISSUE_ID", "issue-77")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "gh-output"))
+
+    specific_calls = []
+    next_calls = []
+    monkeypatch.setattr(
+        claim_issue.db,
+        "claim_specific_issue",
+        lambda id: specific_calls.append(id)
+        or {
+            "id": "issue-77",
+            "project_id": "p1",
+            "title": "t",
+            "description": "d",
+            "priority": "High",
+            "status": "pending",
+            "revision_feedback": None,
+        },
+    )
+    monkeypatch.setattr(
+        claim_issue.db,
+        "claim_next_issue",
+        lambda: next_calls.append("called") or None,
+    )
+    monkeypatch.setattr(
+        claim_issue.db,
+        "fetch_project",
+        lambda pid: {
+            "github_repo": "x/y",
+            "repo_branch": "cms-preview",
+            "production_branch": "main",
+        },
+    )
+
+    monkeypatch.setattr(claim_issue, "ISSUE_JSON_PATH", str(tmp_path / "issue.json"))
+    monkeypatch.setattr(claim_issue, "PROMPT_PATH", str(tmp_path / "prompt.md"))
+
+    claim_issue.main()
+
+    assert specific_calls == ["issue-77"]
+    assert next_calls == []  # queue path NOT used
+
+
+def test_dispatch_issue_id_falls_back_to_queue_when_ineligible(monkeypatch, tmp_path):
+    import claim_issue
+
+    monkeypatch.setenv("DISPATCH_ISSUE_ID", "issue-77")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "gh-output"))
+
+    monkeypatch.setattr(claim_issue.db, "claim_specific_issue", lambda id: None)
+    queue_row = {
+        "id": "issue-other",
+        "project_id": "p2",
+        "title": "fallback",
+        "description": "d",
+        "priority": "Medium",
+        "status": "pending",
+        "revision_feedback": None,
+    }
+    monkeypatch.setattr(claim_issue.db, "claim_next_issue", lambda: queue_row)
+    monkeypatch.setattr(
+        claim_issue.db,
+        "fetch_project",
+        lambda pid: {
+            "github_repo": "x/y",
+            "repo_branch": "cms-preview",
+            "production_branch": "main",
+        },
+    )
+    monkeypatch.setattr(claim_issue, "ISSUE_JSON_PATH", str(tmp_path / "issue.json"))
+    monkeypatch.setattr(claim_issue, "PROMPT_PATH", str(tmp_path / "prompt.md"))
+
+    claim_issue.main()
+
+    import json
+
+    written = json.loads((tmp_path / "issue.json").read_text())
+    assert written["id"] == "issue-other"  # fallback succeeded
+
+
+def test_no_dispatch_issue_id_uses_queue(monkeypatch, tmp_path):
+    import claim_issue
+
+    monkeypatch.delenv("DISPATCH_ISSUE_ID", raising=False)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "gh-output"))
+
+    specific_calls = []
+    monkeypatch.setattr(
+        claim_issue.db,
+        "claim_specific_issue",
+        lambda id: specific_calls.append(id) or None,
+    )
+    monkeypatch.setattr(claim_issue.db, "claim_next_issue", lambda: None)
+
+    claim_issue.main()
+
+    assert specific_calls == []  # specific path skipped entirely
+
+
+def test_empty_dispatch_issue_id_treated_as_unset(monkeypatch, tmp_path):
+    """GitHub passes empty string when client_payload is absent."""
+    import claim_issue
+
+    monkeypatch.setenv("DISPATCH_ISSUE_ID", "")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "gh-output"))
+
+    specific_calls = []
+    monkeypatch.setattr(
+        claim_issue.db,
+        "claim_specific_issue",
+        lambda id: specific_calls.append(id) or None,
+    )
+    monkeypatch.setattr(claim_issue.db, "claim_next_issue", lambda: None)
+
+    claim_issue.main()
+    assert specific_calls == []
+
+
+def test_prompt_includes_source_of_truth_note():
+    import claim_issue
+
+    issue = {
+        "id": "i1",
+        "title": "t",
+        "description": "d",
+        "priority": "Medium",
+        "revision_feedback": None,
+    }
+    project = {"repo_branch": "cms-preview"}
+    prompt = claim_issue._build_prompt(issue, project)
+    # Agent must understand it's reading staging, not prod.
+    assert "cms-preview" in prompt
+    assert "staging" in prompt.lower()
+    assert "not production" in prompt.lower() or "not prod" in prompt.lower()
+
+
+def test_prompt_revision_feedback_acknowledges_branch_head():
+    import claim_issue
+
+    issue = {
+        "id": "i1",
+        "title": "t",
+        "description": "d",
+        "priority": "Medium",
+        "revision_feedback": "logo too small",
+    }
+    project = {"repo_branch": "cms-preview"}
+    prompt = claim_issue._build_prompt(issue, project)
+    # Revision flow with model B: prev attempt is at HEAD, not orphaned.
+    assert "logo too small" in prompt
+    assert "HEAD" in prompt
+    # Must NOT contain the obsolete orphan-recovery prose.
+    assert "no longer reachable" not in prompt
+    assert ".git/objects" not in prompt
+
+
+def test_prompt_content_not_code_rejection_hint():
+    import claim_issue
+
+    issue = {
+        "id": "i1",
+        "title": "t",
+        "description": "d",
+        "priority": "Medium",
+        "revision_feedback": None,
+    }
+    project = {"repo_branch": "cms-preview"}
+    prompt = claim_issue._build_prompt(issue, project)
+    # Step 0 rejection guidance must include "name the dashboard tab".
+    assert "dashboard" in prompt.lower()
