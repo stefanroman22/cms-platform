@@ -26,6 +26,10 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
+          # Don't persist the github-actions[bot] token as a git extraheader —
+          # otherwise it overrides the PROMOTE_TOKEN in the push URL below and
+          # the fast-forward is denied (bot can't write protected `main`).
+          persist-credentials: false
 
       # --- GATE: secret/token scan (working tree only, NOT git history) ---
       # Runs first, on the pristine checkout (before npm ci), so it never
