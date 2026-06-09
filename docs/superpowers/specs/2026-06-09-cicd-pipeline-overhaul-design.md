@@ -1,7 +1,7 @@
 # CI/CD Pipeline Overhaul — `dev` → manual promote → `main` — Design
 
 **Date:** 2026-06-09
-**Status:** Approved (design), pending implementation plan
+**Status:** Implemented + verified end-to-end 2026-06-09
 **Repo:** `stefanroman22/cms-platform` (personal/user-owned, public)
 
 ## Goal
