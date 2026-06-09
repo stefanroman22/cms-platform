@@ -234,7 +234,9 @@ def test_booking_lib_ts_written(tmp_path):
     content = lib_path.read_text(encoding="utf-8")
     assert '"acme"' in content, "booking.ts must contain the slug"
     assert "getServices" in content
+    assert "getResources" in content, "must expose the barber-selection step"
     assert "getAvailability" in content
+    assert "resource_id" in content, "per-barber selection must be wired into create"
     assert "createBooking" in content
     # Next.js framework → NEXT_PUBLIC_ prefix
     assert "NEXT_PUBLIC_BOOKING_API_BASE" in content

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { LazyMotion, domAnimation, MotionConfig, AnimatePresence, m } from "motion/react";
 import { ChevronLeft } from "lucide-react";
@@ -19,7 +19,7 @@ const MIN_SPINNER_MS = 700;
 const DEFAULT_TZ = "Europe/Berlin";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type Step = "service" | "date" | "time" | "confirm" | "details" | "done";
+type Step = "service" | "staff" | "date" | "time" | "confirm" | "details" | "done";
 type Phase = "loading" | "success" | "error";
 
 const detectedTz = () =>
@@ -70,6 +70,12 @@ interface PublicService {
   duration_min: number;
 }
 
+interface PublicResource {
+  id: string;
+  name: string;
+  type?: string;
+}
+
 export function BookingCalendar({
   slug,
   embedded,
@@ -106,6 +112,9 @@ export function BookingCalendar({
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
     reschedule ? reschedule.serviceId : null
   );
+  const [resources, setResources] = useState<PublicResource[]>([]);
+  // null = not yet chosen; "" = "No preference" (auto-assign); else a barber id.
+  const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [configError, setConfigError] = useState(false);
 
   const tzOptions = useMemo(() => buildTzList(detectedTz()), []);
@@ -133,13 +142,15 @@ export function BookingCalendar({
         const active = svcData.services ?? [];
         setServices(active);
         if (active.length === 1) {
-          // Auto-select the only service and skip the service step
-          setSelectedServiceId(active[0].id);
-          setStep("date");
+          // Auto-select the only service and skip the service step; pickService
+          // then loads barbers and decides whether to show the barber step.
+          void pickServiceRef.current(active[0].id);
         } else if (active.length > 1) {
           setStep("service");
         } else {
-          // No services → go to date anyway; availability will be empty
+          // No services → go to date anyway; availability will be empty. No
+          // service means no barber step; treat as "no preference".
+          setSelectedResourceId("");
           setStep("date");
         }
       } catch {
@@ -156,7 +167,7 @@ export function BookingCalendar({
   // chosen. Subsequent month navigation + day selection read from the in-memory
   // cache, so they are instant (the backend availability endpoint is batched).
   const loadAllAvailability = useCallback(
-    async (serviceId: string | null) => {
+    async (serviceId: string | null, resourceId: string | null) => {
       if (!serviceId) return;
       setDaysLoading(true);
       try {
@@ -165,8 +176,11 @@ export function BookingCalendar({
         const horizon = new Date(today);
         horizon.setDate(horizon.getDate() + 120); // covers the default max-advance
         const to = dateKey(horizon);
+        // resourceId "" / null → union across all eligible barbers; a non-empty
+        // id → that one barber's calendar.
+        const resourceQs = resourceId ? `&resource_id=${encodeURIComponent(resourceId)}` : "";
         const res = await fetch(
-          `/api/booking/${slug}/availability?service_id=${encodeURIComponent(serviceId)}&from=${from}&to=${to}`
+          `/api/booking/${slug}/availability?service_id=${encodeURIComponent(serviceId)}&from=${from}&to=${to}${resourceQs}`
         );
         const data = (await res.json()) as {
           days?: Array<{ date: string; slots?: Array<{ start_utc: string }> }>;
@@ -192,9 +206,54 @@ export function BookingCalendar({
     [slug]
   );
 
+  // Choose a service, then load the eligible barbers for it and advance the flow:
+  // render the barber step when there's a real choice, or auto-skip it
+  // (single barber → select it silently; zero → "No preference") — mirroring how
+  // the service step is auto-skipped when 0/1 services exist.
+  const pickService = useCallback(
+    async (serviceId: string) => {
+      setSelectedServiceId(serviceId);
+      setSelectedResourceId(null); // reset any prior barber choice
+      let active: PublicResource[] = [];
+      try {
+        const res = await fetch(
+          `/api/booking/${slug}/resources?service_id=${encodeURIComponent(serviceId)}`
+        );
+        if (res.ok) {
+          const data = (await res.json()) as { resources?: PublicResource[] };
+          active = data.resources ?? [];
+        }
+      } catch {
+        active = [];
+      }
+      setResources(active);
+      if (active.length === 1) {
+        setSelectedResourceId(active[0].id); // single barber → pick silently
+        setStep("date");
+      } else if (active.length > 1) {
+        setStep("staff");
+      } else {
+        setSelectedResourceId(""); // no barbers → auto-assign, no preference
+        setStep("date");
+      }
+    },
+    [slug]
+  );
+  // Keep a stable ref so the mount-time config effect can call the latest
+  // pickService without listing it as a dependency (it's declared after it).
+  const pickServiceRef = useRef(pickService);
+  pickServiceRef.current = pickService;
+
   useEffect(() => {
-    if (selectedServiceId) void loadAllAvailability(selectedServiceId);
-  }, [selectedServiceId, loadAllAvailability]);
+    if (!selectedServiceId) return;
+    // Reschedule mode has no barber step — load straight away (no preference).
+    // Booking mode waits until a barber decision is made (id, or "" = no pref).
+    if (reschedule) {
+      void loadAllAvailability(selectedServiceId, null);
+    } else if (selectedResourceId !== null) {
+      void loadAllAvailability(selectedServiceId, selectedResourceId);
+    }
+  }, [selectedServiceId, selectedResourceId, reschedule, loadAllAvailability]);
 
   function changeMonth(delta: number) {
     const d = new Date(viewYear, viewMonth + delta, 1);
@@ -214,6 +273,13 @@ export function BookingCalendar({
     setStep(reschedule ? "confirm" : "details");
   }
 
+  // Barber chosen (a resource id, or "" for "No preference"/auto-assign). The
+  // availability effect reloads for the chosen barber once this is set.
+  function pickResource(resourceId: string) {
+    setSelectedResourceId(resourceId);
+    setStep("date");
+  }
+
   async function submit(details: BookingDetails) {
     if (!selectedSlot) return;
     setPhase("loading");
@@ -225,6 +291,8 @@ export function BookingCalendar({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             service_id: selectedServiceId,
+            // "" = no preference / auto-assign; a non-empty id = specific barber.
+            resource_id: selectedResourceId ?? "",
             start_utc: selectedSlot,
             customer: {
               name: details.name.trim(),
@@ -384,10 +452,7 @@ export function BookingCalendar({
                     <button
                       key={svc.id}
                       type="button"
-                      onClick={() => {
-                        setSelectedServiceId(svc.id);
-                        setStep("date");
-                      }}
+                      onClick={() => void pickService(svc.id)}
                       className="w-full cursor-pointer rounded-[10px] border border-border bg-surface/40 px-4 py-3 text-left text-sm outline-none transition-colors hover:border-accent/60 hover:bg-surface focus-visible:border-accent"
                     >
                       <span className="font-medium text-text-primary">{svc.name}</span>
@@ -397,6 +462,43 @@ export function BookingCalendar({
                       </span>
                     </button>
                   ))}
+                </div>
+              )}
+
+              {step === "staff" && (
+                <div className="space-y-3">
+                  {services.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setStep("service")}
+                      className="mb-1 inline-flex items-center gap-1 text-sm text-text-secondary outline-none transition-colors hover:text-accent focus-visible:text-accent"
+                    >
+                      <ChevronLeft className="h-4 w-4" /> {tw(locale, "back")}
+                    </button>
+                  )}
+                  <p className="mb-4 text-sm font-medium text-text-secondary">
+                    {tw(locale, "selectStaff")}
+                  </p>
+                  {resources.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => pickResource(r.id)}
+                      className="w-full cursor-pointer rounded-[10px] border border-border bg-surface/40 px-4 py-3 text-left text-sm outline-none transition-colors hover:border-accent/60 hover:bg-surface focus-visible:border-accent"
+                    >
+                      <span className="font-medium text-text-primary">{r.name}</span>
+                    </button>
+                  ))}
+                  {/* "No preference" → auto-assign (empty resource_id). */}
+                  <button
+                    type="button"
+                    onClick={() => pickResource("")}
+                    className="w-full cursor-pointer rounded-[10px] border border-border bg-surface/40 px-4 py-3 text-left text-sm outline-none transition-colors hover:border-accent/60 hover:bg-surface focus-visible:border-accent"
+                  >
+                    <span className="font-medium text-text-primary">
+                      {tw(locale, "noPreference")}
+                    </span>
+                  </button>
                 </div>
               )}
 
@@ -411,10 +513,10 @@ export function BookingCalendar({
                       <ChevronLeft className="h-4 w-4" /> {tw(locale, "back")}
                     </button>
                   )}
-                  {!reschedule && services.length > 1 && (
+                  {!reschedule && (resources.length > 1 || services.length > 1) && (
                     <button
                       type="button"
-                      onClick={() => setStep("service")}
+                      onClick={() => setStep(resources.length > 1 ? "staff" : "service")}
                       className="mb-3 inline-flex items-center gap-1 text-sm text-text-secondary outline-none transition-colors hover:text-accent focus-visible:text-accent"
                     >
                       <ChevronLeft className="h-4 w-4" /> {tw(locale, "back")}

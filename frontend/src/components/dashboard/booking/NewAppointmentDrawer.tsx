@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { X, Loader2, Save } from "lucide-react";
 import { dashboardInputCn, dashboardFieldLabelCn } from "@/lib/styles";
-import { createAppointment, getAvailability } from "./api";
-import type { BookingService, AvailabilitySlot } from "./api";
+import { createAppointment, createBlock, getAvailability } from "./api";
+import type { BookingService, BookingResource, AvailabilitySlot } from "./api";
 
 interface Props {
   projectSlug: string;
   services: BookingService[];
+  resources: BookingResource[];
   timezone: string | null;
   onClose: () => void;
   onCreated: () => void;
@@ -25,9 +26,37 @@ const BACKDROP_VARIANTS = {
   visible: { opacity: 1 },
 };
 
+/** Convert a wall-clock date+time in `tz` to a UTC ISO string (system-tz independent). */
+function wallToUtcIso(date: string, time: string, tz: string): string {
+  const naiveUtc = new Date(`${date}T${time}:00Z`);
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts: Record<string, string> = {};
+  for (const p of dtf.formatToParts(naiveUtc)) parts[p.type] = p.value;
+  const asUTC = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour === "24" ? "0" : parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  );
+  const offset = asUTC - naiveUtc.getTime();
+  return new Date(naiveUtc.getTime() - offset).toISOString();
+}
+
 export function NewAppointmentDrawer({
   projectSlug,
   services,
+  resources,
   timezone,
   onClose,
   onCreated,
@@ -57,6 +86,7 @@ export function NewAppointmentDrawer({
           <DrawerBody
             projectSlug={projectSlug}
             services={services}
+            resources={resources}
             timezone={timezone}
             onClose={onClose}
             onCreated={onCreated}
@@ -67,10 +97,12 @@ export function NewAppointmentDrawer({
   );
 }
 
+type Mode = "appointment" | "block";
 type Step = "service" | "slot" | "customer";
 
 interface Draft {
   serviceId: string;
+  barberId: string; // "" = no preference (auto-assign)
   date: string;
   selectedSlot: string;
   customerName: string;
@@ -81,6 +113,7 @@ interface Draft {
 
 const emptyDraft: Draft = {
   serviceId: "",
+  barberId: "",
   date: "",
   selectedSlot: "",
   customerName: "",
@@ -89,12 +122,31 @@ const emptyDraft: Draft = {
   note: "",
 };
 
-function DrawerBody({ projectSlug, services, timezone, onClose, onCreated }: Props) {
+interface BlockDraft {
+  barberId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  label: string;
+}
+
+const emptyBlock: BlockDraft = {
+  barberId: "",
+  date: "",
+  startTime: "09:00",
+  endTime: "10:00",
+  label: "",
+};
+
+function DrawerBody({ projectSlug, services, resources, timezone, onClose, onCreated }: Props) {
   const prefersReduced = useReducedMotion();
   const press = prefersReduced ? {} : { whileTap: { scale: 0.97 } };
+  const tz = timezone ?? "UTC";
 
+  const [mode, setMode] = useState<Mode>("appointment");
   const [step, setStep] = useState<Step>("service");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [block, setBlock] = useState<BlockDraft>(emptyBlock);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -104,22 +156,31 @@ function DrawerBody({ projectSlug, services, timezone, onClose, onCreated }: Pro
     setDraft((d) => ({ ...d, [k]: v }));
     setError(null);
   }
+  function setBlockField<K extends keyof BlockDraft>(k: K, v: BlockDraft[K]) {
+    setBlock((b) => ({ ...b, [k]: v }));
+    setError(null);
+  }
 
-  // Fetch slots when service + date change (on the slot step)
+  // Fetch slots when service + date (+ barber) change, on the slot step.
   useEffect(() => {
     if (step !== "slot" || !draft.serviceId || !draft.date) {
       setSlots([]);
       setDraft((d) => ({ ...d, selectedSlot: "" }));
       return;
     }
-
     let cancelled = false;
     setSlotsLoading(true);
     setSlots([]);
     setDraft((d) => ({ ...d, selectedSlot: "" }));
     setError(null);
 
-    getAvailability(projectSlug, draft.serviceId, draft.date, draft.date)
+    getAvailability(
+      projectSlug,
+      draft.serviceId,
+      draft.date,
+      draft.date,
+      draft.barberId || undefined
+    )
       .then((res) => {
         if (cancelled) return;
         const daySlots = res.slots ?? res.days?.find((d) => d.date === draft.date)?.slots ?? [];
@@ -136,7 +197,7 @@ function DrawerBody({ projectSlug, services, timezone, onClose, onCreated }: Pro
     return () => {
       cancelled = true;
     };
-  }, [step, draft.serviceId, draft.date, projectSlug]);
+  }, [step, draft.serviceId, draft.date, draft.barberId, projectSlug]);
 
   function goToSlotStep() {
     if (!draft.serviceId) {
@@ -170,6 +231,7 @@ function DrawerBody({ projectSlug, services, timezone, onClose, onCreated }: Pro
     try {
       await createAppointment(projectSlug, {
         service_id: draft.serviceId,
+        resource_id: draft.barberId || undefined,
         start_utc: draft.selectedSlot,
         customer: {
           name: draft.customerName.trim(),
@@ -186,13 +248,45 @@ function DrawerBody({ projectSlug, services, timezone, onClose, onCreated }: Pro
     }
   }
 
+  async function handleCreateBlock() {
+    if (!block.barberId) {
+      setError("Please select a staff member.");
+      return;
+    }
+    if (!block.date) {
+      setError("Please pick a date.");
+      return;
+    }
+    if (block.endTime <= block.startTime) {
+      setError("End time must be after start time.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await createBlock(projectSlug, {
+        resource_id: block.barberId,
+        start_utc: wallToUtcIso(block.date, block.startTime, tz),
+        end_utc: wallToUtcIso(block.date, block.endTime, tz),
+        label: block.label.trim() || "Block",
+      });
+      onCreated();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to block time.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const selectedService = services.find((s) => s.id === draft.serviceId);
 
   return (
     <div className="p-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">New appointment</h2>
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          {mode === "appointment" ? "New appointment" : "Block time"}
+        </h2>
         <button
           type="button"
           onClick={onClose}
@@ -203,13 +297,33 @@ function DrawerBody({ projectSlug, services, timezone, onClose, onCreated }: Pro
         </button>
       </div>
 
-      {/* Step indicator */}
-      <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
-        <StepDot active={step === "service"} done={step !== "service"} label="Service" />
-        <span>›</span>
-        <StepDot active={step === "slot"} done={step === "customer"} label="Date & slot" />
-        <span>›</span>
-        <StepDot active={step === "customer"} done={false} label="Customer" />
+      {/* Mode toggle: customer appointment vs personal block */}
+      <div
+        role="group"
+        aria-label="Entry type"
+        className="mt-4 inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/50"
+      >
+        {(["appointment", "block"] as Mode[]).map((m) => {
+          const active = mode === m;
+          return (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={active}
+              onClick={() => {
+                setMode(m);
+                setError(null);
+              }}
+              className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                active
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+                  : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              }`}
+            >
+              {m === "appointment" ? "Customer appointment" : "Block time (personal)"}
+            </button>
+          );
+        })}
       </div>
 
       {/* Error banner */}
@@ -230,193 +344,75 @@ function DrawerBody({ projectSlug, services, timezone, onClose, onCreated }: Pro
         )}
       </AnimatePresence>
 
-      {/* Step: service */}
-      {step === "service" && (
+      {/* ── Block time mode ── */}
+      {mode === "block" && (
         <div className="mt-5 space-y-4">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Block a staff member&apos;s calendar (lunch, holiday, or a personal appointment). No
+            customer or service — it simply makes that time unavailable to book.
+          </p>
           <div>
-            <label className={dashboardFieldLabelCn}>Service</label>
+            <label className={dashboardFieldLabelCn}>Staff member *</label>
             <select
-              value={draft.serviceId}
-              onChange={(e) => setField("serviceId", e.target.value)}
+              value={block.barberId}
+              onChange={(e) => setBlockField("barberId", e.target.value)}
               className={dashboardInputCn}
             >
-              <option value="">Select a service…</option>
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.duration_min} min)
+              <option value="">Select staff…</option>
+              {resources.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className={dashboardFieldLabelCn}>Date *</label>
+            <input
+              type="date"
+              value={block.date}
+              onChange={(e) => setBlockField("date", e.target.value)}
+              className={`${dashboardInputCn} max-w-xs`}
+            />
+          </div>
+          <div className="flex items-end gap-3">
+            <div>
+              <label className={dashboardFieldLabelCn}>From *</label>
+              <input
+                type="time"
+                value={block.startTime}
+                onChange={(e) => setBlockField("startTime", e.target.value)}
+                className={`${dashboardInputCn} w-32`}
+              />
+            </div>
+            <span className="pb-2 text-xs text-zinc-400">to</span>
+            <div>
+              <label className={dashboardFieldLabelCn}>Until *</label>
+              <input
+                type="time"
+                value={block.endTime}
+                onChange={(e) => setBlockField("endTime", e.target.value)}
+                className={`${dashboardInputCn} w-32`}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500">Times are in {tz}.</p>
+          <div>
+            <label className={dashboardFieldLabelCn}>Label (optional)</label>
+            <input
+              type="text"
+              value={block.label}
+              onChange={(e) => setBlockField("label", e.target.value)}
+              placeholder="Lunch, holiday, personal…"
+              className={dashboardInputCn}
+            />
           </div>
           <div className="flex justify-end">
             <motion.button
               {...press}
               type="button"
-              onClick={goToSlotStep}
-              className="cursor-pointer rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-            >
-              Next: pick a slot →
-            </motion.button>
-          </div>
-        </div>
-      )}
-
-      {/* Step: date + slot */}
-      {step === "slot" && (
-        <div className="mt-5 space-y-4">
-          {selectedService && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Service:{" "}
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                {selectedService.name}
-              </span>{" "}
-              ({selectedService.duration_min} min)
-            </p>
-          )}
-          <div>
-            <label className={dashboardFieldLabelCn}>Date</label>
-            <input
-              type="date"
-              value={draft.date}
-              onChange={(e) => setField("date", e.target.value)}
-              className={`${dashboardInputCn} max-w-xs`}
-            />
-          </div>
-          {slotsLoading && (
-            <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading slots…
-            </div>
-          )}
-          {!slotsLoading && draft.date && slots.length === 0 && (
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">
-              No available slots on this date.
-            </p>
-          )}
-          {!slotsLoading && slots.length > 0 && (
-            <div>
-              <label className={dashboardFieldLabelCn}>Available slots</label>
-              <div className="flex flex-wrap gap-1.5">
-                {slots.map((slot) => {
-                  const label = new Intl.DateTimeFormat("en-GB", {
-                    timeZone: timezone ?? "UTC",
-                    timeStyle: "short",
-                  }).format(new Date(slot.start_utc));
-                  return (
-                    <button
-                      key={slot.start_utc}
-                      type="button"
-                      onClick={() => setField("selectedSlot", slot.start_utc)}
-                      className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                        draft.selectedSlot === slot.start_utc
-                          ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
-                          : "border-zinc-200 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
               onClick={() => {
-                setStep("service");
-                setError(null);
-              }}
-              className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-            >
-              ← Back
-            </button>
-            <motion.button
-              {...press}
-              type="button"
-              onClick={goToCustomerStep}
-              className="cursor-pointer rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-            >
-              Next: customer info →
-            </motion.button>
-          </div>
-        </div>
-      )}
-
-      {/* Step: customer */}
-      {step === "customer" && (
-        <div className="mt-5 space-y-4">
-          {selectedService && draft.selectedSlot && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Booking{" "}
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                {selectedService.name}
-              </span>{" "}
-              at{" "}
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                {new Intl.DateTimeFormat("en-GB", {
-                  timeZone: timezone ?? "UTC",
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                }).format(new Date(draft.selectedSlot))}
-              </span>
-            </p>
-          )}
-          <div>
-            <label className={dashboardFieldLabelCn}>Customer name *</label>
-            <input
-              type="text"
-              value={draft.customerName}
-              onChange={(e) => setField("customerName", e.target.value)}
-              placeholder="Jane Smith"
-              className={dashboardInputCn}
-            />
-          </div>
-          <div>
-            <label className={dashboardFieldLabelCn}>Email *</label>
-            <input
-              type="email"
-              value={draft.customerEmail}
-              onChange={(e) => setField("customerEmail", e.target.value)}
-              placeholder="jane@example.com"
-              className={dashboardInputCn}
-            />
-          </div>
-          <div>
-            <label className={dashboardFieldLabelCn}>Phone (optional)</label>
-            <input
-              type="tel"
-              value={draft.customerPhone}
-              onChange={(e) => setField("customerPhone", e.target.value)}
-              placeholder="+40 700 000 000"
-              className={dashboardInputCn}
-            />
-          </div>
-          <div>
-            <label className={dashboardFieldLabelCn}>Note (optional)</label>
-            <textarea
-              rows={2}
-              value={draft.note}
-              onChange={(e) => setField("note", e.target.value)}
-              className={`${dashboardInputCn} resize-none`}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                setStep("slot");
-                setError(null);
-              }}
-              className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-            >
-              ← Back
-            </button>
-            <motion.button
-              {...press}
-              type="button"
-              onClick={() => {
-                handleCreate().catch(() => {});
+                handleCreateBlock().catch(() => {});
               }}
               disabled={saving}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-700 dark:hover:bg-zinc-600"
@@ -426,10 +422,241 @@ function DrawerBody({ projectSlug, services, timezone, onClose, onCreated }: Pro
               ) : (
                 <Save className="h-3.5 w-3.5" aria-hidden="true" />
               )}
-              {saving ? "Creating…" : "Create appointment"}
+              {saving ? "Saving…" : "Block time"}
             </motion.button>
           </div>
         </div>
+      )}
+
+      {/* ── Appointment mode ── */}
+      {mode === "appointment" && (
+        <>
+          {/* Step indicator */}
+          <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+            <StepDot active={step === "service"} done={step !== "service"} label="Service" />
+            <span>›</span>
+            <StepDot active={step === "slot"} done={step === "customer"} label="Barber & slot" />
+            <span>›</span>
+            <StepDot active={step === "customer"} done={false} label="Customer" />
+          </div>
+
+          {/* Step: service */}
+          {step === "service" && (
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className={dashboardFieldLabelCn}>Service</label>
+                <select
+                  value={draft.serviceId}
+                  onChange={(e) => setField("serviceId", e.target.value)}
+                  className={dashboardInputCn}
+                >
+                  <option value="">Select a service…</option>
+                  {services.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.duration_min} min)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end">
+                <motion.button
+                  {...press}
+                  type="button"
+                  onClick={goToSlotStep}
+                  className="cursor-pointer rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                >
+                  Next: pick a slot →
+                </motion.button>
+              </div>
+            </div>
+          )}
+
+          {/* Step: barber + date + slot */}
+          {step === "slot" && (
+            <div className="mt-5 space-y-4">
+              {selectedService && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Service:{" "}
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                    {selectedService.name}
+                  </span>{" "}
+                  ({selectedService.duration_min} min)
+                </p>
+              )}
+              <div>
+                <label className={dashboardFieldLabelCn}>Staff</label>
+                <select
+                  value={draft.barberId}
+                  onChange={(e) => setField("barberId", e.target.value)}
+                  className={`${dashboardInputCn} max-w-xs`}
+                >
+                  <option value="">No preference (first available)</option>
+                  {resources.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={dashboardFieldLabelCn}>Date</label>
+                <input
+                  type="date"
+                  value={draft.date}
+                  onChange={(e) => setField("date", e.target.value)}
+                  className={`${dashboardInputCn} max-w-xs`}
+                />
+              </div>
+              {slotsLoading && (
+                <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Loading slots…
+                </div>
+              )}
+              {!slotsLoading && draft.date && slots.length === 0 && (
+                <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                  No available slots on this date.
+                </p>
+              )}
+              {!slotsLoading && slots.length > 0 && (
+                <div>
+                  <label className={dashboardFieldLabelCn}>Available slots</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {slots.map((slot) => {
+                      const label = new Intl.DateTimeFormat("en-GB", {
+                        timeZone: tz,
+                        timeStyle: "short",
+                      }).format(new Date(slot.start_utc));
+                      return (
+                        <button
+                          key={slot.start_utc}
+                          type="button"
+                          onClick={() => setField("selectedSlot", slot.start_utc)}
+                          className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                            draft.selectedSlot === slot.start_utc
+                              ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                              : "border-zinc-200 text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("service");
+                    setError(null);
+                  }}
+                  className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                >
+                  ← Back
+                </button>
+                <motion.button
+                  {...press}
+                  type="button"
+                  onClick={goToCustomerStep}
+                  className="cursor-pointer rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                >
+                  Next: customer info →
+                </motion.button>
+              </div>
+            </div>
+          )}
+
+          {/* Step: customer */}
+          {step === "customer" && (
+            <div className="mt-5 space-y-4">
+              {selectedService && draft.selectedSlot && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Booking{" "}
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                    {selectedService.name}
+                  </span>{" "}
+                  at{" "}
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                    {new Intl.DateTimeFormat("en-GB", {
+                      timeZone: tz,
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }).format(new Date(draft.selectedSlot))}
+                  </span>
+                </p>
+              )}
+              <div>
+                <label className={dashboardFieldLabelCn}>Customer name *</label>
+                <input
+                  type="text"
+                  value={draft.customerName}
+                  onChange={(e) => setField("customerName", e.target.value)}
+                  placeholder="Jane Smith"
+                  className={dashboardInputCn}
+                />
+              </div>
+              <div>
+                <label className={dashboardFieldLabelCn}>Email *</label>
+                <input
+                  type="email"
+                  value={draft.customerEmail}
+                  onChange={(e) => setField("customerEmail", e.target.value)}
+                  placeholder="jane@example.com"
+                  className={dashboardInputCn}
+                />
+              </div>
+              <div>
+                <label className={dashboardFieldLabelCn}>Phone (optional)</label>
+                <input
+                  type="tel"
+                  value={draft.customerPhone}
+                  onChange={(e) => setField("customerPhone", e.target.value)}
+                  placeholder="+40 700 000 000"
+                  className={dashboardInputCn}
+                />
+              </div>
+              <div>
+                <label className={dashboardFieldLabelCn}>Note (optional)</label>
+                <textarea
+                  rows={2}
+                  value={draft.note}
+                  onChange={(e) => setField("note", e.target.value)}
+                  className={`${dashboardInputCn} resize-none`}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("slot");
+                    setError(null);
+                  }}
+                  className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                >
+                  ← Back
+                </button>
+                <motion.button
+                  {...press}
+                  type="button"
+                  onClick={() => {
+                    handleCreate().catch(() => {});
+                  }}
+                  disabled={saving}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                >
+                  {saving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  {saving ? "Creating…" : "Create appointment"}
+                </motion.button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

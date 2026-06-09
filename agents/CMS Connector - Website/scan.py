@@ -411,6 +411,7 @@ const BASE = process.env.{env_prefix}BOOKING_API_BASE!;
 const SLUG = "{slug}";
 
 export type Service = {{ id: string; name: string; duration_min: number }};
+export type Resource = {{ id: string; name: string; type: string }};
 export type Slot = {{ start_utc: string }};
 
 export async function getServices(): Promise<Service[]> {{
@@ -418,13 +419,26 @@ export async function getServices(): Promise<Service[]> {{
   if (!r.ok) throw new Error("booking: services failed");
   return (await r.json()).services as Service[];
 }}
-export async function getAvailability(serviceId: string, from: string, to: string) {{
-  const r = await fetch(`${{BASE}}/booking/${{SLUG}}/availability?service_id=${{serviceId}}&from=${{from}}&to=${{to}}`);
+// Bookable staff/barbers. Pass a serviceId to list only those who perform it.
+// The UI auto-adjusts as the admin adds/removes staff in the CMS.
+export async function getResources(serviceId?: string): Promise<Resource[]> {{
+  const q = serviceId ? `?service_id=${{encodeURIComponent(serviceId)}}` : "";
+  const r = await fetch(`${{BASE}}/booking/${{SLUG}}/resources${{q}}`);
+  if (!r.ok) throw new Error("booking: resources failed");
+  return (await r.json()).resources as Resource[];
+}}
+// Per-barber availability: pass resourceId to get THAT barber's free slots; omit
+// it ("no preference") to get the union across all eligible barbers.
+export async function getAvailability(
+  serviceId: string, from: string, to: string, resourceId?: string,
+) {{
+  const rid = resourceId ? `&resource_id=${{encodeURIComponent(resourceId)}}` : "";
+  const r = await fetch(`${{BASE}}/booking/${{SLUG}}/availability?service_id=${{serviceId}}&from=${{from}}&to=${{to}}${{rid}}`);
   if (!r.ok) throw new Error("booking: availability failed");
   return (await r.json()).days as {{ date: string; slots: Slot[] }}[];
 }}
 export async function createBooking(input: {{
-  service_id: string; start_utc: string;
+  service_id: string; resource_id?: string; start_utc: string;
   customer: {{ name: string; email: string; phone?: string; tz?: string }};
   note?: string;
 }}) {{

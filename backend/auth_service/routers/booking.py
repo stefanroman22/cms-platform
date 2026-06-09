@@ -185,11 +185,19 @@ def _free_resource_for(
     start_utc: datetime,
     now_utc: datetime,
     exclude_booking_id: str | None = None,
+    prefer_resource_id: str | None = None,
 ) -> str | None:
-    """Least-loaded free eligible resource for `start_utc`, or None.
+    """Free eligible resource for `start_utc`, or None.
     `exclude_booking_id` omits that booking from the busy set (used on reschedule
-    so a booking never collides with its own current guard interval)."""
+    so a booking never collides with its own current guard interval).
+    `prefer_resource_id` (the customer's chosen barber): if set, return that
+    resource only when it is eligible AND free — never silently substitute another
+    barber; if blank, fall back to the least-loaded free eligible resource."""
     resources = booking_repo.load_eligible_resources(cfg.tenant_id, service["id"])
+    if prefer_resource_id:
+        resources = [r for r in resources if r["id"] == prefer_resource_id]
+        if not resources:
+            return None  # requested barber cannot perform this service
     if not resources:
         return None
     day = start_utc.astimezone(ZoneInfo(cfg.timezone)).date()
@@ -218,6 +226,8 @@ def _free_resource_for(
         granularity_min=cfg.slot_granularity_min,
         resources=avail,
     )
+    if prefer_resource_id:
+        return prefer_resource_id if prefer_resource_id in free else None
     # least-loaded = fewest existing busy intervals among free resources
     busy_count = {r.resource_id: len(r.busy) for r in avail}
     free.sort(key=lambda rid: busy_count.get(rid, 0))
@@ -225,14 +235,24 @@ def _free_resource_for(
 
 
 def _availability_for_range(
-    *, cfg: TenantConfig, service: dict, d0: date, d1: date, now_utc: datetime
+    *,
+    cfg: TenantConfig,
+    service: dict,
+    d0: date,
+    d1: date,
+    now_utc: datetime,
+    resource_id: str | None = None,
 ) -> list[dict]:
     """Batched availability for a whole date range. Loads resources/hours/
     exceptions/busy (and calendar busy) ONCE for the range, then computes each
     day purely — vs. _availability_for_day which re-queries per day (fine for a
     single day, far too slow for a month). Returns
-    [{"date": "YYYY-MM-DD", "starts": [datetime, ...]}] for days with >=1 slot."""
+    [{"date": "YYYY-MM-DD", "starts": [datetime, ...]}] for days with >=1 slot.
+    `resource_id` (the customer's chosen barber): restricts the computation to that
+    single barber's own calendar; an ineligible id yields no days."""
     resources = booking_repo.load_eligible_resources(cfg.tenant_id, service["id"])
+    if resource_id:
+        resources = [r for r in resources if r["id"] == resource_id]
     if not resources:
         return []
     tz = ZoneInfo(cfg.timezone)
@@ -349,9 +369,33 @@ def list_services(slug: str) -> JSONResponse:
     )
 
 
+@router.get("/{slug}/resources", dependencies=[Depends(_public_read_limit)])
+def list_resources(slug: str, service_id: str = Query("")) -> JSONResponse:
+    """Active bookable resources (barbers/staff) for the barber-selection step.
+    With `service_id`, returns only those eligible to perform that service; without
+    it, all active resources. The UI auto-adjusts as the admin adds/removes staff."""
+    cfg = _require_tenant(slug)
+    if service_id.strip():
+        resources = booking_repo.load_eligible_resources(cfg.tenant_id, service_id.strip())
+    else:
+        resources = booking_repo.load_active_resources(cfg.tenant_id)
+    return JSONResponse(
+        content={
+            "resources": [
+                {"id": r["id"], "name": r["name"], "type": r.get("type", "generic")}
+                for r in resources
+            ]
+        }
+    )
+
+
 @router.get("/{slug}/availability", dependencies=[Depends(_public_read_limit)])
 def availability(
-    slug: str, service_id: str, from_: str = Query(..., alias="from"), to: str = Query(...)
+    slug: str,
+    service_id: str,
+    from_: str = Query(..., alias="from"),
+    to: str = Query(...),
+    resource_id: str = Query(""),
 ) -> JSONResponse:
     cfg = _require_tenant(slug)
     service = booking_repo.load_service(cfg.tenant_id, service_id)
@@ -362,7 +406,14 @@ def availability(
         d1 = datetime.strptime(to, "%Y-%m-%d").date()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Bad range") from exc
-    rng = _availability_for_range(cfg=cfg, service=service, d0=d0, d1=d1, now_utc=datetime.now(UTC))
+    rng = _availability_for_range(
+        cfg=cfg,
+        service=service,
+        d0=d0,
+        d1=d1,
+        now_utc=datetime.now(UTC),
+        resource_id=resource_id.strip() or None,
+    )
     return JSONResponse(content=_range_to_grouped(rng))
 
 
@@ -437,7 +488,13 @@ def _create_core(cfg: TenantConfig, body: CreateIn) -> JSONResponse:
         ) from exc
 
     now = datetime.now(UTC)
-    resource_id = _free_resource_for(cfg=cfg, service=service, start_utc=start, now_utc=now)
+    resource_id = _free_resource_for(
+        cfg=cfg,
+        service=service,
+        start_utc=start,
+        now_utc=now,
+        prefer_resource_id=body.resource_id.strip() or None,
+    )
     if resource_id is None:
         raise HTTPException(status_code=409, detail="That time was just taken")
 

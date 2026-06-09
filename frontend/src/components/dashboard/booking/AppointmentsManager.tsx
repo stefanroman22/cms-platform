@@ -10,6 +10,7 @@ import { listAppointments, listServices, listResources } from "./api";
 import type { BookingAppointment, AppointmentFilters } from "./api";
 import { AppointmentDetailDrawer } from "./AppointmentDetailDrawer";
 import { NewAppointmentDrawer } from "./NewAppointmentDrawer";
+import { createOverviewPrefs } from "./overview/prefsStore";
 
 interface Props {
   projectSlug: string;
@@ -54,8 +55,14 @@ function formatDateTime(utc: string, tz?: string | null): string {
  * Mirrors ServicesManager (list + cache-invalidate refresh pattern).
  */
 export function AppointmentsManager({ projectSlug }: Props) {
-  const [filters, setFilters] = useState<AppointmentFilters>({});
-  const [pendingFilters, setPendingFilters] = useState<AppointmentFilters>({});
+  // Default the resource filter to the persisted staff scope (localStorage), so a
+  // barber opening the dashboard sees their own appointments first. "all" → no filter.
+  const initialFilters = useState<AppointmentFilters>(() => {
+    const scope = createOverviewPrefs(projectSlug).getScope();
+    return scope && scope !== "all" ? { resource_id: scope } : {};
+  })[0];
+  const [filters, setFilters] = useState<AppointmentFilters>(initialFilters);
+  const [pendingFilters, setPendingFilters] = useState<AppointmentFilters>(initialFilters);
 
   // Build a cache key that includes the active filters
   const filterKey = JSON.stringify(filters);
@@ -103,11 +110,14 @@ export function AppointmentsManager({ projectSlug }: Props) {
 
   function applyFilters() {
     setFilters(pendingFilters);
+    // Persist the staff scope so it carries across the dashboard + reloads.
+    createOverviewPrefs(projectSlug).setScope(pendingFilters.resource_id ?? "all");
   }
 
   function resetFilters() {
     setPendingFilters({});
     setFilters({});
+    createOverviewPrefs(projectSlug).setScope("all");
   }
 
   // Look up the settings timezone from settings cache if available
@@ -333,6 +343,7 @@ export function AppointmentsManager({ projectSlug }: Props) {
         <NewAppointmentDrawer
           projectSlug={projectSlug}
           services={services}
+          resources={resources}
           timezone={tz}
           onClose={() => setNewDrawerOpen(false)}
           onCreated={() => {

@@ -89,6 +89,40 @@ describe("booking-client", () => {
     );
   });
 
+  it("getResources routes to the slug (no service_id) and with a service_id filter", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ resources: [] }) });
+    const c = createBookingClient({ ...cfg, fetch: fetchMock });
+    await c.getResources();
+    await c.getResources("s1");
+    const urls = fetchMock.mock.calls.map((args) => args[0] as string);
+    expect(urls[0]).toBe("https://api.example.com/booking/acme/resources");
+    expect(urls[1]).toBe("https://api.example.com/booking/acme/resources?service_id=s1");
+  });
+
+  it("getAvailability appends resource_id when a barber is selected", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    const c = createBookingClient({ ...cfg, fetch: fetchMock });
+    await c.getAvailability("s1", "2026-07-01", "2026-07-31", "r1");
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://api.example.com/booking/acme/availability?service_id=s1&from=2026-07-01&to=2026-07-31&resource_id=r1"
+    );
+  });
+
+  it("createBooking forwards resource_id in the normalized payload", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "b1" }) });
+    const c = createBookingClient({ ...cfg, fetch: fetchMock });
+    await c.createBooking({
+      service_id: "s1",
+      resource_id: "r1",
+      start_utc: "2026-07-01T10:00:00Z",
+      customer: { name: "Jane", email: "jane@x.com" },
+    });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body).resource_id).toBe("r1");
+  });
+
   it("trims a trailing slash on apiBase", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "b1" }) });
     const c = createBookingClient({
@@ -106,5 +140,6 @@ describe("booking-client", () => {
 
   it("exposes the contract version", () => {
     expect(BOOKING_CONTRACT_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(BOOKING_CONTRACT_VERSION).toBe("1.1.0");
   });
 });

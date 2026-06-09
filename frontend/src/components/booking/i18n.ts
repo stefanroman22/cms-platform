@@ -14,6 +14,8 @@ export const STRINGS = {
     bookWithName: "Book with {name}",
     bookHeading: "Book an appointment",
     selectService: "Select a service",
+    selectStaff: "Select a staff member",
+    noPreference: "No preference",
     durationSuffix: " min",
     back: "Back",
     moveAppointmentTo: "Move your appointment to",

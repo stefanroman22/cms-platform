@@ -41,7 +41,13 @@ export interface BookingClient {
   createBooking: (payload: BookingPayload) => Promise<CreateBookingResult>;
   getConfig: () => Promise<unknown>;
   getServices: () => Promise<unknown>;
-  getAvailability: (serviceId: string, from: string, to: string) => Promise<unknown>;
+  getResources: (serviceId?: string) => Promise<unknown>;
+  getAvailability: (
+    serviceId: string,
+    from: string,
+    to: string,
+    resourceId?: string
+  ) => Promise<unknown>;
   readonly contractVersion: string;
 }
 
@@ -105,10 +111,21 @@ export function createBookingClient(config: BookingClientConfig): BookingClient 
       return getJson(`${target}/services`);
     },
 
-    getAvailability(serviceId: string, from: string, to: string) {
-      const qs = `service_id=${encodeURIComponent(serviceId)}&from=${encodeURIComponent(
+    getResources(serviceId?: string) {
+      const qs =
+        typeof serviceId === "string" && serviceId !== ""
+          ? `?service_id=${encodeURIComponent(serviceId)}`
+          : "";
+      return getJson(`${target}/resources${qs}`);
+    },
+
+    getAvailability(serviceId: string, from: string, to: string, resourceId?: string) {
+      let qs = `service_id=${encodeURIComponent(serviceId)}&from=${encodeURIComponent(
         from
       )}&to=${encodeURIComponent(to)}`;
+      if (typeof resourceId === "string" && resourceId !== "") {
+        qs += `&resource_id=${encodeURIComponent(resourceId)}`;
+      }
       return getJson(`${target}/availability?${qs}`);
     },
   };

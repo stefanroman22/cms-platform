@@ -51,6 +51,21 @@ def load_service(tenant_id: str, service_id: str) -> dict | None:
     return rows[0] if rows else None
 
 
+def load_active_resources(tenant_id: str) -> list[dict]:
+    """All active resources (staff/rooms/equipment) for a tenant, ordered.
+    Used by the public per-barber selection step when no service filter applies."""
+    sb = get_supabase_admin()
+    res = (
+        sb.table("booking_resources")
+        .select("*")
+        .eq("tenant_id", tenant_id)
+        .eq("is_active", True)
+        .order("sort_order")
+        .execute()
+    )
+    return res.data or []
+
+
 def load_eligible_resources(tenant_id: str, service_id: str) -> list[dict]:
     """Active resources linked to this service via booking_service_resources."""
     sb = get_supabase_admin()
@@ -224,6 +239,48 @@ def insert_booking(
                     "manage_token_hash": manage_token_hash,
                     "source": source,
                     "notes": notes,
+                }
+            )
+            .execute()
+        )
+    except Exception as exc:  # noqa: BLE001
+        if _is_conflict(exc):
+            raise BookingConflict() from exc
+        raise
+    return (res.data or [{}])[0].get("id")
+
+
+def insert_block(
+    *,
+    tenant_id: str,
+    resource_id: str,
+    start_utc: datetime,
+    end_utc: datetime,
+    label: str,
+    manage_token_hash: str,
+) -> str:
+    """Insert a personal time-block on one barber's calendar: a confirmed booking
+    with no customer and no service (source='block'). It participates in the
+    per-resource no-overlap constraint, so it blocks that barber's availability."""
+    sb = get_supabase_admin()
+    try:
+        res = (
+            sb.table("bookings")
+            .insert(
+                {
+                    "tenant_id": tenant_id,
+                    "service_id": None,
+                    "resource_id": resource_id,
+                    "customer_id": None,
+                    "customer_name": label,
+                    "status": "confirmed",
+                    "start_utc": start_utc.isoformat(),
+                    "end_utc": end_utc.isoformat(),
+                    "guard_start_utc": start_utc.isoformat(),
+                    "guard_end_utc": end_utc.isoformat(),
+                    "manage_token_hash": manage_token_hash,
+                    "source": "block",
+                    "notes": None,
                 }
             )
             .execute()

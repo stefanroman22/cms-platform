@@ -9,7 +9,10 @@ their shapes change in a non-backward-compatible way.
 
 from __future__ import annotations
 
-BOOKING_CONTRACT_VERSION = "1.0.0"
+# 1.1.0: `resource_id` is now honored on create (customer-chosen barber) and the
+# public availability/resources endpoints accept a resource filter. Still optional
+# and backward compatible — clients that omit it get auto-assignment as before.
+BOOKING_CONTRACT_VERSION = "1.1.0"
 
 # Per-field type/format descriptors. Dotted keys describe nested customer fields.
 BOOKING_CONTRACT = {

@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from ..models.booking_admin_schemas import (
     AppointmentAction,
     AppointmentCreate,
+    BlockCreate,
     EmailPreviewIn,
     ExceptionIn,
     HoursReplace,
@@ -186,12 +187,17 @@ async def list_services(project_slug: str, request: Request) -> JSONResponse:
 @router.post("/projects/{project_slug}/bookings/services", status_code=status.HTTP_201_CREATED)
 async def create_service(project_slug: str, body: ServiceIn, request: Request) -> JSONResponse:
     tenant_id = await _tenant(project_slug, request)
-    _validate_resource_ids(tenant_id, body.resource_ids)
+    # R5 default-all: a new service with no explicit staff is offered by EVERY
+    # active barber. An explicit list is validated and used as-is.
+    resource_ids = body.resource_ids or [
+        r["id"] for r in booking_admin_repo.list_resources(tenant_id) if r.get("is_active", True)
+    ]
+    _validate_resource_ids(tenant_id, resource_ids)
     fields = body.model_dump(exclude={"resource_ids"})
     row = booking_admin_repo.insert_service(tenant_id, fields)
-    booking_admin_repo.set_service_resources(tenant_id, row["id"], body.resource_ids)
+    booking_admin_repo.set_service_resources(tenant_id, row["id"], resource_ids)
     return JSONResponse(
-        content={**row, "resource_ids": body.resource_ids}, status_code=status.HTTP_201_CREATED
+        content={**row, "resource_ids": resource_ids}, status_code=status.HTTP_201_CREATED
     )
 
 
@@ -227,6 +233,8 @@ async def list_resources(project_slug: str, request: Request) -> JSONResponse:
 async def create_resource(project_slug: str, body: ResourceIn, request: Request) -> JSONResponse:
     tenant_id = await _tenant(project_slug, request)
     row = booking_admin_repo.insert_resource(tenant_id, body.model_dump())
+    # R5 default-all: a new barber can immediately perform every existing service.
+    booking_admin_repo.link_resource_to_all_services(tenant_id, row["id"])
     return JSONResponse(content=row, status_code=status.HTTP_201_CREATED)
 
 
@@ -264,25 +272,25 @@ async def get_hours(project_slug: str, request: Request) -> JSONResponse:
 @router.put("/projects/{project_slug}/bookings/hours")
 async def put_hours(project_slug: str, body: HoursReplace, request: Request) -> JSONResponse:
     tenant_id = await _tenant(project_slug, request)
+    # Scope the replace to one barber (resource_id) or the business-wide default.
+    scope = (body.resource_id or "").strip() or None
+    if scope:
+        _validate_resource_ids(tenant_id, [scope])
     rows = []
     for h in body.hours:
         if not (0 <= h.weekday <= 6) or h.start_time >= h.end_time:
             raise HTTPException(status_code=422, detail="Invalid hours interval")
-        rows.append(
-            {
-                "resource_id": h.resource_id,
-                "weekday": h.weekday,
-                "start_time": h.start_time,
-                "end_time": h.end_time,
-            }
-        )
-    booking_admin_repo.replace_hours(tenant_id, rows)
+        rows.append({"weekday": h.weekday, "start_time": h.start_time, "end_time": h.end_time})
+    booking_admin_repo.replace_hours(tenant_id, rows, resource_id=scope)
     return JSONResponse(content={"hours": booking_admin_repo.list_hours(tenant_id)})
 
 
 @router.post("/projects/{project_slug}/bookings/exceptions", status_code=status.HTTP_201_CREATED)
 async def create_exception(project_slug: str, body: ExceptionIn, request: Request) -> JSONResponse:
     tenant_id = await _tenant(project_slug, request)
+    # A per-barber holiday/closure must target a barber owned by this tenant.
+    if body.resource_id:
+        _validate_resource_ids(tenant_id, [body.resource_id])
     row = booking_admin_repo.insert_exception(tenant_id, body.model_dump())
     return JSONResponse(content=row, status_code=status.HTTP_201_CREATED)
 
@@ -358,9 +366,11 @@ async def owner_availability(
     service_id: str = Query(...),
     from_: str = Query(..., alias="from"),
     to: str = Query(...),
+    resource_id: str = Query(""),
 ) -> JSONResponse:
     """Owner-side availability (for the manual-create / reschedule slot pickers).
-    Same slots the public widget sees, but on the authenticated owner surface."""
+    Same slots the public widget sees, but on the authenticated owner surface.
+    `resource_id` scopes the slots to one staff member's calendar."""
     tenant_id = await _tenant(project_slug, request)
     cfg = booking_tenant.load_tenant_by_id(tenant_id)
     if cfg is None:
@@ -373,7 +383,14 @@ async def owner_availability(
         d1 = datetime.strptime(to, "%Y-%m-%d").date()
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Bad range") from exc
-    rng = _availability_for_range(cfg=cfg, service=service, d0=d0, d1=d1, now_utc=datetime.now(UTC))
+    rng = _availability_for_range(
+        cfg=cfg,
+        service=service,
+        d0=d0,
+        d1=d1,
+        now_utc=datetime.now(UTC),
+        resource_id=resource_id.strip() or None,
+    )
     return JSONResponse(content=_range_to_grouped(rng))
 
 
@@ -448,6 +465,49 @@ async def create_appointment(
         action="create",
         actor="owner",
         payload={"resource_id": resource_id, "owner_override": True},
+    )
+    return JSONResponse(
+        content={"booking_id": booking_id, "start": start.isoformat(), "end": end.isoformat()},
+        status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.post("/projects/{project_slug}/bookings/blocks", status_code=status.HTTP_201_CREATED)
+async def create_block(project_slug: str, body: BlockCreate, request: Request) -> JSONResponse:
+    """Add a personal time-block (no customer, no service) on one barber's
+    calendar — e.g. lunch, holiday, or an appointment a barber books for himself.
+    It blocks that barber's availability via the per-resource no-overlap constraint."""
+    tenant_id = await _tenant(project_slug, request)
+    owned = {r["id"] for r in booking_admin_repo.list_resources(tenant_id)}
+    if body.resource_id not in owned:
+        raise HTTPException(status_code=422, detail="Unknown resource")
+    try:
+        start = datetime.fromisoformat(body.start_utc).astimezone(UTC)
+        end = datetime.fromisoformat(body.end_utc).astimezone(UTC)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Bad start_utc/end_utc") from exc
+    if end <= start:
+        raise HTTPException(status_code=422, detail="end_utc must be after start_utc")
+    token_hash = hashlib.sha256(secrets.token_urlsafe(32).encode()).hexdigest()
+    try:
+        booking_id = booking_repo.insert_block(
+            tenant_id=tenant_id,
+            resource_id=body.resource_id,
+            start_utc=start,
+            end_utc=end,
+            label=body.label.strip() or "Block",
+            manage_token_hash=token_hash,
+        )
+    except BookingConflict as exc:
+        raise HTTPException(
+            status_code=409, detail="That time overlaps an existing booking"
+        ) from exc
+    booking_repo.insert_audit(
+        tenant_id=tenant_id,
+        booking_id=booking_id,
+        action="create",
+        actor="owner",
+        payload={"kind": "block", "resource_id": body.resource_id},
     )
     return JSONResponse(
         content={"booking_id": booking_id, "start": start.isoformat(), "end": end.isoformat()},

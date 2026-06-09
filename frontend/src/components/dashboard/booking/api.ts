@@ -152,6 +152,9 @@ export interface HoursRow {
 }
 
 export interface HoursReplace {
+  // null/omitted = business-wide default; a resource_id scopes the replace to one
+  // staff member's calendar (other staff's hours are left untouched).
+  resource_id?: string | null;
   hours: HoursRow[];
 }
 
@@ -411,6 +414,13 @@ export interface AppointmentActionIn {
   reason?: string;
 }
 
+export interface BlockCreateIn {
+  resource_id: string;
+  start_utc: string;
+  end_utc: string;
+  label?: string;
+}
+
 // ── Policies ─────────────────────────────────────────────────────────────────
 
 export async function getPolicies(slug: string): Promise<{ policies: BookingPolicy[] }> {
@@ -466,6 +476,20 @@ export async function createAppointment(
   return r.json();
 }
 
+export async function createBlock(
+  slug: string,
+  body: BlockCreateIn
+): Promise<{ booking_id: string; start: string; end: string }> {
+  const r = await fetch(`/api/projects/${slug}/bookings/blocks`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  await throwOnError(r);
+  return r.json();
+}
+
 export async function actOnAppointment(
   slug: string,
   id: string,
@@ -485,9 +509,11 @@ export async function getAvailability(
   slug: string,
   serviceId: string,
   from: string,
-  to: string
+  to: string,
+  resourceId?: string
 ): Promise<AvailabilityResponse> {
   const params = new URLSearchParams({ service_id: serviceId, from, to });
+  if (resourceId) params.set("resource_id", resourceId);
   const r = await fetch(`/api/projects/${slug}/bookings/availability?${params.toString()}`, {
     credentials: "include",
   });

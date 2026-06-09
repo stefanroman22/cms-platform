@@ -163,6 +163,24 @@ def update_service(tenant_id: str, service_id: str, fields: dict) -> dict:
     return (res.data or [{}])[0]
 
 
+def link_resource_to_all_services(tenant_id: str, resource_id: str) -> None:
+    """Link a (newly created) resource to EVERY service of the tenant — the
+    default-all rule so a new barber can immediately perform all services.
+    Idempotent: existing (service_id, resource_id) links are ignored."""
+    sb = get_supabase_admin()
+    services = (
+        sb.table("booking_services").select("id").eq("tenant_id", tenant_id).execute()
+    ).data or []
+    rows = [
+        {"tenant_id": tenant_id, "service_id": s["id"], "resource_id": resource_id}
+        for s in services
+    ]
+    if rows:
+        sb.table("booking_service_resources").upsert(
+            rows, on_conflict="service_id,resource_id", ignore_duplicates=True
+        ).execute()
+
+
 def set_service_resources(tenant_id: str, service_id: str, resource_ids: list[str]) -> None:
     sb = get_supabase_admin()
     sb.table("booking_service_resources").delete().eq("tenant_id", tenant_id).eq(
@@ -252,11 +270,19 @@ def list_hours(tenant_id: str) -> list[dict]:
     return (sb.table("booking_hours").select("*").eq("tenant_id", tenant_id).execute()).data or []
 
 
-def replace_hours(tenant_id: str, rows: list[dict]) -> None:
+def replace_hours(tenant_id: str, rows: list[dict], *, resource_id: str | None = None) -> None:
+    """Replace the weekly hours for ONE scope only: a specific barber
+    (`resource_id` set) or the business-wide default (`resource_id` None). Each
+    inserted row's resource_id is forced to the scope, and other scopes' rows are
+    left untouched — so saving one barber's calendar never wipes another's."""
     sb = get_supabase_admin()
-    sb.table("booking_hours").delete().eq("tenant_id", tenant_id).execute()
+    q = sb.table("booking_hours").delete().eq("tenant_id", tenant_id)
+    q = q.eq("resource_id", resource_id) if resource_id else q.is_("resource_id", "null")
+    q.execute()
     if rows:
-        sb.table("booking_hours").insert([{**r, "tenant_id": tenant_id} for r in rows]).execute()
+        sb.table("booking_hours").insert(
+            [{**r, "tenant_id": tenant_id, "resource_id": resource_id} for r in rows]
+        ).execute()
 
 
 # ---- exceptions ----

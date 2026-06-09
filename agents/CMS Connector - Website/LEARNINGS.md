@@ -56,6 +56,7 @@
 - 2026-06-06: `calendar_provider` is always `"none"` for clients. Never set Google Calendar or iCal at the client level. Triggered by: prompts.py booking schema.
 - 2026-06-06: Always set `business_name` and `accent_color` (and `primary_color` where available) in the booking settings block so booking confirmation emails use client branding instead of falling back to Roman Technologies defaults. Triggered by: booking email templates reference these fields for the From name and header colour.
 - 2026-06-06: Booking emails are host-name-neutral — the email templates do not hard-code `roman-technologies.dev`. Use the `email_copy` fields in booking settings for any company-specific wording so each client's emails carry their own identity. Triggered by: booking email layout refactored to use `business_name` from settings.
+- 2026-06-09: CONFIRMED-GOOD: the generated `lib/booking.ts` now exposes `getResources(serviceId?)` and threads `resource_id` through `getAvailability(serviceId,from,to,resourceId?)` + `createBooking` — supporting the per-barber public flow (select service → select barber → that barber's slots; "" = no preference → server auto-assigns). Generated client BookingForms should fetch services + resources dynamically so the UI auto-adjusts when the admin adds/removes staff/services. Backend booking contract bumped to 1.1.0 (backward compatible). Triggered by: Stefan's per-staff dynamic booking requirement on the samir-kapsalon run. See [[project_booking_per_staff_dynamic]].
 
 ## Successful runs
 

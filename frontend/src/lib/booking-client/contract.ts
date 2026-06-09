@@ -9,7 +9,7 @@
  * non-backward-compatible change.
  */
 
-export const BOOKING_CONTRACT_VERSION = "1.0.0";
+export const BOOKING_CONTRACT_VERSION = "1.1.0";
 
 /** A normalized booking payload as posted to `POST {apiBase}/{slug}`. */
 export interface BookingPayload {

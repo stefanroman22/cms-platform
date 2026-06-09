@@ -58,7 +58,20 @@ class HoursRow(BaseModel):
 
 
 class HoursReplace(BaseModel):
+    # `resource_id` scopes the replace to ONE barber's calendar; null = the
+    # business-wide default. Only that scope's rows are replaced — other barbers'
+    # hours are untouched.
+    resource_id: str | None = None
     hours: list[HoursRow]
+
+
+class BlockCreate(BaseModel):
+    """A personal time-block on one barber's calendar (no customer, no service)."""
+
+    resource_id: str
+    start_utc: str
+    end_utc: str
+    label: str = "Block"
 
 
 class ExceptionIn(BaseModel):
