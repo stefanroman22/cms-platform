@@ -209,8 +209,9 @@ externally-reported finding.
      touched: log in the rotation table above; no client notification.
 
 4. **Remediate**
-   - Open a private fix branch. Land the patch on `dev` first, run the
-     full E2E + integration suite, then scheduled-merge to `master`.
+   - Open a private fix branch. Land the patch on `dev` first, verify it
+     locally, then promote to production via the **Promote dev → main**
+     action (build + gitleaks gate).
    - Never disable hooks (`--no-verify`) during incident response —
      gitleaks pre-commit is what stops the hot-fix from re-leaking.
 

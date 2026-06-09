@@ -27,7 +27,7 @@ sudo chown scraper:scraper /var/log/rt-scraper.log
 
 ## 3. Clone repo + install package
 
-Use the production branch (currently `feat/lead-scraper-system` until merged to master).
+Use the production branch (currently `feat/lead-scraper-system` until merged to `main`).
 
 ```bash
 sudo -u scraper -H git clone -b feat/lead-scraper-system \

@@ -11,6 +11,16 @@ This table is the **source of truth for status**. Detail for each finding lives 
 > data), control-char input, and OAuth-token exfil (harden-runner egress block, now in `block` mode).
 > Verified: 29 Solver-agent + 436 backend tests green.
 
+> **Note 2026-06-09 — CI/CD overhaul.** The auto-gated pipeline was removed: deleted
+> `ci.yml`, `e2e.yml`, `auto-merge-dev-to-master.yml`, `post-deploy-smoke.yml`,
+> `scraper-ci.yml`, `dependabot-auto-merge.yml`, and Dependabot was disabled entirely.
+> This obsoletes **SEC-007** (Dependabot auto-merge) and **SEC-023** (auto-rollback revert
+> to protected master), plus the `scraper-ci` locations in **SEC-008/SEC-024**. Production
+> now moves only via the manual **Promote dev → main** action (`promote.yml`), which
+> currently uses an unpinned `gitleaks-action@v2` — track under the SEC-024 SHA-pin
+> standard. `master` was renamed to `main`. Status rows below to be reconciled at the next
+> security review.
+
 ## Counts by severity
 
 | Critical | High | Medium | Low | Info | Total |

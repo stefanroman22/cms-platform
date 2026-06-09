@@ -10,38 +10,38 @@ Welcome. This doc gets you productive in 30 minutes. No CI jargon, no acronym so
                        ▼
             git push origin <your-branch>
                        │
-        ┌──────────────┴──────────────┐
-        │  GitHub runs CI (lint+      │
-        │  unit tests, ~3 min)        │
-        └──────────────┬──────────────┘
-                       │ green?
                        ▼
         you merge feature → dev, push
                        │
         ┌──────────────┴──────────────┐
-        │  CI + E2E + CodeQL run on   │
-        │  dev (~6 min total)         │
+        │  No CI runs on dev. Vercel  │
+        │  auto-deploys a dev preview │
+        │  for frontend + backend.    │
         └──────────────┬──────────────┘
-                       │ both green?
+                       │ preview looks good?
                        ▼
-        Robot fast-forwards master to dev
+        run "Promote dev → main" (Actions tab)
                        │
-                       ▼
-        Vercel auto-deploys backend + frontend
-                       │
-                       ▼
-        Smoke probes /health, /log-in
-                       │
+        ┌──────────────┴──────────────┐
+        │  Gates: frontend lint+build │
+        │  · backend deps+ruff+compile│
+        │  · gitleaks secret scan     │
+        └──────────────┬──────────────┘
+                       │ all gates green?
               ┌────────┴────────┐
               │                 │
-            green             broken
+            green             any gate fails
               │                 │
-       Done. Live now.     Auto-rollback +
-                           incident issue
-                           tags Stefan.
+   main fast-forwards     Aborted. main
+   to dev; Vercel prod    untouched. Fix on
+   deploy hooks fire      dev, re-run.
+   (frontend + backend).
+              │
+              ▼
+       Done. Live now.
 ```
 
-You never click "deploy". You never SSH anywhere. You push code, wait ~10 minutes, your work is live.
+You never click "deploy" for previews — pushing to `dev` is enough. Going to production is one deliberate click: run the **Promote dev → main** Action and, if every gate passes, your work is live a couple of minutes later.
 
 ## Setup (one time)
 
@@ -83,46 +83,60 @@ git commit -m "feat(workspace): add X"    # the pre-commit hook checks lint + se
 
 # 6. Push the feature branch
 git push origin fix/something-short-and-clear
-# CI runs automatically (lint + unit tests). Watch the run on
-# https://github.com/stefanroman22/cms-platform/actions
-# Wait for green before continuing.
+# No CI runs on push. Feature branches are just for sharing/backup.
 
 # 7. When the feature is done — merge into dev
 git checkout dev
 git pull               # pull anything Stefan landed while you were working
 git merge fix/something-short-and-clear
 git push origin dev
-# Now the full pipeline runs. About 10 minutes later, your
-# code is live on roman-technologies.dev.
+# Pushing to dev runs NO checks. Vercel auto-deploys a dev preview
+# for frontend (roman-technologies-git-dev-*.vercel.app) and backend
+# (cms-backend-roman-git-dev-*.vercel.app). Test there. When it's
+# ready for production, run the "Promote dev → main" Action (see below).
 
 # 8. Delete the merged branch (optional, keeps things tidy)
 git branch -d fix/something-short-and-clear
 git push origin --delete fix/something-short-and-clear
 ```
 
+## Promoting dev → production
+
+Production deploys are manual and deliberate — there is no scheduled auto-merge.
+
+1. Verify the change on the dev preview URLs (frontend + backend) Vercel built from your `dev` push.
+2. Go to the **Actions** tab → **Promote dev → main** → **Run workflow**.
+3. The action runs three gates, in order:
+   - **Frontend** — `npm ci && npm run lint && npm run build`
+   - **Backend** — `pip install --require-hashes -r requirements.lock` + `ruff check` + `python -m compileall`
+   - **Secrets** — a `gitleaks` scan for leaked tokens
+4. If every gate passes, the action fast-forwards `main` to `dev` and fires the Vercel production deploy hooks for both frontend (roman-technologies.dev) and backend (cms-backend-roman.vercel.app). If any gate fails, it aborts and `main` is left untouched — fix it on `dev` and re-run.
+
+You never push to `main` yourself: it's protected, and only the promote action (using a `PROMOTE_TOKEN` PAT) writes to it.
+
 ## Things you should never do
 
-- **Push directly to `master`.** Master is robot-managed. Branch protection blocks you anyway.
+- **Push directly to `main`.** `main` is protected and only the Promote action writes to it. Push to `dev` and promote.
 - **Force-push `dev`.** Other people's work might be there. Force-pushing rewrites history and loses commits silently.
 - **Skip pre-commit hooks** with `git commit --no-verify`. They exist for a reason — the most common cause is a leaked API key. If a hook misbehaves, fix the hook, don't bypass it.
-- **Edit `master` branch protection** without telling Stefan. The settings are tuned to make the auto-merge pipeline work.
+- **Edit `main` branch protection** without telling Stefan. The settings are tuned so only the Promote action can write to it.
 - **Apply Supabase migrations on a whim.** SQL files in `backend/migrations/` need Stefan's review and a human applies them via the Supabase dashboard. The CMS code does not auto-run them.
 
 ## Things you should always do
 
-- **Write tests** for non-trivial logic. The backend has a 60 % coverage floor — if your PR drops it, CI fails. Add a unit test next to your change.
+- **Write tests** for non-trivial logic. Run them locally with `make ci` before you push — there is no CI on push to catch regressions for you.
 - **Read the existing patterns** in the file you're editing. The codebase has a consistent style; match it.
 - **Write commit messages that explain WHY**, not what. The diff already shows what.
-- **Mark deployed-state tests** with `pytest.mark.deployed_state` if they assert behaviour of a *freshly-deployed* prod URL. Otherwise CI on dev will fail because prod hasn't deployed your code yet.
+- **Run the local checks before promoting.** The Promote action lints and builds both apps and scans for secrets; catching a failure locally (`make ci`) saves you a round-trip.
 
 ## When you're stuck
 
-- **CI is red and you don't know why** → Click the failing job in the Actions tab, scroll to the red ✗. Most failures fall into three buckets:
-  - **Lint / format** — run `make format`, commit again.
-  - **Unit test** — your change broke something measurable. Read the assertion error.
-  - **Coverage drop** — add a test, or document why the new code is genuinely uncoverable (rare).
-- **E2E is red on dev push but unit tests pass** → Likely a `deployed_state` test or a flake. Check Stefan / `DEVELOPMENT.md`.
-- **Vercel deploy succeeded but the site looks wrong** → Hard refresh (Ctrl-Shift-R). If still wrong, the Vercel build may have used a stale env var. Stefan handles env vars in the Vercel dashboard.
+- **The Promote action failed and you don't know why** → Click the failing run in the Actions tab, scroll to the red ✗. Most failures fall into three buckets:
+  - **Frontend lint / build** — run `make format` (or `npm run lint`/`npm run build` in `frontend/`), fix, push to `dev`, re-run.
+  - **Backend ruff / compile** — your change broke `ruff check` or `python -m compileall`. Read the error, fix on `dev`, re-run.
+  - **gitleaks** — the scan found a secret in the diff. Remove it, rotate the leaked credential, and re-run.
+- **The dev preview looks wrong but the code is right** → Hard refresh (Ctrl-Shift-R). If still wrong, the Vercel build may have used a stale env var. Stefan handles env vars in the Vercel dashboard.
+- **Heads up: dev and prod share one Supabase database** (no dev DB isolation yet), so data changes on the dev preview hit production data. Be careful with destructive operations.
 
 ## Where things live
 
@@ -175,12 +189,12 @@ In Slack desktop, click your profile → **Copy member ID** for `SLACK_APPROVER_
 
 ## Glossary in plain words
 
-- **CI** = the GitHub robot that runs tests on every push.
-- **E2E** = "end to end" tests — they hit the real deployed site, not mocks.
-- **Auto-merge** = the workflow that promotes `dev` to `master` once CI + E2E are green. Sleeps 60 s first to batch your rapid commits into one prod deploy.
-- **Smoke test** = a 5-second probe right after deploy that asks "is the prod URL still serving 200s?". If no, it auto-reverts.
-- **Aggregator gate** = a fake "summary" CI job that's the only thing branch protection checks. Path-filtered skips don't break it.
-- **deployed_state** = a label we put on tests that check prod-state-after-deploy (security headers, rate limits). They only run after the new code is on master + Vercel finishes deploying.
+- **dev** = the integration branch. Pushing here runs no checks and gives you a Vercel preview of frontend + backend.
+- **main** = the production branch. Protected; only the Promote action writes to it.
+- **Promote dev → main** = the manual GitHub Action that gates (frontend lint+build, backend deps+ruff+compile, gitleaks) and, if green, fast-forwards `main` to `dev` and fires the Vercel production deploy hooks.
+- **gitleaks** = the secret-scanning gate in the Promote action — it blocks the promote if it finds a token or key in the diff.
+- **CodeQL** = a security code-scan that runs on its own weekly schedule (not on push); findings show up under the repo's Security → Code scanning tab.
+- **Solver Agent** = a kept GitHub Actions workflow that picks up issues (on dispatch + hourly); unrelated to the promote pipeline.
 
 ## The contract
 

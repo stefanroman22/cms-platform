@@ -27,7 +27,7 @@ in 60 seconds without opening the diff.
 ## Deployed-state impact
 
 - [ ] No deployed-state assertion changes
-- [ ] Adds / changes a `pytest.mark.deployed_state` test (will only run on master push, post-Vercel-deploy)
+- [ ] Adds / changes a `pytest.mark.deployed_state` test (runs after promotion to `main`, post-Vercel-deploy)
 
 ## Rollback plan
 

@@ -37,8 +37,8 @@ python scripts/deploy/create_frontend_vercel_project.py
 
 ## After running
 
-Push to `master` triggers the actual first deploy. Confirm the live
-endpoints respond:
+A push to `dev` deploys a preview; running the **Promote dev → main**
+action deploys production. Confirm the live endpoints respond:
 
 ```bash
 curl -s https://cms-backend-roman.vercel.app/health

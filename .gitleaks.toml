@@ -4,7 +4,7 @@
 #
 # Run locally:
 #   pre-commit run gitleaks --all-files
-# CI run is wired into .github/workflows/ci.yml.
+# CI run is wired into .github/workflows/promote.yml (the promote gate).
 
 title = "Roman Technologies CMS — gitleaks rules"
 

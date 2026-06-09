@@ -2,19 +2,16 @@
 # PR-8 — CodeQL static analysis. Closes audit finding CI-018.
 #
 # Runs:
-#   • on every push to master + dev (catches regressions same-day)
-#   • weekly Sunday 03:00 UTC (catches new query-set findings against
-#     code that didn't change)
+#   • weekly Sunday 03:00 UTC (standing SAST scan)
+#   • manually via workflow_dispatch
+# Push triggers were removed 2026-06-09 — dev/main pushes run no checks.
 #
-# Findings surface in the "Security → Code scanning" tab. Critical /
-# high results auto-open issues via Dependabot's security workflow
-# integration. No manual config beyond enabling Code Scanning.
+# Findings surface in the "Security → Code scanning" tab. No manual config
+# beyond enabling Code Scanning.
 
 name: CodeQL
 
 on:
-  push:
-    branches: [master, dev]
   schedule:
     - cron: "0 3 * * 0"
   workflow_dispatch:

@@ -8,8 +8,8 @@ specific deploy surface and a specific source of env vars.
 | Tier | Where it runs | Source of env vars | Trigger |
 |------|---------------|-------------------|---------|
 | development | your laptop | `backend/.env` + `frontend/.env.local` (gitignored) | `uvicorn` / `npm run dev` |
-| preview | Vercel preview deployment | Vercel dashboard → Preview env | push to any non-`master` branch |
-| production | Vercel production deployment | Vercel dashboard → Production env | merge to `master` |
+| preview | Vercel preview deployment | Vercel dashboard → Preview env | push to `dev` (auto-deploys a dev preview for frontend + backend; no CI runs) |
+| production | Vercel production deployment | Vercel dashboard → Production env | manual "Promote dev → main" GitHub Action (gates pass → fast-forwards `main` to `dev` + fires Vercel prod deploy hooks) |
 
 The backend reads `ENVIRONMENT` (`Literal["development","preview","production"]`)
 to branch CORS + Private Network Access logic. Anything else is rejected at

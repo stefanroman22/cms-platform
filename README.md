@@ -83,31 +83,33 @@ The `source venv/Scripts/activate` line is the Git Bash form on Windows. On macO
 
 Two branches:
 
-- **`dev`** — your sandbox. Push here directly. Every push runs CI
-  (backend + agent + frontend) but does NOT trigger a Vercel deploy.
-- **`master`** — production-only. Never edited directly. Vercel auto-deploys
-  backend + frontend on every push.
+- **`dev`** — your sandbox / integration workspace. Push here directly.
+  Pushing to `dev` runs NO CI, checks, or workflows at all. Vercel
+  auto-deploys a dev preview for both frontend
+  (`roman-technologies-git-dev-*.vercel.app`) and backend
+  (`cms-backend-roman-git-dev-*.vercel.app`).
+- **`main`** — production. Protected: only the promote action writes to it
+  (via a `PROMOTE_TOKEN` PAT). Humans never push to `main` directly.
 
-Promotion happens via `.github/workflows/scheduled-merge.yml`:
+Promotion to production is manual only, via the **Promote dev → main**
+GitHub Action (GitHub → **Actions** → **Run workflow**, `workflow_dispatch`):
 
-- **Scheduled**: every Friday at 16:00 UTC (= 18:00 Europe/Bucharest summer,
-  17:00 winter — GitHub cron is UTC, no DST).
-- **Manual**: GitHub → **Actions** → **Scheduled merge dev → master** →
-  **Run workflow** (`workflow_dispatch`).
+1. Gates, in order: frontend `npm ci && npm run lint && npm run build`;
+   backend deps install (`pip install --require-hashes -r requirements.lock`)
+   + `ruff check` + `python -m compileall`; and a `gitleaks` secret/token scan.
+2. If ALL gates pass → fast-forwards `main` to `dev` and fires the Vercel
+   production deploy hooks for both frontend (roman-technologies.dev) and
+   backend (cms-backend-roman.vercel.app).
+3. Any gate failure aborts and leaves `main` untouched.
 
-Either trigger:
-1. Looks up the latest CI run on `dev`'s HEAD.
-2. If green → fast-forwards `master` to `dev` and pushes. Vercel deploys.
-3. If red or pending → refuses, prints the failing run.
-
-There are no merge commits — only fast-forwards. If `master` ever moves
-ahead of `dev` (it shouldn't), the merge will fail until the divergence
-is resolved.
+There are no merge commits — only fast-forwards.
 
 ## Production
 
-Both services deploy to Vercel on push to `master`. Env vars live in each
-Vercel project's dashboard, not in this repo. See
+Both services deploy to Vercel production when the **Promote dev → main**
+action fast-forwards `main`. Env vars live in each Vercel project's
+dashboard, not in this repo. Note: dev and prod currently share the same
+Supabase database (no dev DB isolation yet). See
 [`docs/ENVIRONMENTS.md`](./docs/ENVIRONMENTS.md) for the full contract per
 tier (development / preview / production).
 
