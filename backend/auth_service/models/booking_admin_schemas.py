@@ -33,6 +33,7 @@ class ServiceIn(BaseModel):
     description: str = ""
     color: str = ""
     duration_min: int
+    price: float | None = None  # EUR, shown to the customer + editable by the owner
     buffer_before_min: int = 0
     buffer_after_min: int = 0
     lead_time_min: int = 0

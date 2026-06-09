@@ -69,7 +69,9 @@ def _cta_block(
 
 def _add_to_cal_url(*, booking: dict, meeting_url: str, title: str) -> str:
     note = booking.get("note")
-    details = "Video call with Roman Technologies."
+    # Neutral, business-agnostic — the calendar event TITLE already carries the
+    # business name; never hard-code "Roman Technologies" into a client's booking.
+    details = "Your appointment."
     if meeting_url:
         details += f"\nJoin: {meeting_url}"
     if note:

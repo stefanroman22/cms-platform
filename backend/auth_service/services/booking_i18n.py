@@ -14,9 +14,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "host_new_subject": "New booking — {name}",
         "reminder_subject": "Reminder: your upcoming appointment",
         "cancel_subject": "Your booking has been cancelled",
-        "host_cancel_subject": "Cancelled — call with {name}",
+        "host_cancel_subject": "Cancelled — booking with {name}",
         "reschedule_subject": "Your booking has been rescheduled",
-        "host_reschedule_subject": "Rescheduled — call with {name}",
+        "host_reschedule_subject": "Rescheduled — booking with {name}",
         # --- header subtitles ---
         "header_new_booking": "New booking",
         "header_confirmed": "Appointment confirmed",
@@ -28,9 +28,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "confirmed_subtext": "Your booking is confirmed.",
         "reminder_heading": "Your appointment is in about an hour, {name}.",
         "cancel_client_heading": "Your booking has been cancelled, {name}.",
-        "cancel_host_heading": "A call was cancelled",
+        "cancel_host_heading": "A booking was cancelled",
         "reschedule_client_heading": "Your booking has been moved, {name}.",
-        "reschedule_host_heading": "A call was rescheduled",
+        "reschedule_host_heading": "A booking was rescheduled",
         "host_new_heading": "New booking",
         "manage_cta": "Manage your booking",
         "join_cta": "Join the meeting",
@@ -95,7 +95,7 @@ def tt(
 # "shared" fields render once.
 EDITABLE_EMAIL_FIELDS: list[dict[str, str]] = [
     {"key": "manage_cta", "label": "Manage-booking button", "group": "shared"},
-    {"key": "join_cta", "label": "Join-call button", "group": "shared"},
+    {"key": "join_cta", "label": "Join button", "group": "shared"},
     {"key": "add_cal_cta", "label": "Add-to-calendar button", "group": "shared"},
     {"key": "manage_prompt", "label": "Manage prompt", "group": "shared"},
     {"key": "confirm_subject", "label": "Subject", "group": "confirmation"},

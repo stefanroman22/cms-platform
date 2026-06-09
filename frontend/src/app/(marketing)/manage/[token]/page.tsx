@@ -85,7 +85,7 @@ export default function ManagePage({ params }: { params: Promise<{ token: string
                 <h1 className="font-display text-xl font-semibold text-text-primary">
                   Booking cancelled
                 </h1>
-                <p className="mt-2 text-sm text-text-secondary">This call has been cancelled.</p>
+                <p className="mt-2 text-sm text-text-secondary">This booking has been cancelled.</p>
               </Card>
             ) : mode === "reschedule" && data.public_slug != null && data.service_id != null ? (
               <BookingCalendar
@@ -112,7 +112,7 @@ export default function ManagePage({ params }: { params: Promise<{ token: string
                       <SubmitFeedback
                         status={cancelPhase}
                         loadingText="Cancelling…"
-                        successText="Your call is cancelled."
+                        successText="Your booking is cancelled."
                         errorText={<>Could not cancel. Please try again or contact support.</>}
                       />
                     </m.div>
@@ -124,7 +124,7 @@ export default function ManagePage({ params }: { params: Promise<{ token: string
                       transition={{ duration: 0.3, ease: EXPO }}
                     >
                       <h1 className="font-display text-xl font-semibold text-text-primary">
-                        Your call
+                        Your booking
                       </h1>
                       <p className="mt-2 text-sm text-text-secondary">{whenLabel}</p>
 
@@ -145,7 +145,7 @@ export default function ManagePage({ params }: { params: Promise<{ token: string
                             onClick={() => setConfirmCancel(true)}
                             className="w-full text-sm font-medium text-text-secondary underline-offset-4 outline-none transition-colors hover:text-red-400 focus-visible:underline"
                           >
-                            Cancel this call
+                            Cancel this booking
                           </button>
                         )}
                         {/* Own AnimatePresence so the outer initial={false} doesn't
@@ -167,7 +167,7 @@ export default function ManagePage({ params }: { params: Promise<{ token: string
                             >
                               <div className="p-4 text-center">
                                 <p className="mb-3 text-sm text-text-secondary">
-                                  Cancel this call? This cannot be undone.
+                                  Cancel this booking? This cannot be undone.
                                 </p>
                                 <div className="flex gap-2">
                                   <button

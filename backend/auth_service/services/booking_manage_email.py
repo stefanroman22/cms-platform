@@ -99,9 +99,9 @@ def render_reschedule_client(
         title=f"Booking @ {_brand.business_name}",
         start_utc=new_start,
         end_utc=new_end,
-        details=f"Video call with {_brand.business_name}."
+        details=f"Appointment with {_brand.business_name}."
         + (f"\nJoin: {meeting_url}" if meeting_url else ""),
-        location=meeting_url or "Google Meet",
+        location=meeting_url or _brand.business_name,
     )
     safe_cal = email_layout.safe_url(add_to_cal)
     addcal_btn = ""
@@ -212,7 +212,7 @@ def send_cancellation(
         to_email=host_email or settings.BOOKING_HOST_EMAIL,
         subject=t(locale, "host_cancel_subject", name=name),
         html_body=render_cancel_host(name=name, when_label=host_when, brand=brand, locale=locale),
-        text_body=f"A call was cancelled.\nClient: {name}\nWas: {host_when}\n",
+        text_body=f"A booking was cancelled.\nClient: {name}\nWas: {host_when}\n",
         from_name=from_name,
     )
     _safe_send(
@@ -221,7 +221,7 @@ def send_cancellation(
         html_body=render_cancel_client(
             name=name, when_label=client_when, brand=brand, locale=locale, copy=copy
         ),
-        text_body=f"Your call is cancelled.\nWas: {client_when}\n",
+        text_body=f"Your booking is cancelled.\nWas: {client_when}\n",
         from_name=from_name,
     )
 
@@ -249,7 +249,7 @@ def send_reschedule(
         html_body=render_reschedule_host(
             name=name, old_when=old_host_when, new_when=new_host_when, brand=brand, locale=locale
         ),
-        text_body=f"A call was rescheduled.\nClient: {name}\nFrom: {old_host_when}\nTo: {new_host_when}\n",
+        text_body=f"A booking was rescheduled.\nClient: {name}\nFrom: {old_host_when}\nTo: {new_host_when}\n",
         from_name=from_name,
     )
     _safe_send(
@@ -266,6 +266,6 @@ def send_reschedule(
             locale=locale,
             copy=copy,
         ),
-        text_body=f"Your call has been moved to {new_client_when}.\nJoin: {meeting_url}\nManage: {manage_url}\n",
+        text_body=f"Your booking has been moved to {new_client_when}.\nManage: {manage_url}\n",
         from_name=from_name,
     )

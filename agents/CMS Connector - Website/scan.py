@@ -430,6 +430,8 @@ def _provision_booking(
             "name": service["name"],
             "duration_min": service.get("duration_min", 60),
         }
+        if service.get("price") is not None:
+            svc_body["price"] = service["price"]
         if created_resource_ids:
             svc_body["resource_ids"] = created_resource_ids
         try:
@@ -474,7 +476,7 @@ def _write_booking_ts(slug: str, framework: str, out_dir: Path) -> None:
 const BASE = process.env.{env_prefix}BOOKING_API_BASE!;
 const SLUG = "{slug}";
 
-export type Service = {{ id: string; name: string; duration_min: number }};
+export type Service = {{ id: string; name: string; duration_min: number; price?: number | null }};
 export type Resource = {{ id: string; name: string; type: string }};
 export type Slot = {{ start_utc: string }};
 
@@ -825,6 +827,10 @@ def _vercel_setup(
             "production_branch": prod_branch,
             "vercel_project_id": project_id,
             "production_url": production_url,
+            # website_url drives the dashboard's "Live website" card. Without it the
+            # card stays hidden even though the site is deployed. Default it to the
+            # production deploy URL (the public main-branch site).
+            "website_url": production_url,
             "preview_url": preview_url,
             "preview_token": preview_token,
             "default_locale": default_locale,

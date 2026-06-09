@@ -53,7 +53,9 @@ def _brand_for(cfg: TenantConfig) -> Brand:
         business_name=cfg.business_name or DEFAULT_BRAND.business_name,
         logo_url=cfg.logo_url or DEFAULT_BRAND.logo_url,
         accent=accent or DEFAULT_BRAND.accent,
-        canonical_url=settings.manage_base_url or DEFAULT_BRAND.canonical_url,
+        # Footer "Sent from <site>" points at the CLIENT's live website (never
+        # roman-technologies.dev). Falls back to the manage host only if unset.
+        canonical_url=cfg.website_url or settings.manage_base_url or DEFAULT_BRAND.canonical_url,
     )
 
 
@@ -362,7 +364,14 @@ def list_services(slug: str) -> JSONResponse:
     return JSONResponse(
         content={
             "services": [
-                {"id": s["id"], "name": s["name"], "duration_min": s["duration_min"]}
+                {
+                    "id": s["id"],
+                    "name": s["name"],
+                    "duration_min": s["duration_min"],
+                    # Postgres numeric comes back as a string via PostgREST — coerce to
+                    # a JSON number so clients can format it without parsing.
+                    "price": float(s["price"]) if s.get("price") is not None else None,
+                }
                 for s in services
             ]
         }

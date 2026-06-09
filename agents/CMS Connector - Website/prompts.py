@@ -100,7 +100,9 @@ include. Otherwise exclude.
   When the intent is ambiguous, emit the `booking` block with `"detected": true` \
   and add an open question; the human review gate decides. Extract demo values for \
   all fields where possible (business_name, brand colors, logo, services list with \
-  duration_min, resource/staff names, opening hours as weekday 0=Sun..6=Sat with \
+  duration_min AND price (EUR — always include a price per bookable service; the \
+  customer sees it and the owner can edit it later), resource/staff names, opening \
+  hours as weekday 0=Sun..6=Sat with \
   local start/end times, locale, timezone). Leave `destination_email` empty — \
   Stefan sets the client email in the report; it defaults to his email at provision. \
   The client's booking UI components are WIRED to the headless booking API at \
@@ -147,7 +149,7 @@ Return only:
     "destination_email": "",
     "calendar_provider": "none",
     "reminders": { "enabled": true, "offsets_min": [1440, 120] },
-    "services":  [{ "name": "Consultation", "duration_min": 30 }],
+    "services":  [{ "name": "Consultation", "duration_min": 30, "price": 30 }],
     "resources": [{ "name": "Staff", "type": "staff" }],
     "hours":     [{ "weekday": 1, "start_time": "09:00", "end_time": "17:00" }],
     "field_mapping": {

@@ -33,6 +33,7 @@ export interface BookingService {
   description?: string;
   color?: string;
   duration_min: number;
+  price?: number | null;
   buffer_before_min?: number;
   buffer_after_min?: number;
   lead_time_min?: number;
@@ -127,6 +128,7 @@ export interface ServiceIn {
   description?: string;
   color?: string;
   duration_min: number;
+  price?: number | null;
   buffer_before_min?: number;
   buffer_after_min?: number;
   lead_time_min?: number;

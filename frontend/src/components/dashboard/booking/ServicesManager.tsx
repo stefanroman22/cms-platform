@@ -110,9 +110,14 @@ export function ServicesManager({ projectSlug }: Props) {
                     {s.description}
                   </p>
                 )}
-                <div className="mt-1 flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
-                  <Clock className="h-3 w-3" />
-                  {s.duration_min} min
+                <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {s.duration_min} min
+                  </span>
+                  {s.price != null && (
+                    <span className="font-medium text-zinc-500 dark:text-zinc-400">€{s.price}</span>
+                  )}
                 </div>
               </div>
               <button

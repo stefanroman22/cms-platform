@@ -20,6 +20,7 @@ type Draft = {
   description: string;
   color: string;
   duration_min: string;
+  price: string;
   buffer_before_min: string;
   buffer_after_min: string;
   lead_time_min: string;
@@ -35,6 +36,7 @@ function serviceToDraft(s: BookingService): Draft {
     description: s.description ?? "",
     color: s.color ?? "",
     duration_min: String(s.duration_min),
+    price: s.price != null ? String(s.price) : "",
     buffer_before_min: String(s.buffer_before_min ?? 0),
     buffer_after_min: String(s.buffer_after_min ?? 0),
     lead_time_min: String(s.lead_time_min ?? 0),
@@ -50,6 +52,7 @@ const emptyDraft: Draft = {
   description: "",
   color: "",
   duration_min: "30",
+  price: "",
   buffer_before_min: "0",
   buffer_after_min: "0",
   lead_time_min: "0",
@@ -151,6 +154,7 @@ function DrawerBody({ projectSlug, service, resources, onClose, onSaved }: Props
         description: draft.description.trim(),
         color: draft.color.trim(),
         duration_min: parseInt(draft.duration_min, 10) || 30,
+        price: draft.price.trim() === "" ? null : parseFloat(draft.price),
         buffer_before_min: parseInt(draft.buffer_before_min, 10) || 0,
         buffer_after_min: parseInt(draft.buffer_after_min, 10) || 0,
         lead_time_min: parseInt(draft.lead_time_min, 10) || 0,
@@ -317,6 +321,21 @@ function DrawerBody({ projectSlug, service, resources, onClose, onSaved }: Props
               className={dashboardInputCn}
             />
           </div>
+          <div>
+            <label className={dashboardFieldLabelCn}>Price (€)</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={draft.price}
+              onChange={(e) => setField("price", e.target.value)}
+              placeholder="e.g. 25 — shown to customers"
+              className={dashboardInputCn}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={dashboardFieldLabelCn}>Color</label>
             <input

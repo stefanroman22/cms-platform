@@ -35,9 +35,12 @@ class TenantConfig:
     accent_color: str | None = None
     widget_color: str | None = None
     email_copy: dict = field(default_factory=dict)
+    # The client's live website URL (from projects.website_url) — used as the email
+    # footer "Sent from <site>" so client emails are never branded roman-technologies.
+    website_url: str | None = None
 
 
-def _to_config(row: dict) -> TenantConfig:
+def _to_config(row: dict, *, website_url: str | None = None) -> TenantConfig:
     return TenantConfig(
         tenant_id=row["tenant_id"],
         public_slug=row["public_slug"],
@@ -57,6 +60,7 @@ def _to_config(row: dict) -> TenantConfig:
         accent_color=row.get("accent_color"),
         widget_color=row.get("widget_color"),
         email_copy=row.get("email_copy") or {},
+        website_url=website_url,
     )
 
 
@@ -66,7 +70,18 @@ def _load_where(column: str, value: str) -> TenantConfig | None:
     rows = res.data or []
     if not rows:
         return None
-    cfg = _to_config(rows[0])
+    row = rows[0]
+    # Best-effort lookup of the client's live site for the email footer branding.
+    website_url = None
+    try:
+        pr = (
+            sb.table("projects").select("website_url").eq("id", row["tenant_id"]).limit(1).execute()
+        )
+        if pr.data:
+            website_url = pr.data[0].get("website_url")
+    except Exception:  # noqa: BLE001
+        website_url = None
+    cfg = _to_config(row, website_url=website_url)
     return cfg if cfg.is_active else None
 
 
