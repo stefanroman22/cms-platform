@@ -80,6 +80,11 @@ paths = [
   '''(^|/)\.venv/''',
   '''(^|/)venv/''',
   '''(^|/)\.git/''',
+  # Tests + docs hold fake/example/redacted credentials, not real secrets;
+  # real leaks would be in application code or config, which stay scanned.
+  '''(^|/)tests?/''',
+  '''(^|/)tests_integration/''',
+  '''(^|/)docs/''',
   '''(.*/)?\.env\.example$''',
   '''docs/SECURITY\.md''',
   '''docs/ENVIRONMENTS\.md''',
