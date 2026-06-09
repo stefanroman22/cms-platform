@@ -20,7 +20,12 @@ def _request(headers: dict | None = None, cookies: dict | None = None):
 
 
 @pytest.mark.asyncio
-async def test_bearer_valid_returns_user():
+async def test_bearer_valid_returns_userout():
+    """The bearer path must return a UserOut (attribute access), NOT the raw dict
+    from verify_admin_api_key — else require_project_access (user.id / user.is_admin)
+    500s on every bearer call to booking-admin + workspace service endpoints."""
+    from auth_service.models.schemas import UserOut
+
     with patch.object(
         deps,
         "verify_admin_api_key",
@@ -29,7 +34,17 @@ async def test_bearer_valid_returns_user():
         user = await deps.admin_user_via_bearer_or_sid(
             _request(headers={"authorization": "Bearer cmsk_dev_xx_yy"})
         )
-        assert user["id"] == "u1"
+        assert isinstance(user, UserOut)
+        assert user.id == "u1"
+        assert user.is_admin is True
+        # require_project_access does owner-or-admin via attribute access — must not raise.
+        with patch.object(deps, "get_supabase_admin") as sb:
+            sb.return_value.table.return_value.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+                "user_id": "someone-else",
+                "id": "p1",
+            }
+            project = deps.require_project_access("acme", user)
+        assert project["id"] == "p1"  # admin bypasses ownership without AttributeError
 
 
 @pytest.mark.asyncio

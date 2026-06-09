@@ -58,7 +58,13 @@ async def admin_user_via_bearer_or_sid(request: Request):
         plain = auth_header.split(" ", 1)[1].strip()
         user = verify_admin_api_key(plain)
         if user:
-            return user
+            # verify_admin_api_key returns a plain dict; normalise to UserOut so
+            # downstream code (e.g. require_project_access doing user.id /
+            # user.is_admin) gets the SAME type as the session-cookie path.
+            # Without this, every bearer call that hits require_project_access
+            # (all booking-admin + workspace service endpoints) 500s with
+            # AttributeError: 'dict' object has no attribute 'id'.
+            return UserOut(id=user["id"], email=user["email"], is_admin=user.get("is_admin", False))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or revoked admin API key",

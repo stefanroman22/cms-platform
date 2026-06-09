@@ -10,6 +10,11 @@ from pydantic import AfterValidator, BaseModel, EmailStr, Field, field_validator
 # concern when slugs are interpolated into Supabase storage keys
 # (e.g. `{project_slug}/{service_key}/file.png`).
 _SLUG_PATTERN = r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+# Service keys + type slugs are snake_case (e.g. `text_block`, `general_brand_name`)
+# — they double as next-intl message namespaces. Storage-safe (lowercase alnum +
+# underscore only, no slashes/dots/control chars), so still safe to interpolate
+# into Supabase storage keys. The hyphen-only _SLUG_PATTERN wrongly rejected these.
+_SERVICE_KEY_PATTERN = r"^[a-z0-9_]+$"
 # Generic short-text pattern: any printable except control characters.
 _NO_CTRL_PATTERN = r"^[^\x00-\x1f\x7f]*$"
 
@@ -153,9 +158,9 @@ class RepeaterItemField(BaseModel):
 class ServiceCreateRequest(BaseModel):
     # service_type_slug is one of a fixed set; route still validates
     # against the DB. Length cap blocks DoS via huge strings.
-    service_type_slug: str = Field(min_length=1, max_length=64, pattern=_SLUG_PATTERN)
-    # Used as a Supabase storage path component — must be slug-safe.
-    service_key: str = Field(min_length=1, max_length=64, pattern=_SLUG_PATTERN)
+    service_type_slug: str = Field(min_length=1, max_length=64, pattern=_SERVICE_KEY_PATTERN)
+    # Used as a Supabase storage path component — must be slug-safe (snake_case).
+    service_key: str = Field(min_length=1, max_length=64, pattern=_SERVICE_KEY_PATTERN)
     label: str | None = Field(default=None, max_length=120, pattern=_NO_CTRL_PATTERN)
     display_order: int = Field(default=0, ge=0, le=10_000)
     page_name: str = Field(default="General", min_length=1, max_length=80, pattern=_NO_CTRL_PATTERN)

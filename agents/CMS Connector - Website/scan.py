@@ -173,6 +173,34 @@ def _resolve_client(api_url: str, api_token: str, client_email: str | None) -> s
     return client_email
 
 
+def _extract_json_object(text: str) -> str:
+    """Return the first balanced top-level {...} object, ignoring any prose the
+    model emitted before/after it (string-aware so braces inside values don't
+    confuse the matcher). Falls back to the original text if no object is found."""
+    start = text.find("{")
+    if start == -1:
+        return text
+    depth, in_str, esc = 0, False, False
+    for i in range(start, len(text)):
+        c = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return text[start:]
+
+
 def _call_claude(model: str, project_slug: str, files: dict[str, str]) -> dict:
     """Send files to Claude and parse the returned JSON manifest.
 
@@ -201,7 +229,7 @@ def _call_claude(model: str, project_slug: str, files: dict[str, str]) -> dict:
                     "--model",
                     model,
                     "--effort",
-                    "xhigh",
+                    "max",
                 ],
                 input=combined,
                 capture_output=True,
@@ -257,10 +285,19 @@ def _call_claude(model: str, project_slug: str, files: dict[str, str]) -> dict:
         lines = raw.splitlines()
         raw = "\n".join(line for line in lines if not line.startswith("```"))
 
+    candidate = _extract_json_object(raw)
     try:
-        return json.loads(raw)
+        return json.loads(candidate)
     except json.JSONDecodeError as exc:
-        click.echo(f"\nError: Claude returned invalid JSON.\n{exc}\n\nRaw output:\n{raw}", err=True)
+        out_file = Path(__file__).resolve().parent / ".last-llm-output.txt"
+        try:
+            out_file.write_text(raw, encoding="utf-8")
+        except Exception:  # noqa: BLE001
+            pass
+        click.echo(
+            f"\nError: Claude returned invalid JSON.\n{exc}\n\nRaw output saved to {out_file}",
+            err=True,
+        )
         sys.exit(1)
 
 
@@ -810,6 +847,13 @@ def _vercel_setup(
 )
 @click.option("--model", default=DEFAULT_MODEL, show_default=True, help="Claude model ID.")
 @click.option(
+    "--manifest",
+    "manifest_path",
+    default=None,
+    help="Load a pre-built provision manifest JSON instead of scanning via Claude "
+    "(reuses the human-approved manifest; skips re-scan).",
+)
+@click.option(
     "--github-repo",
     "github_repo",
     default=None,
@@ -846,6 +890,7 @@ def main(
     api_url: str,
     admin_key: str | None,
     model: str,
+    manifest_path: str | None,
     github_repo: str | None,
     vercel_token: str | None,
     github_token: str | None,
@@ -902,18 +947,25 @@ def main(
         client_email = _resolve_client(api_url, admin_key, client_email)
         click.echo()
 
-    # ── Read source files ─────────────────────────────────────────────────────
-    files = read_website_files(website_path)
-    if not files:
-        raise click.ClickException("No source files found. Check the --dir path.")
-    click.echo(f"  Found {len(files)} source file(s) to analyse.")
+    # ── Build manifest: load a pre-approved one, or scan via Claude ────────────
+    if manifest_path:
+        manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+        manifest.setdefault("cms_endpoint", endpoint)
+        manifest.setdefault("project_slug", slug)
+        click.echo(
+            f"  Loaded manifest from {manifest_path} "
+            f"({len(manifest.get('services', []))} service(s); skipping Claude scan)."
+        )
+        config_path, provision_path = write_outputs(manifest, output_path)
+    else:
+        files = read_website_files(website_path)
+        if not files:
+            raise click.ClickException("No source files found. Check the --dir path.")
+        click.echo(f"  Found {len(files)} source file(s) to analyse.")
 
-    # ── Call Claude ───────────────────────────────────────────────────────────
-    manifest = _call_claude(model, slug, files)
-    manifest["cms_endpoint"] = endpoint
-
-    # ── Write output files ────────────────────────────────────────────────────
-    config_path, provision_path = write_outputs(manifest, output_path)
+        manifest = _call_claude(model, slug, files)
+        manifest["cms_endpoint"] = endpoint
+        config_path, provision_path = write_outputs(manifest, output_path)
 
     click.echo("\n✅ Done!")
     click.echo(f"   cms.config.json    → {config_path}")
