@@ -35,6 +35,7 @@ import os
 import re
 import secrets
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -106,12 +107,38 @@ def _pick_project(projects: list[Path]) -> Path:
         click.echo("  Invalid selection. Please enter a number from the list.")
 
 
+def _urlopen_retry(req, *, retries: int = 8, base_sleep: float = 12.0):
+    """urlopen with backoff on 429 (admin bearer limiter is 10/min/IP) and transient
+    5xx. Returns the response object; the caller reads it as usual. Re-raises the
+    final HTTPError on exhaustion so callers keep their existing error handling."""
+    last: Exception | None = None
+    for attempt in range(retries):
+        try:
+            return urllib.request.urlopen(req)
+        except urllib.error.HTTPError as e:
+            last = e
+            if e.code == 429 or 500 <= e.code < 600:
+                # Respect Retry-After if present; else back off ~ the limiter window.
+                retry_after = e.headers.get("Retry-After") if e.headers else None
+                sleep_s = float(retry_after) if (retry_after or "").isdigit() else base_sleep
+                click.echo(
+                    f"    ⏳ {e.code}; retrying in {sleep_s:.0f}s "
+                    f"(attempt {attempt + 1}/{retries})"
+                )
+                time.sleep(sleep_s)
+                continue
+            raise
+    if last:
+        raise last
+    raise RuntimeError("unreachable")
+
+
 def _http(method: str, url: str, headers: dict, body: dict | None = None) -> dict | None:
     """Minimal HTTP helper using stdlib. Returns parsed JSON or None on 404."""
     data = json.dumps(body).encode() if body else None
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req) as resp:
+        with _urlopen_retry(req) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         if e.code == 404:
@@ -345,7 +372,7 @@ def _provision_booking(
             headers=headers,
             method="POST",
         )
-        with urllib.request.urlopen(enable_req) as resp:
+        with _urlopen_retry(enable_req) as resp:
             resp.read()
         click.echo("  ✓ Booking system enabled (seeded defaults)")
     except Exception as exc:  # noqa: BLE001
@@ -386,7 +413,7 @@ def _provision_booking(
                 headers=headers,
                 method="POST",
             )
-            with urllib.request.urlopen(res_req) as resp:
+            with _urlopen_retry(res_req) as resp:
                 result = json.loads(resp.read().decode())
             rid = result.get("id")
             if rid:
@@ -412,7 +439,7 @@ def _provision_booking(
                 headers=headers,
                 method="POST",
             )
-            with urllib.request.urlopen(svc_req) as resp:
+            with _urlopen_retry(svc_req) as resp:
                 resp.read()
             click.echo(f"  ✓ Booking service created: {service['name']}")
         except Exception as exc:  # noqa: BLE001
@@ -428,7 +455,7 @@ def _provision_booking(
                 headers=headers,
                 method="PUT",
             )
-            with urllib.request.urlopen(hours_req) as resp:
+            with _urlopen_retry(hours_req) as resp:
                 resp.read()
             click.echo(f"  ✓ Booking hours set ({len(hours)} slot(s))")
         except Exception as exc:  # noqa: BLE001
@@ -549,7 +576,7 @@ def _provision(
             url, data=json.dumps(body).encode(), headers=headers, method="POST"
         )
         try:
-            with urllib.request.urlopen(req) as resp:
+            with _urlopen_retry(req) as resp:
                 resp.read()
             created += 1
             created_keys.add(svc["service_key"])
@@ -588,7 +615,7 @@ def _provision(
             method="PUT",
         )
         try:
-            with urllib.request.urlopen(put_req) as resp:
+            with _urlopen_retry(put_req) as resp:
                 resp.read()
             seeded += 1
             click.echo(f"  ✓ Seeded content:  {svc['service_key']} (default: {default_locale})")
@@ -624,7 +651,7 @@ def _provision(
                 method="PUT",
             )
             try:
-                with urllib.request.urlopen(put_req) as resp:
+                with _urlopen_retry(put_req) as resp:
                     resp.read()
                 seeded += 1
                 click.echo(f"  ✓ Seeded content:  {svc['service_key']} (locale: {locale})")

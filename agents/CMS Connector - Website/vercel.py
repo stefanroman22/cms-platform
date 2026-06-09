@@ -167,7 +167,10 @@ def trigger_deployment(
     # from omitting the field entirely.
     if is_production:
         payload["target"] = "production"
-    data = _request(token, "POST", "/v13/deployments", payload)
+    # skipAutoDetectionConfirmation=1 lets Vercel auto-detect the framework from
+    # package.json — required on the FIRST deploy of a brand-new project, which
+    # otherwise 400s with "projectSettings object is required". Framework-agnostic.
+    data = _request(token, "POST", "/v13/deployments?skipAutoDetectionConfirmation=1", payload)
     dep_id = data["id"]
     fallback_url = data.get("url") or ""
 
