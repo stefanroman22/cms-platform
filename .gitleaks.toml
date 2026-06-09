@@ -74,6 +74,12 @@ regexes = [
 
 # Files where pattern-only / docs / examples live.
 paths = [
+  # Never scan dependency trees, virtualenvs, or git internals (relevant for
+  # the promote gate's full-tree `gitleaks detect --no-git`).
+  '''(^|/)node_modules/''',
+  '''(^|/)\.venv/''',
+  '''(^|/)venv/''',
+  '''(^|/)\.git/''',
   '''(.*/)?\.env\.example$''',
   '''docs/SECURITY\.md''',
   '''docs/ENVIRONMENTS\.md''',
