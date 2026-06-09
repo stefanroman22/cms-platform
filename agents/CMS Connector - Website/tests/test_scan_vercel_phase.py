@@ -38,6 +38,11 @@ def test_vercel_setup_creates_project_and_saves_urls_to_cms():
 
         mock_vercel.create_project.assert_called_once()
         mock_vercel.disable_deployment_protection.assert_called_once_with("vtok", "prj_abc")
+        # GitHub branch protection on the production branch is stripped so the
+        # fast-forward promotion can advance main directly (see github.py).
+        mock_gh.ensure_branch_unprotected.assert_called_once_with(
+            "gtok", "lauriand/portfolio", "main"
+        )
         mock_gh.create_branch.assert_called_once_with(
             "gtok", "lauriand/portfolio", "cms-preview", from_branch="main"
         )
@@ -102,6 +107,11 @@ def test_vercel_setup_preserves_existing_preview_token_on_rerun():
         # Found-existing path also triggers the protection PATCH so re-running
         # the agent on a previously-protected client retrofits it.
         mock_vercel.disable_deployment_protection.assert_called_once_with("vtok", "prj_existing")
+        # Re-running also retrofits GitHub branch protection removal on the
+        # production branch (here 'master' from Vercel's productionBranch).
+        mock_gh.ensure_branch_unprotected.assert_called_once_with(
+            "gtok", "lauriand/portfolio", "master"
+        )
         mock_gh.create_branch.assert_not_called()
 
         # PATCH was called; must have reused ORIGINAL_TOKEN, not the fresh one

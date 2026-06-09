@@ -70,3 +70,27 @@ def test_create_branch_skips_when_branch_exists(fake_urlopen):
 
     # Only 1 call: the branch_exists check. No create call.
     assert fake_urlopen.call_count == 1
+
+
+def test_ensure_branch_unprotected_deletes_protection(fake_urlopen):
+    # 204 No Content -> empty body. Must issue a DELETE to the protection endpoint.
+    fake_urlopen.return_value = _resp({})
+
+    gh.ensure_branch_unprotected("tok", "lauriand/portfolio", "main")
+
+    assert fake_urlopen.call_count == 1
+    req = fake_urlopen.call_args_list[0][0][0]
+    assert req.method == "DELETE"
+    assert req.full_url.endswith("/repos/lauriand/portfolio/branches/main/protection")
+
+
+def test_ensure_branch_unprotected_swallows_404_when_already_unprotected(fake_urlopen):
+    # GitHub returns 404 "Branch not protected" when there is nothing to remove.
+    # That is the desired end state, so the call must not raise.
+    import urllib.error
+
+    fake_urlopen.side_effect = urllib.error.HTTPError(
+        url="", code=404, msg="Branch not protected", hdrs=None, fp=None
+    )
+
+    gh.ensure_branch_unprotected("tok", "lauriand/portfolio", "master")

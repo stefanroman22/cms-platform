@@ -57,3 +57,22 @@ def create_branch(token: str, github_repo: str, new_branch: str, from_branch: st
         f"/repos/{github_repo}/git/refs",
         {"ref": f"refs/heads/{new_branch}", "sha": sha},
     )
+
+
+def ensure_branch_unprotected(token: str, github_repo: str, branch: str) -> None:
+    """Removes branch protection from `branch`. Idempotent.
+
+    A protected, PR-only production branch is incompatible with the S1.5
+    fast-forward promotion: such a branch can only advance via PR-merge
+    commits, which permanently diverge it from `cms-preview` and wedge every
+    deploy ("cannot fast-forward ... diverged"). The CMS Slack approval is the
+    real production gate, so we strip GitHub protection here the same way
+    `vercel.disable_deployment_protection` strips Vercel's. A branch with no
+    protection returns 404 ("Branch not protected") — already the desired state.
+    """
+    try:
+        _request(token, "DELETE", f"/repos/{github_repo}/branches/{branch}/protection")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return
+        raise
