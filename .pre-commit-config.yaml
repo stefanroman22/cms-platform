@@ -1,5 +1,6 @@
 # .pre-commit-config.yaml — runs lint + format on every commit.
-# Tests do NOT run here (too slow); CI handles that on push to master.
+# Tests do NOT run here (too slow); run them locally — there is no CI on
+# push. The Promote dev → main action gates on build + gitleaks, not tests.
 # Install via: `make install` (Task C1) — sets up the git hook.
 
 repos:
