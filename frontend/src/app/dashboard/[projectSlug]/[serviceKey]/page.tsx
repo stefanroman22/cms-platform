@@ -2,6 +2,7 @@
 
 import { use, useState, useCallback } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   ArrowLeft,
@@ -185,6 +186,7 @@ export default function ServiceEditorPage({
     }
   }
 
+  const reduce = useReducedMotion();
   const activeLocale = service?.locale ?? service?.default_locale ?? "";
   const defaultLocale = service?.default_locale ?? "";
   const locales = service?.locales ?? [];
@@ -343,22 +345,42 @@ export default function ServiceEditorPage({
         </div>
       )}
 
-      {/* Loading */}
-      {loading && (
+      {/* First load only — skeleton (no stale data to show yet). */}
+      {loading && !service && (
         <div className="h-64 rounded-xl border border-zinc-200 bg-white animate-pulse dark:border-zinc-800 dark:bg-zinc-900" />
       )}
 
-      {/* Fetch error */}
-      {!loading && error && <div className={dashboardErrorBannerCn}>{error}</div>}
+      {/* Fetch error (only when there's nothing to show). */}
+      {!loading && error && !service && <div className={dashboardErrorBannerCn}>{error}</div>}
 
-      {/* Editor — keyed on service.id + activeLocale so it re-mounts cleanly on locale change */}
-      {!loading && service && EditorComponent && (
-        <EditorComponent
-          key={`${service.id}:${activeLocale}`}
-          initialContent={service.content}
-          onChange={handleChange}
-          onUpload={handleUpload}
-        />
+      {/* Editor — stale-while-revalidate on locale switch: keep the current editor
+          visible during the refetch (with a subtle loading veil) and cross-fade to
+          the new locale's content when it arrives, so switching NL/EN is smooth and
+          never blanks. Keyed on service.id + activeLocale so it re-mounts cleanly. */}
+      {service && EditorComponent && (
+        <div className="relative">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={`${service.id}:${activeLocale}`}
+              initial={{ opacity: 0, y: reduce ? 0 : 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: reduce ? 0 : -6 }}
+              transition={{ duration: reduce ? 0.12 : 0.2, ease: [0.2, 0, 0, 1] }}
+            >
+              <EditorComponent
+                initialContent={service.content}
+                onChange={handleChange}
+                onUpload={handleUpload}
+              />
+            </motion.div>
+          </AnimatePresence>
+          {loading && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-xl bg-white/40 backdrop-blur-[1px] dark:bg-zinc-950/40"
+            />
+          )}
+        </div>
       )}
 
       {/* Unknown service type fallback */}
