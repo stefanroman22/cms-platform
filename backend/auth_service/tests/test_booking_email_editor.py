@@ -105,6 +105,40 @@ def test_email_preview_confirmation(client):
     assert "#abcdef" in html
 
 
+def test_email_preview_applies_per_field_colour(client):
+    """A per-field colour override ("{key}__color") in the draft email_copy is
+    rendered into the preview HTML."""
+    ru, rp = _auth()
+    with ru, rp:
+        r = client.post(
+            "/projects/acme/bookings/email-preview",
+            json={
+                "case": "confirmation",
+                "draft": {"email_copy": {"confirmed_heading__color": "#ff8800"}},
+            },
+        )
+    assert r.status_code == 200
+    assert "color:#ff8800" in r.json()["html"]
+
+
+def test_email_template_fields_expose_colour_flag(client):
+    """The schema endpoint tells the editor which fields support a colour."""
+    ru, rp = _auth()
+    with (
+        ru,
+        rp,
+        patch(
+            "auth_service.routers.booking_admin.booking_admin_repo.get_settings",
+            return_value=None,
+        ),
+    ):
+        r = client.get("/projects/acme/bookings/email-template")
+    assert r.status_code == 200
+    fields = {f["key"]: f for f in r.json()["fields"]}
+    assert fields["confirmed_heading"]["color"] is True
+    assert fields["confirm_subject"]["color"] is False
+
+
 def test_email_preview_reschedule(client):
     ru, rp = _auth()
     with ru, rp:

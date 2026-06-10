@@ -7,6 +7,12 @@ from __future__ import annotations
 
 import html
 
+from .email_layout import safe_hex
+
+# Suffix appended to a copy key to store that field's per-text colour override in
+# the same email_copy JSONB dict — no schema/migration change needed.
+COLOR_SUFFIX = "__color"
+
 STRINGS: dict[str, dict[str, str]] = {
     "en": {
         # --- subjects (match original booking email subjects exactly) ---
@@ -90,25 +96,43 @@ def tt(
     return t(locale, key, **fmt)
 
 
+def copy_color(overrides: dict | None, key: str, default: str) -> str:
+    """Per-field text colour for *key*, read from ``overrides["{key}__color"]``.
+
+    SEC-045: the stored value is untrusted (owner-supplied), so it is run through
+    the same hex allowlist used for the tenant accent before it is ever emitted
+    into a ``style="color:…"`` attribute. Anything that isn't a hex literal (or no
+    override at all) falls back to *default*.
+    """
+    raw = (overrides or {}).get(key + COLOR_SUFFIX) if overrides else None
+    return safe_hex(raw if isinstance(raw, str) else None, default)
+
+
 # Editable client-facing fields, grouped for the dashboard editor. Host-facing
 # keys are intentionally excluded. `group` drives the editor's case selector;
-# "shared" fields render once.
-EDITABLE_EMAIL_FIELDS: list[dict[str, str]] = [
-    {"key": "manage_cta", "label": "Manage-booking button", "group": "shared"},
-    {"key": "join_cta", "label": "Join button", "group": "shared"},
-    {"key": "add_cal_cta", "label": "Add-to-calendar button", "group": "shared"},
-    {"key": "manage_prompt", "label": "Manage prompt", "group": "shared"},
-    {"key": "confirm_subject", "label": "Subject", "group": "confirmation"},
-    {"key": "header_confirmed", "label": "Header subtitle", "group": "confirmation"},
-    {"key": "confirmed_heading", "label": "Heading", "group": "confirmation"},
-    {"key": "confirmed_subtext", "label": "Subtext", "group": "confirmation"},
-    {"key": "reschedule_subject", "label": "Subject", "group": "reschedule"},
-    {"key": "header_moved", "label": "Header subtitle", "group": "reschedule"},
-    {"key": "reschedule_client_heading", "label": "Heading", "group": "reschedule"},
-    {"key": "cancel_subject", "label": "Subject", "group": "cancellation"},
-    {"key": "header_cancelled", "label": "Header subtitle", "group": "cancellation"},
-    {"key": "cancel_client_heading", "label": "Heading", "group": "cancellation"},
-    {"key": "reminder_subject", "label": "Subject", "group": "reminder"},
-    {"key": "header_reminder", "label": "Header subtitle", "group": "reminder"},
-    {"key": "reminder_heading", "label": "Heading", "group": "reminder"},
+# "shared" fields render once. `color` flags the fields whose rendered text
+# accepts a per-field colour override (subjects are plain-text, so they don't).
+EDITABLE_EMAIL_FIELDS: list[dict[str, object]] = [
+    {"key": "manage_cta", "label": "Manage-booking button", "group": "shared", "color": True},
+    {"key": "join_cta", "label": "Join button", "group": "shared", "color": True},
+    {"key": "add_cal_cta", "label": "Add-to-calendar button", "group": "shared", "color": True},
+    {"key": "manage_prompt", "label": "Manage prompt", "group": "shared", "color": True},
+    {"key": "confirm_subject", "label": "Subject", "group": "confirmation", "color": False},
+    {"key": "header_confirmed", "label": "Header subtitle", "group": "confirmation", "color": True},
+    {"key": "confirmed_heading", "label": "Heading", "group": "confirmation", "color": True},
+    {"key": "confirmed_subtext", "label": "Subtext", "group": "confirmation", "color": True},
+    {"key": "reschedule_subject", "label": "Subject", "group": "reschedule", "color": False},
+    {"key": "header_moved", "label": "Header subtitle", "group": "reschedule", "color": True},
+    {
+        "key": "reschedule_client_heading",
+        "label": "Heading",
+        "group": "reschedule",
+        "color": True,
+    },
+    {"key": "cancel_subject", "label": "Subject", "group": "cancellation", "color": False},
+    {"key": "header_cancelled", "label": "Header subtitle", "group": "cancellation", "color": True},
+    {"key": "cancel_client_heading", "label": "Heading", "group": "cancellation", "color": True},
+    {"key": "reminder_subject", "label": "Subject", "group": "reminder", "color": False},
+    {"key": "header_reminder", "label": "Header subtitle", "group": "reminder", "color": True},
+    {"key": "reminder_heading", "label": "Heading", "group": "reminder", "color": True},
 ]

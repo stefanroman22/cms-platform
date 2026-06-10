@@ -1,6 +1,13 @@
 """Tests for the booking_i18n locale helper."""
 
-from auth_service.services.booking_i18n import EDITABLE_EMAIL_FIELDS, STRINGS, t, tt
+from auth_service.services.booking_i18n import (
+    COLOR_SUFFIX,
+    EDITABLE_EMAIL_FIELDS,
+    STRINGS,
+    copy_color,
+    t,
+    tt,
+)
 
 
 def test_t_returns_english_by_default():
@@ -58,3 +65,37 @@ def test_editable_fields_have_known_keys():
     keys = {f["key"] for f in EDITABLE_EMAIL_FIELDS}
     assert "join_cta" in keys and "confirm_subject" in keys
     assert all(f["key"] in STRINGS["en"] for f in EDITABLE_EMAIL_FIELDS)
+
+
+# ---- per-field colour overrides (H2) ----
+
+
+def test_color_suffix_key_convention():
+    # Colours live in the same email_copy dict under "{key}__color".
+    assert COLOR_SUFFIX == "__color"
+
+
+def test_copy_color_returns_override_hex():
+    copy = {"confirmed_heading" + COLOR_SUFFIX: "#ff8800"}
+    assert copy_color(copy, "confirmed_heading", "#18181b") == "#ff8800"
+
+
+def test_copy_color_falls_back_to_default_when_absent():
+    assert copy_color({}, "confirmed_heading", "#123456") == "#123456"
+    assert copy_color(None, "confirmed_heading", "#123456") == "#123456"
+
+
+def test_copy_color_rejects_non_hex_value():
+    # SEC-045: anything that is not a hex literal must fall back to the default,
+    # so it can never break out of a style="color:…" attribute.
+    bad = {"confirmed_heading" + COLOR_SUFFIX: 'red;"><script>alert(1)</script>'}
+    assert copy_color(bad, "confirmed_heading", "#18181b") == "#18181b"
+
+
+def test_color_fields_flag_marks_text_fields_only():
+    by_key = {f["key"]: f for f in EDITABLE_EMAIL_FIELDS}
+    # Rendered text fields accept a colour…
+    assert by_key["confirmed_heading"]["color"] is True
+    assert by_key["join_cta"]["color"] is True
+    # …subjects are plain-text email subjects, so they do not.
+    assert by_key["confirm_subject"]["color"] is False

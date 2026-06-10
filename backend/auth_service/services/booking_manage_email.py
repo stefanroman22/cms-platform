@@ -12,7 +12,7 @@ from datetime import datetime
 
 from ..core.config import settings
 from . import email_layout
-from .booking_i18n import t, tt
+from .booking_i18n import copy_color, t, tt
 from .email_layout import DEFAULT_BRAND, Brand
 
 log = logging.getLogger(__name__)
@@ -20,33 +20,33 @@ log = logging.getLogger(__name__)
 
 def _box(rows: list[tuple[str, str]]) -> str:
     body = "".join(
-        f'<p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:0.08em;'
+        f'<p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;'
         f'text-transform:uppercase;color:#71717a">{label}</p>'
         f'<p style="margin:0 0 14px;font-size:15px;color:#18181b">{value}</p>'
         for label, value in rows
     )
     return (
         '<tr><td style="padding:8px 32px"><table width="100%" cellpadding="0" cellspacing="0" '
-        'style="margin-top:16px;background:#fafafa;border:1px solid #e4e4e7;border-radius:8px">'
+        'style="margin-top:16px;background:#fafafa;border:1px solid #ececee;border-radius:10px">'
         f'<tr><td style="padding:18px 22px">{body}</td></tr></table></td></tr>'
     )
 
 
-def _heading(text: str) -> str:
+def _heading(text: str, *, color: str = "#18181b") -> str:
     return (
         '<tr><td style="padding:32px 32px 8px">'
-        f'<h1 style="margin:0;font-size:22px;font-weight:600;color:#18181b">{text}</h1></td></tr>'
+        f'<h1 style="margin:0;font-size:23px;font-weight:600;letter-spacing:-0.01em;color:{color}">{text}</h1></td></tr>'
     )
 
 
-def _button(*, url: str, label: str, accent: str = "#18181b") -> str:
+def _button(*, url: str, label: str, accent: str = "#18181b", label_color: str = "#ffffff") -> str:
     safe = email_layout.safe_url(url)
     if not safe:
         return ""
     return (
         '<tr><td style="padding:20px 32px 8px" align="center">'
-        f'<a href="{html.escape(safe)}" style="display:inline-block;background:{accent};color:#fff;'
-        'text-decoration:none;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px">'
+        f'<a href="{html.escape(safe)}" style="display:inline-block;background:{accent};color:{label_color};'
+        'text-decoration:none;font-size:14px;font-weight:600;padding:13px 30px;border-radius:9px">'
         f"{label} &rarr;</a></td></tr>"
     )
 
@@ -60,9 +60,17 @@ def render_cancel_client(
     copy: dict | None = None,
 ) -> str:
     _brand = brand if brand is not None else DEFAULT_BRAND
+    sub_color = copy.get("header_cancelled" + "__color") if copy else None
+    heading_color = copy_color(copy, "cancel_client_heading", "#18181b")
     inner = (
-        email_layout.header(tt(copy, locale, "header_cancelled"), brand=_brand)
-        + _heading(f"{tt(copy, locale, 'cancel_client_heading', name=html.escape(name))}")
+        email_layout.header(
+            tt(copy, locale, "header_cancelled"), brand=_brand, subtitle_color=sub_color
+        )
+        + email_layout.accent_rule(brand=_brand)
+        + _heading(
+            f"{tt(copy, locale, 'cancel_client_heading', name=html.escape(name))}",
+            color=heading_color,
+        )
         + _box([("Was", html.escape(when_label))])
         + email_layout.footer(brand=_brand)
     )
@@ -75,6 +83,7 @@ def render_cancel_host(
     _brand = brand if brand is not None else DEFAULT_BRAND
     inner = (
         email_layout.header(t(locale, "header_cancelled"), brand=_brand)
+        + email_layout.accent_rule(brand=_brand)
         + _heading(t(locale, "cancel_host_heading"))
         + _box([("Client", html.escape(name)), ("Was", html.escape(when_label))])
         + email_layout.footer(brand=_brand)
@@ -103,31 +112,49 @@ def render_reschedule_client(
         + (f"\nJoin: {meeting_url}" if meeting_url else ""),
         location=meeting_url or _brand.business_name,
     )
+    accent = email_layout.safe_hex(_brand.accent, "#18181b")
     safe_cal = email_layout.safe_url(add_to_cal)
     addcal_btn = ""
     if safe_cal:
+        add_color = copy_color(copy, "add_cal_cta", "#18181b")
         addcal_btn = (
             '<tr><td style="padding:0 32px 8px" align="center">'
             f'<a href="{html.escape(safe_cal)}" style="display:inline-block;background:#fff;'
-            "border:1px solid #d4d4d8;color:#18181b;text-decoration:none;font-size:14px;font-weight:600;"
-            f'padding:11px 26px;border-radius:8px">{tt(copy, locale, "add_cal_cta")}</a></td></tr>'
+            f"border:1px solid {accent};color:{add_color};text-decoration:none;font-size:14px;font-weight:600;"
+            f'padding:11px 26px;border-radius:9px">{tt(copy, locale, "add_cal_cta")}</a></td></tr>'
         )
     # Manage link as a small bottom-of-email text link (matches the confirmation
     # email), not a prominent button. Only shown when a manage URL is present.
+    prompt_color = copy_color(copy, "manage_prompt", "#71717a")
+    manage_color = copy_color(copy, "manage_cta", "#52525b")
     manage = ""
     safe_manage = email_layout.safe_url(manage_url)
     if safe_manage:
         manage = (
             '<tr><td style="padding:8px 32px 0" align="center">'
-            f'<p style="margin:0;font-size:12px;color:#71717a">{tt(copy, locale, "manage_prompt")} '
-            f'<a href="{html.escape(safe_manage)}" style="color:#52525b;text-decoration:underline">'
+            f'<p style="margin:0;font-size:12px;color:{prompt_color}">{tt(copy, locale, "manage_prompt")} '
+            f'<a href="{html.escape(safe_manage)}" style="color:{manage_color};text-decoration:underline">'
             f'{tt(copy, locale, "manage_cta")}</a>.</p></td></tr>'
         )
+    sub_color = copy.get("header_moved" + "__color") if copy else None
+    heading_color = copy_color(copy, "reschedule_client_heading", "#18181b")
+    join_color = copy_color(copy, "join_cta", "#ffffff")
     inner = (
-        email_layout.header(tt(copy, locale, "header_moved"), brand=_brand)
-        + _heading(tt(copy, locale, "reschedule_client_heading", name=html.escape(name)))
+        email_layout.header(
+            tt(copy, locale, "header_moved"), brand=_brand, subtitle_color=sub_color
+        )
+        + email_layout.accent_rule(brand=_brand)
+        + _heading(
+            tt(copy, locale, "reschedule_client_heading", name=html.escape(name)),
+            color=heading_color,
+        )
         + _box([("New time", html.escape(new_when))])
-        + _button(url=meeting_url, label=tt(copy, locale, "join_cta"), accent=_brand.accent)
+        + _button(
+            url=meeting_url,
+            label=tt(copy, locale, "join_cta"),
+            accent=_brand.accent,
+            label_color=join_color,
+        )
         + addcal_btn
         + manage
         + email_layout.footer(brand=_brand)
@@ -141,6 +168,7 @@ def render_reschedule_host(
     _brand = brand if brand is not None else DEFAULT_BRAND
     inner = (
         email_layout.header(t(locale, "header_moved"), brand=_brand)
+        + email_layout.accent_rule(brand=_brand)
         + _heading(t(locale, "reschedule_host_heading"))
         + _box(
             [

@@ -53,3 +53,29 @@ def test_reminder_html_default_brand_unchanged():
         name="Jane", when_label="t", note=None, meeting_url="", brand=DEFAULT_BRAND
     )
     assert html_no_brand == html_default
+
+
+# ---- H2 per-field colour overrides ----
+
+
+def test_reminder_html_per_field_heading_colour():
+    html_body = render_html(
+        name="Jane",
+        when_label="Today · 15:00",
+        note=None,
+        meeting_url="https://meet.example/abc",
+        copy={"reminder_heading__color": "#ff8800", "join_cta__color": "#ffffff"},
+    )
+    assert "color:#ff8800" in html_body
+
+
+def test_reminder_html_drops_unsafe_colour():
+    html_body = render_html(
+        name="Jane",
+        when_label="Today · 15:00",
+        note=None,
+        meeting_url="",
+        copy={"reminder_heading__color": 'x;"><script>boom</script>'},
+    )
+    assert "<script>" not in html_body
+    assert "boom" not in html_body

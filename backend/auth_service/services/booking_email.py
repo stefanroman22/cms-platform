@@ -10,20 +10,20 @@ import urllib.request
 
 from ..core.config import settings
 from . import email_layout
-from .booking_i18n import t, tt
+from .booking_i18n import copy_color, t, tt
 from .email_layout import DEFAULT_BRAND, Brand
 
 
 def _detail_box(rows: list[tuple[str, str]]) -> str:
     body = "".join(
-        f'<p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:0.08em;'
+        f'<p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;'
         f'text-transform:uppercase;color:#71717a">{label}</p>'
         f'<p style="margin:0 0 14px;font-size:15px;color:#18181b">{value}</p>'
         for label, value in rows
     )
     return (
         '<tr><td style="padding:8px 32px"><table width="100%" cellpadding="0" cellspacing="0" '
-        'style="margin-top:16px;background:#fafafa;border:1px solid #e4e4e7;border-radius:8px">'
+        'style="margin-top:16px;background:#fafafa;border:1px solid #ececee;border-radius:10px">'
         f'<tr><td style="padding:18px 22px">{body}</td></tr></table></td></tr>'
     )
 
@@ -44,23 +44,26 @@ def _cta_block(
     if not safe_meeting:
         return ""
     esc = html.escape(safe_meeting)
+    link_color = email_layout.safe_hex(accent, "#18181b")
+    join_color = copy_color(copy, "join_cta", "#ffffff")
     add_btn = ""
     if add_to_cal_url:
         cal = html.escape(add_to_cal_url)
+        add_color = copy_color(copy, "add_cal_cta", "#18181b")
         add_btn = (
             f'<a href="{cal}" style="display:inline-block;margin:8px 0 0 8px;background:#fff;'
-            "border:1px solid #d4d4d8;color:#18181b;text-decoration:none;font-size:14px;font-weight:600;"
+            f"border:1px solid {accent};color:{add_color};text-decoration:none;font-size:14px;font-weight:600;"
             f'padding:11px 22px;border-radius:8px">{tt(copy, locale, "add_cal_cta")}</a>'
         )
     return (
-        # Explicit link, spelled out.
+        # Explicit link, spelled out — link tinted with the tenant accent.
         '<tr><td style="padding:18px 32px 0" align="center">'
-        '<p style="margin:0;font-size:13px;color:#52525b">Meeting link: '
-        f'<a href="{esc}" style="color:#18181b;text-decoration:underline">{esc}</a></p></td></tr>'
+        '<p style="margin:0;font-size:13px;color:#71717a">Meeting link: '
+        f'<a href="{esc}" style="color:{link_color};text-decoration:underline">{esc}</a></p></td></tr>'
         # Buttons.
         '<tr><td style="padding:16px 32px 8px" align="center">'
-        f'<a href="{esc}" style="display:inline-block;background:{accent};color:#fff;text-decoration:none;'
-        'font-size:14px;font-weight:600;padding:12px 26px;border-radius:8px">'
+        f'<a href="{esc}" style="display:inline-block;background:{accent};color:{join_color};text-decoration:none;'
+        'font-size:14px;font-weight:600;padding:13px 28px;border-radius:9px">'
         f'{tt(copy, locale, "join_cta")} &rarr;</a>'
         f"{add_btn}"
         "</td></tr>"
@@ -97,7 +100,8 @@ def render_host_html(
     cta = _cta_block(meeting_url=meeting_url, locale=locale)
     inner = (
         email_layout.header(t(locale, "header_new_booking"), brand=_brand)
-        + f'<tr><td style="padding:32px 32px 8px"><h1 style="margin:0;font-size:22px;font-weight:600;color:#18181b">{t(locale, "host_new_heading")}</h1></td></tr>'
+        + email_layout.accent_rule(brand=_brand)
+        + f'<tr><td style="padding:32px 32px 8px"><h1 style="margin:0;font-size:23px;font-weight:600;letter-spacing:-0.01em;color:#18181b">{t(locale, "host_new_heading")}</h1></td></tr>'
         + _detail_box([("When", when), ("Name", name), ("Email", email_addr), ("Note", note)])
         + cta
         + email_layout.footer(brand=_brand)
@@ -127,19 +131,27 @@ def render_visitor_html(
         copy=copy,
         accent=_brand.accent,
     )
+    prompt_color = copy_color(copy, "manage_prompt", "#71717a")
+    manage_color = copy_color(copy, "manage_cta", "#52525b")
     manage = ""
     safe_manage = email_layout.safe_url(manage_url)
     if safe_manage:
         manage = (
             '<tr><td style="padding:8px 32px 0" align="center">'
-            f'<p style="margin:0;font-size:12px;color:#71717a">{tt(copy, locale, "manage_prompt")} '
-            f'<a href="{html.escape(safe_manage)}" style="color:#52525b;text-decoration:underline">'
+            f'<p style="margin:0;font-size:12px;color:{prompt_color}">{tt(copy, locale, "manage_prompt")} '
+            f'<a href="{html.escape(safe_manage)}" style="color:{manage_color};text-decoration:underline">'
             f'{tt(copy, locale, "manage_cta")}</a>.</p></td></tr>'
         )
+    heading_color = copy_color(copy, "confirmed_heading", "#18181b")
+    subtext_color = copy_color(copy, "confirmed_subtext", "#52525b")
+    sub_color = copy.get("header_confirmed" + "__color") if copy else None
     inner = (
-        email_layout.header(tt(copy, locale, "header_confirmed"), brand=_brand)
-        + f'<tr><td style="padding:32px 32px 8px"><h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#18181b">{tt(copy, locale, "confirmed_heading", name=name)}</h1>'
-        + f'<p style="margin:0;font-size:15px;line-height:1.55;color:#52525b">{tt(copy, locale, "confirmed_subtext")}</p></td></tr>'
+        email_layout.header(
+            tt(copy, locale, "header_confirmed"), brand=_brand, subtitle_color=sub_color
+        )
+        + email_layout.accent_rule(brand=_brand)
+        + f'<tr><td style="padding:32px 32px 8px"><h1 style="margin:0 0 12px;font-size:23px;font-weight:600;letter-spacing:-0.01em;color:{heading_color}">{tt(copy, locale, "confirmed_heading", name=name)}</h1>'
+        + f'<p style="margin:0;font-size:15px;line-height:1.55;color:{subtext_color}">{tt(copy, locale, "confirmed_subtext")}</p></td></tr>'
         + _detail_box([("When", when), ("Note", note)])
         + cta
         + manage

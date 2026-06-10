@@ -212,3 +212,46 @@ def test_visitor_html_generic_tenant_no_stefan():
     )
     assert "Acme Salon" in html
     assert "Stefan" not in html
+
+
+def test_visitor_html_tenant_brand_does_not_leak_default_owner_name():
+    """A tenant-branded render must NOT carry the platform owner's name/brand
+    (Roman Technologies / Stefan) — only the tenant's own brand."""
+    ACME_BRAND = Brand(
+        business_name="Acme Salon",
+        logo_url="https://acme.example/logo.png",
+        accent="#ff0000",
+        canonical_url="https://acme.example",
+    )
+    html = render_visitor_html(
+        booking=BOOKING,
+        meeting_url="https://meet.example/abc",
+        manage_url="https://acme.example/m/x",
+        brand=ACME_BRAND,
+    )
+    assert "Roman Technologies" not in html
+    assert "Stefan" not in html
+
+
+# ---- H2 per-field colour override tests ----
+
+
+def test_visitor_email_per_field_colours_applied():
+    """Owner-set per-field colours land in the rendered style attributes."""
+    copy = {
+        "confirmed_heading__color": "#ff0000",
+        "confirmed_subtext__color": "#00ff00",
+        "join_cta__color": "#0000ff",
+    }
+    html = render_visitor_html(booking=BOOKING, meeting_url="https://m/x", copy=copy)
+    assert "color:#ff0000" in html  # heading
+    assert "color:#00ff00" in html  # subtext
+    assert "color:#0000ff" in html  # join button label
+
+
+def test_visitor_email_rejects_unsafe_colour(monkeypatch):
+    """A non-hex colour override is dropped (SEC-045) — never injected raw."""
+    copy = {"confirmed_heading__color": 'red;"><script>alert(1)</script>'}
+    html = render_visitor_html(booking=BOOKING, meeting_url="", copy=copy)
+    assert "<script>" not in html
+    assert "alert(1)" not in html

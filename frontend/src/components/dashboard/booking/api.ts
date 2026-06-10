@@ -92,7 +92,17 @@ export interface EmailTemplateField {
   group: "shared" | "confirmation" | "reschedule" | "cancellation" | "reminder";
   default: string;
   value: string;
+  // True when this field's rendered text accepts a per-field colour override.
+  // The colour is stored in the same email_copy dict under `${key}__color`
+  // (see COLOR_SUFFIX in booking_i18n.py) — no separate schema/field.
+  color?: boolean;
+  // The saved per-field colour override hex (or "" when none) — round-trips the editor.
+  color_value?: string;
 }
+
+// Mirror of booking_i18n.COLOR_SUFFIX — per-field colours live in email_copy
+// under `${key}${COLOR_SUFFIX}`.
+export const COLOR_SUFFIX = "__color";
 
 export interface EmailTemplateBrand {
   logo_url?: string | null;

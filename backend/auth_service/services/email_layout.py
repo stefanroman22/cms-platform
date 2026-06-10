@@ -66,13 +66,26 @@ def safe_url(value: str | None, fallback: str = "") -> str:
     return fallback
 
 
+def safe_hex(value: str | None, fallback: str) -> str:
+    """A CSS hex colour literal or ``fallback`` (SEC-045).
+
+    The single allowlist used everywhere a tenant-controlled colour is emitted
+    into a ``style`` attribute — the tenant accent and the per-field text colours
+    in ``email_copy`` both go through here, so an arbitrary string can never break
+    out of the style attribute.
+    """
+    v = (value or "").strip()
+    return v if _HEX_COLOUR_RE.fullmatch(v) else fallback
+
+
 def _safe_accent(value: str) -> str:
     """Tenant accent colour, restricted to a hex literal (SEC-045)."""
-    v = (value or "").strip()
-    return v if _HEX_COLOUR_RE.fullmatch(v) else DEFAULT_BRAND.accent
+    return safe_hex(value, DEFAULT_BRAND.accent)
 
 
-def header(subtitle: str, *, brand: Brand = DEFAULT_BRAND) -> str:
+def header(
+    subtitle: str, *, brand: Brand = DEFAULT_BRAND, subtitle_color: str | None = None
+) -> str:
     # SEC-044 / SEC-045: business_name, logo_url, accent and the subtitle (tenant
     # email_copy) are tenant-controlled. Escape text, allowlist the accent colour,
     # and force logo_url to an http(s) URL so none can break out of the markup.
@@ -80,17 +93,27 @@ def header(subtitle: str, *, brand: Brand = DEFAULT_BRAND) -> str:
     logo = html.escape(safe_url(brand.logo_url, DEFAULT_BRAND.logo_url), quote=True)
     business_name = html.escape(brand.business_name)
     subtitle = html.escape(subtitle)
-    return f"""<tr><td style="background:{accent};padding:24px 32px">
+    # Per-field colour override for the subtitle (email_copy "{key}__color"), else a
+    # soft muted-white that stays legible on any accent (SEC-045 allowlists the hex).
+    sub_color = safe_hex(subtitle_color, "#d4d4d8")
+    return f"""<tr><td style="background:{accent};padding:26px 32px">
   <table cellpadding="0" cellspacing="0"><tr>
-    <td width="44" height="44" valign="middle" style="background:{accent};border-radius:10px">
-      <img src="{logo}" width="44" height="44" alt="" style="display:block;border:0;border-radius:10px">
+    <td width="46" height="46" valign="middle" style="background:rgba(255,255,255,0.12);border-radius:11px">
+      <img src="{logo}" width="46" height="46" alt="" style="display:block;border:0;border-radius:11px">
     </td>
     <td style="vertical-align:middle;padding-left:14px">
       <p style="margin:0;color:#fff;font-size:18px;font-weight:600;letter-spacing:-0.01em">{business_name}</p>
-      <p style="margin:2px 0 0;color:#a1a1aa;font-size:12px">{subtitle}</p>
+      <p style="margin:3px 0 0;color:{sub_color};font-size:12px;letter-spacing:0.02em">{subtitle}</p>
     </td>
   </tr></table>
 </td></tr>"""
+
+
+def accent_rule(*, brand: Brand = DEFAULT_BRAND) -> str:
+    """A thin accent bar directly under the header — carries the tenant colour
+    into the body so the email reads as on-brand, not just a dark header strip."""
+    accent = _safe_accent(brand.accent)
+    return f'<tr><td style="height:4px;background:{accent};line-height:4px;font-size:0">&nbsp;</td></tr>'
 
 
 def footer(*, brand: Brand = DEFAULT_BRAND) -> str:
@@ -108,9 +131,9 @@ def footer(*, brand: Brand = DEFAULT_BRAND) -> str:
 def shell(inner: str) -> str:
     return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#27272a">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f4;padding:40px 20px"><tr><td align="center">
-    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden">
+<body style="margin:0;padding:0;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#27272a">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;padding:44px 20px"><tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border:1px solid #ececee;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(24,24,27,0.06)">
       {inner}
     </table>
   </td></tr></table>

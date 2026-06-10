@@ -88,3 +88,33 @@ def test_reschedule_client_custom_brand_uses_tenant_name_in_cal():
     assert "Acme Corp" in h
     assert "Acme+Corp" in h  # URL-encoded in the cal link
     assert "Roman Technologies" not in h
+
+
+# ---- H2 per-field colour overrides ----
+
+
+def test_cancel_client_per_field_heading_colour():
+    h = render_cancel_client(
+        name="Jo",
+        when_label="Thu 11 Jun · 10:00",
+        copy={"cancel_client_heading__color": "#aa00aa"},
+    )
+    assert "color:#aa00aa" in h
+
+
+def test_reschedule_client_per_field_colours_and_safe():
+    h = render_reschedule_client(
+        name="Jo",
+        new_when="Fri 12 Jun · 14:00 (CET)",
+        meeting_url="https://meet.example/x",
+        manage_url="https://site/manage/tok",
+        new_start=datetime(2026, 6, 12, 12, 0, tzinfo=UTC),
+        new_end=datetime(2026, 6, 12, 12, 45, tzinfo=UTC),
+        copy={
+            "reschedule_client_heading__color": "#123abc",
+            "join_cta__color": "#ffffff",
+            "manage_cta__color": 'evil;"><script>x</script>',
+        },
+    )
+    assert "color:#123abc" in h  # heading colour applied
+    assert "<script>" not in h  # unsafe manage_cta colour dropped (SEC-045)

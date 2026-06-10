@@ -657,8 +657,15 @@ async def get_email_template(project_slug: str, request: Request) -> JSONRespons
     tenant_id = await _tenant(project_slug, request)
     row = booking_admin_repo.get_settings(tenant_id) or {}
     overrides = row.get("email_copy") or {}
+    # `value` is the text override; `color_value` is the per-field colour override
+    # stored in the same dict under "{key}__color" (H2). Both round-trip the editor.
     fields = [
-        {**f, "default": booking_i18n.STRINGS["en"][f["key"]], "value": overrides.get(f["key"], "")}
+        {
+            **f,
+            "default": booking_i18n.STRINGS["en"][f["key"]],
+            "value": overrides.get(f["key"], ""),
+            "color_value": overrides.get(f["key"] + booking_i18n.COLOR_SUFFIX, ""),
+        }
         for f in booking_i18n.EDITABLE_EMAIL_FIELDS
     ]
     return JSONResponse(

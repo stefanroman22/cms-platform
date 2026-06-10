@@ -17,6 +17,12 @@ import { getEmailTemplate, patchSettings, uploadBookingLogo } from "./api";
 import type { EmailDraft, EmailTemplateData, EmailTemplateField } from "./api";
 import { EmailPreviewFrame } from "./EmailPreviewFrame";
 
+// Per-field colours live in the same email_copy dict under `${key}${COLOR_SUFFIX}`
+// — mirrors COLOR_SUFFIX in api.ts / booking_i18n.py.
+const COLOR_SUFFIX = "__color";
+// Default swatch shown in the colour picker when a field has no colour override.
+const DEFAULT_TEXT_COLOR = "#18181b";
+
 interface Props {
   projectSlug: string;
 }
@@ -48,15 +54,20 @@ function isMultiline(key: string): boolean {
 function FieldEditor({
   field,
   value,
+  color,
   onChange,
+  onColorChange,
   onReset,
 }: {
   field: EmailTemplateField;
   value: string;
+  color: string;
   onChange: (v: string) => void;
+  onColorChange: (v: string) => void;
   onReset: () => void;
 }) {
-  const hasOverride = value !== "";
+  const hasOverride = value !== "" || color !== "";
+  const supportsColor = field.color === true;
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -73,23 +84,37 @@ function FieldEditor({
           </button>
         )}
       </div>
-      {isMultiline(field.key) ? (
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.default}
-          rows={3}
-          className={`${dashboardInputCn} resize-y`}
-        />
-      ) : (
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.default}
-          className={dashboardInputCn}
-        />
-      )}
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          {isMultiline(field.key) ? (
+            <textarea
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={field.default}
+              rows={3}
+              className={`${dashboardInputCn} resize-y`}
+            />
+          ) : (
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={field.default}
+              className={dashboardInputCn}
+            />
+          )}
+        </div>
+        {supportsColor && (
+          <input
+            type="color"
+            value={color || DEFAULT_TEXT_COLOR}
+            onChange={(e) => onColorChange(e.target.value)}
+            title="Text color"
+            aria-label={`${field.label} text color`}
+            className="mt-0.5 h-9 w-9 shrink-0 cursor-pointer rounded border border-zinc-200 bg-transparent p-0.5 dark:border-zinc-700"
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -121,6 +146,7 @@ export function EmailTemplateEditor({ projectSlug }: Props) {
       const emailCopy: Record<string, string> = {};
       for (const f of data.fields) {
         if (f.value) emailCopy[f.key] = f.value;
+        if (f.color_value) emailCopy[f.key + COLOR_SUFFIX] = f.color_value;
       }
       setDraft({
         logo_url: data.brand.logo_url ?? "",
@@ -172,8 +198,22 @@ export function EmailTemplateEditor({ projectSlug }: Props) {
     setMsg(null);
   }
 
+  // Per-field colour override → stored in the same email_copy dict under
+  // `${key}${COLOR_SUFFIX}` (matches the backend convention).
+  function setColorKey(key: string, value: string) {
+    setCopyKey(key + COLOR_SUFFIX, value);
+  }
+
+  // Reset clears BOTH the text override and its colour override.
   function resetCopyKey(key: string) {
-    setCopyKey(key, "");
+    setDraft((d) => {
+      if (!d) return d;
+      const copy = { ...d.email_copy };
+      delete copy[key];
+      delete copy[key + COLOR_SUFFIX];
+      return { ...d, email_copy: copy };
+    });
+    setMsg(null);
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -226,6 +266,7 @@ export function EmailTemplateEditor({ projectSlug }: Props) {
           fields: data.fields.map((f) => ({
             ...f,
             value: draft.email_copy?.[f.key] ?? "",
+            color_value: draft.email_copy?.[f.key + COLOR_SUFFIX] ?? "",
           })),
         };
         cache.set(cacheKey, refreshed);
@@ -409,7 +450,9 @@ export function EmailTemplateEditor({ projectSlug }: Props) {
                       key={field.key}
                       field={field}
                       value={draft.email_copy?.[field.key] ?? ""}
+                      color={draft.email_copy?.[field.key + COLOR_SUFFIX] ?? ""}
                       onChange={(v) => setCopyKey(field.key, v)}
+                      onColorChange={(v) => setColorKey(field.key, v)}
                       onReset={() => resetCopyKey(field.key)}
                     />
                   ))}
@@ -429,7 +472,9 @@ export function EmailTemplateEditor({ projectSlug }: Props) {
                       key={field.key}
                       field={field}
                       value={draft.email_copy?.[field.key] ?? ""}
+                      color={draft.email_copy?.[field.key + COLOR_SUFFIX] ?? ""}
                       onChange={(v) => setCopyKey(field.key, v)}
+                      onColorChange={(v) => setColorKey(field.key, v)}
                       onReset={() => resetCopyKey(field.key)}
                     />
                   ))}
