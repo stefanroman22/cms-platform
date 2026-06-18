@@ -29,14 +29,17 @@ async def _require_user(request: Request):
 async def list_projects(request: Request):
     user = await _require_user(request)
     sb = get_supabase_admin()
-    result = (
+    query = (
         sb.table("projects")
         .select("id, name, description, slug, is_active, website_url, created_at, updated_at")
-        .eq("user_id", user.id)
         .eq("is_active", True)
-        .order("created_at", desc=True)
-        .execute()
     )
+    # Admins operationally own every project (require_project_access already
+    # grants them full access), so surface ALL projects in the admin dashboard —
+    # not just rows where user_id == the admin. Non-admins still see only theirs.
+    if not user.is_admin:
+        query = query.eq("user_id", user.id)
+    result = query.order("created_at", desc=True).execute()
     return result.data
 
 
@@ -51,13 +54,11 @@ async def get_account(request: Request):
         .single()
         .execute()
     )
-    count_result = (
-        sb.table("projects")
-        .select("id", count="exact")
-        .eq("user_id", user.id)
-        .eq("is_active", True)
-        .execute()
-    )
+    count_query = sb.table("projects").select("id", count="exact").eq("is_active", True)
+    # Match list_projects: admins count every project, non-admins only their own.
+    if not user.is_admin:
+        count_query = count_query.eq("user_id", user.id)
+    count_result = count_query.execute()
     return {
         **user_result.data,
         "projects_count": count_result.count or 0,
