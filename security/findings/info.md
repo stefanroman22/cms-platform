@@ -2,7 +2,7 @@
 
 _Best-practice notes and accepted-by-design observations._
 
-**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**12** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
 
 ---
 
@@ -453,5 +453,85 @@ Read the cited code directly. frontend/src/app/(widget)/w/[slug]/page.tsx:18-19 
 **Recommendation**
 
 Optionally constrain the targetOrigin if the set of embedding origins is known; otherwise acceptable since no sensitive data is transmitted. The embed.js inbound origin check is correct and should be kept.
+
+---
+
+<a id="sec-061"></a>
+
+## SEC-061 — Admin Bearer brute-force limiter is process-local (per serverless instance) and threat-model comment cites wrong 192-bit secret size
+
+| | |
+|---|---|
+| **Severity** | info |
+| **Status** | open |
+| **Category** | Rate limiting / documentation accuracy |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/core/bearer_limiter.py:6-10,23-61; backend/auth_service/services/admin_keys.py:68` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+The Bearer-auth brute-force limiter is a module-level in-memory Bucket (10 attempts/60s/IP), explicitly process-local; on Vercel each warm instance and cold start has its own counter, so the real ceiling is 10 x (instances + cold starts). This is the same serverless-reset class as the booking/forms write limiters but WITHOUT email amplification or any feasible-guessing consequence: the admin API key secret is secrets.token_hex(16) = 128 bits, infeasible to brute-force at any multiplier, and verification uses Argon2 with timing equalization. The docstring justifying the per-instance design cites 'brute-forcing a 192-bit secret', which is factually wrong (the secret is 128-bit; admin_keys.py's own inline comment says 128-bit). Reported purely as a defense-in-depth/accuracy note.
+
+**Attack scenario**
+
+No practical attack. An attacker spreading Bearer guesses across serverless instances exceeds 10/min/instance, but guessing a 128-bit secret remains astronomically infeasible. Residual cost is marginal Argon2 CPU, bounded by the per-instance limiter.
+
+**Evidence**
+
+```text
+_BEARER_BUCKET = Bucket(capacity=10, window_seconds=60)
+# docstring: 'acceptable given the threat model (brute-forcing a 192-bit secret)'  <- secret is actually secrets.token_hex(16) = 128 bits
+```
+
+**Adversarial verification**
+
+Verifier confirmed the Bearer bucket is process-local and the docstring miscites a 192-bit secret that is actually secrets.token_hex(16) = 128 bits; brute-force is infeasible regardless of the instance multiplier. Real but no practical impact; info.
+
+**Recommendation**
+
+Correct the docstring/threat-model comments from 192 to 128 bits (or raise SECRET_LEN_TARGET if 192 bits is truly desired). Optional consistency hardening: back the Bearer-attempt limiter with the same Postgres shared counter once the booking/forms write paths are moved to the shared limiter. Low priority given the 128-bit secret.
+
+---
+
+<a id="sec-067"></a>
+
+## SEC-067 — New seo_* tables inherit full anon/authenticated DML grants from Supabase default ACLs; safe only because RLS is enabled (no explicit REVOKE)
+
+| | |
+|---|---|
+| **Severity** | info |
+| **Status** | open |
+| **Category** | Supabase DB / least privilege (defense-in-depth) |
+| **Dimension** | supabase-db |
+| **Location** | `backend/migrations/2026_06_14_seo_geo.sql:159-167` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+Every public table created by the SEO/GEO migration (seo_runs, seo_audits, seo_plan_items, seo_changes, seo_competitors, seo_page_meta, seo_articles, seo_learnings, seo_jobs) holds the full DML grant set for both anon and authenticated PostgREST roles, inherited from the Supabase project-level default ACL (pg_default_acl). The migration only ENABLEs RLS with zero policies (verified live: relrowsecurity=true, policy_count=0, no SECURITY DEFINER SEO routines), which is the documented fail-closed control - so the broad grants are inert today. However, unlike slack_processed_events (explicitly REVOKEd in the 2026-06-08 hardening migration), the SEO migration issues NO revoke, so the fail-closed posture depends entirely on the single RLS toggle. Same accepted SEC-054 service-role posture as the booking_* tables; reported purely as a defense-in-depth observation, no live exploit.
+
+**Attack scenario**
+
+No live exploit. Hypothetical regression: if a future migration or a Supabase dashboard action runs ALTER TABLE seo_* DISABLE ROW LEVEL SECURITY (or drops RLS), the pre-existing un-revoked default-ACL grants would immediately make cross-tenant SEO memory readable/writable by anyone holding the public anon API key. The single RLS toggle is the only barrier.
+
+**Evidence**
+
+```text
+alter table public.seo_articles enable row level security;  -- enables RLS but issues NO `revoke all ... from anon, authenticated`
+-- contrast 2026_06_08 hardening: revoke all on table public.slack_processed_events from anon, authenticated;
+```
+
+**Adversarial verification**
+
+Verifier confirmed via live execute_sql that the seo_* tables have RLS enabled with zero policies and no explicit REVOKE, so they inherit the broad default-ACL anon/authenticated grants; safe only while RLS stays enabled. No live exploit. Info.
+
+**Recommendation**
+
+Optional defense-in-depth (not required while RLS stays enabled): add an explicit `revoke all on table public.seo_* from anon, authenticated;` to the SEO migration, and consider `ALTER DEFAULT PRIVILEGES ... REVOKE ALL ON TABLES FROM anon, authenticated` so future tables do not silently inherit the broad grant. Makes the fail-closed posture independent of the RLS toggle, matching the SEC-013/slack_processed_events pattern.
 
 ---

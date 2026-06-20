@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**13** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
 
 ---
 
@@ -502,5 +502,130 @@ Read backend/auth_service/routers/forms.py directly. The injection is real and t
 **Recommendation**
 
 HTML-escape both key and value before interpolation, mirroring the rest of the codebase: import html and use html.escape(key) / html.escape(value) (and html.escape(submitted_at), project_name, form_key for completeness). This is a one-line-per-field change consistent with the existing BE-006 pattern already applied in every other email builder.
+
+---
+
+<a id="sec-057"></a>
+
+## SEC-057 — Tenant accent color injected unsanitized into booking confirmation email style attribute (_cta_block missed the SEC-045 sink)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | XSS / HTML injection (email) |
+| **Dimension** | xss-html |
+| **Location** | `backend/auth_service/services/booking_email.py:51,70` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+The SEC-045 hardening routes ALL tenant-controlled colors through the hex allowlist (email_layout.safe_hex/_safe_accent) before they are emitted into a style attribute. Every render path does this EXCEPT booking_email._cta_block: it computes link_color = safe_hex(accent, '#18181b') (line 43) but then interpolates the RAW accent parameter into the add-to-calendar button (border:1px solid {accent}, line 51) and the join button (background:{accent}, line 70). render_visitor_html calls _cta_block(accent=_brand.accent) (line 137), and _brand.accent comes verbatim from booking_settings.accent_color/primary_color, which SettingsPatch stores as a free-form str|None with no validation (booking_admin_schemas.py:14; persisted as-is by update_settings). The add-to-calendar button is rendered for every visitor confirmation email, so the sink is reliably reachable. Because the value lands inside a double-quoted style attribute, a payload that closes the attribute and tag injects attacker markup into the recipient's confirmation email. test_email_escaping.py only covers header()/footer(), so this gap is untested.
+
+**Attack scenario**
+
+A project owner (or anyone who can PATCH /projects/{slug}/bookings settings) sets accent_color to a value like `#000;"><a href="https://evil">CLICK</a><span style="display:none`. A customer then books; booking.py calls send_visitor_confirmation -> render_visitor_html -> _cta_block, emitting the raw accent into the button style at line 51/70. The customer's confirmation email now contains attacker-injected markup (spoofed link / hidden phishing content / tracking pixel), bypassing the SEC-045 allowlist relied on everywhere else.
+
+**Evidence**
+
+```text
+link_color = email_layout.safe_hex(accent, "#18181b")  # computed but NOT used for borders/background
+... f"border:1px solid {accent};color:{add_color};..."   # line 51 - RAW accent
+... f'<a ... style="display:inline-block;...background:{accent};color:{join_color};...'  # line 70 - RAW accent
+```
+
+**Adversarial verification**
+
+Verifier re-read booking_email._cta_block and confirmed link_color is computed via safe_hex but the raw `accent` is interpolated into the button border (line 51) and background (line 70) of buttons rendered in every visitor confirmation email; booking settings store accent_color/primary_color unvalidated. Real; severity medium — tenant-reachable HTML injection into customer mail, bounded by email-client sandboxing.
+
+**Recommendation**
+
+Resolve accent through the existing allowlist once at the top of _cta_block (accent = email_layout.safe_hex(accent, '#18181b'), as booking_reminder_email.render_html already does) and use that sanitized value for the line 51/70 interpolations. Defense-in-depth: validate accent_color/primary_color as a hex literal on write in SettingsPatch, and add a _cta_block escaping test mirroring test_email_header_neutralises_malicious_brand.
+
+---
+
+<a id="sec-058"></a>
+
+## SEC-058 — Unauthenticated booking create/cancel/reschedule write paths use only the in-memory slowapi limiter (per-instance reset) -> email/booking-spam amplification
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Rate limiting / DoS |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/booking.py:462-463, 691-692, 753-754, 989-990; backend/auth_service/core/limiter.py:21` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+All unauthenticated booking WRITE endpoints are protected solely by slowapi's @limiter.limit (create_booking 5/hour, manage_cancel 10/hour, manage_reschedule 10/hour, legacy_create 5/hour). The Limiter is instantiated with no storage backend (limiter.py:21 Limiter(key_func=client_ip)), defaulting to in-process MemoryStorage. On Vercel @vercel/python each cold start and each concurrently-warm instance gets its own fresh counter, so the effective limit is N x limit (documented verbatim in pg_rate_limit.py:3-6). The READ endpoints were migrated to the shared Postgres limiter (booking.py:334 _public_read_limit) and submit_form was given a PG layer (forms.py:144-149), but the booking WRITE paths were NOT. Each create/cancel/reschedule sends 1-2 Resend emails, so N x limit translates directly into N x outbound email volume and N x booking-row inserts per tenant. client_ip uses the leftmost X-Forwarded-For value, which is attacker-controllable, further defeating the per-instance cap. The honeypot website field blocks only naive bots; the email idempotency guard is keyed per booking_id so it does not dampen create-spam (each request mints a fresh booking_id). create/legacy_create are wide-open to pure anon spam; cancel/reschedule additionally require a valid manage token.
+
+**Attack scenario**
+
+An attacker scripts POST /booking/{slug} for a known tenant slug (slugs are public, embedded in widget HTML), leaving the honeypot blank and rotating spoofed X-Forwarded-For. Bursts fan out across concurrent serverless instances/cold starts so the 5/hour counter never accumulates. The attacker drives far more than 5 bookings/hour, each inserting a row and sending owner-notification + customer-confirmation emails via the metered Resend API, flooding the owner inbox, spamming any attacker-supplied customer address, burning Resend quota/credits, and polluting the bookings table.
+
+**Evidence**
+
+```text
+limiter = Limiter(key_func=client_ip)  # no storage_uri -> MemoryStorage
+@router.post("/{slug}")
+@limiter.limit("5/hour", key_func=client_ip)
+... # pg_rate_limit.enforce present on READ (booking.py:334) and forms.py:144, absent on these writes
+```
+
+**Adversarial verification**
+
+Verifier confirmed the booking write endpoints carry only the in-memory slowapi decorator (no pg_rate_limit.enforce, which is present on the read paths and submit_form), client_ip trusts the leftmost X-Forwarded-For, and each create/cancel/reschedule sends 1-2 Resend emails. Real; medium — anonymous cost/DoS amplification, no data exposure.
+
+**Recommendation**
+
+Add pg_rate_limit.enforce on the booking write paths exactly as done for forms.py and the booking read endpoints, e.g. inside _create_core / manage_cancel / manage_reschedule call pg_rate_limit.enforce(f'booking_create:{client_ip(request)}', limit=5, window_seconds=3600, ...) plus a per-tenant bucket to cap total outbound email per tenant. Keep the slowapi decorator as a cheap first line; make the authoritative cap the cross-instance PG counter.
+
+---
+
+<a id="sec-059"></a>
+
+## SEC-059 — Marketing /forms/contact endpoint protected only by in-memory slowapi limiter -> cross-instance Resend email-spam amplification
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Rate limiting / DoS |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/forms.py:282-345; backend/auth_service/core/limiter.py:21` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+The first-party marketing contact form (submit_contact) is unauthenticated, has no Origin allow-listing (by design, reached via a same-origin proxy that strips Origin), and its ONLY abuse control is @limiter.limit('5/10minutes', key_func=client_ip) backed by in-memory MemoryStorage. Unlike the sibling multi-tenant submit_form (which adds pg_rate_limit.enforce at forms.py:144-149), submit_contact has NO Postgres-backed cap, so the 5/10min limit resets per serverless invocation/instance (effectively N x 5). Worse, client_ip takes the leftmost X-Forwarded-For value, so an attacker can rotate a spoofed leftmost IP per request and get a fresh slowapi bucket every time, defeating the cap even within one warm instance. Each accepted submission sends one Resend email to the hard-coded MARKETING_CONTACT_RECIPIENT (stefanromanpers@gmail.com). The honeypot blocks only naive bots.
+
+**Attack scenario**
+
+An anonymous caller POSTs valid contact bodies (name/email/message set, honeypot blank, rotating spoofed X-Forwarded-For) to /forms/contact in parallel. The slowapi cap never binds across instances or across spoofed IPs, so the attacker floods the operator inbox and burns Resend send quota/credits - a denial of service on both the operator mailbox and the paid email API.
+
+**Evidence**
+
+```text
+@router.post("/contact")
+@limiter.limit("5/10minutes", key_func=client_ip)
+MARKETING_CONTACT_RECIPIENT = "stefanromanpers@gmail.com"
+# contrast forms.py:144 pg_rate_limit.enforce(... limit=5, window_seconds=600 ...) present on submit_form, absent here
+```
+
+**Adversarial verification**
+
+Verifier confirmed submit_contact has only the in-memory slowapi cap (pg_rate_limit.enforce appears exactly once in forms.py, on submit_form), the limiter key is the spoofable leftmost X-Forwarded-For, and one Resend email is sent per accepted POST to a hard-coded recipient. Real; medium — operator-inbox flood + Resend quota burn.
+
+**Recommendation**
+
+Mirror submit_form: add pg_rate_limit.enforce(f'contact:{client_ip(request)}', limit=5, window_seconds=600, ...) plus a global per-recipient bucket (all contact mail goes to one address) so the cap holds across serverless instances. Optionally add a CAPTCHA/proof-of-work to the unauthenticated marketing form.
 
 ---

@@ -36,6 +36,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `config.py` — env validation, service-role-required-in-prod, secrets
 - [ ] `security.py` · `security_headers.py` — hashing, headers, CSP
 - [ ] `limiter.py` · `bearer_limiter.py` — rate limiting (note: in-memory resets per serverless invocation)
+- [ ] `pg_rate_limit.py` — shared Postgres limiter: confirm it covers **all** unauth write paths (booking create/cancel/reschedule, `/forms/contact`), not just reads (SEC-058/059); note it **fails OPEN** on DB error (SEC-068)
 - [ ] `main.py` — **CORS origins for both apps**, Private-Network middleware, app mounting
 
 ### Migrations (`backend/migrations/*.sql`)
@@ -44,6 +45,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `claim_next_solver_issue` / `claim_specific_solver_issue` RPC GRANTs (anon/authenticated)
 - [ ] `slack_processed_events` RLS state
 - [ ] Function `search_path` pinning
+- [ ] `2026_06_14_seo_geo.sql` — the `seo_*` tables: prefer an explicit `REVOKE ALL … FROM anon, authenticated` over relying only on the RLS toggle (SEC-067); check for any SECURITY DEFINER SEO routines + pinned `search_path`
 
 ## Frontend — Next.js (`frontend/src/`)
 - [ ] `app/layout.tsx` — `dangerouslySetInnerHTML` (JSON-LD?) sink

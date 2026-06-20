@@ -2,7 +2,7 @@
 
 _Hardening / defense-in-depth. Address opportunistically._
 
-**31** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**38** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
 
 ---
 
@@ -1442,5 +1442,296 @@ Verified the core injection by reading the cited code. In email_layout.py:64-74 
 **Recommendation**
 
 Validate accent_color/primary_color/widget_color against a strict hex/CSS-color regex in SettingsPatch (reject anything not matching ^#[0-9A-Fa-f]{3,8}$), run business_name through html.escape() at render time in header()/footer(), and pass logo_url/canonical_url through email_layout.safe_url() (already used for other links) before interpolating into src/href. The booking body copy already escapes name/when/note; the chrome (header/footer/brand) should follow the same rule.
+
+---
+
+<a id="sec-060"></a>
+
+## SEC-060 — Python str.format() injection: tenant-controlled booking email copy override used as the format string
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Injection (str.format / template) |
+| **Dimension** | injection |
+| **Location** | `backend/auth_service/services/booking_i18n.py:86-95` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+booking_i18n.tt() takes a tenant-supplied copy override and uses it directly as the FORMAT STRING in raw.format(**fmt). The override is HTML-escaped first (SEC-044), but html.escape() does not neutralize { / } braces, so format-field expressions survive and are evaluated. Because fmt values are plain str (e.g. name), an attacker can use attribute access (e.g. {name.__class__.__mro__}) to traverse and disclose Python type/class internals into the rendered email. Secret exfiltration is NOT reachable through a str-typed arg ({name.__class__.__init__.__globals__} raises AttributeError on a str), so impact is limited to type-internal info-disclosure plus a self-DoS: the except clause catches (KeyError, IndexError, ValueError) but NOT AttributeError, so {name.bogus} raises an uncaught AttributeError. All production send paths wrap sends in a broad try/except that logs and continues, so the booking endpoint still succeeds and only that one email silently fails; the tenant's own unwrapped email-preview endpoint would 500 on the tenant's own bad input. No cross-tenant reach: email_copy is set via PATCH .../bookings/settings guarded by require_project_access, and injected content lands only in the tenant's own outbound mail.
+
+**Attack scenario**
+
+An authenticated tenant owner sets a copy override (e.g. confirmed_heading) to {name.__class__.__mro__} via booking-branding settings. When a customer books, tt(copy, locale, 'confirmed_heading', name=name) evaluates the attribute chain and injects class/type internals into the customer's confirmation email. Setting {name.bogus} raises an uncaught AttributeError, silently dropping that one email (self-inflicted email DoS).
+
+**Evidence**
+
+```text
+if overrides and key in overrides and overrides[key]:
+    raw = str(overrides[key])
+    if html_escape: raw = html.escape(raw)
+    if fmt:
+        try: return raw.format(**fmt)
+        except (KeyError, IndexError, ValueError): return raw
+```
+
+**Adversarial verification**
+
+Verifier confirmed tt() uses the tenant override as the str.format format string after html.escape (which does not neutralize braces); attribute traversal discloses type internals and an uncaught AttributeError drops a single email. Secret exfiltration is not reachable via a str-typed arg. Real; low.
+
+**Recommendation**
+
+Do not use an untrusted template as a str.format format string. Either escape braces before substitution (raw.replace('{','{{').replace('}','}}')) or use a restricted formatter that only substitutes named placeholders without attribute/index access (string.Template.safe_substitute, or a custom string.Formatter whose get_field rejects '.'/'['). Also add AttributeError to the caught exceptions to avoid send-path/preview crashes.
+
+---
+
+<a id="sec-062"></a>
+
+## SEC-062 — Scraped business website_url/source_url rendered as anchor href in admin dashboard without scheme allowlist
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | XSS / unsafe URL scheme |
+| **Dimension** | xss-html |
+| **Location** | `frontend/src/components/admin/leads/sections/ContactSection.tsx:215-223; frontend/src/components/admin/leads/LeadDetailDrawer.tsx:214-216,480-487` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+lead.website_url originates from the scraper, read raw from the Google-Maps 'website' href (google_maps.py:597 _safe_attr(..., 'href')) and persisted via the scraper Supabase sink with no scheme validation (scraper Lead.website_url is a bare str|None; classify_web_presence only inspects hostname). The admin Lead drawer renders this attacker-influenced value as <a href={value}> with no scheme check (same for source_url). React does not strip javascript:/data: hrefs (dev-only warning), so a non-http scheme survives to the DOM in the admin origin. The admin write/edit path is NOT affected (LeadUpdate/LeadCreate use _http_url_validator which hard-rejects non-http(s)); the only live injection path is scraper-write -> raw DB -> unsanitized read render. Impact bounded: admin-only audience, requires Google to accept/surface a non-http(s) scheme as a business website, and requires an admin click.
+
+**Attack scenario**
+
+An attacker who controls a target business's Google Maps website field gets a non-http(s) scheme (e.g. javascript:) surfaced there; the scraper stores it raw on the lead. When an admin clicks the rendered Website/source link in /admin/leads, the script-scheme URL executes in the admin origin.
+
+**Evidence**
+
+```text
+<a href={value} target="_blank" rel="noopener noreferrer" ...>{value}</a>  // no scheme validation
+```
+
+**Adversarial verification**
+
+Verifier confirmed lead.website_url/source_url originate from the scraper (raw Google-Maps href, no scheme validation) and are rendered as <a href={value}> in the admin drawer; React does not strip javascript:/data:. The admin write path is validated by _http_url_validator; only scraper-write -> raw-DB -> render is affected. Real; low — admin-only, requires a click.
+
+**Recommendation**
+
+Before rendering, validate the URL scheme is http or https (drop/plain-text any value whose parsed protocol is not http:/https:) for website_url, source_url, facebook_url, instagram_url and menu_url in both ContactSection and LeadDetailDrawer. Optionally backfill the scraper Lead model with _http_url_validator to match the rest of the codebase.
+
+---
+
+<a id="sec-063"></a>
+
+## SEC-063 — Solver Agent installs @anthropic-ai/claude-code@latest unpinned on a runner holding the live OAuth credential and untrusted input
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Supply chain / dependency integrity |
+| **Dimension** | deps-supplychain |
+| **Location** | `.github/workflows/solver-agent.yml:91-96` |
+| **Reviewer confidence** | medium |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+The Solver job installs the Claude CLI with npm install -g @anthropic-ai/claude-code@latest (mutable tag, no version pin, no lockfile, no integrity hash, refetched every run) - the only globally installed npm package on the runner. The same job then writes the long-lived CLAUDE_CODE_OAUTH_TOKEN to ~/.claude/.credentials.json (lines 99-110), clones an attacker-influenceable client repo, and processes UNTRUSTED client issue text. The credential wipe runs only in the NEXT step, so an install-time/postinstall script executes while the OAuth file is on disk and outside Claude's tool sandbox. harden-runner egress-block allowlists registry.npmjs.org plus api.github.com/Supabase/Slack/api.anthropic.com, so a malicious package could read the credential and exfiltrate over an allowed host. The rest of the supply chain here is disciplined (SHA-pinned actions, --require-hashes pip), making this floating npm tag the inconsistent weak link. Exploitation requires an upstream compromise of Anthropic's own first-party package; not triggerable by any tenant/anon actor; blast radius is one Claude Max OAuth token (the Supabase service-role key is not in this step's env).
+
+**Attack scenario**
+
+Anthropic's npm package or a transitive dependency is compromised (account takeover / malicious patch under @latest). The next scheduled or dispatch-triggered Solver run pulls the poisoned @latest, whose postinstall (or first invocation) reads ~/.claude/.credentials.json and exfiltrates the Max OAuth token over an allowlisted endpoint.
+
+**Evidence**
+
+```text
+npm install -g @anthropic-ai/claude-code@latest
+claude --version
+# then: cat > "$HOME/.claude/.credentials.json" <<'EOF' {"claudeAiOauth": {"accessToken": "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}", ...}}
+```
+
+**Adversarial verification**
+
+Verifier confirmed solver-agent.yml installs @anthropic-ai/claude-code@latest (mutable, unpinned) on a runner that then writes the Claude OAuth credential and processes untrusted issue text; the harden-runner egress allowlist includes hosts a malicious package could reach. Requires an upstream first-party compromise; not actor-reachable. Real; low.
+
+**Recommendation**
+
+Pin the CLI to an exact published version (@anthropic-ai/claude-code@X.Y.Z) and bump deliberately, ideally with an integrity record (npm audit signatures or a lockfile-based global install), matching the --require-hashes discipline already used for pip in this job. Move credential-writing to the latest possible point so no unpinned third-party package runs with the OAuth file present.
+
+---
+
+<a id="sec-064"></a>
+
+## SEC-064 — solver-agent.yml pins actions/checkout and actions/setup-python to mutable major tags instead of commit SHAs
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | CI workflows / action pinning |
+| **Dimension** | ci-workflows |
+| **Location** | `.github/workflows/solver-agent.yml:64,66` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+In the credential-bearing Solver job, actions/checkout@v4 (line 64) and actions/setup-python@v5 (line 66) are referenced by mutable major-version tag rather than full commit SHA. The other two workflows SHA-pin every action (promote.yml 25/46/59, codeql.yml 33/36/45/48), and even this same job SHA-pins step-security/harden-runner (line 46) and uses pip --require-hashes, so the two tag-pinned first-party actions are an inconsistency that weakens supply-chain integrity specifically in the job handling the Claude OAuth credential and untrusted client input. A mutable tag force-moved by a compromised upstream would run before the credential-wipe step. Mitigated by harden-runner (SHA-pinned, runs first, egress-block) which constrains exfiltration to allowlisted hosts, and the cross-tenant SOLVER_GITHUB_TOKEN is not in these steps' env. Requires upstream/GitHub-side tag compromise; not application-actor reachable.
+
+**Attack scenario**
+
+Upstream tag v4/v5 is repointed (compromised maintainer/registry tampering) to a malicious commit. The next solver-tick resolves the tag at run time and executes attacker-controlled action code on the same runner that subsequently writes the Claude OAuth credential.
+
+**Evidence**
+
+```text
+- uses: actions/checkout@v4
+- uses: actions/setup-python@v5
+  with:
+    python-version: '3.13'
+```
+
+**Adversarial verification**
+
+Verifier confirmed actions/checkout@v4 and actions/setup-python@v5 are tag-pinned in the credential-bearing Solver job while the other workflows SHA-pin everything. Requires upstream tag compromise. Real; low.
+
+**Recommendation**
+
+Pin both actions to full commit SHAs with a version comment, matching promote.yml/codeql.yml (e.g. actions/checkout@<sha> # v4.2.2, actions/setup-python@<sha> # v5.6.0).
+
+---
+
+<a id="sec-065"></a>
+
+## SEC-065 — promote.yml fetches the gitleaks secret-scanner binary without checksum/signature verification
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | CI workflows / supply chain |
+| **Dimension** | ci-workflows |
+| **Location** | `.github/workflows/promote.yml:42` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+The production-promotion gate downloads the gitleaks binary at run time via curl ... | tar -xz gitleaks from GitHub releases with NO checksum or signature verification before executing it as the secret-scanning gate (a repo-wide grep finds no sha256/shasum/gpg/cosign primitive). The version is URL-pinned (v8.21.2), which gives reproducibility but not byte-integrity. If the fetched binary were tampered with (compromised release asset, CDN/MITM despite TLS, or a moved release), a no-op gitleaks that exits 0 would silently pass the gate while real secrets get fast-forwarded to main and deployed. Impact is bounded because the gate itself is best-effort (scans the working tree only with --no-git, not history), and exploitation requires upstream release-asset compromise or TLS-MITM against github.com - not reachable by any application or repo-operator actor alone.
+
+**Attack scenario**
+
+An attacker who can tamper with the downloaded release asset (or serve a benign-exit replacement) gets the promote workflow to run a gitleaks that always exits 0. The secret-scan gate passes regardless of content, and a commit containing a hard-coded secret on dev is fast-forwarded to production main and deployed.
+
+**Evidence**
+
+```text
+curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+./gitleaks detect --source . --no-git --redact --verbose --config .gitleaks.toml
+```
+
+**Adversarial verification**
+
+Verifier confirmed promote.yml curls the gitleaks binary and pipes to tar with no checksum/signature verification before running it as the secret-scan gate. Requires release-asset or TLS compromise. Real; low.
+
+**Recommendation**
+
+Verify the downloaded archive against the published SHA256 checksum (gitleaks ships a checksums file per release) before extracting/executing, or use the SHA-pinned gitleaks GitHub Action consistently. Replace pipe-to-tar of an unverified security-gate binary with a verify-then-run sequence.
+
+---
+
+<a id="sec-066"></a>
+
+## SEC-066 — Admin API key scopes are stored but never enforced - every key is full-admin
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Admin privilege / least privilege |
+| **Dimension** | admin-priv |
+| **Location** | `backend/auth_service/services/admin_keys.py:106; backend/auth_service/routers/deps.py:42-81; backend/migrations/2026_05_06_admin_api_keys.sql:12` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+admin_api_keys rows carry a scopes jsonb column (DB default ['agent']) and verify_admin_api_key() even SELECTs scopes, but no code path ever reads or enforces it (verify returns only id/email/is_admin/is_active; the auth dependency admin_user_via_bearer_or_sid only checks is_admin/is_active). Consequently a key minted as a narrow automation/agent credential grants the SAME full admin authority as any other key, including destructive endpoints (DELETE /admin/clients/{email}, DELETE /admin/projects/{slug}, POST /admin/projects/{slug}/transfer, PATCH /admin/issues/{id}/status cross-project). The least-privilege design implied by the scopes column is inert. Latent defense-in-depth gap that amplifies the blast radius of a key leak (chains with SEC-015); requires an already-trusted admin key, not anonymous-reachable.
+
+**Attack scenario**
+
+A Connector/Solver agent key provisioned for limited automation and stored in CI/Slack-reachable infra leaks (it is long-lived; see SEC-015). It can immediately drive destructive admin mutations far beyond its intended 'agent' scope - delete clients, hard-delete projects, reassign ownership - because the scope label is decorative.
+
+**Evidence**
+
+```text
+.select("id, user_id, key_hash, expires_at, scopes, users(email, is_admin, is_active)")  # scopes fetched...
+return {"id": row["user_id"], "email": u["email"], "is_admin": u["is_admin"], "is_active": u["is_active"]}  # ...never returned/checked
+```
+
+**Adversarial verification**
+
+Verifier confirmed verify_admin_api_key SELECTs scopes but never returns/enforces it; the auth dependency checks only is_admin/is_active, so every key is full-admin including destructive routes. Amplifies a leaked key (chains SEC-015). Real; low.
+
+**Recommendation**
+
+Either drop the scopes column to avoid a false sense of granularity, or enforce it: have verify_admin_api_key return scopes and add a scope-checking dependency (e.g. require_scope('admin:projects:delete')) on destructive admin routes so an agent-scoped key cannot call client/project deletion or transfer.
+
+---
+
+<a id="sec-068"></a>
+
+## SEC-068 — Per-account login lockout fails open on any Postgres error, leaving only per-instance in-memory throttling
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Rate limiting / authentication (fail-open) |
+| **Dimension** | authn-session |
+| **Location** | `backend/auth_service/core/pg_rate_limit.py:40-55; backend/auth_service/routers/auth.py:79-96` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed |
+| **First seen** | 2026-06-20 |
+
+**Description**
+
+The account-lockout gate that stops password brute-force (pg_rate_limit.over_limit(fail_bucket, ...)) is fail-open by design: on any DB/RPC exception it logs and returns False ("not over"), so the 10-failures/15-min per-account lockout silently disappears during a Supabase outage or RPC error. The only remaining throttle on /auth/login is the slowapi @limiter.limit("30/minute"), which is in-memory and resets per Vercel serverless invocation (the module docstring itself notes limits are effectively N x limit across warm instances). During a DB disruption an attacker therefore regains a much higher effective password-guessing rate against a known account. Argon2 cost (~250 ms) and the strong password requirement keep the practical risk modest, and fail-open is a deliberate availability tradeoff, so this is a defense-in-depth gap rather than a live bypass.
+
+**Attack scenario**
+
+Supabase RPC layer degrades or the rate_limit_over RPC errors transiently. During that window the per-account lockout returns False for every check, and the per-instance slowapi cap (reset on each cold start, no cross-instance sharing) is the only brake. An attacker spreading guesses across many serverless invocations brute-forces a targeted account's password far faster than the intended 10/15-min ceiling.
+
+**Evidence**
+
+```text
+def over_limit(bucket, limit, window_seconds) -> bool:
+    try:
+        ... rpc("rate_limit_over", ...).execute()
+        return bool(res.data)
+    except Exception:
+        logger.exception("rate_limit_over failed; failing open (bucket=%s)", bucket)
+        return False   # <- lockout disabled on DB error
+```
+
+**Adversarial verification**
+
+Verifier confirmed pg_rate_limit.over_limit returns False on any DB exception (fail-open), so the per-account login lockout silently disappears during a Supabase/RPC outage, leaving only the per-instance slowapi 30/min cap; argon2 cost and password-strength requirements bound the practical risk. Real; low (defense-in-depth).
+
+**Recommendation**
+
+Keep fail-open for availability but add a durable, instance-independent secondary brake on the failure path (e.g. enforce a low fixed slowapi cap PLUS exponential argon2-cost backoff, or fail-closed specifically for the lockout check after N consecutive RPC errors). At minimum, alert on sustained rate_limit_over exceptions so a DB-down brute-force window is detected.
 
 ---
