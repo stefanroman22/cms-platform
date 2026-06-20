@@ -1,8 +1,10 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Phone, Mail } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Logo } from "@/components/ui/Logo";
+import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { fadeUp, stagger } from "@/lib/animations";
 import { dividerCn, sectionLabelCn } from "@/lib/styles";
 
@@ -16,6 +18,7 @@ const CONTACT_ITEMS = [
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export default function Footer() {
+  const t = useTranslations("footer");
   return (
     <footer className="border-t border-border bg-[#0e0e10]">
       <motion.div
@@ -30,14 +33,12 @@ export default function Footer() {
           {/* Brand */}
           <motion.div variants={fadeUp} className="flex flex-col gap-3">
             <Logo />
-            <p className="max-w-[260px] text-sm leading-relaxed text-zinc-500">
-              Premium software solutions for modern businesses.
-            </p>
+            <p className="max-w-[260px] text-sm leading-relaxed text-zinc-500">{t("tagline")}</p>
           </motion.div>
 
           {/* Contact */}
           <motion.div variants={fadeUp} className="flex flex-col gap-4">
-            <p className={sectionLabelCn}>Contact</p>
+            <p className={sectionLabelCn}>{t("contact")}</p>
 
             {CONTACT_ITEMS.map(({ href, icon: Icon, label }) => (
               <a
@@ -55,6 +56,8 @@ export default function Footer() {
                 </span>
               </a>
             ))}
+
+            <LanguageSwitcher variant="footer" />
           </motion.div>
         </div>
 
@@ -63,7 +66,7 @@ export default function Footer() {
 
         {/* ── Copyright ─────────────────────────────────────────────────── */}
         <motion.p variants={fadeUp} className="text-center text-xs text-zinc-600">
-          © {new Date().getFullYear()} Roman Technologies SRL. All rights reserved.
+          {t("rights", { year: new Date().getFullYear() })}
         </motion.p>
       </motion.div>
     </footer>

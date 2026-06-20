@@ -1,0 +1,380 @@
+{
+  "common": {
+    "brand": "Roman Technologies",
+    "loadingExperience": "Experiența de încărcare"
+  },
+  "languageSwitcher": {
+    "label": "Limba",
+    "ariaLabel": "Schimbă limba"
+  },
+  "nav": {
+    "about": "Despre",
+    "clients": "Clienți",
+    "team": "Echipa",
+    "contact": "Contact",
+    "primaryNav": "Navigare principală",
+    "mobileNav": "Navigare pe dispozitive mobile"
+  },
+  "header": {
+    "logIn": "Autentificare",
+    "openDashboard": "Deschide tabloul de bord",
+    "openMenu": "Deschide meniul",
+    "closeMenu": "Închide meniul",
+    "openDashboardButton": "Deschide tabloul de bord",
+    "getInTouch": "Contactează-ne"
+  },
+  "footer": {
+    "tagline": "Soluții software premium pentru întreprinderile moderne.",
+    "contact": "Contact",
+    "rights": "© {year} Roman Technologies SRL. Toate drepturile rezervate."
+  },
+  "login": {
+    "heading": "Acces la CMS",
+    "subheading": "Vă rugăm să vă autentificați în contul dvs. de administrator.",
+    "emailLabel": "Adresă de e-mail sau nume de utilizator",
+    "emailPlaceholder": "admin@example.com",
+    "passwordLabel": "Parolă",
+    "showPassword": "Afișează parola",
+    "hidePassword": "Ascunde parola",
+    "rememberMe": "Reține-mă",
+    "forgotPassword": "Ți-ai uitat parola?",
+    "signIn": "Conectează-te la panoul de control",
+    "successHeading": "Autentificare reușită",
+    "successBody": "Ești gata. Accesează panoul de control pentru a-ți gestiona proiectele.",
+    "goToDashboard": "Accesează Tabloul de bord"
+  },
+  "hero": {
+    "eyebrow": "Roman Technologies",
+    "title": "Noi dăm viață ideii sau nevoii dumneavoastră",
+    "subtitle": "Site-uri web personalizate, aplicații, agenți AI și fluxuri de lucru pentru companii ambițioase, la un preț care se încadrează în bugetul dumneavoastră.",
+    "getPreview": "Obțineți o previzualizare gratuită",
+    "seePricing": "Vezi prețurile",
+    "noCall": "Nu este necesar să sunați pentru a afla prețurile.",
+    "trust": {
+      "humanReviewed": "Cod verificat de oameni",
+      "euBased": "cu sediul în UE",
+      "gdpr": "Conform cu RGPD",
+      "hosting": "Găzduire gestionată inclusă"
+    }
+  },
+  "laptop": {
+    "srDescription": "Animație decorativă care prezintă deschiderea unui laptop pentru a dezvălui sistemul de gestionare a conținutului Roman Technologies, utilizat de Café Nordlys, un client de exemplu.",
+    "mobileIntro": "Un sistem de conținut pe care clienții tăi nu îl văd niciodată — și pe care abia dacă trebuie să-l folosești.",
+    "seeItOpen": "Vezi cum se deschide",
+    "closeDemo": "Închide demonstrația",
+    "demoComingSoon": "Videoclipul demonstrativ va fi disponibil în curând.",
+    "captions": {
+      "manage": "Gestionează-ți proiectele dintr-un singur loc",
+      "adjust": "Modificați conținutul și adaptați-vă proiectul chiar dumneavoastră, 24 de ore din 24, 7 zile din 7, folosind software-ul nostru de tip agentic",
+      "hosted": "Găzduit, securizat, monitorizat — de noi.",
+      "reviewed": "Fiecare versiune majoră este verificată manual pentru a se asigura corectitudinea acesteia"
+    }
+  },
+  "contactSection": {
+    "eyebrow": "Hai să vorbim",
+    "heading": "Programează o convorbire sau trimite un mesaj",
+    "subheading": "Rezervă-ți un interval de 45 de minute cu mine, Stefan — sau lasă-ți datele de contact mai jos și îți voi răspunde în termen de o zi lucrătoare.",
+    "bookingHeading": "Programează o discuție telefonică cu Stefan",
+    "bookingSubheading": "Convorbire de 45 de minute"
+  },
+  "contactInfo": {
+    "heading": "Contactați-ne direct",
+    "subheading": "Preferi să ne trimiți un e-mail sau să ne dai un telefon scurt? Aici ne poți găsi.",
+    "email": "E-mail",
+    "phone": "Telefon",
+    "location": "Locație",
+    "hours": "Program"
+  },
+  "contactForm": {
+    "name": "Nume",
+    "email": "E-mail",
+    "company": "Companie",
+    "message": "Mesaj",
+    "optional": "(opțional)",
+    "namePlaceholder": "Jane Doe",
+    "emailPlaceholder": "jane@company.com",
+    "companyPlaceholder": "Acme Inc.",
+    "messagePlaceholder": "Câteva rânduri despre proiectul dumneavoastră, calendarul de execuție și bugetul.",
+    "errName": "Te rugăm să-ți introduci numele.",
+    "errEmailEmpty": "Te rugăm să introduci adresa ta de e-mail.",
+    "errEmailInvalid": "E-mailul acela nu pare în regulă.",
+    "errMessage": "Spune-ne puțin mai multe (cel puțin 10 caractere).",
+    "send": "Trimite mesaj",
+    "success": "Mesajul a fost trimis — vorbim curând!",
+    "error": "A apărut o problemă. Trimite-mi un e-mail direct la <link>{recipient}</link>.",
+    "sendAnother": "Trimite un alt mesaj",
+    "tryAgain": "Încearcă din nou",
+    "orEmail": "Sau trimiteți-ne un e-mail direct la <link>{recipient}</link>.",
+    "sending": "Se trimite mesajul..."
+  },
+  "contactChannel": {
+    "email": "E-mail",
+    "bookCall": "Programează o convorbire"
+  },
+  "whatWeDo": {
+    "eyebrow": "Ce construim",
+    "heading": "Cu ce ne ocupăm?",
+    "lead": "De la o simplă pagină de destinație până la platforme complete bazate pe inteligență artificială — iată cum ajutăm companiile ambițioase să-și lanseze produsele.",
+    "aiAgents": {
+      "title": "Dezvoltăm agenți de inteligență artificială",
+      "description": "Agenți autonomi care gestionează activități reale de la început până la sfârșit — nu doar chatboți."
+    },
+    "websites": {
+      "title": "Realizăm site-uri web",
+      "description": "Site-uri rapide, atractive și optimizate pentru SEO, care transformă vizitatorii în clienți."
+    },
+    "apps": {
+      "title": "Dezvoltăm aplicații software",
+      "description": "Aplicații web, mobile și pentru desktop concepute să se adapteze la nevoile dumneavoastră."
+    },
+    "automation": {
+      "title": "Creăm fluxuri de lucru automatizate cu ajutorul inteligenței artificiale",
+      "description": "Fluxuri de lucru bazate pe inteligență artificială care se ocupă de sarcinile repetitive non-stop."
+    }
+  },
+  "values": {
+    "eyebrow": "Ce susținem",
+    "heading": "Valorile noastre",
+    "clientFirst": {
+      "title": "Clientul este pe primul loc",
+      "description": "Pornim de la obiectivele dumneavoastră, nu de la tehnologiile noastre. Fiecare decizie este evaluată în funcție de ceea ce contribuie la dezvoltarea afacerii dumneavoastră."
+    },
+    "teamwork": {
+      "title": "Munca în echipă",
+      "description": "Echipele de inginerie, securitate și strategie lucrează ca o singură echipă, astfel încât nimic să nu fie omis."
+    },
+    "ownership": {
+      "title": "Proprietate",
+      "description": "Tot ceea ce construim vă aparține — codul, datele și planul de dezvoltare. Fără legături de dependență, fără „cutii negre”."
+    },
+    "transparency": {
+      "title": "Transparență",
+      "description": "Oferte clare, termene precise și o persoană care îți răspunde. Știi întotdeauna care este situația."
+    }
+  },
+  "work": {
+    "searchPlaceholder": "Căutare proiecte…",
+    "searchAria": "Căutare proiecte după nume",
+    "empty": "Nu există proiecte care să corespundă cu „{query}”.",
+    "previewAlt": "{name} previzualizare",
+    "openAria": "Deschideți {name} într-o filă nouă",
+    "prevProject": "Proiectul anterior",
+    "nextProject": "Următorul proiect"
+  },
+  "projects": {
+    "akris": {
+      "tagline": "Un site de prezentare dotat cu un instrument de extragere personalizat, care preia statistici oficiale și le afișează într-un tablou de bord elegant și modern.",
+      "keyInfo": [
+        {
+          "label": "Tip",
+          "value": "Site-ul clubului sportiv"
+        },
+        {
+          "label": "Stivă",
+          "value": "Next.js · Instrument de extragere a datelor de pe web"
+        },
+        {
+          "label": "Focus",
+          "value": "Tablou de bord cu statistici în timp real"
+        }
+      ]
+    },
+    "pluxbox": {
+      "tagline": "Un site de prezentare al produselor cu un design clar și concis pentru o companie de software",
+      "keyInfo": [
+        {
+          "label": "Tip",
+          "value": "SaaS / site-ul produsului"
+        },
+        {
+          "label": "Stivă",
+          "value": "Next.js · Tailwind · Motion"
+        },
+        {
+          "label": "Focus",
+          "value": "Claritate, conversie"
+        }
+      ]
+    },
+    "roman-mariana": {
+      "tagline": "Un site de afaceri bine realizat, cu integrări personalizate de e-mail care automatizează comunicarea dintre clienți și companie.",
+      "keyInfo": [
+        {
+          "label": "Tip",
+          "value": "Site web de afaceri"
+        },
+        {
+          "label": "Stivă",
+          "value": "Next.js · Automatizarea e-mailurilor"
+        },
+        {
+          "label": "Focus",
+          "value": "Automatizarea e-mailurilor, generarea de clienți potențiali"
+        }
+      ]
+    }
+  },
+  "clientsPage": {
+    "metaTitle": "Clienți — Roman Technologies",
+    "metaDescription": "O selecție de site-uri web, aplicații și fluxuri de lucru bazate pe inteligență artificială pe care le-am creat și pe care le menținem în funcțiune pentru clienții noștri din întreaga Uniune Europeană.",
+    "eyebrow": "Activitatea noastră",
+    "title": "Conceput pentru companii ambițioase.",
+    "subheading": "O selecție de site-uri web, aplicații și fluxuri de lucru bazate pe inteligență artificială pe care le-am proiectat, dezvoltat și pe care le menținem în prezent pentru clienți din întreaga Uniune Europeană."
+  },
+  "pricing": {
+    "heading": "Prețuri simple și transparente",
+    "toggleProject": "Bazat pe proiecte",
+    "toggleSubscription": "Abonament",
+    "monthly": "Lunar",
+    "yearly": "Anual",
+    "mostPopular": "Cele mai populare",
+    "save": "Economisiți {discount} %",
+    "disclaimerProject": "Prețurile variază în funcție de complexitate — veți primi întotdeauna o ofertă clară înainte de începerea lucrărilor.",
+    "shared": {
+      "managedHosting": "Găzduire gestionată și securitate",
+      "managedHostingTip": "Găzduit, securizat și monitorizat de noi — fără factură separată pentru găzduire.",
+      "seo": "Optimizare SEO și GEO",
+      "seoTip": "Optimizat pentru motoarele de căutare și motoarele de răspuns bazate pe inteligență artificială, pentru ca utilizatorii să vă găsească.",
+      "humanReview": "Evaluare umană individuală",
+      "humanReviewTip": "Fiecare versiune majoră este verificată de o persoană, nu este lansată pur și simplu de o mașină.",
+      "cms": "Conector CMS și instrument de rezolvare a problemelor legate de agenți",
+      "cmsTip": "Puteți modifica conținutul din aplicația dvs. oricând, iar un agent bazat pe inteligență artificială detectează automat și remediază problemele."
+    },
+    "project": {
+      "presentation": {
+        "name": "Site-ul de prezentare",
+        "info": "Site-uri de marketing și prezentare care se încarcă rapid.",
+        "price": "de la 250 €",
+        "priceNote": "de la 400 € cu integrare complexă în backend",
+        "feature": "Design personalizat și adaptabil",
+        "cta": "Obțineți o previzualizare gratuită"
+      },
+      "application": {
+        "name": "Aplicație software",
+        "info": "Aplicații pentru mobil și/sau desktop, concepute pentru a se adapta la nevoile în continuă creștere.",
+        "price": "de la 500 €",
+        "feature": "Reuniuni privind dezvoltarea priorităților",
+        "featureTip": "Se acordă o prioritate mai mare întâlnirilor față în față cu echipa de dezvoltare.",
+        "cta": "Pornește aplicația"
+      },
+      "automation": {
+        "name": "Software de automatizare bazat pe inteligență artificială",
+        "info": "Fluxuri de lucru personalizate bazate pe inteligență artificială, care se ocupă de sarcinile repetitive.",
+        "price": "de la 200 €",
+        "feature": "Întreținere non-stop",
+        "featureTip": "Ne asigurăm că automatizările dumneavoastră funcționează non-stop.",
+        "cta": "Automatizează ceva"
+      }
+    },
+    "subscription": {
+      "care": {
+        "name": "Îngrijire",
+        "info": "Mențineți un site existent în stare bună.",
+        "priceMonthly": "49 € pe lună",
+        "priceYearly": "490 €/an",
+        "features": [
+          "Găzduire gestionată și monitorizare",
+          "Actualizări lunare ale conținutului",
+          "Asistență prin e-mail"
+        ],
+        "cta": "Alege îngrijirea"
+      },
+      "growth": {
+        "name": "Creștere",
+        "info": "Îmbunătățiri continue și asistență.",
+        "priceMonthly": "99 € pe lună",
+        "priceYearly": "990 € pe an",
+        "features": [
+          "Totul despre îngrijire",
+          "Sistem de rezolvare a problemelor bazat pe agenți",
+          "Asistență prioritară",
+          "Ședința trimestrială de strategie"
+        ],
+        "cta": "Alege creșterea"
+      },
+      "scale": {
+        "name": "Scala",
+        "info": "Un partener dedicat echipelor dinamice.",
+        "priceMonthly": "199 € pe lună",
+        "priceYearly": "1990 € pe an",
+        "features": [
+          "Totul despre creștere",
+          "Ore de lucru dedicate dezvoltării",
+          "Agent de asistență disponibil 24 de ore din 24, 7 zile din 7",
+          "Analize lunare ale planului de acțiune"
+        ],
+        "cta": "Alegeți scara"
+      }
+    }
+  },
+  "teamPage": {
+    "metaTitle": "Echipa — Roman Technologies",
+    "eyebrow": "Echipa noastră",
+    "title": "O echipă care livrează.",
+    "subheading": "Oamenii din spatele fiecărui proiect — inginerie, securitate și strategie sub același acoperiș, precum și principiile care ne ghidează modul de lucru."
+  },
+  "aboutPage": {
+    "metaTitle": "Despre — Roman Technologies"
+  },
+  "about": {
+    "hero": {
+      "eyebrow": "Despre noi",
+      "title": "Un software care ține cont de timpul, bugetul și datele dumneavoastră.",
+      "lead": "Roman Technologies este un studio de software cu sediul în UE. Proiectăm și dezvoltăm site-uri web personalizate, aplicații și fluxuri de lucru bazate pe inteligență artificială pentru companii ambițioase — apoi le găzduim, le securizăm și le întreținem, astfel încât dumneavoastră să vă puteți concentra pe afacerea dumneavoastră, nu pe infrastructura tehnologică."
+    },
+    "story": {
+      "heading": "Cine suntem",
+      "paragraphs": [
+        "Am înființat Roman Technologies pornind de la o convingere simplă: întreprinderile mici și cele în creștere merită software de aceeași calitate ca și marile companii — fără prețurile practicate de acestea din urmă și fără birocrația agențiilor.",
+        "Fiecare proiect este conceput pentru a vă aparține, este verificat de o persoană înainte de lansare și beneficiază de găzduire și monitorizare gestionate. Fără angajamente pe termen lung, fără surprize — doar un software care funcționează și o echipă care vă răspunde cu adevărat."
+      ]
+    },
+    "team": {
+      "heading": "Faceți cunoștință cu echipa",
+      "subheading": "O echipă mică, formată din profesioniști cu experiență, care livrează rezultate — inginerie, securitate și strategie, toate sub același acoperiș.",
+      "emailAria": "E-mail: {name}",
+      "linkedinAria": "{name} pe LinkedIn",
+      "members": {
+        "stefan-roman": {
+          "role": "Director general și fondator",
+          "description": "Conduce strategia și relațiile cu clienții, supraveghează procesul de livrare de la început până la sfârșit și se asigură că fiecare versiune este lansată corect, la timp și în concordanță cu nevoile reale ale companiei."
+        },
+        "alexandru-aioanei": {
+          "role": "Dezvoltator Full Stack (IA)",
+          "description": "Dezvoltă funcționalități de la cap la coadă, atât la nivel de frontend, cât și de backend, și integrează fluxuri de lucru bazate pe inteligență artificială (AI) și agenți în produsele clienților — transformând ideile în software funcțional și ușor de întreținut."
+        },
+        "laurian-duma": {
+          "role": "Inginer specializat în conformitatea cu RGPD și securitatea",
+          "description": "Este responsabil de protecția și securitatea datelor: efectuează analize și modelează amenințările, asigură conformitatea fiecărui produs cu RGPD și se asigură că datele clienților rămân protejate și stocate pe teritoriul UE."
+        }
+      }
+    }
+  },
+  "contactPage": {
+    "metaTitle": "Contact — Roman Technologies",
+    "hero": {
+      "eyebrow": "Contact",
+      "title": "Spune-ne ce construiești.",
+      "lead": "Trimiteți-ne un mesaj sau contactați-ne direct. De obicei, răspundem în termen de o zi lucrătoare, iar pentru a obține o ofertă de preț nu este nevoie să ne sunați."
+    }
+  },
+  "manage": {
+    "loading": "Se încarcă…",
+    "linkNotFoundTitle": "Linkul nu a fost găsit",
+    "linkNotFoundBody": "Acest link de administrare este nevalid sau a expirat.",
+    "cancelledTitle": "Rezervarea a fost anulată",
+    "cancelledBody": "Această rezervare a fost anulată.",
+    "bookingTitle": "Rezervarea dumneavoastră",
+    "reschedule": "Reprogramare",
+    "rescheduleTooltipAllowed": "Această companie permite reprogramarea de până la {max} {max, plural, one {dată} other {ori}}.",
+    "rescheduleClosedTooltip": "Opțiunea de reprogramare nu mai este disponibilă pentru această rezervare — data programării este prea apropiată.",
+    "cancelBooking": "Anulează această rezervare",
+    "cancelling": "Anulare…",
+    "cancelSuccess": "Rezervarea dumneavoastră a fost anulată.",
+    "cancelError": "Nu s-a putut anula. Vă rugăm să încercați din nou sau să contactați serviciul de asistență.",
+    "confirmCancel": "Doriți să anulați această rezervare? Această acțiune nu poate fi anulată.",
+    "keepIt": "Păstrează-l",
+    "yesCancel": "Da, anulează",
+    "cancellationClosed": "Anularea nu mai este posibilă — suntem prea aproape de data programării."
+  }
+}

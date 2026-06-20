@@ -6,6 +6,8 @@ import { X, Loader2, Save } from "lucide-react";
 import { dashboardInputCn, dashboardFieldLabelCn } from "@/lib/styles";
 import { createAppointment, createBlock, getAvailability } from "./api";
 import type { BookingService, BookingResource, AvailabilitySlot } from "./api";
+import { DatePicker } from "@/components/dashboard/DatePicker";
+import { TimePicker } from "@/components/dashboard/TimePicker";
 
 interface Props {
   projectSlug: string;
@@ -368,31 +370,31 @@ function DrawerBody({ projectSlug, services, resources, timezone, onClose, onCre
           </div>
           <div>
             <label className={dashboardFieldLabelCn}>Date *</label>
-            <input
-              type="date"
+            <DatePicker
               value={block.date}
-              onChange={(e) => setBlockField("date", e.target.value)}
-              className={`${dashboardInputCn} max-w-xs`}
+              onChange={(v) => setBlockField("date", v)}
+              ariaLabel="Block date"
+              className="max-w-xs"
             />
           </div>
           <div className="flex items-end gap-3">
             <div>
               <label className={dashboardFieldLabelCn}>From *</label>
-              <input
-                type="time"
+              <TimePicker
                 value={block.startTime}
-                onChange={(e) => setBlockField("startTime", e.target.value)}
-                className={`${dashboardInputCn} w-32`}
+                onChange={(v) => setBlockField("startTime", v)}
+                ariaLabel="Block start time"
+                className="w-28"
               />
             </div>
             <span className="pb-2 text-xs text-zinc-400">to</span>
             <div>
               <label className={dashboardFieldLabelCn}>Until *</label>
-              <input
-                type="time"
+              <TimePicker
                 value={block.endTime}
-                onChange={(e) => setBlockField("endTime", e.target.value)}
-                className={`${dashboardInputCn} w-32`}
+                onChange={(v) => setBlockField("endTime", v)}
+                ariaLabel="Block end time"
+                className="w-28"
               />
             </div>
           </div>
@@ -500,11 +502,11 @@ function DrawerBody({ projectSlug, services, resources, timezone, onClose, onCre
               </div>
               <div>
                 <label className={dashboardFieldLabelCn}>Date</label>
-                <input
-                  type="date"
+                <DatePicker
                   value={draft.date}
-                  onChange={(e) => setField("date", e.target.value)}
-                  className={`${dashboardInputCn} max-w-xs`}
+                  onChange={(v) => setField("date", v)}
+                  ariaLabel="Appointment date"
+                  className="max-w-xs"
                 />
               </div>
               {slotsLoading && (

@@ -364,10 +364,12 @@ def list_appointments(
         q = q.eq("service_id", service_id)
     if resource_id:
         q = q.eq("resource_id", resource_id)
+    # Bounds are tz-aware UTC instants from the router: lower inclusive, upper
+    # EXCLUSIVE (start of the day after `to`), so the `to` day is fully included.
     if date_from:
         q = q.gte("start_utc", date_from)
     if date_to:
-        q = q.lte("start_utc", date_to)
+        q = q.lt("start_utc", date_to)
     return (q.order("start_utc", desc=True).execute()).data or []
 
 
@@ -401,10 +403,14 @@ def list_bookings_for_stats(
         .select("status, start_utc, resource_id, booking_services(name), booking_resources(name)")
         .eq("tenant_id", tenant_id)
     )
+    # `date_from`/`date_to` are pre-resolved by the router to tz-aware UTC
+    # instants: lower bound inclusive, upper bound EXCLUSIVE (start of the day
+    # after `to`). So the whole final day is included even though `start_utc` is a
+    # timestamptz.
     if date_from:
         q = q.gte("start_utc", date_from)
     if date_to:
-        q = q.lte("start_utc", date_to)
+        q = q.lt("start_utc", date_to)
     if resource_id:
         q = q.eq("resource_id", resource_id)
     rows = q.execute().data or []

@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { ChevronDown, ChevronRight, Plus, Send, X } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { FormFeedback } from "@/components/dashboard/FormFeedback";
 import { dashboardFieldLabelCn, dashboardInputCn, dashboardPrimaryBtnCn } from "@/lib/styles";
 import { AnimatedSelect } from "@/components/dashboard/AnimatedSelect";

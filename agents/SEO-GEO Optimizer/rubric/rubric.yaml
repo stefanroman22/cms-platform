@@ -1,0 +1,172 @@
+# SEO/GEO Optimizer — scored audit rubric
+#
+# Source of truth: docs/superpowers/specs/2026-06-14-seo-geo-agent-design.md
+#                  (Guidelines KB + scored rubric).
+#
+# Each item: id, track (seo|geo|local), check, measure (auto|proxy-llm|paid-api|human),
+#            weight, threshold. Deferred (paid-api/human) items carry `deferred: true`.
+#
+# The deterministic `auto` SEO/local item ids MUST stay aligned with audit.py
+# (_SEO_ITEMS / _LOCAL_ITEMS). Refuted claims are NOT scored (see prompts.py FORBIDDEN_CLAIMS).
+# Schema is a Google-rich-result + structured signal, NOT an AI-citation multiplier.
+#
+# ── CONVERGENCE / PASS GATE (the loop's halt) ────────────────────────────────────────
+#   pass_gate:
+#     geo_score        >= 75        # GEO proxy (LLM-judge, temp 0)
+#     seo_score        >= 85        # Track-G deterministic
+#     local_score      >= 80        # local auto + proxy
+#     gate_fact        == clean     # every injected stat/quote/citation verbatim-verified
+#     no_hard_item_below_its_own_threshold
+#   MAX_ITERS: 3                     # Reflexion has no convergence guarantee; the rubric supplies the halt
+#   plateau_guard: stop if score improves by < 2 points across an iteration
+#   regression_guard: if a published iteration scores lower, revert to best-so-far
+#   cost_budget_per_run:
+#     websearch:  <= 12
+#     webfetch:   <= 12 @ 100KB
+#     proxy_llm:  <= ~15 * locales
+#     playwright_renders: <= ~9 * locales * iterations
+# ─────────────────────────────────────────────────────────────────────────────────────
+
+# === Track G — Google technical + on-page (deterministic, audit.py) ===
+items:
+  - id: G-1_content_in_raw_html
+    track: seo
+    check: Primary content present in raw server HTML (AI/Google bots don't run JS)
+    measure: auto
+    weight: 18
+    threshold: word_count >= 50
+
+  - id: G-3_single_h1
+    track: seo
+    check: Exactly one H1 on the page
+    measure: auto
+    weight: 8
+    threshold: h1_count == 1
+
+  - id: G-3_heading_order
+    track: seo
+    check: Heading hierarchy descends without skipping a level
+    measure: auto
+    weight: 8
+    threshold: no skipped level on the way down
+
+  - id: G-4_title_len
+    track: seo
+    check: Title length in range (target 50-60, unique per page+locale)
+    measure: auto
+    weight: 10
+    threshold: 40 <= title_len <= 60
+
+  - id: G-4_meta_desc_len
+    track: seo
+    check: Meta description length in range (target 140-160, unique per page+locale)
+    measure: auto
+    weight: 10
+    threshold: 120 <= meta_desc_len <= 165
+
+  - id: G-5_canonical
+    track: seo
+    check: Self-referential rel=canonical present (hreflang assessed per-locale by auditor)
+    measure: auto
+    weight: 8
+    threshold: canonical is present
+
+  - id: G-6_jsonld_valid
+    track: seo
+    check: At least one JSON-LD block and all blocks parse (rich-result/structured signal, NOT an AI multiplier)
+    measure: auto
+    weight: 12
+    threshold: jsonld present AND jsonld_valid
+
+  - id: G-8_internal_links
+    track: seo
+    check: Page links to at least one other internal page (no orphans)
+    measure: auto
+    weight: 6
+    threshold: internal_link_count >= 1
+
+  - id: G-onpage_og
+    track: seo
+    check: Open Graph card present (og:title or og:image)
+    measure: auto
+    weight: 6
+    threshold: og:title or og:image present
+
+  # === Track L — Local (deterministic, audit.py) ===
+  - id: L-1_localbusiness_jsonld
+    track: local
+    check: Valid LocalBusiness (or subtype) JSON-LD present
+    measure: auto
+    weight: 60
+    threshold: a local-type JSON-LD node is present
+
+  - id: L-onpage_has_content
+    track: local
+    check: Local content (services + location) present in raw HTML
+    measure: auto
+    weight: 40
+    threshold: has_main_content
+
+  # === Track E — GEO (LLM-judge proxy, temp 0; the skill, not audit.py) ===
+  - id: E-citability-proxy
+    track: geo
+    check: LLM-judge readiness — real attributed stats/quotes/citations, short citable one-idea paragraphs, clean structure
+    measure: proxy-llm
+    weight: 100
+    threshold: geo_score >= 75
+
+  - id: GATE-FACT
+    track: geo
+    check: Every injected stat/quote/citation names a source+URL whose verbatim claim sentence is a literal substring of the fetched page (per-locale)
+    measure: proxy-llm
+    weight: veto
+    threshold: clean (any miss drops the edit and fails the iteration — not averaged)
+
+  # === Deferred — paid-API / human (flagged, never faked) ===
+  - id: G-cwv-cadence
+    track: seo
+    check: Core Web Vitals LCP<2.5s / INP<200ms / CLS<0.1 (measured on a cadence, not per-iteration)
+    measure: paid-api
+    weight: 0
+    threshold: cadence-measured; not a per-iteration gate
+    deferred: true
+
+  - id: L-geo-grid-solv
+    track: local
+    check: True geo-grid Share-of-Local-Voice / map-pack rank across a grid of points
+    measure: paid-api
+    weight: 0
+    threshold: requires Google Places/SERP API — flagged upsell, never faked
+    deferred: true
+
+  - id: L-review-velocity
+    track: local
+    check: Review velocity / recency tracking
+    measure: paid-api
+    weight: 0
+    threshold: paid-API; advice only, never a multiplier
+    deferred: true
+
+  - id: L-nap-vs-gbp
+    track: local
+    check: NAP consistency across external directories + Google Business Profile
+    measure: human
+    weight: 0
+    threshold: actual GBP edits are human-only, flagged not faked
+    deferred: true
+
+  - id: E-real-engine-citation
+    track: geo
+    check: Real per-engine AI-citation measurement (did ChatGPT/Perplexity/AIO cite us?)
+    measure: paid-api
+    weight: 0
+    threshold: no obtainable ground truth with current toolset — deferred Playwright path
+    deferred: true
+
+  - id: G-backlinks-offpage
+    track: seo
+    check: Backlinks / off-page authority / E-E-A-T
+    measure: human
+    weight: 0
+    threshold: off-page authority is human-only, flagged not faked
+    deferred: true

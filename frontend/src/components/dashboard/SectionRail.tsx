@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "motion/react";
 import type { SectionDef, SectionKey } from "./sectionConfig";
 
 interface SectionRailProps {
@@ -11,10 +11,11 @@ interface SectionRailProps {
 }
 
 /**
- * Project-level section navigation. Vertical rail on md+, a horizontal
- * scrollable strip on mobile. The active item shows a filled pill driven by
- * a shared `layoutId` so it slides between items with the same spring as the
- * CMS underline (PageTabs). tablist semantics + roving tabindex + arrow keys.
+ * Project-level section navigation: a horizontal segmented control on every
+ * breakpoint (scrollable strip on narrow screens). The active item shows a
+ * filled pill driven by a shared `layoutId` so it slides between items with
+ * the same spring as the CMS underline (PageTabs). tablist semantics +
+ * roving tabindex; all four arrow keys move selection.
  */
 export function SectionRail({ sections, activeView, onSelect }: SectionRailProps) {
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -38,8 +39,8 @@ export function SectionRail({ sections, activeView, onSelect }: SectionRailProps
     <nav
       role="tablist"
       aria-label="Project sections"
-      aria-orientation="vertical"
-      className="no-scrollbar flex flex-row gap-1 overflow-x-auto overflow-y-hidden md:flex-col md:overflow-visible"
+      aria-orientation="horizontal"
+      className="no-scrollbar flex w-full items-center gap-1 overflow-x-auto overflow-y-hidden rounded-xl border border-zinc-200 bg-white p-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none md:w-fit"
     >
       {sections.map((section, i) => {
         const isActive = section.key === activeView;
@@ -58,12 +59,12 @@ export function SectionRail({ sections, activeView, onSelect }: SectionRailProps
             tabIndex={isActive ? 0 : -1}
             onClick={() => onSelect(section.key)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className="relative flex shrink-0 cursor-pointer items-center rounded-lg px-3 py-2 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-zinc-400/40"
+            className="relative flex shrink-0 cursor-pointer items-center whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-zinc-400/40"
           >
             {isActive && (
               <motion.span
                 layoutId="section-rail-active"
-                className="absolute inset-0 rounded-lg bg-zinc-100 dark:bg-zinc-800"
+                className="absolute inset-0 rounded-lg bg-zinc-900 shadow-sm dark:bg-zinc-700"
                 transition={
                   reduce
                     ? { duration: 0 }
@@ -73,16 +74,23 @@ export function SectionRail({ sections, activeView, onSelect }: SectionRailProps
             )}
             <span
               className={
-                "relative z-10 flex items-center gap-2.5 " +
+                "relative z-10 flex items-center gap-2.5 transition-colors duration-150 " +
                 (isActive
-                  ? "text-zinc-900 dark:text-zinc-50"
+                  ? "text-white"
                   : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200")
               }
             >
               <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
               {section.label}
               {section.adminOnly && (
-                <span className="ml-0.5 rounded-full bg-zinc-200/70 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:bg-zinc-700/70 dark:text-zinc-400">
+                <span
+                  className={
+                    "ml-0.5 rounded-full px-1.5 py-px text-[10px] font-medium uppercase tracking-wide " +
+                    (isActive
+                      ? "bg-white/20 text-white/90"
+                      : "bg-zinc-200/70 text-zinc-500 dark:bg-zinc-700/70 dark:text-zinc-400")
+                  }
+                >
                   admin
                 </span>
               )}

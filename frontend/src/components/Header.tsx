@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useScroll, useMotionValueEvent } from "motion/react";
+import { m, useScroll, useMotionValueEvent } from "motion/react";
+import { useTranslations } from "next-intl";
 import { Logo } from "@/components/ui/Logo";
 import { navLinkCn } from "@/lib/styles";
 import { HeaderRightCluster } from "@/components/HeaderRightCluster";
 import { NavLink } from "@/components/nav/NavLink";
+import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { NAV_LINKS } from "@/lib/nav-links";
+import { stagger, fadeDown } from "@/lib/animations";
 
 /**
  * Fixed top bar. Its background, border and blur are tied directly to the
@@ -17,6 +20,7 @@ import { NAV_LINKS } from "@/lib/nav-links";
 const FADE_RANGE = 100; // px over which the header fully lifts
 
 export default function Header() {
+  const tNav = useTranslations("nav");
   const ref = useRef<HTMLElement>(null);
   const { scrollY } = useScroll();
 
@@ -39,28 +43,39 @@ export default function Header() {
   }, []);
 
   return (
-    <header
-      ref={ref}
-      className="fixed left-0 right-0 top-0 z-40 animate-fade-down border-b border-transparent"
-    >
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-8">
-        <Logo />
+    <header ref={ref} className="fixed left-0 right-0 top-0 z-40 border-b border-transparent">
+      <m.div
+        variants={stagger}
+        initial="hidden"
+        animate="visible"
+        className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-8"
+      >
+        <m.div variants={fadeDown}>
+          <Logo />
+        </m.div>
 
         {/* Right group: primary nav + auth cluster, end-aligned next to
             the Log In button. Mobile hamburger lives inside the cluster
             and renders alongside (the nav itself is `hidden md:flex`). */}
         <div className="flex items-center gap-1 md:gap-2">
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
+          <nav className="hidden items-center gap-1 md:flex" aria-label={tNav("primaryNav")}>
             {NAV_LINKS.map((link) => (
-              <NavLink key={link.label} href={link.href} className={`px-4 py-2 ${navLinkCn}`}>
-                {link.label}
-              </NavLink>
+              <m.div key={link.key} variants={fadeDown}>
+                <NavLink href={link.href} className={`px-4 py-2 ${navLinkCn}`}>
+                  {tNav(link.key)}
+                </NavLink>
+              </m.div>
             ))}
+            {/* Language switcher — last item in the nav stagger, so it slides in
+                right after Contact with the same fadeDown flow. */}
+            <m.div variants={fadeDown}>
+              <LanguageSwitcher variant="nav" />
+            </m.div>
           </nav>
 
           <HeaderRightCluster />
         </div>
-      </div>
+      </m.div>
     </header>
   );
 }

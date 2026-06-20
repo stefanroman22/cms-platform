@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderWithIntl } from "@/test/intl";
 import { HeaderRightCluster } from "../HeaderRightCluster";
 import { AuthProvider } from "@/context/auth";
 import { LoadingProvider } from "@/context/loading";
@@ -25,7 +26,7 @@ afterEach(() => {
 
 describe("HeaderRightCluster", () => {
   it("renders 'Log In' link when logged out", () => {
-    render(
+    renderWithIntl(
       <LoadingProvider>
         <AuthProvider>
           <HeaderRightCluster />
@@ -37,7 +38,7 @@ describe("HeaderRightCluster", () => {
 
   it("opens mobile drawer when hamburger clicked", async () => {
     const user = userEvent.setup();
-    render(
+    renderWithIntl(
       <LoadingProvider>
         <AuthProvider>
           <HeaderRightCluster />

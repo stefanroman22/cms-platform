@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { dashboardInputLgCn } from "@/lib/styles";
 
 /**

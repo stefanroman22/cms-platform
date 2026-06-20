@@ -14,6 +14,7 @@ time is constant regardless of where parsing failed.
 
 from __future__ import annotations
 
+import functools
 import secrets
 from datetime import UTC, datetime
 from typing import Literal
@@ -28,20 +29,21 @@ SECRET_LEN_TARGET = 32
 
 _ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4)
 
-# Precomputed at import time so the verify-on-fail path costs the same
-# argon2 cycles as the success path. Hash of `_DUMMY_PLAIN`; we ignore
-# the verify result (always raises VerifyMismatchError given a fresh
-# random plain). Computed once → no startup penalty in serverless cold
-# start beyond the existing PasswordHasher instantiation.
-_DUMMY_PLAIN = secrets.token_hex(SECRET_LEN_TARGET // 2)
-_DUMMY_HASH = _ph.hash(_DUMMY_PLAIN)
+
+@functools.cache
+def _dummy_hash() -> str:
+    """Dummy hash whose verify-on-fail costs the same argon2 cycles as the
+    success path (BE-011 / CWE-208). Computed LAZILY (not at import) so the
+    ~150 ms argon2 hash stays off the serverless cold-start critical path; the
+    first parse-fail / row-miss pays it once, then it's cached for the worker."""
+    return _ph.hash(secrets.token_hex(SECRET_LEN_TARGET // 2))
 
 
 def _equalise_timing() -> None:
     """Burn argon2 cycles on every parse-fail / row-miss path so the
     response time is independent of where validation failed."""
     try:
-        _ph.verify(_DUMMY_HASH, "x")
+        _ph.verify(_dummy_hash(), "x")
     except VerifyMismatchError:
         pass
 

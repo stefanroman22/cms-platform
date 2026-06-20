@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { usePathname } from "next/navigation";
 
 export function DashboardContent({ children }: { children: React.ReactNode }) {

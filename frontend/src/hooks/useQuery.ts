@@ -117,12 +117,19 @@ export function useQuery<T>(
   useEffect(() => {
     const unsub = cache.subscribe(key, () => {
       const fresh = cache.get<T>(key);
-      // setData unconditionally — `null` after invalidate is a valid
-      // signal that the entry is gone; consumers should refetch.
-      setData(fresh);
+      if (fresh !== null) {
+        setData(fresh);
+      } else if (enabled) {
+        // Entry was invalidated. Keep showing the stale data and revalidate
+        // silently instead of nulling out — always-mounted consumers (e.g.
+        // the sidebar's project list) have no remount to trigger a refetch,
+        // so nulling here would leave them empty until a hard reload.
+        doFetch(true);
+      }
     });
     return unsub;
-  }, [key]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, enabled]);
 
   const refresh = useCallback(() => {
     cache.invalidate(key);

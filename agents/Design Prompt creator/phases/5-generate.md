@@ -11,6 +11,34 @@
    ```markdown
    <additional_context>
 
+   ## Motion & performance standards (every build — paste verbatim)
+
+   The site must be FAST and tastefully animated, never gratuitously animated. Require:
+   - **Restrained, consistent motion from a shared token set** (one easing curve, durations 0.3–0.6s, travel 16–40px). Header entrance (logo + nav stagger in), a per-word/per-token hero headline reveal, and scroll-triggered directional section reveals that fire ONCE on viewport entry. Animate 1–2 key elements per view (section header + primary block) — never every element. Spend boldness on ONE hero signature; keep the rest quiet.
+   - **A branded page-load / navigation loading spinner** as a first-class, named element (full-screen or top-bar), themed to the palette, with a min-display window so it never flashes, and `prefers-reduced-motion` respected.
+   - **Page transitions** are opacity-only cross-fades (no transform/blur on the wrapper if any sticky/fixed scroll scene exists).
+   - **Performance budgets:** fast LCP; lazy-load heavy/below-the-fold media and any 3D/WebGL hero (with a mobile static fallback + capped dpr + viewport-aware/on-demand render loop); server-first data, no client fetch waterfalls.
+
+   Sell "fast + tastefully animated / AI-answer-ready", never gratuitous motion.
+
+   **Name these as REQUIRED, first-class elements in the prompt (not just “tasteful motion”):**
+   - **A page-change loading transition** — a named element shown on internal route navigation
+     (distinct from the first-visit intro loader already mandated by `<intro_loader>`): branded,
+     themed to the palette, with a min-display window (~450ms) so it never flashes, a safety
+     force-hide, and `prefers-reduced-motion` respected. Call it out explicitly so the build
+     ships it on EVERY page change, not only the first load.
+   - **A header entrance** (logo + nav links cascade in via one shared stagger; the auth/locale/
+     menu cluster does NOT animate), **a per-word/per-token hero headline reveal**, and
+     **scroll-triggered DIRECTIONAL section reveals that fire ONCE** — all from the SAME shared
+     token set (one easing curve, 0.3–0.6s, 16–40px). Grid/list reveals must be driven by ONE
+     container stagger, never a per-card index delay (per-card delays leave on-screen cards
+     invisible then popping).
+   - **Structure expectations:** thin `'use client'` boundary (server-first HTML), a single
+     app-level motion provider, and heavy/below-the-fold media (galleries, video, any 3D) lazy
+     with a space-reserving skeleton + mobile fallback.
+   These complement — do not repeat — the `<universal_ux_requirements>` block
+   (`<intro_loader>`/`<themed_scrollbar>`/`<page_transitions>`), which stays mandatory verbatim.
+
    ## Research insights for this category
 
    <copy "Common patterns observed" block from research/<bucket>.md

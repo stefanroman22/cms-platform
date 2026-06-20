@@ -1,0 +1,341 @@
+{
+  "common": { "brand": "Roman Technologies", "loadingExperience": "Loading experience" },
+  "languageSwitcher": {
+    "label": "Language",
+    "ariaLabel": "Change language"
+  },
+  "nav": {
+    "about": "About",
+    "clients": "Clients",
+    "team": "Team",
+    "contact": "Contact",
+    "primaryNav": "Primary navigation",
+    "mobileNav": "Mobile navigation"
+  },
+  "header": {
+    "logIn": "Log In",
+    "openDashboard": "Open dashboard",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "openDashboardButton": "Open Dashboard",
+    "getInTouch": "Get in touch"
+  },
+  "footer": {
+    "tagline": "Premium software solutions for modern businesses.",
+    "contact": "Contact",
+    "rights": "© {year} Roman Technologies SRL. All rights reserved."
+  },
+  "login": {
+    "heading": "Access CMS",
+    "subheading": "Please sign in to your administrative account.",
+    "emailLabel": "Email address or Username",
+    "emailPlaceholder": "admin@example.com",
+    "passwordLabel": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "rememberMe": "Remember me",
+    "forgotPassword": "Forgot your password?",
+    "signIn": "Sign in to dashboard",
+    "successHeading": "Successfully Logged In",
+    "successBody": "You're all set. Head over to your dashboard to manage your projects.",
+    "goToDashboard": "Go to Dashboard"
+  },
+  "hero": {
+    "eyebrow": "Roman Technologies",
+    "title": "We make your idea or need come alive",
+    "subtitle": "Custom websites, apps, AI Agents and workflows for ambitious companies, at a price that respects your budget.",
+    "getPreview": "Get a free preview",
+    "seePricing": "See pricing",
+    "noCall": "No call required to get pricing.",
+    "trust": {
+      "humanReviewed": "Human-reviewed code",
+      "euBased": "EU-based",
+      "gdpr": "GDPR compliant",
+      "hosting": "Managed hosting included"
+    }
+  },
+  "laptop": {
+    "srDescription": "Decorative animation of a laptop opening to reveal the Roman Technologies content management system in use by Café Nordlys, a sample client.",
+    "mobileIntro": "A content system your customers never see — and you barely have to touch.",
+    "seeItOpen": "See it open",
+    "closeDemo": "Close demo",
+    "demoComingSoon": "Demo video coming soon.",
+    "captions": {
+      "manage": "Manage your projects in one place",
+      "adjust": "Change content and adjust your project yourself 24/7 using our agentic software",
+      "hosted": "Hosted, secured, monitored — by us.",
+      "reviewed": "Every major release is human-reviewed to ensure correctness"
+    }
+  },
+  "contactSection": {
+    "eyebrow": "Let's talk",
+    "heading": "Book a call or send a message",
+    "subheading": "Grab a 45-minute slot with me, Stefan — or leave your details below and I'll reply within one business day.",
+    "bookingHeading": "Book a call with Stefan",
+    "bookingSubheading": "45-minute call"
+  },
+  "contactInfo": {
+    "heading": "Reach us directly",
+    "subheading": "Prefer email or a quick call? Here is where to find us.",
+    "email": "Email",
+    "phone": "Phone",
+    "location": "Location",
+    "hours": "Hours"
+  },
+  "contactForm": {
+    "name": "Name",
+    "email": "Email",
+    "company": "Company",
+    "message": "Message",
+    "optional": "(optional)",
+    "namePlaceholder": "Jane Doe",
+    "emailPlaceholder": "jane@company.com",
+    "companyPlaceholder": "Acme Inc.",
+    "messagePlaceholder": "A few lines about your project, timeline and budget.",
+    "errName": "Please add your name.",
+    "errEmailEmpty": "Please add your email.",
+    "errEmailInvalid": "That email does not look right.",
+    "errMessage": "Tell us a little more (at least 10 characters).",
+    "send": "Send message",
+    "sending": "Sending your message…",
+    "success": "Message sent — talk soon!",
+    "error": "Something went wrong. Email me directly at <link>{recipient}</link>.",
+    "sendAnother": "Send another message",
+    "tryAgain": "Try again",
+    "orEmail": "Or email us directly at <link>{recipient}</link>."
+  },
+  "contactChannel": { "email": "Email", "bookCall": "Book a call" },
+  "whatWeDo": {
+    "eyebrow": "What we build",
+    "heading": "What do we do?",
+    "lead": "From a single landing page to full AI platforms — here's how we help ambitious companies ship.",
+    "aiAgents": {
+      "title": "We build AI agents",
+      "description": "Autonomous agents that handle real work end-to-end — not just chatbots."
+    },
+    "websites": {
+      "title": "We develop websites",
+      "description": "Fast, beautiful, SEO-ready sites that turn visitors into customers."
+    },
+    "apps": {
+      "title": "We build software applications",
+      "description": "Web, mobile and desktop apps engineered to scale with you."
+    },
+    "automation": {
+      "title": "We create automation workflows with AI",
+      "description": "AI-driven workflows that run your busywork around the clock."
+    }
+  },
+  "values": {
+    "eyebrow": "What we stand for",
+    "heading": "Our values",
+    "clientFirst": {
+      "title": "Client comes first",
+      "description": "We start from your goals, not our stack. Every decision is measured by what moves your business forward."
+    },
+    "teamwork": {
+      "title": "Teamwork",
+      "description": "Engineering, security and strategy work as one team, so nothing falls between the cracks."
+    },
+    "ownership": {
+      "title": "Ownership",
+      "description": "You own everything we build — code, data and roadmap. No lock-in, no black boxes."
+    },
+    "transparency": {
+      "title": "Transparency",
+      "description": "Clear quotes, honest timelines, and a human who answers. You always know where things stand."
+    }
+  },
+  "work": {
+    "searchPlaceholder": "Search projects…",
+    "searchAria": "Search projects by name",
+    "empty": "No projects match \"{query}\".",
+    "previewAlt": "{name} preview",
+    "openAria": "Open {name} in a new tab",
+    "prevProject": "Previous project",
+    "nextProject": "Next project"
+  },
+  "projects": {
+    "akris": {
+      "tagline": "A presentation site with a custom scraper that pulls official statistics into a sleek, modern dashboard.",
+      "keyInfo": [
+        { "label": "Type", "value": "Sports club website" },
+        { "label": "Stack", "value": "Next.js · Web scraper" },
+        { "label": "Focus", "value": "Live stats dashboard" }
+      ]
+    },
+    "pluxbox": {
+      "tagline": "A crisp product site for a software company",
+      "keyInfo": [
+        { "label": "Type", "value": "SaaS / product website" },
+        { "label": "Stack", "value": "Next.js · Tailwind · Motion" },
+        { "label": "Focus", "value": "Clarity, conversion" }
+      ]
+    },
+    "roman-mariana": {
+      "tagline": "A polished business site with custom email integrations that automate customer-business communication.",
+      "keyInfo": [
+        { "label": "Type", "value": "Business website" },
+        { "label": "Stack", "value": "Next.js · Email automation" },
+        { "label": "Focus", "value": "Email automation, lead gen" }
+      ]
+    }
+  },
+  "clientsPage": {
+    "metaTitle": "Clients — Roman Technologies",
+    "metaDescription": "A selection of websites, applications and AI workflows we've built and now keep running for clients across the EU.",
+    "eyebrow": "Our work",
+    "title": "Built for ambitious companies.",
+    "subheading": "A selection of websites, applications and AI workflows we've designed, built and now keep running for clients across the EU."
+  },
+  "pricing": {
+    "heading": "Simple, honest pricing",
+    "toggleProject": "Project-based",
+    "toggleSubscription": "Subscription",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "mostPopular": "Most popular",
+    "save": "Save {discount}%",
+    "disclaimerProject": "Prices adjust with complexity — you always get a clear quote before anything starts.",
+    "shared": {
+      "managedHosting": "Managed hosting and security",
+      "managedHostingTip": "Hosted, secured and monitored by us — no separate hosting bill.",
+      "seo": "SEO & GEO optimization",
+      "seoTip": "Optimized for search engines and AI answer engines so you get found.",
+      "humanReview": "Personal human review",
+      "humanReviewTip": "Every major release is reviewed by a human, not just shipped by a machine.",
+      "cms": "CMS connector & agentic issue solver",
+      "cmsTip": "Change content across your app anytime, and an AI agent auto-detects and fixes issues."
+    },
+    "project": {
+      "presentation": {
+        "name": "Presentation website",
+        "info": "Marketing & presentation sites that launch fast.",
+        "price": "from €250",
+        "priceNote": "from €400 with complex backend integration",
+        "feature": "Custom, responsive design",
+        "cta": "Get a free preview"
+      },
+      "application": {
+        "name": "Software application",
+        "info": "Mobile and / or desktop apps, built to scale.",
+        "price": "from €500",
+        "feature": "Priority development meetings",
+        "featureTip": "Higher priority for human meetings with the development team.",
+        "cta": "Start your app"
+      },
+      "automation": {
+        "name": "AI automation software",
+        "info": "Custom AI workflows that run your busywork.",
+        "price": "from €200",
+        "feature": "24/7 maintenance",
+        "featureTip": "We keep your automations running around the clock.",
+        "cta": "Automate something"
+      }
+    },
+    "subscription": {
+      "care": {
+        "name": "Care",
+        "info": "Keep an existing site healthy.",
+        "priceMonthly": "€49/month",
+        "priceYearly": "€490/year",
+        "features": ["Managed hosting & monitoring", "Monthly content updates", "Email support"],
+        "cta": "Choose Care"
+      },
+      "growth": {
+        "name": "Growth",
+        "info": "Ongoing improvements & support.",
+        "priceMonthly": "€99/month",
+        "priceYearly": "€990/year",
+        "features": [
+          "Everything in Care",
+          "Agentic issue solver",
+          "Priority support",
+          "Quarterly strategy meeting"
+        ],
+        "cta": "Choose Growth"
+      },
+      "scale": {
+        "name": "Scale",
+        "info": "A dedicated partner for fast-moving teams.",
+        "priceMonthly": "€199/month",
+        "priceYearly": "€1990/year",
+        "features": [
+          "Everything in Growth",
+          "Dedicated developer hours",
+          "24/7 support agent",
+          "Monthly roadmap reviews"
+        ],
+        "cta": "Choose Scale"
+      }
+    }
+  },
+  "teamPage": {
+    "metaTitle": "Team — Roman Technologies",
+    "eyebrow": "Our team",
+    "title": "A team that ships.",
+    "subheading": "The people behind every build — engineering, security and strategy under one roof, and the principles that guide how we work."
+  },
+  "aboutPage": { "metaTitle": "About — Roman Technologies" },
+  "about": {
+    "hero": {
+      "eyebrow": "About us",
+      "title": "Software that respects your time, your budget, and your data.",
+      "lead": "Roman Technologies is an EU-based software studio. We design and build custom websites, applications and AI workflows for ambitious companies — then host, secure and maintain them, so you can focus on your business instead of your stack."
+    },
+    "story": {
+      "heading": "Who we are",
+      "paragraphs": [
+        "We started Roman Technologies on a simple conviction: small and growing businesses deserve the same quality of software as enterprises — without the enterprise price tag or the agency runaround.",
+        "Every project is built to be owned by you, reviewed by a human before it ships, and backed by managed hosting and monitoring. No lock-in, no surprises — just software that works, and a team that actually answers."
+      ]
+    },
+    "team": {
+      "heading": "Meet the team",
+      "subheading": "A small, senior team that ships — engineering, security and strategy under one roof.",
+      "emailAria": "Email {name}",
+      "linkedinAria": "{name} on LinkedIn",
+      "members": {
+        "stefan-roman": {
+          "role": "CEO & Founder",
+          "description": "Leads strategy and client relationships, oversees delivery end-to-end, and makes sure every release ships correct, on time, and aligned with what the business actually needs."
+        },
+        "alexandru-aioanei": {
+          "role": "Full Stack (AI) Developer",
+          "description": "Builds features end-to-end across frontend and backend, and integrates AI workflows and agents into client products — turning ideas into working, maintainable software."
+        },
+        "laurian-duma": {
+          "role": "GDPR & Security Compliance Engineer",
+          "description": "Owns data protection and security: runs reviews and threat modelling, keeps every product GDPR-compliant, and makes sure client data stays locked down and EU-resident."
+        }
+      }
+    }
+  },
+  "contactPage": {
+    "metaTitle": "Contact — Roman Technologies",
+    "hero": {
+      "eyebrow": "Contact",
+      "title": "Tell us what you're building.",
+      "lead": "Send a message or reach us directly. We usually reply within one business day, and you never need a call to get a quote."
+    }
+  },
+  "manage": {
+    "loading": "Loading…",
+    "linkNotFoundTitle": "Link not found",
+    "linkNotFoundBody": "This management link is invalid or expired.",
+    "cancelledTitle": "Booking cancelled",
+    "cancelledBody": "This booking has been cancelled.",
+    "bookingTitle": "Your booking",
+    "reschedule": "Reschedule",
+    "rescheduleTooltipAllowed": "This business allows rescheduling up to {max} {max, plural, one {time} other {times}}.",
+    "rescheduleClosedTooltip": "Rescheduling is closed for this booking — it's too close to the appointment.",
+    "cancelBooking": "Cancel this booking",
+    "cancelling": "Cancelling…",
+    "cancelSuccess": "Your booking is cancelled.",
+    "cancelError": "Could not cancel. Please try again or contact support.",
+    "confirmCancel": "Cancel this booking? This cannot be undone.",
+    "keepIt": "Keep it",
+    "yesCancel": "Yes, cancel",
+    "cancellationClosed": "Cancellation is closed — it's too close to the appointment."
+  }
+}

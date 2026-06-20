@@ -36,14 +36,10 @@ def _cta_block(
     copy: dict | None = None,
     accent: str = "#18181b",
 ) -> str:
-    """Explicit meeting link (as text) + a 'Join the call' button, plus an
-    OPTIONAL 'Add to Google Calendar' button (only when add_to_cal_url is given).
-    When the tenant has no meeting URL (e.g. in-person businesses) we render
-    NOTHING — the meeting link is an opt-in extension, not a default."""
-    safe_meeting = email_layout.safe_url(meeting_url)
-    if not safe_meeting:
-        return ""
-    esc = html.escape(safe_meeting)
+    """A customer 'Add to calendar' button (always shown when add_to_cal_url is
+    given — even for in-person businesses with no meeting link), plus, ONLY when
+    the tenant has a meeting URL, the explicit meeting link + a 'Join the call'
+    button. So an in-person booking still gets its add-to-calendar button."""
     link_color = email_layout.safe_hex(accent, "#18181b")
     join_color = copy_color(copy, "join_cta", "#ffffff")
     add_btn = ""
@@ -51,10 +47,19 @@ def _cta_block(
         cal = html.escape(add_to_cal_url)
         add_color = copy_color(copy, "add_cal_cta", "#18181b")
         add_btn = (
-            f'<a href="{cal}" style="display:inline-block;margin:8px 0 0 8px;background:#fff;'
+            f'<a href="{cal}" style="display:inline-block;margin:0 4px;background:#fff;'
             f"border:1px solid {accent};color:{add_color};text-decoration:none;font-size:14px;font-weight:600;"
             f'padding:11px 22px;border-radius:8px">{tt(copy, locale, "add_cal_cta")}</a>'
         )
+
+    safe_meeting = email_layout.safe_url(meeting_url)
+    # In-person (no meeting URL): just the add-to-calendar button, on its own row.
+    if not safe_meeting:
+        if not add_btn:
+            return ""
+        return f'<tr><td style="padding:16px 32px 8px" align="center">{add_btn}</td></tr>'
+
+    esc = html.escape(safe_meeting)
     return (
         # Explicit link, spelled out — link tinted with the tenant accent.
         '<tr><td style="padding:18px 32px 0" align="center">'
@@ -62,7 +67,7 @@ def _cta_block(
         f'<a href="{esc}" style="color:{link_color};text-decoration:underline">{esc}</a></p></td></tr>'
         # Buttons.
         '<tr><td style="padding:16px 32px 8px" align="center">'
-        f'<a href="{esc}" style="display:inline-block;background:{accent};color:{join_color};text-decoration:none;'
+        f'<a href="{esc}" style="display:inline-block;margin:0 4px;background:{accent};color:{join_color};text-decoration:none;'
         'font-size:14px;font-weight:600;padding:13px 28px;border-radius:9px">'
         f'{tt(copy, locale, "join_cta")} &rarr;</a>'
         f"{add_btn}"

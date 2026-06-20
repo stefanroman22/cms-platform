@@ -6,14 +6,14 @@ import { CalendarCheck2 } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { ArcSpinner } from "@/components/ui/ArcSpinner";
 import * as cache from "@/lib/cache";
-import { getStats, listAppointments, listServices, listResources } from "./api";
+import { getStats, listAppointments, listServices, listResources, getHours } from "./api";
 import type { BookingAppointment } from "./api";
 import { AppointmentDetailDrawer } from "./AppointmentDetailDrawer";
 import { STAT_VIEWS, STAT_VIEWS_BY_ID, type OverviewWidgetCtx } from "./overview/widgetRegistry";
 import { StaffScopeSelect } from "./overview/StaffScopeSelect";
 import { StatViewFilter } from "./overview/StatViewFilter";
 import { CalendarWidget } from "./overview/CalendarWidget";
-import { createOverviewPrefs, DEFAULT_STAT_VIEW } from "./overview/prefsStore";
+import { createOverviewPrefs, DEFAULT_STAT_VIEW, type CalendarView } from "./overview/prefsStore";
 
 interface Props {
   projectSlug: string;
@@ -27,12 +27,16 @@ export function OverviewPanel({ projectSlug }: Props) {
   const prefs = useMemo(() => createOverviewPrefs(projectSlug), [projectSlug]);
   const [statView, setStatViewState] = useState<string>(() => prefs.getStatView());
   const [scope, setScopeState] = useState<string>(() => prefs.getScope());
+  const [calendarView, setCalendarViewState] = useState<CalendarView>(() =>
+    prefs.getCalendarView()
+  );
   const [detailTarget, setDetailTarget] = useState<BookingAppointment | undefined>(undefined);
 
   // Re-hydrate when switching projects.
   useEffect(() => {
     setStatViewState(prefs.getStatView());
     setScopeState(prefs.getScope());
+    setCalendarViewState(prefs.getCalendarView());
   }, [prefs]);
 
   function setStatView(next: string) {
@@ -44,6 +48,12 @@ export function OverviewPanel({ projectSlug }: Props) {
   function setScope(next: string) {
     setScopeState(next);
     prefs.setScope(next);
+  }
+
+  // Day/week/month is remembered per project (only this + scope are persisted).
+  function setCalendarView(next: CalendarView) {
+    setCalendarViewState(next);
+    prefs.setCalendarView(next);
   }
 
   const resourceId = scope === "all" ? undefined : scope;
@@ -74,9 +84,17 @@ export function OverviewPanel({ projectSlug }: Props) {
     () => listResources(projectSlug),
     { ttl: 60 * 1000 }
   );
+  // Working hours drive the day-view time window. Same cache key as HoursEditor,
+  // so editing a schedule reflects here (and vice versa) without a refetch.
+  const { data: hoursData, loading: hoursLoading } = useQuery(
+    `booking-hours:${projectSlug}`,
+    () => getHours(projectSlug),
+    { ttl: 5 * 60 * 1000 }
+  );
 
   const services = servicesData?.services ?? [];
   const allResources = resourcesData?.resources ?? [];
+  const hours = useMemo(() => hoursData?.hours ?? [], [hoursData]);
   const staff = allResources.filter(
     (r) => (r.type ?? "staff") === "staff" && r.is_active !== false
   );
@@ -90,7 +108,10 @@ export function OverviewPanel({ projectSlug }: Props) {
 
   const tz = cache.get<{ timezone?: string }>(`booking-settings:${projectSlug}`)?.timezone ?? null;
 
-  if (loading) {
+  // Gate on the hours query too — the calendar window depends on the schedule, so
+  // painting before hours load would briefly show an invented default grid on a
+  // closed day (the very thing the schedule-driven window removes).
+  if (loading || hoursLoading) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white/40 px-6 py-8 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-400">
         <ArcSpinner size={20} />
@@ -110,6 +131,7 @@ export function OverviewPanel({ projectSlug }: Props) {
   if (!stats) return null;
 
   const ctx: OverviewWidgetCtx = {
+    projectSlug,
     stats,
     appointments,
     services,
@@ -140,7 +162,12 @@ export function OverviewPanel({ projectSlug }: Props) {
       <CalendarWidget
         appointments={appointments}
         services={services}
+        staff={staff}
+        scope={scope}
+        hours={hours}
         timezone={tz}
+        view={calendarView}
+        onViewChange={setCalendarView}
         onSelectAppointment={(a) => setDetailTarget(a)}
       />
 

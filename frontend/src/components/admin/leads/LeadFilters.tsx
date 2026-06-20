@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { dashboardInputCn, dashboardFieldLabelCn } from "@/lib/styles";
 import { AnimatedSelect } from "@/components/dashboard/AnimatedSelect";
 import { WEB_PRESENCE_LABEL, LEAD_STATUS_LABEL, LEAD_TYPE_LABEL } from "@/lib/leadEnums";

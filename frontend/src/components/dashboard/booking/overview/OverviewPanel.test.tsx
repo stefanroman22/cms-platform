@@ -18,12 +18,14 @@ const getStats = vi.fn().mockResolvedValue(STATS);
 const listAppointments = vi.fn().mockResolvedValue({ appointments: [] });
 const listServices = vi.fn().mockResolvedValue({ services: [] });
 const listResources = vi.fn().mockResolvedValue({ resources: [] });
+const getHours = vi.fn().mockResolvedValue({ hours: [], exceptions: [] });
 
 vi.mock("../api", () => ({
   getStats: (...a: unknown[]) => getStats(...a),
   listAppointments: (...a: unknown[]) => listAppointments(...a),
   listServices: (...a: unknown[]) => listServices(...a),
   listResources: (...a: unknown[]) => listResources(...a),
+  getHours: (...a: unknown[]) => getHours(...a),
 }));
 
 // AppointmentDetailDrawer is heavy + irrelevant to these assertions.

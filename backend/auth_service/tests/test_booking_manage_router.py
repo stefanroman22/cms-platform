@@ -207,3 +207,45 @@ def test_reschedule_email_uses_booking_snapshot_name(client, monkeypatch):
         r = client.post("/booking/manage/abc/reschedule", json={"slot_start": new_slot})
     assert r.status_code == 200, r.text
     assert snd.call_args.kwargs["name"] == "Alice"
+
+
+def test_reschedule_second_time_still_sends_email(client, monkeypatch):
+    """Regression: the reschedule email idempotency key must vary per reschedule.
+    On the 2nd reschedule (reschedule_count already 1, max 2) the email must still
+    send — the key is suffixed with the new count, so a prior reschedule's logged
+    key doesn't suppress it."""
+    from datetime import datetime, timedelta
+
+    from auth_service.core.config import settings
+
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "k")
+    new_slot = (datetime.now(UTC) + timedelta(days=10)).isoformat()
+    with (
+        patch(
+            "auth_service.routers.booking.booking_repo.load_booking_by_token_hash",
+            return_value=_booking(customer_name="Alice", reschedule_count=1),  # already moved once
+        ),
+        patch("auth_service.routers.booking.booking_tenant.load_tenant_by_id", return_value=TENANT),
+        patch("auth_service.routers.booking.booking_repo.load_policy", return_value=POLICY),
+        patch("auth_service.routers.booking.booking_repo.load_service", return_value=SVC),
+        patch("auth_service.routers.booking._free_resource_for", return_value="r1"),
+        patch("auth_service.routers.booking.booking_repo.update_booking"),
+        patch("auth_service.routers.booking.booking_repo.insert_audit"),
+        patch(
+            "auth_service.routers.booking.booking_repo.load_customer",
+            return_value=_OVERWRITTEN_CUST,
+        ),
+        patch(
+            "auth_service.routers.booking.booking_repo.notification_already_sent",
+            return_value=False,
+        ) as not_sent,
+        patch("auth_service.routers.booking.booking_repo.record_notification") as record,
+        patch("auth_service.routers.booking.booking_manage_email.send_reschedule") as snd,
+    ):
+        r = client.post("/booking/manage/abc/reschedule", json={"slot_start": new_slot})
+    assert r.status_code == 200, r.text
+    # The email was sent (not suppressed), and the dedup key carries the NEW count (2),
+    # so it can't collide with the 1st reschedule's key.
+    snd.assert_called_once()
+    assert not_sent.call_args.args[0] == "b1:reschedule:2"
+    assert record.call_args.kwargs["idempotency_key"] == "b1:reschedule:2"

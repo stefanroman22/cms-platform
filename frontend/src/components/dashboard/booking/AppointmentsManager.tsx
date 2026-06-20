@@ -11,6 +11,7 @@ import type { BookingAppointment, AppointmentFilters } from "./api";
 import { AppointmentDetailDrawer } from "./AppointmentDetailDrawer";
 import { NewAppointmentDrawer } from "./NewAppointmentDrawer";
 import { createOverviewPrefs } from "./overview/prefsStore";
+import { DatePicker } from "@/components/dashboard/DatePicker";
 
 interface Props {
   projectSlug: string;
@@ -218,16 +219,13 @@ export function AppointmentsManager({ projectSlug }: Props) {
           <label className="block text-xs font-medium text-zinc-500 mb-1 dark:text-zinc-400">
             From
           </label>
-          <input
-            type="date"
+          <DatePicker
             value={pendingFilters.from ?? ""}
-            onChange={(e) =>
-              setPendingFilters((f) => ({
-                ...f,
-                from: e.target.value || undefined,
-              }))
-            }
-            className={`${dashboardInputCn} w-36`}
+            onChange={(v) => setPendingFilters((f) => ({ ...f, from: v || undefined }))}
+            clearable
+            placeholder="Any"
+            ariaLabel="Filter from date"
+            className="w-44"
           />
         </div>
 
@@ -235,16 +233,13 @@ export function AppointmentsManager({ projectSlug }: Props) {
           <label className="block text-xs font-medium text-zinc-500 mb-1 dark:text-zinc-400">
             To
           </label>
-          <input
-            type="date"
+          <DatePicker
             value={pendingFilters.to ?? ""}
-            onChange={(e) =>
-              setPendingFilters((f) => ({
-                ...f,
-                to: e.target.value || undefined,
-              }))
-            }
-            className={`${dashboardInputCn} w-36`}
+            onChange={(v) => setPendingFilters((f) => ({ ...f, to: v || undefined }))}
+            clearable
+            placeholder="Any"
+            ariaLabel="Filter to date"
+            className="w-44"
           />
         </div>
 

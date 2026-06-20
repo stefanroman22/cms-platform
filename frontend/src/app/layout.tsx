@@ -32,6 +32,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // lang stays "en" statically: marketing pages set the active language on the
+    // client (see MarketingProviders) and emit hreflang alternates for SEO; the
+    // dashboard/widget are English. Keeps every page statically renderable.
     <html lang="en" suppressHydrationWarning>
       <head>
         <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: themeBootScript }} />

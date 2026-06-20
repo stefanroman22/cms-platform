@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 /**
  * Browser-side security headers applied to every Next.js response.
@@ -69,6 +72,13 @@ const embeddableHeaders = securityHeaders
   );
 
 const nextConfig: NextConfig = {
+  // Rewrite barrel imports to direct module paths at build time so a single
+  // `import { Icon } from "lucide-react"` (used in ~88 files) doesn't pull the
+  // library's ~1,500-module index into the shared chunk. recharts (dashboard
+  // charts) benefits the same way; it isn't in Next's built-in allowlist.
+  experimental: {
+    optimizePackageImports: ["lucide-react", "recharts"],
+  },
   async headers() {
     return [
       // Embeddable paths — no X-Frame-Options, permissive frame-ancestors.
@@ -84,4 +94,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

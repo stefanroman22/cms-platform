@@ -7,11 +7,49 @@ import html
 import json
 import urllib.error
 import urllib.request
+from datetime import datetime
 
 from ..core.config import settings
 from . import email_layout
 from .booking_i18n import copy_color, tt
 from .email_layout import DEFAULT_BRAND, Brand
+
+
+def _add_to_cal_button(
+    *,
+    start_utc: datetime | None,
+    end_utc: datetime | None,
+    business_name: str | None,
+    meeting_url: str,
+    accent: str,
+    locale: str,
+    copy: dict | None,
+) -> str:
+    """Customer-facing 'Add to calendar' button. Rendered regardless of whether
+    the tenant has a meeting URL (in-person businesses still want the event)."""
+    if start_utc is None or end_utc is None:
+        return ""
+    title = f"Booking @ {business_name}" if business_name else "Your appointment"
+    details = f"Appointment with {business_name}." if business_name else "Your appointment."
+    if meeting_url:
+        details += f"\nJoin: {meeting_url}"
+    url = email_layout.google_calendar_url(
+        title=title,
+        start_utc=start_utc,
+        end_utc=end_utc,
+        details=details,
+        location=meeting_url or (business_name or ""),
+    )
+    safe_cal = email_layout.safe_url(url)
+    if not safe_cal:
+        return ""
+    add_color = copy_color(copy, "add_cal_cta", "#18181b")
+    return (
+        '<tr><td style="padding:8px 32px 8px" align="center">'
+        f'<a href="{html.escape(safe_cal)}" style="display:inline-block;background:#fff;'
+        f"border:1px solid {accent};color:{add_color};text-decoration:none;font-size:14px;font-weight:600;"
+        f'padding:11px 26px;border-radius:9px">{tt(copy, locale, "add_cal_cta")}</a></td></tr>'
+    )
 
 
 def render_html(
@@ -21,6 +59,9 @@ def render_html(
     note: str | None,
     meeting_url: str,
     manage_url: str = "",
+    start_utc: datetime | None = None,
+    end_utc: datetime | None = None,
+    business_name: str | None = None,
     brand: Brand | None = None,
     locale: str = "en",
     copy: dict | None = None,
@@ -66,6 +107,15 @@ def render_html(
             f'<a href="{html.escape(safe_manage)}" style="color:{manage_color};text-decoration:underline">'
             f'{tt(copy, locale, "manage_cta")}</a>.</p></td></tr>'
         )
+    add_cal = _add_to_cal_button(
+        start_utc=start_utc,
+        end_utc=end_utc,
+        business_name=business_name,
+        meeting_url=meeting_url,
+        accent=accent,
+        locale=locale,
+        copy=copy,
+    )
     sub_color = copy.get("header_reminder" + "__color") if copy else None
     heading_color = copy_color(copy, "reminder_heading", "#18181b")
     inner = (
@@ -76,6 +126,7 @@ def render_html(
         + f'<tr><td style="padding:32px 32px 8px"><h1 style="margin:0 0 12px;font-size:23px;font-weight:600;letter-spacing:-0.01em;color:{heading_color}">{tt(copy, locale, "reminder_heading", name=safe_name)}</h1></td></tr>'
         + box
         + cta
+        + add_cal
         + manage
         + email_layout.footer(brand=_brand)
     )
@@ -95,6 +146,9 @@ def send(
     note: str | None,
     meeting_url: str,
     manage_url: str = "",
+    start_utc: datetime | None = None,
+    end_utc: datetime | None = None,
+    business_name: str | None = None,
     brand: Brand | None = None,
     locale: str = "en",
     copy: dict | None = None,
@@ -116,6 +170,9 @@ def send(
             note=note,
             meeting_url=meeting_url,
             manage_url=manage_url,
+            start_utc=start_utc,
+            end_utc=end_utc,
+            business_name=business_name,
             brand=brand,
             locale=locale,
             copy=copy,

@@ -638,7 +638,7 @@ export default function TeamPage() {
             Our team
           </p>
           <h1 className="text-balance font-display text-[clamp(2.25rem,6vw,4rem)] font-bold leading-[1.04] tracking-[-0.02em] text-text-primary">
-            A small, senior team that ships.
+            A team that ships.
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-[1.0625rem] leading-relaxed text-text-secondary sm:text-[1.15rem]">
             The people behind every build — engineering, security and strategy under one roof, and

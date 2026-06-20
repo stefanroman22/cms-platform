@@ -40,6 +40,19 @@ def test_load_by_slug_returns_config():
     assert cfg.calendar_provider == "none"
 
 
+def test_load_by_slug_reads_embedded_website_url():
+    """website_url now arrives embedded via the projects FK (one query, no second
+    round-trip). The 'projects' key is consumed and not leaked into the config."""
+    row = {**SETTINGS_ROW, "projects": {"website_url": "https://client.example"}}
+    with patch(
+        "auth_service.services.booking_tenant.get_supabase_admin",
+        return_value=_sb_returning([row]),
+    ):
+        cfg = booking_tenant.load_tenant_by_slug("acme")
+    assert cfg is not None
+    assert cfg.website_url == "https://client.example"
+
+
 def test_load_by_slug_unknown_returns_none():
     with patch(
         "auth_service.services.booking_tenant.get_supabase_admin", return_value=_sb_returning([])

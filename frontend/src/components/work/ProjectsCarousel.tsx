@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LazyMotion, domAnimation, m, AnimatePresence, MotionConfig } from "motion/react";
 import { ChevronLeft, ChevronRight, ArrowUpRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { projects } from "@/content/projects";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,8 @@ const arrowCn =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-text-secondary transition-colors hover:border-accent/50 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer";
 
 export function ProjectsCarousel() {
+  const t = useTranslations("work");
+  const tp = useTranslations("projects");
   // [index, direction] — direction drives the image slide on every change.
   const [[active, direction], setState] = useState<[number, number]>([0, 0]);
   const count = projects.length;
@@ -73,7 +76,13 @@ export function ProjectsCarousel() {
                     {isActive && (
                       <span
                         aria-hidden="true"
-                        className="absolute inset-x-2.5 bottom-0 h-0.5 rounded-full bg-accent"
+                        className={cn(
+                          "absolute bottom-0 right-2.5 h-0.5 rounded-full bg-accent",
+                          // The first button is `first:pl-0` (flush-left), so its
+                          // underline must start at the edge too — otherwise it
+                          // sits 10px in and clips the first name's leading letters.
+                          i === 0 ? "left-0" : "left-2.5"
+                        )}
                       />
                     )}
                   </button>
@@ -84,7 +93,7 @@ export function ProjectsCarousel() {
               <button
                 type="button"
                 onClick={() => step(-1)}
-                aria-label="Previous project"
+                aria-label={t("prevProject")}
                 className={arrowCn}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -92,7 +101,7 @@ export function ProjectsCarousel() {
               <button
                 type="button"
                 onClick={() => step(1)}
-                aria-label="Next project"
+                aria-label={t("nextProject")}
                 className={arrowCn}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -100,13 +109,15 @@ export function ProjectsCarousel() {
             </div>
           </div>
 
-          {/* Image stage — gold ambient shadow + inset ring matching the theme. */}
-          <div className="relative mt-5 aspect-[16/10] w-full overflow-hidden rounded-2xl border border-border bg-surface/40 shadow-[0_28px_80px_-28px_rgba(201,169,97,0.45)]">
+          {/* Image stage — gold ambient shadow + inset ring matching the theme.
+              Aspect matches the source screenshots (1920×842) so the full landing
+              page shows edge-to-edge with no crop. */}
+          <div className="relative mt-5 aspect-[1920/842] w-full overflow-hidden rounded-2xl border border-border bg-surface/40 shadow-[0_28px_80px_-28px_rgba(201,169,97,0.45)]">
             <AnimatePresence initial={false} custom={direction}>
               <m.img
                 key={project.id}
                 src={project.image}
-                alt={`${project.name} preview`}
+                alt={t("previewAlt", { name: project.name })}
                 loading="lazy"
                 draggable={false}
                 custom={direction}
@@ -130,7 +141,7 @@ export function ProjectsCarousel() {
                 href={project.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`Open ${project.name} in a new tab`}
+                aria-label={t("openAria", { name: project.name })}
                 className="group absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-accent hover:bg-accent hover:text-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-black active:scale-95 cursor-pointer"
               >
                 <ArrowUpRight className="h-5 w-5 transition-transform duration-300 group-hover:rotate-45" />
@@ -148,7 +159,7 @@ export function ProjectsCarousel() {
               transition={{ duration: 0.3, ease: EXPO }}
               className="mt-4 line-clamp-2 text-sm leading-relaxed text-text-secondary"
             >
-              {project.tagline}
+              {tp(`${project.id}.tagline`)}
             </m.p>
           </AnimatePresence>
         </div>

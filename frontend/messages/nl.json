@@ -1,0 +1,380 @@
+{
+  "common": {
+    "brand": "Roman Technologies",
+    "loadingExperience": "Ervaring met laden"
+  },
+  "languageSwitcher": {
+    "label": "Taal",
+    "ariaLabel": "Taal wijzigen"
+  },
+  "nav": {
+    "about": "Over",
+    "clients": "Klanten",
+    "team": "Team",
+    "contact": "Contact",
+    "primaryNav": "Hoofdnavigatie",
+    "mobileNav": "Mobiele navigatie"
+  },
+  "header": {
+    "logIn": "Inloggen",
+    "openDashboard": "Dashboard openen",
+    "openMenu": "Menu openen",
+    "closeMenu": "Menu sluiten",
+    "openDashboardButton": "Dashboard openen",
+    "getInTouch": "Neem contact op"
+  },
+  "footer": {
+    "tagline": "Hoogwaardige softwareoplossingen voor moderne bedrijven.",
+    "contact": "Contact",
+    "rights": "© {year} Roman Technologies SRL. Alle rechten voorbehouden."
+  },
+  "login": {
+    "heading": "Toegang tot CMS",
+    "subheading": "Log alstublieft in op uw beheerdersaccount.",
+    "emailLabel": "E-mailadres of gebruikersnaam",
+    "emailPlaceholder": "admin@example.com",
+    "passwordLabel": "Wachtwoord",
+    "showPassword": "Wachtwoord weergeven",
+    "hidePassword": "Wachtwoord verbergen",
+    "rememberMe": "Onthoud mij",
+    "forgotPassword": "Wachtwoord vergeten?",
+    "signIn": "Log in op het dashboard",
+    "successHeading": "Inloggen gelukt",
+    "successBody": "Je bent helemaal klaar. Ga naar je dashboard om je projecten te beheren.",
+    "goToDashboard": "Ga naar het dashboard"
+  },
+  "hero": {
+    "eyebrow": "Roman Technologies",
+    "title": "Wij brengen uw idee of wens tot leven",
+    "subtitle": "Op maat gemaakte websites, apps, AI-agenten en workflows voor ambitieuze bedrijven, tegen een prijs die binnen uw budget past.",
+    "getPreview": "Bekijk een gratis voorproefje",
+    "seePricing": "Bekijk de prijzen",
+    "noCall": "U hoeft niet te bellen om de prijzen te weten te komen.",
+    "trust": {
+      "humanReviewed": "Door mensen gecontroleerde code",
+      "euBased": "gevestigd in de EU",
+      "gdpr": "Voldoet aan de AVG",
+      "hosting": "Managed hosting inbegrepen"
+    }
+  },
+  "laptop": {
+    "srDescription": "Decoratieve animatie van een laptop die opengaat en het contentmanagementsysteem Roman Technologies laat zien, dat wordt gebruikt door Café Nordlys, een voorbeeldklant.",
+    "mobileIntro": "Een contentsysteem dat je klanten nooit te zien krijgen — en waar je nauwelijks iets aan hoeft te doen.",
+    "seeItOpen": "Bekijk het in de openbare versie",
+    "closeDemo": "Demo sluiten",
+    "demoComingSoon": "Demovideo volgt binnenkort.",
+    "captions": {
+      "manage": "Beheer je projecten op één plek",
+      "adjust": "Wijzig de inhoud en pas je project 24/7 zelf aan met behulp van onze agentic-software",
+      "hosted": "Gehost, beveiligd, bewaakt — door ons.",
+      "reviewed": "Elke grote release wordt door mensen gecontroleerd om de juistheid ervan te waarborgen"
+    }
+  },
+  "contactSection": {
+    "eyebrow": "Laten we eens praten",
+    "heading": "Maak een afspraak voor een telefoongesprek of stuur een bericht",
+    "subheading": "Boek een afspraak van 45 minuten met mij, Stefan — of vul hieronder je gegevens in, dan neem ik binnen één werkdag contact met je op.",
+    "bookingHeading": "Maak een afspraak voor een telefoongesprek met Stefan",
+    "bookingSubheading": "telefoongesprek van 45 minuten"
+  },
+  "contactInfo": {
+    "heading": "Neem rechtstreeks contact met ons op",
+    "subheading": "Liever een e-mail of een kort telefoontje? Hier kun je ons vinden.",
+    "email": "E-mail",
+    "phone": "Telefoon",
+    "location": "Locatie",
+    "hours": "Openingstijden"
+  },
+  "contactForm": {
+    "name": "Naam",
+    "email": "E-mail",
+    "company": "Bedrijf",
+    "message": "Bericht",
+    "optional": "(optioneel)",
+    "namePlaceholder": "Jane Doe",
+    "emailPlaceholder": "jane@company.com",
+    "companyPlaceholder": "Acme Inc.",
+    "messagePlaceholder": "Een korte beschrijving van je project, de planning en het budget.",
+    "errName": "Vul hier je naam in.",
+    "errEmailEmpty": "Vul hier je e-mailadres in.",
+    "errEmailInvalid": "Die e-mail ziet er niet goed uit.",
+    "errMessage": "Vertel ons er wat meer over (minstens 10 tekens).",
+    "send": "Bericht verzenden",
+    "success": "Bericht verzonden — tot gauw!",
+    "error": "Er is iets misgegaan. Stuur me een e-mail op <link>{recipient}</link>.",
+    "sendAnother": "Stuur nog een bericht",
+    "tryAgain": "Probeer het nog eens",
+    "orEmail": "Of stuur ons rechtstreeks een e-mail op <link>{recipient}</link>.",
+    "sending": "Je bericht wordt verzonden…"
+  },
+  "contactChannel": {
+    "email": "E-mail",
+    "bookCall": "Maak een afspraak voor een telefoongesprek"
+  },
+  "whatWeDo": {
+    "eyebrow": "Wat we bouwen",
+    "heading": "Wat doen we?",
+    "lead": "Van een enkele landingspagina tot complete AI-platforms — zo helpen wij ambitieuze bedrijven hun producten op de markt te brengen.",
+    "aiAgents": {
+      "title": "Wij ontwikkelen AI-agenten",
+      "description": "Autonome systemen die echte taken van begin tot eind afhandelen — niet alleen chatbots."
+    },
+    "websites": {
+      "title": "Wij ontwikkelen websites",
+      "description": "Snelle, mooie en SEO-vriendelijke websites die bezoekers tot klanten maken."
+    },
+    "apps": {
+      "title": "Wij ontwikkelen softwareapplicaties",
+      "description": "Web-, mobiele en desktop-apps die zijn ontworpen om mee te groeien met uw bedrijf."
+    },
+    "automation": {
+      "title": "We ontwikkelen automatiseringsworkflows met behulp van AI",
+      "description": "Door AI aangestuurde workflows die je routinematige taken de klok rond uitvoeren."
+    }
+  },
+  "values": {
+    "eyebrow": "Waar wij voor staan",
+    "heading": "Onze waarden",
+    "clientFirst": {
+      "title": "De klant staat voorop",
+      "description": "We gaan uit van uw doelstellingen, niet van onze technologie. Elke beslissing wordt afgemeten aan de vraag wat uw bedrijf vooruit helpt."
+    },
+    "teamwork": {
+      "title": "Teamwork",
+      "description": "De afdelingen Engineering, Beveiliging en Strategie werken als één team samen, zodat er niets over het hoofd wordt gezien."
+    },
+    "ownership": {
+      "title": "Eigendom",
+      "description": "Alles wat we bouwen is van jou: de code, de gegevens en de roadmap. Geen lock-in, geen black boxes."
+    },
+    "transparency": {
+      "title": "Transparantie",
+      "description": "Duidelijke offertes, eerlijke tijdschema’s en iemand die je te woord staat. Je weet altijd precies hoe de zaken ervoor staan."
+    }
+  },
+  "work": {
+    "searchPlaceholder": "Projecten zoeken…",
+    "searchAria": "Projecten zoeken op naam",
+    "empty": "Er zijn geen projecten die overeenkomen met „{query}”.",
+    "previewAlt": "{name} voorvertoning",
+    "openAria": "Open {name} in een nieuw tabblad",
+    "prevProject": "Vorige project",
+    "nextProject": "Volgend project"
+  },
+  "projects": {
+    "akris": {
+      "tagline": "Een presentatiesite met een op maat gemaakte scraper die officiële statistieken verzamelt en weergeeft in een strak, modern dashboard.",
+      "keyInfo": [
+        {
+          "label": "Type",
+          "value": "Website van een sportclub"
+        },
+        {
+          "label": "Stapel",
+          "value": "Next.js · Webscraper"
+        },
+        {
+          "label": "Focus",
+          "value": "Dashboard met live statistieken"
+        }
+      ]
+    },
+    "pluxbox": {
+      "tagline": "Een strakke productwebsite voor een softwarebedrijf",
+      "keyInfo": [
+        {
+          "label": "Type",
+          "value": "SaaS / productwebsite"
+        },
+        {
+          "label": "Stapel",
+          "value": "Next.js · Tailwind · Motion"
+        },
+        {
+          "label": "Focus",
+          "value": "Duidelijkheid, conversie"
+        }
+      ]
+    },
+    "roman-mariana": {
+      "tagline": "Een verzorgde zakelijke website met op maat gemaakte e-mailintegraties die de communicatie tussen klanten en het bedrijf automatiseren.",
+      "keyInfo": [
+        {
+          "label": "Type",
+          "value": "Zakelijke website"
+        },
+        {
+          "label": "Stapel",
+          "value": "Next.js · E-mailautomatisering"
+        },
+        {
+          "label": "Focus",
+          "value": "E-mailautomatisering, leadgeneratie"
+        }
+      ]
+    }
+  },
+  "clientsPage": {
+    "metaTitle": "Klanten — Roman Technologies",
+    "metaDescription": "Een selectie van websites, applicaties en AI-workflows die we hebben ontwikkeld en die we nu voor klanten in de hele EU in beheer houden.",
+    "eyebrow": "Ons werk",
+    "title": "Ontworpen voor ambitieuze bedrijven.",
+    "subheading": "Een selectie van websites, applicaties en AI-workflows die we hebben ontworpen, ontwikkeld en nu in beheer houden voor klanten in de hele EU."
+  },
+  "pricing": {
+    "heading": "Eenvoudige, eerlijke prijsstelling",
+    "toggleProject": "Projectgericht",
+    "toggleSubscription": "Abonnement",
+    "monthly": "Maandelijks",
+    "yearly": "Jaarlijks",
+    "mostPopular": "Meest populair",
+    "save": "{discount}% korting",
+    "disclaimerProject": "De prijzen zijn afhankelijk van de complexiteit — je krijgt altijd een duidelijke offerte voordat er iets wordt gestart.",
+    "shared": {
+      "managedHosting": "Beheerde hosting en beveiliging",
+      "managedHostingTip": "Door ons gehost, beveiligd en gemonitord — geen aparte hostingfactuur.",
+      "seo": "SEO- en GEO-optimalisatie",
+      "seoTip": "Geoptimaliseerd voor zoekmachines en AI-antwoordengines, zodat je goed gevonden wordt.",
+      "humanReview": "Persoonlijke beoordeling door een mens",
+      "humanReviewTip": "Elke grote release wordt door een mens gecontroleerd en niet zomaar door een machine uitgebracht.",
+      "cms": "CMS-connector & oplossing voor agentgerelateerde problemen",
+      "cmsTip": "Je kunt de inhoud in je app op elk moment aanpassen, en een AI-agent spoort problemen automatisch op en lost ze op."
+    },
+    "project": {
+      "presentation": {
+        "name": "Presentatiewebsite",
+        "info": "Marketing- en presentatiesites die snel online gaan.",
+        "price": "vanaf € 250",
+        "priceNote": "vanaf € 400 inclusief complexe backend-integratie",
+        "feature": "Op maat gemaakt, responsief ontwerp",
+        "cta": "Bekijk een gratis voorproefje"
+      },
+      "application": {
+        "name": "Softwareapplicatie",
+        "info": "Mobiele en/of desktop-apps, ontworpen om mee te groeien.",
+        "price": "vanaf € 500",
+        "feature": "Bijeenkomsten over prioritaire ontwikkelingen",
+        "featureTip": "Meer prioriteit voor persoonlijke ontmoetingen met het ontwikkelingsteam.",
+        "cta": "Start je app"
+      },
+      "automation": {
+        "name": "AI-automatiseringssoftware",
+        "info": "Op maat gemaakte AI-workflows die je routinematige taken uitvoeren.",
+        "price": "vanaf € 200",
+        "feature": "24/7 onderhoud",
+        "featureTip": "Wij zorgen ervoor dat uw automatiseringen de klok rond blijven draaien.",
+        "cta": "Iets automatiseren"
+      }
+    },
+    "subscription": {
+      "care": {
+        "name": "Verzorging",
+        "info": "Zorg ervoor dat een bestaande website goed blijft functioneren.",
+        "priceMonthly": "€ 49 per maand",
+        "priceYearly": "490 euro per jaar",
+        "features": [
+          "Beheerde hosting en monitoring",
+          "Maandelijkse inhoudsupdates",
+          "E-mailondersteuning"
+        ],
+        "cta": "Kies voor zorg"
+      },
+      "growth": {
+        "name": "Groei",
+        "info": "Voortdurende verbeteringen en ondersteuning.",
+        "priceMonthly": "99 euro per maand",
+        "priceYearly": "990 euro per jaar",
+        "features": [
+          "Alles op het gebied van zorg",
+          "Proactieve probleemoplosser",
+          "Prioritaire ondersteuning",
+          "Driemaandelijkse strategievergadering"
+        ],
+        "cta": "Kies voor groei"
+      },
+      "scale": {
+        "name": "Schaal",
+        "info": "Een toegewijde partner voor dynamische teams.",
+        "priceMonthly": "199 euro per maand",
+        "priceYearly": "1990 euro per jaar",
+        "features": [
+          "Alles over groei",
+          "Aantal uren dat ontwikkelaars hieraan hebben besteed",
+          "24/7-klantenservicemedewerker",
+          "Maandelijkse evaluaties van de roadmap"
+        ],
+        "cta": "Schaal kiezen"
+      }
+    }
+  },
+  "teamPage": {
+    "metaTitle": "Team — Roman Technologies",
+    "eyebrow": "Ons team",
+    "title": "Een team dat resultaten boekt.",
+    "subheading": "De mensen achter elk project — techniek, beveiliging en strategie onder één dak, en de principes die ten grondslag liggen aan onze werkwijze."
+  },
+  "aboutPage": {
+    "metaTitle": "Over ons — Roman Technologies"
+  },
+  "about": {
+    "hero": {
+      "eyebrow": "Over ons",
+      "title": "Software die rekening houdt met uw tijd, uw budget en uw gegevens.",
+      "lead": "Roman Technologies is een in de EU gevestigde softwareontwikkelaar. Wij ontwerpen en bouwen op maat gemaakte websites, applicaties en AI-workflows voor ambitieuze bedrijven — en zorgen vervolgens voor de hosting, beveiliging en het onderhoud ervan, zodat u zich kunt concentreren op uw bedrijf in plaats van op uw technostack."
+    },
+    "story": {
+      "heading": "Wie wij zijn",
+      "paragraphs": [
+        "We zijn Roman Technologies begonnen vanuit een eenvoudige overtuiging: kleine en groeiende bedrijven verdienen software van dezelfde kwaliteit als grote ondernemingen — zonder het hoge prijskaartje van grote ondernemingen of het gedoe met tussenpersonen.",
+        "Elk project wordt zo ontwikkeld dat u er zelf eigenaar van bent, wordt vóór de oplevering door een medewerker gecontroleerd en wordt ondersteund door beheerde hosting en monitoring. Geen lock-in, geen verrassingen — gewoon software die werkt, en een team dat daadwerkelijk reageert."
+      ]
+    },
+    "team": {
+      "heading": "Maak kennis met het team",
+      "subheading": "Een klein, ervaren team dat resultaten boekt — engineering, beveiliging en strategie onder één dak.",
+      "emailAria": "E-mail {name}",
+      "linkedinAria": "{name} op LinkedIn",
+      "members": {
+        "stefan-roman": {
+          "role": "CEO en oprichter",
+          "description": "Geeft leiding aan de strategie en de klantrelaties, houdt toezicht op het gehele leveringsproces en zorgt ervoor dat elke release correct, op tijd en in overeenstemming met de daadwerkelijke behoeften van het bedrijf wordt opgeleverd."
+        },
+        "alexandru-aioanei": {
+          "role": "Full-stack (AI) ontwikkelaar",
+          "description": "Ontwikkelt end-to-end-functies voor zowel de frontend als de backend en integreert AI-workflows en -agents in klantproducten — waardoor ideeën worden omgezet in werkende, onderhoudbare software."
+        },
+        "laurian-duma": {
+          "role": "GDPR- en beveiligingscompliance-engineer",
+          "description": "Verantwoordelijk voor gegevensbescherming en beveiliging: voert beoordelingen en dreigingsanalyses uit, zorgt ervoor dat elk product aan de AVG voldoet en waarborgt dat klantgegevens goed beveiligd blijven en binnen de EU worden bewaard."
+        }
+      }
+    }
+  },
+  "contactPage": {
+    "metaTitle": "Contact — Roman Technologies",
+    "hero": {
+      "eyebrow": "Contact",
+      "title": "Vertel ons eens wat je aan het bouwen bent.",
+      "lead": "Stuur ons een bericht of neem rechtstreeks contact met ons op. We reageren doorgaans binnen één werkdag, en u hoeft nooit te bellen om een offerte te krijgen."
+    }
+  },
+  "manage": {
+    "loading": "Bezig met laden…",
+    "linkNotFoundTitle": "Link niet gevonden",
+    "linkNotFoundBody": "Deze beheerlink is ongeldig of is verlopen.",
+    "cancelledTitle": "Boeking geannuleerd",
+    "cancelledBody": "Deze reservering is geannuleerd.",
+    "bookingTitle": "Uw reservering",
+    "reschedule": "Een nieuwe afspraak maken",
+    "rescheduleTooltipAllowed": "Bij dit bedrijf kun je een afspraak tot {max} {max, plural, one {keer} other {keer}} verzetten.",
+    "rescheduleClosedTooltip": "Het wijzigen van de afspraak is niet meer mogelijk voor deze boeking — de afspraak is te dichtbij.",
+    "cancelBooking": "Deze reservering annuleren",
+    "cancelling": "Annuleren…",
+    "cancelSuccess": "Uw reservering is geannuleerd.",
+    "cancelError": "Het is niet gelukt om te annuleren. Probeer het nog eens of neem contact op met de klantenservice.",
+    "confirmCancel": "Deze reservering annuleren? Dit kan niet ongedaan worden gemaakt.",
+    "keepIt": "Bewaar het",
+    "yesCancel": "Ja, annuleren",
+    "cancellationClosed": "Annuleren is niet meer mogelijk — de afspraak is te dichtbij."
+  }
+}

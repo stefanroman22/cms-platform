@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { LazyMotion, domAnimation, m, AnimatePresence, MotionConfig } from "motion/react";
 import { ArrowUpRight, Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { projects } from "@/content/projects";
 import { REVEAL_EASE } from "@/components/motion/Reveal";
 
@@ -12,6 +13,8 @@ import { REVEAL_EASE } from "@/components/motion/Reveal";
  * home carousel. Cards animate in and re-flow as the filter narrows results.
  */
 export function ProjectsGrid() {
+  const t = useTranslations("work");
+  const tp = useTranslations("projects");
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -38,17 +41,15 @@ export function ProjectsGrid() {
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search projects…"
-                  aria-label="Search projects by name"
+                  placeholder={t("searchPlaceholder")}
+                  aria-label={t("searchAria")}
                   className="w-full rounded-xl border border-border bg-surface/40 py-3 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-tertiary outline-none transition-colors focus:border-accent/50 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
                 />
               </div>
             </div>
 
             {filtered.length === 0 ? (
-              <p className="text-center text-sm text-text-secondary">
-                No projects match &ldquo;{query}&rdquo;.
-              </p>
+              <p className="text-center text-sm text-text-secondary">{t("empty", { query })}</p>
             ) : (
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 <AnimatePresence>
@@ -57,16 +58,17 @@ export function ProjectsGrid() {
                       key={p.id}
                       layout
                       initial={{ opacity: 0, y: 24 }}
-                      animate={{ opacity: 1, y: 0 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, amount: 0.2 }}
                       exit={{ opacity: 0, y: -12 }}
                       whileHover={{ y: -6 }}
                       transition={{ duration: 0.4, ease: REVEAL_EASE, delay: i * 0.05 }}
                       className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface/30 transition-colors hover:border-accent/40"
                     >
-                      <div className="relative aspect-[16/10] w-full overflow-hidden">
+                      <div className="relative aspect-[1920/842] w-full overflow-hidden">
                         <img
                           src={p.image}
-                          alt={`${p.name} preview`}
+                          alt={t("previewAlt", { name: p.name })}
                           loading="lazy"
                           draggable={false}
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -76,7 +78,7 @@ export function ProjectsGrid() {
                             href={p.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={`Open ${p.name} in a new tab`}
+                            aria-label={t("openAria", { name: p.name })}
                             className="group/btn absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:border-accent hover:bg-accent hover:text-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
                           >
                             <ArrowUpRight className="h-5 w-5 transition-transform duration-300 group-hover/btn:rotate-45" />
@@ -88,15 +90,17 @@ export function ProjectsGrid() {
                           {p.name}
                         </h3>
                         <p className="mt-2 text-sm leading-relaxed text-text-secondary">
-                          {p.tagline}
+                          {tp(`${p.id}.tagline`)}
                         </p>
                         <dl className="mt-5 space-y-2 border-t border-border pt-4">
-                          {p.keyInfo.map((info) => (
-                            <div key={info.label} className="flex items-baseline gap-3 text-sm">
-                              <dt className="w-16 shrink-0 text-text-tertiary">{info.label}</dt>
-                              <dd className="text-text-secondary">{info.value}</dd>
-                            </div>
-                          ))}
+                          {(tp.raw(`${p.id}.keyInfo`) as { label: string; value: string }[]).map(
+                            (info) => (
+                              <div key={info.label} className="flex items-baseline gap-3 text-sm">
+                                <dt className="w-16 shrink-0 text-text-tertiary">{info.label}</dt>
+                                <dd className="text-text-secondary">{info.value}</dd>
+                              </div>
+                            )
+                          )}
                         </dl>
                       </div>
                     </m.article>

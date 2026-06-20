@@ -19,7 +19,8 @@ export interface ServiceCardService {
 
 interface ServiceCardProps {
   service: ServiceCardService;
-  projectSlug: string;
+  /** Query-param link that opens this service's editor inline in the CMS section. */
+  editHref: string;
   isAdmin: boolean;
   removing: boolean;
   onRemove: (serviceKey: string) => void;
@@ -29,7 +30,7 @@ interface ServiceCardProps {
 
 export function ServiceCard({
   service: svc,
-  projectSlug,
+  editHref,
   isAdmin,
   removing,
   onRemove,
@@ -89,7 +90,8 @@ export function ServiceCard({
             : "No content yet"}
         </span>
         <Link
-          href={`/dashboard/${projectSlug}/${svc.service_key}`}
+          href={editHref}
+          scroll={false}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
             isEmail
               ? "bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600"

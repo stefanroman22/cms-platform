@@ -12,12 +12,14 @@ import { motion, useReducedMotion } from "motion/react";
 import { dashboardSectionCardCn } from "@/lib/styles";
 import { dashAccent } from "@/lib/dashboardTheme";
 import type { BookingAppointment, BookingResource, BookingService, BookingStats } from "../api";
-import { BookingsOverTimeChart, BookingBreakdown } from "../OverviewCharts";
+import { BookingsOverTimeChart } from "../OverviewCharts";
+import { RangedBreakdown } from "./RangedBreakdown";
 import { ByStaffWidgets } from "./ByStaffWidgets";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
 export interface OverviewWidgetCtx {
+  projectSlug: string;
   stats: BookingStats;
   /** Already scope-filtered by the panel. */
   appointments: BookingAppointment[];
@@ -140,7 +142,11 @@ export const STAT_VIEWS: StatView[] = [
     id: "breakdown",
     title: "Breakdown",
     render: (ctx) => (
-      <BookingBreakdown byService={ctx.stats.by_service} byStatus={ctx.stats.by_status} />
+      <RangedBreakdown
+        projectSlug={ctx.projectSlug}
+        resourceId={ctx.scope === "all" ? undefined : ctx.scope}
+        fallback={ctx.stats}
+      />
     ),
   },
   {

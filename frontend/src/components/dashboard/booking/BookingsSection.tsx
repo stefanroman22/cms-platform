@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Calendar, Copy, Check } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import { ArcSpinner } from "@/components/ui/ArcSpinner";
 import { dashboardSectionCardCn } from "@/lib/styles";
@@ -26,8 +26,7 @@ type Tab =
   | "resources"
   | "hours"
   | "policies"
-  | "emails"
-  | "embed";
+  | "emails";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
@@ -38,7 +37,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "hours", label: "Hours" },
   { key: "policies", label: "Policies" },
   { key: "emails", label: "Emails" },
-  { key: "embed", label: "Embed" },
 ];
 
 interface Props {
@@ -185,77 +183,6 @@ export function BookingsSection({ projectSlug, isAdmin }: Props) {
       {activeTab === "hours" && <HoursEditor projectSlug={projectSlug} />}
       {activeTab === "policies" && <PoliciesForm projectSlug={projectSlug} />}
       {activeTab === "emails" && <EmailTemplateEditor projectSlug={projectSlug} />}
-      {activeTab === "embed" && <EmbedTab publicSlug={data.public_slug} />}
-    </div>
-  );
-}
-
-// ── Embed tab ──────────────────────────────────────────────────────────────────
-
-function EmbedTab({ publicSlug }: { publicSlug?: string }) {
-  const [origin] = useState(() => (typeof window !== "undefined" ? window.location.origin : ""));
-  const [copied, setCopied] = useState(false);
-
-  if (!publicSlug) {
-    return (
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Set a public slug in Settings before embedding.
-      </p>
-    );
-  }
-
-  const snippet = `<script src="${origin}/embed.js" data-tenant="${publicSlug}" async></script>`;
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(snippet);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // clipboard unavailable — silently ignore
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          Embed snippet
-        </h3>
-        <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-          Paste this on any page of the client&apos;s site — the booking widget will appear
-          automatically.
-        </p>
-        <div className="relative rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
-          <pre className="overflow-x-auto px-4 py-3 pr-12 text-xs text-zinc-800 dark:text-zinc-200">
-            <code>{snippet}</code>
-          </pre>
-          <button
-            type="button"
-            onClick={() => {
-              void handleCopy();
-            }}
-            aria-label="Copy embed snippet"
-            className="absolute right-2 top-2 cursor-pointer rounded-md border border-zinc-200 bg-white p-1.5 text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
-          >
-            {copied ? (
-              <Check className="h-3.5 w-3.5" aria-hidden="true" />
-            ) : (
-              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Live preview</h3>
-        <iframe
-          src={`/w/${publicSlug}`}
-          title="Booking widget preview"
-          style={{ width: "100%", border: 0, minHeight: 500 }}
-          className="rounded-lg border border-zinc-200 dark:border-zinc-700"
-        />
-      </div>
     </div>
   );
 }

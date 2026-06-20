@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { Loader2, Pencil, Save, X } from "lucide-react";
 import { editReveal, errorBlip } from "@/lib/animations";
 import { useEditingSection } from "../context/EditingSectionContext";

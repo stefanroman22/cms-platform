@@ -48,6 +48,16 @@ def test_visitor_email_no_meeting_block_when_no_url():
     assert "Meeting link" not in html
 
 
+def test_visitor_email_addtocal_for_in_person_no_meeting():
+    """In-person business (no meeting URL) still gets the customer add-to-calendar
+    button — the calendar event is useful regardless of a video link."""
+    html = render_visitor_html(booking=BOOKING, meeting_url="")
+    assert "Add to Google Calendar" in html
+    assert "calendar.google.com/calendar/render" in html
+    # …but still no meeting link / Join button.
+    assert "Join the meeting" not in html
+
+
 def test_visitor_email_includes_manage_link_when_given():
     html = render_visitor_html(
         booking=BOOKING,

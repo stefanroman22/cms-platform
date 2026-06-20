@@ -34,12 +34,150 @@ Phase 6). Otherwise reuse the existing row.
    - Verify the from-domain is verified in Resend (call Resend API `/domains` if reachable; otherwise warn the user).
 5. **Vercel project setup** for the client website:
    - `find_project_by_repo` → reuse if found, else `create_project`.
-   - Set env vars using the **framework-aware prefix**: `NEXT_PUBLIC_*` for Next.js (`next.config.*` present), `VITE_*` for Vite-based frameworks. Concretely: `NEXT_PUBLIC_CMS_ENDPOINT` or `VITE_CMS_ENDPOINT` (production + preview); `NEXT_PUBLIC_CMS_PREVIEW_TOKEN` or `VITE_CMS_PREVIEW_TOKEN` (preview only). Reuse existing `preview_token` from CMS project row if present (idempotent).
-   - The CMS endpoint value is the **locale-less base** `{cms_endpoint_base}/content/{slug}`. Do NOT append a locale — the site's `i18n/request.ts` appends `/{locale}` at runtime.
+   - **CMS endpoint** — set `{prefix}CMS_ENDPOINT` (framework-aware prefix: `NEXT_PUBLIC_` for Next.js, `VITE_` for Vite, `PUBLIC_` for Astro/SvelteKit) to the **locale-less base** `{cms_endpoint_base}/content/{slug}` on **BOTH** production AND preview (the SAME value — do NOT suffix preview with `/draft`). The site appends `/{locale}` and `/draft` itself at fetch time; draft-vs-published is decided by the **token's presence**, not the URL.
+   - **Preview token** — do **NOT** set a `NEXT_PUBLIC_*`/prefixed token (that inlines a credential into the client bundle), and do **NOT** PATCH `preview_token` onto the project row (`AdminProjectPatchIn` deliberately drops it — audit BE-004 — so the PATCH is a silent no-op that leaves the DB token NULL while Vercel has one → `/draft` 401s → drafts never show). Instead, provision it via the **rotate endpoint**, the single writer of both stores:
+     - If the project row has no `preview_token`, `POST /admin/projects/{slug}/rotate-preview-token` (admin bearer). It writes the DB `preview_token` AND the Vercel **`CMS_PREVIEW_TOKEN`** (server-only key, preview target). It returns the token.
+     - Mirror that token onto Vercel yourself too — `set_env_var("CMS_PREVIEW_TOKEN", token, target=["preview"])` (literal unprefixed key) — because rotate skips its Vercel write silently when the backend `VERCEL_TOKEN` is unset. Set this BEFORE triggering the build.
+     - The token key is the server-only **`CMS_PREVIEW_TOKEN`** for ALL frameworks (it is read only in server components / `i18n/request.ts`, never a client component). Re-runs are idempotent: reuse the existing DB token, never rotate when one already exists.
    - Create `cms-preview` branch from production branch if missing.
-   - Trigger production + preview deployments.
-   - PATCH the CMS project row with `github_repo`, `production_branch` (resolved in this step from Vercel `productionBranch` or GitHub `default_branch` — see [AGENTS.md → Branch standardization](../AGENTS.md)), `vercel_project_id`, `production_url`, `preview_url`, `preview_token`.
+   - Trigger production + preview deployments (env + token must already be set so the build/runtime carries them).
+   - PATCH the CMS project row with `github_repo`, `production_branch` (resolved in this step from Vercel `productionBranch` or GitHub `default_branch` — see [AGENTS.md → Branch standardization](../AGENTS.md)), `vercel_project_id`, `production_url`, `preview_url`. **Never** `preview_token` (see above).
+   - **On the Vercel env "duplicates":** Vercel scopes env vars per environment, so the same key shows a separate **Preview** and **Production** row — that is NORMAL, not a duplicate. A genuine duplicate only appears if a re-run requests a different *target set* than the stored row (`set_env_var` matches on key + exact target set), so keep target sets stable across runs.
 6. **Commit `cms.config.json`** to the client repo and push (uses Phase 1's git origin).
+
+### 4.1.6 — Content wiring: EVERY provisioned service must drive the live site
+
+**Non-negotiable rule:** every content service you provision must be *consumed* by
+the rendered site. A service that is editable in the dashboard but does not change
+the live site (because the site reads a static constant instead) is a bug — the
+owner edits it, publishes, and nothing happens. This is the #1 content
+failure mode (see the samir-kapsalon follow-up in `LEARNINGS.md`).
+
+Most website-builder sites render text via **next-intl messages** and render
+non-text data (images, hours, contact, brand) from **static constants in
+`lib/site.ts`**. The deep-merge bridge only covers text whose service key maps to a
+`t()` namespace — so `image`/`gallery` services and `opening_hours`/`contact_info`/
+`general_brand_name` get silently dropped. You MUST close that gap:
+
+0. **Draft vs published fetch (so cms-preview AND localhost show SAVED-but-unpublished
+   edits).** `lib/cms-content.ts` must branch on the **server-only** `CMS_PREVIEW_TOKEN`:
+   - Token present (preview deployment + localhost `.env.local`) → fetch
+     `{base}/{locale}/draft` with header `X-CMS-Preview-Token: <token>` and
+     `cache: "no-store"`. This shows the latest SAVED draft before publishing.
+   - Token absent (production) → fetch `{base}/{locale}` (published) with
+     `next: { revalidate: 60 }`.
+   - **Safe fallback chain (never throw):** draft fetch not-ok/401 → retry the
+     published URL; published not-ok → return the local `messages` seed. So a
+     missing/0-length token or an unreachable CMS degrades gracefully, never a 500.
+   - Read the token via `process.env.CMS_PREVIEW_TOKEN` in this server-only module
+     (it is imported only by `i18n/request.ts`); NEVER reference it from a client
+     component (that would inline the credential into the public bundle).
+   - `.env.local` for localhost must set `CMS_PREVIEW_TOKEN` (matching the DB token)
+     so the developer sees drafts locally exactly like cms-preview.
+   The canonical multilingual reference is the samir-kapsalon `lib/cms-content.ts`
+   (single-locale sites: the it-global-services `src/lib/cms.ts` pattern).
+
+1. **`lib/cms-content.ts`** — deep-merges the fetched per-locale payload (draft or
+   published per point 0) over the local `messages/<locale>.json`. It must map EVERY
+   service type, not a subset:
+   - `text_block` → a message key (e.g. brand name).
+   - `key_value` → the matching next-intl namespace's `entries` (ENTRY_NS map).
+   - `repeater` → the namespace's items array.
+   - `image` → a `site.*` url string.
+   - `gallery` → a `site.*` url array.
+   Inject the non-text services under a dedicated **`site`** namespace in the merged
+   messages (brandName / contact / hours / heroImage / aboutImages / galleryImages /
+   …). Map service keys to the site's ACTUAL `t()` namespaces — the scan's keys
+   often don't match the built site's namespaces, so reconcile them here.
+
+2. **`lib/cms-site.ts`** — export `resolveSite(messages)` returning the site data
+   with a SAFE FALLBACK to the `lib/site.ts` constants when a service is absent
+   (the site must never break if the CMS is unreachable). Do the shape bridging
+   here once (e.g. derive `tel:` href from a phone string, build the Instagram URL
+   from a handle, split a one-line address, override only the TIMES on the weekly
+   hours rows). Components call `resolveSite(await getMessages())` (Server) or
+   `resolveSite(useMessages())` (Client) and read from it INSTEAD of importing the
+   static constant directly.
+
+3. **Audit before declaring done — check EVERY render surface, not just one.** For
+   each provisioned service key, confirm a component consumes its resolved value.
+   Grep the client repo for direct imports of `lib/site.ts` constants that shadow a
+   CMS service (`HERO_IMAGE`, `BUSINESS`, `HOURS`, `GALLERY_IMAGES`, …) — each such
+   usage must be replaced by `resolveSite`. A service with no consumer is either
+   wired or removed from the manifest; never leave it editable-but-inert.
+   (Canonical reference: the samir-kapsalon `lib/cms-content.ts` + `lib/cms-site.ts`.)
+
+   **The same data is often rendered in MULTIPLE places — wire ALL of them.** A
+   service is only "wired" if *every* surface that displays it reads the CMS, not a
+   parallel static duplicate. Real partial-wiring bugs found in shipped sites:
+   - **Logo/brand** rendered in Home/About from CMS but HARDCODED in the Header
+     (shows on every page), Footer, and MobileMenu (it-global-services).
+   - **Staff name/portrait/tags** read from a static `TEAM` constant on the team
+     page while only role/bio came from the CMS repeater (samir-kapsalon).
+   - **CV/experience/projects** wired in the GUI views but rendered from static
+     constants in a SECOND surface (a terminal emulator) (laurian portfolio).
+   So for each service, grep ALL usages of its data across the repo — chrome
+   (header/footer/mobile menu), every page, AND any alternate/secondary view — and
+   confirm each reads the resolved CMS value. A static constant may exist ONLY as a
+   fallback INSIDE the resolver, never as a parallel render path.
+
+4. **Reconcile the DB against the manifest — no orphan services.** After
+   provisioning, list `project_services` for the slug and diff against the manifest
+   keys. Any service in the DB that is NOT in the manifest (and not consumed by the
+   repo) is editable-but-inert clutter in the owner's dashboard (e.g. a stray
+   empty `contact_intro` with a colliding `display_order`, found on laurian). Either
+   wire it (add to the manifest + a render path) or DEPROVISION it (delete its
+   `content_entries` + `project_services` row). Never leave a provisioned service
+   the site can't render.
+
+5. **Note on uploaded images:** CMS image uploads may be served as relative
+   `/images/uploads/*` (committed to the client `public/`) or absolute URLs. If a
+   future upload host differs from the site's `next.config` `images.remotePatterns`,
+   `next/image` will reject it — add the host (or a loader) when wiring galleries.
+
+### 4.1.7 — SEO-area wiring (consume the SEO/GEO Optimizer's public endpoints)
+
+The **SEO/GEO Optimizer** agent owns the `seo_*` tables and writes per-route SEO meta
+(`seo_page_meta`) + articles (`seo_articles`) autonomously. Generated sites must CONSUME its
+public read endpoints so that stored SEO reaches the live site. (See
+[AGENTS.md → SEO/GEO area contract](../AGENTS.md).)
+
+**Hard rule:** NEVER provision the `seo_*` tables as content services and NEVER clobber them —
+this phase only WIRES consumption of the public read endpoints.
+
+1. **Backend base env.** The SEO endpoints live on the same backend as content; reuse the
+   existing backend base (the `{prefix}CMS_ENDPOINT` base / the bare backend base already set
+   for content + booking). No new secret is needed — `GET /projects/{slug}/seo/public/{meta,articles}`
+   is public (ETag/ISR).
+
+2. **Generate `lib/seo-meta.ts`** (mirrors `lib/cms-content.ts`: ISR + never-throw fallback).
+   It exports a fetch helper that calls
+   `GET {backend}/projects/{slug}/seo/public/meta?route=<route>&locale=<active-locale>` (the
+   **active** next-intl locale) with `next: { revalidate: 60 }`, and on any non-ok/error
+   returns `null` so the caller falls back to the build-time `seo-pro` output. It NEVER throws.
+   **The per-field default-locale fallback is now SERVER-SIDE** — the public endpoint fills any
+   missing/untranslated locale field from the project's default-locale row, so the helper
+   fetches **one** active-locale response and **never merges locales itself** (it never sees an
+   empty translated field).
+
+3. **Wire `generateMetadata` to prefer stored meta + generate coded tags itself per locale.**
+   Each page's `generateMetadata` calls the helper for the active locale; when it returns
+   stored prose (`title`/`description`/`og` text + JSON-LD data), PREFER it over build-time;
+   otherwise keep the build-time `seo-pro` output. The **coded tags are generated LOCALLY per
+   active locale** — `canonical`, `hreflang` (`alternates.languages`), `og:locale`, and JSON-LD
+   `inLanguage` are language-invariant **codes**, NOT fetched; the site emits them itself per
+   locale. **SSR every locale** (each locale's content lands in the raw HTML, not just the
+   default — AI/Google bots don't run JS).
+
+4. **`/blog` only when articles exist — ACTIVE locale, server-side fallback.** Provision/wire
+   the `/blog` index + `/blog/[slug]` (fetching
+   `GET {backend}/projects/{slug}/seo/public/articles?locale=<active-locale>` + `/{articleSlug}`,
+   ISR + fallback) and set `projects.seo_blog_route` (e.g. `/blog`) ONLY once the SEO agent has
+   created articles — typically when the SEO agent drives this via a `site-change-spec`
+   `cms_wiring` block (the Website Builder incremental mode adds the route). An untranslated
+   article transparently shows default-locale prose because the endpoint applies the per-field
+   default fallback **server-side** — the site does not merge. Do not scaffold an empty `/blog`
+   on a normal connector run.
 
 ### 4.2 — Booking provisioning (only if `booking.detected` in manifest)
 
@@ -68,7 +206,7 @@ Body fields (all required):
 
 **c. Create resources, then services, then hours — in this order**
 
-1. `POST /projects/{slug}/bookings/resources` for each resource in `booking.resources`. Capture returned `resource_id` values.
+1. `POST /projects/{slug}/bookings/resources` for each resource in `booking.resources`. Capture returned `resource_id` values. Include `image_url` when the manifest carries a staff portrait — it surfaces as the staff avatar on the owner's calendar and the customer booking flow. When absent/empty, both UIs fall back to a default placeholder avatar (a photo is never required). Staff avatars are editable later in the dashboard under **Bookings → Staff**.
 2. `POST /projects/{slug}/bookings/services` for each service in `booking.services`. Each service must reference at least one `resource_id` from step c-1.
 3. `PUT /projects/{slug}/bookings/hours` — post the weekly hours grid (weekday 0=Sun … 6=Sat, open/close times).
 

@@ -11,7 +11,9 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { Check, Star } from "lucide-react";
+import { useTranslations, useLocale } from "next-intl";
 import { HeroButton } from "@/components/ui/HeroButton";
+import { localizePath, type Locale } from "@/lib/locale";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { Reveal } from "@/components/motion/Reveal";
 import { cn } from "@/lib/utils";
@@ -21,6 +23,8 @@ const EXPO = [0.16, 1, 0.3, 1] as const;
 type Category = "project" | "subscription";
 type Frequency = "monthly" | "yearly";
 
+/** A resolved feature line — its label and optional tooltip are already
+ *  translated by the time it reaches the rendering components. */
 interface Feature {
   text: string;
   /** Optional plain-language explanation shown on hover / focus / tap. */
@@ -28,84 +32,43 @@ interface Feature {
 }
 
 interface ProjectPlan {
-  name: string;
-  info: string;
-  /** Starting price in EUR — every quote is adjusted to complexity. */
-  priceFrom: number;
-  /** Secondary "starting from" note, e.g. complex-backend pricing. */
-  priceNote?: string;
-  /** Differentiators only — shared items live in the "includes" strip. */
-  features: Feature[];
+  /** Stable key into the `pricing.project.*` message namespace. */
+  key: "presentation" | "application" | "automation";
+  /** Whether this plan exposes a secondary "starting from" note. */
+  hasPriceNote?: boolean;
+  /** Whether the differentiator feature carries a tooltip. */
+  hasFeatureTip?: boolean;
   highlighted?: boolean;
-  badge?: string;
-  cta: { text: string; href: string };
+  badge?: boolean;
+  cta: { href: string };
 }
 
 interface SubscriptionPlan {
-  name: string;
-  info: string;
+  /** Stable key into the `pricing.subscription.*` message namespace. */
+  key: "care" | "growth" | "scale";
   price: { monthly: number; yearly: number };
-  features: Feature[];
   highlighted?: boolean;
-  badge?: string;
-  cta: { text: string; href: string };
+  badge?: boolean;
+  cta: { href: string };
 }
-
-/** Core services bundled into every project plan — listed inside each card. */
-const PROJECT_BUNDLE: Feature[] = [
-  {
-    text: "Managed hosting and security",
-    tooltip: "Hosted, secured and monitored by us — no separate hosting bill.",
-  },
-  {
-    text: "SEO & GEO optimization",
-    tooltip: "Optimized for search engines and AI answer engines so you get found.",
-  },
-  {
-    text: "Personal human review",
-    tooltip: "Every major release is reviewed by a human, not just shipped by a machine.",
-  },
-  {
-    text: "CMS connector & agentic issue solver",
-    tooltip:
-      "Change content across your app anytime, and an AI agent auto-detects and fixes issues.",
-  },
-];
 
 const PROJECT_PLANS: ProjectPlan[] = [
   {
-    name: "Presentation website",
-    info: "Marketing & presentation sites that launch fast.",
-    priceFrom: 250,
-    priceNote: "from €400 with complex backend integration",
-    features: [{ text: "Custom, responsive design" }],
-    cta: { text: "Get a free preview", href: "/contact" },
+    key: "presentation",
+    hasPriceNote: true,
+    cta: { href: "/contact" },
   },
   {
-    name: "Software application",
-    info: "Mobile and / or desktop apps, built to scale.",
-    priceFrom: 500,
+    key: "application",
     highlighted: true,
-    badge: "Most popular",
-    features: [
-      {
-        text: "Priority development meetings",
-        tooltip: "Higher priority for human meetings with the development team.",
-      },
-    ],
-    cta: { text: "Start your app", href: "/contact" },
+    badge: true,
+    hasFeatureTip: true,
+    cta: { href: "/contact" },
   },
   {
-    name: "AI automation software",
-    info: "Custom AI workflows that run your busywork.",
-    priceFrom: 200,
-    features: [
-      {
-        text: "24/7 maintenance",
-        tooltip: "We keep your automations running around the clock.",
-      },
-    ],
-    cta: { text: "Automate something", href: "/contact" },
+    key: "automation",
+    hasFeatureTip: true,
+    cta: { href: "/contact" },
   },
 ];
 
@@ -113,41 +76,21 @@ const PROJECT_PLANS: ProjectPlan[] = [
 // Stefan will finalise the names, prices and feature lists later.
 const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
-    name: "Care",
-    info: "Keep an existing site healthy.",
+    key: "care",
     price: { monthly: 49, yearly: 490 },
-    features: [
-      { text: "Managed hosting & monitoring" },
-      { text: "Monthly content updates" },
-      { text: "Email support" },
-    ],
-    cta: { text: "Choose Care", href: "/contact" },
+    cta: { href: "/contact" },
   },
   {
-    name: "Growth",
-    info: "Ongoing improvements & support.",
+    key: "growth",
     price: { monthly: 99, yearly: 990 },
     highlighted: true,
-    badge: "Most popular",
-    features: [
-      { text: "Everything in Care" },
-      { text: "Agentic issue solver" },
-      { text: "Priority support" },
-      { text: "Quarterly strategy meeting" },
-    ],
-    cta: { text: "Choose Growth", href: "/contact" },
+    badge: true,
+    cta: { href: "/contact" },
   },
   {
-    name: "Scale",
-    info: "A dedicated partner for fast-moving teams.",
+    key: "scale",
     price: { monthly: 199, yearly: 1990 },
-    features: [
-      { text: "Everything in Growth" },
-      { text: "Dedicated developer hours" },
-      { text: "24/7 support agent" },
-      { text: "Monthly roadmap reviews" },
-    ],
-    cta: { text: "Choose Scale", href: "/contact" },
+    cta: { href: "/contact" },
   },
 ];
 
@@ -312,32 +255,53 @@ function FeatureList({ features }: { features: Feature[] }) {
 }
 
 function ProjectCard({ plan, showTrail }: { plan: ProjectPlan; showTrail: boolean }) {
+  const t = useTranslations("pricing");
+  const locale = useLocale() as Locale;
+
+  // Differentiator feature (plus its optional tooltip) followed by the shared
+  // bundle that every project plan includes — all resolved from messages.
+  const features: Feature[] = [
+    {
+      text: t(`project.${plan.key}.feature`),
+      ...(plan.hasFeatureTip ? { tooltip: t(`project.${plan.key}.featureTip`) } : {}),
+    },
+    { text: t("shared.managedHosting"), tooltip: t("shared.managedHostingTip") },
+    { text: t("shared.seo"), tooltip: t("shared.seoTip") },
+    { text: t("shared.humanReview"), tooltip: t("shared.humanReviewTip") },
+    { text: t("shared.cms"), tooltip: t("shared.cmsTip") },
+  ];
+
   return (
     <CardShell highlighted={plan.highlighted} showTrail={showTrail}>
-      {plan.badge && <CardBadge label={plan.badge} />}
+      {plan.badge && <CardBadge label={t("mostPopular")} />}
       <div className="border-b border-border p-5">
-        <h3 className="font-display text-lg font-semibold text-text-primary">{plan.name}</h3>
-        <p className="mt-1 min-h-[2.5rem] text-sm text-text-secondary">{plan.info}</p>
+        <h3 className="font-display text-lg font-semibold text-text-primary">
+          {t(`project.${plan.key}.name`)}
+        </h3>
+        <p className="mt-1 min-h-[2.5rem] text-sm text-text-secondary">
+          {t(`project.${plan.key}.info`)}
+        </p>
         <div className="mt-3 flex items-baseline gap-1.5">
-          <span className="text-sm text-text-tertiary">from</span>
           <span className="font-display text-4xl font-bold tabular-nums text-text-primary">
-            €{plan.priceFrom}
+            {t(`project.${plan.key}.price`)}
           </span>
         </div>
-        <p className="mt-1 min-h-[1rem] text-xs text-text-tertiary">{plan.priceNote ?? ""}</p>
+        <p className="mt-1 min-h-[1rem] text-xs text-text-tertiary">
+          {plan.hasPriceNote ? t(`project.${plan.key}.priceNote`) : ""}
+        </p>
       </div>
 
       <div className="flex-1 px-5 py-4">
-        <FeatureList features={[...plan.features, ...PROJECT_BUNDLE]} />
+        <FeatureList features={features} />
       </div>
 
       <div className="border-t border-border p-4">
         <HeroButton
-          href={plan.cta.href}
+          href={localizePath(plan.cta.href, locale)}
           variant={plan.highlighted ? "primary" : "secondary"}
           className="w-full"
         >
-          {plan.cta.text}
+          {t(`project.${plan.key}.cta`)}
         </HeroButton>
       </div>
     </CardShell>
@@ -353,54 +317,63 @@ function SubscriptionCard({
   frequency: Frequency;
   showTrail: boolean;
 }) {
-  const price = plan.price[frequency];
-  const yearlyDiscount =
+  const t = useTranslations("pricing");
+  const locale = useLocale() as Locale;
+
+  const discount =
     plan.price.monthly > 0
       ? Math.round(
           ((plan.price.monthly * 12 - plan.price.yearly) / (plan.price.monthly * 12)) * 100
         )
       : 0;
 
+  const features: Feature[] = (t.raw(`subscription.${plan.key}.features`) as string[]).map(
+    (text) => ({ text })
+  );
+
   return (
     <CardShell highlighted={plan.highlighted} showTrail={showTrail}>
       <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
-        {frequency === "yearly" && yearlyDiscount > 0 && (
+        {frequency === "yearly" && discount > 0 && (
           <span className="rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
-            Save {yearlyDiscount}%
+            {t("save", { discount })}
           </span>
         )}
         {plan.badge && (
           <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-bg">
             <Star className="h-3 w-3 fill-current" aria-hidden="true" />
-            {plan.badge}
+            {t("mostPopular")}
           </span>
         )}
       </div>
 
       <div className="border-b border-border p-5">
-        <h3 className="font-display text-lg font-semibold text-text-primary">{plan.name}</h3>
-        <p className="mt-1 min-h-[2.5rem] text-sm text-text-secondary">{plan.info}</p>
+        <h3 className="font-display text-lg font-semibold text-text-primary">
+          {t(`subscription.${plan.key}.name`)}
+        </h3>
+        <p className="mt-1 min-h-[2.5rem] text-sm text-text-secondary">
+          {t(`subscription.${plan.key}.info`)}
+        </p>
         <div className="mt-3 flex items-baseline gap-1">
           <span className="font-display text-4xl font-bold tabular-nums text-text-primary">
-            €{price}
-          </span>
-          <span className="text-sm text-text-tertiary">
-            /{frequency === "monthly" ? "month" : "year"}
+            {frequency === "monthly"
+              ? t(`subscription.${plan.key}.priceMonthly`)
+              : t(`subscription.${plan.key}.priceYearly`)}
           </span>
         </div>
       </div>
 
       <div className="flex-1 px-5 py-4">
-        <FeatureList features={plan.features} />
+        <FeatureList features={features} />
       </div>
 
       <div className="border-t border-border p-4">
         <HeroButton
-          href={plan.cta.href}
+          href={localizePath(plan.cta.href, locale)}
           variant={plan.highlighted ? "primary" : "secondary"}
           className="w-full"
         >
-          {plan.cta.text}
+          {t(`subscription.${plan.key}.cta`)}
         </HeroButton>
       </div>
     </CardShell>
@@ -408,6 +381,7 @@ function SubscriptionCard({
 }
 
 export function PricingSection() {
+  const t = useTranslations("pricing");
   const [category, setCategory] = React.useState<Category>("project");
   const [frequency, setFrequency] = React.useState<Frequency>("monthly");
 
@@ -437,7 +411,7 @@ export function PricingSection() {
           <div className="relative z-10 mx-auto max-w-5xl">
             <Reveal inView amount={0.4} className="mx-auto max-w-2xl text-center">
               <h2 className="font-display text-[clamp(2rem,5vw,3.25rem)] font-bold leading-[1.05] tracking-[-0.02em] text-text-primary">
-                Simple, honest pricing
+                {t("heading")}
               </h2>
             </Reveal>
 
@@ -453,8 +427,8 @@ export function PricingSection() {
                 onChange={setCategory}
                 layoutId="pricing-category"
                 options={[
-                  { value: "project", label: "Project-based" },
-                  { value: "subscription", label: "Subscription" },
+                  { value: "project", label: t("toggleProject") },
+                  { value: "subscription", label: t("toggleSubscription") },
                 ]}
               />
             </Reveal>
@@ -471,12 +445,11 @@ export function PricingSection() {
                   >
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                       {PROJECT_PLANS.map((plan) => (
-                        <ProjectCard key={plan.name} plan={plan} showTrail={showTrail} />
+                        <ProjectCard key={plan.key} plan={plan} showTrail={showTrail} />
                       ))}
                     </div>
                     <p className="mt-5 text-center text-sm text-text-tertiary">
-                      Prices adjust with complexity — you always get a clear quote before anything
-                      starts.
+                      {t("disclaimerProject")}
                     </p>
                   </m.div>
                 ) : (
@@ -493,15 +466,15 @@ export function PricingSection() {
                         onChange={setFrequency}
                         layoutId="pricing-frequency"
                         options={[
-                          { value: "monthly", label: "Monthly" },
-                          { value: "yearly", label: "Yearly" },
+                          { value: "monthly", label: t("monthly") },
+                          { value: "yearly", label: t("yearly") },
                         ]}
                       />
                     </div>
                     <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
                       {SUBSCRIPTION_PLANS.map((plan) => (
                         <SubscriptionCard
-                          key={plan.name}
+                          key={plan.key}
                           plan={plan}
                           frequency={frequency}
                           showTrail={showTrail}

@@ -11,8 +11,15 @@ export default defineConfig({
     css: true,
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      {
+        find: "@/i18n/navigation",
+        replacement: path.resolve(__dirname, "./src/test/__mocks__/i18n-navigation.ts"),
+      },
+      {
+        find: "@",
+        replacement: path.resolve(__dirname, "./src"),
+      },
+    ],
   },
 });

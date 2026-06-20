@@ -1,3 +1,5 @@
+import functools
+
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
@@ -9,12 +11,17 @@ ph = PasswordHasher(
     parallelism=4,
 )
 
-# Pre-computed dummy hash used to equalise timing on the missing-email path.
-# Without this, an attacker can enumerate accounts: a wrong email returns in
-# ~5 ms (DB round-trip only), a wrong password returns in ~250 ms (DB +
-# argon2 verify). Running a verify against this dummy on the miss path makes
-# both paths take the same wall-clock time.
-_TIMING_DUMMY_HASH = ph.hash("timing-equaliser-dummy-password-not-real-anywhere")
+
+# Dummy hash used to equalise timing on the missing-email path. Without this, an
+# attacker can enumerate accounts: a wrong email returns in ~5 ms (DB round-trip
+# only), a wrong password returns in ~250 ms (DB + argon2 verify). Running a verify
+# against this dummy on the miss path makes both paths take the same wall-clock time.
+# Computed LAZILY (not at import) so the ~150 ms argon2 hash stays off the serverless
+# cold-start critical path; the first missing-email login pays it once, then it's
+# cached for the life of the worker.
+@functools.cache
+def _timing_dummy_hash() -> str:
+    return ph.hash("timing-equaliser-dummy-password-not-real-anywhere")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -44,7 +51,7 @@ async def authenticate_user(email: str, password: str) -> dict | None:
     if not result or not result.data:
         # Burn the same argon2 budget as a real verify so a missing email
         # is indistinguishable from a wrong password by timing alone.
-        verify_password(password, _TIMING_DUMMY_HASH)
+        verify_password(password, _timing_dummy_hash())
         return None
     user = result.data
     if not verify_password(password, user["password_hash"]):

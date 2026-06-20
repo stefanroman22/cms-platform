@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { LeadsDashboard } from "./LeadsDashboard";
 import { ScraperControl } from "./ScraperControl";

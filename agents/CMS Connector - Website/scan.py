@@ -33,7 +33,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import secrets
 import sys
 import time
 import urllib.error
@@ -405,11 +404,19 @@ def _provision_booking(
     created_resource_ids: list[str] = []
     for resource in booking.get("resources", []):
         try:
+            res_body: dict = {
+                "name": resource["name"],
+                "type": resource.get("type", "staff"),
+            }
+            # Staff avatar (optional). When the scan found a portrait for this
+            # person (e.g. from a team/staff section), seed it so the customer
+            # booking flow and the owner calendar show a real photo; otherwise
+            # the UI falls back to a default placeholder avatar.
+            if resource.get("image_url"):
+                res_body["image_url"] = resource["image_url"]
             res_req = urllib.request.Request(
                 f"{base}/projects/{project_slug}/bookings/resources",
-                data=json.dumps(
-                    {"name": resource["name"], "type": resource.get("type", "staff")}
-                ).encode(),
+                data=json.dumps(res_body).encode(),
                 headers=headers,
                 method="POST",
             )
@@ -477,7 +484,8 @@ const BASE = process.env.{env_prefix}BOOKING_API_BASE!;
 const SLUG = "{slug}";
 
 export type Service = {{ id: string; name: string; duration_min: number; price?: number | null }};
-export type Resource = {{ id: string; name: string; type: string }};
+// `image_url` is the staff avatar ("" when none — render a default placeholder).
+export type Resource = {{ id: string; name: string; type: string; image_url?: string }};
 export type Slot = {{ start_utc: string }};
 
 export async function getServices(): Promise<Service[]> {{
@@ -525,6 +533,22 @@ export async function cancel(token: string) {{ return (await fetch(`${{BASE}}/bo
 """
     (lib_dir / "booking.ts").write_text(content, encoding="utf-8")
     click.echo(f"  ✓ lib/booking.ts written ({env_prefix}BOOKING_API_BASE)")
+
+
+def _repeater_seed_content(svc: dict, content: object) -> object:
+    """Fold a repeater's `item_schema` into the content being seeded.
+
+    The seed PUT replaces a service's content wholesale, so an items-only blob
+    would clobber the `_schema` the create step seeded — leaving the dashboard
+    with an uneditable "no field schema defined" repeater. `_schema` is part of
+    the repeater content shape (`{_schema, items}`), so carry it explicitly on
+    every seed. No-op for non-repeaters or when the content already has one."""
+    if svc.get("service_type_slug") != "repeater" or not isinstance(content, dict):
+        return content
+    item_schema = svc.get("item_schema")
+    if item_schema and not content.get("_schema"):
+        return {**content, "_schema": item_schema}
+    return content
 
 
 def _provision(
@@ -609,6 +633,9 @@ def _provision(
             # Single-locale or flat initial_content (legacy / unchanged)
             default_content = initial
 
+        # Repeaters must carry their `_schema` so the seed PUT doesn't wipe it.
+        default_content = _repeater_seed_content(svc, default_content)
+
         put_url = f"{base}/projects/{slug}/services/{svc['service_key']}?seed=true"
         put_req = urllib.request.Request(
             put_url,
@@ -642,6 +669,10 @@ def _provision(
             locale_content = initial.get(locale)
             if not locale_content:
                 continue
+
+            # Repeaters must carry their `_schema` on every per-locale seed too,
+            # else the editor can't render this locale's repeater.
+            locale_content = _repeater_seed_content(svc, locale_content)
 
             put_url = (
                 f"{base}/projects/{slug}/services/{svc['service_key']}?seed=true&locale={locale}"
@@ -700,8 +731,9 @@ def _vercel_setup(
     cms_endpoint_base: str,
 ) -> None:
     """Creates/locates Vercel project, sets env vars, creates preview branch,
-    triggers prod + preview deploys, saves URLs/token to the CMS project row.
-    Idempotent: safe to re-run — reuses existing preview_token from CMS.
+    triggers prod + preview deploys, saves URLs to the CMS project row.
+    Idempotent: safe to re-run — the preview token is provisioned set-if-absent
+    via the backend rotate endpoint (DB + Vercel), reused on re-run.
     """
     slug = manifest["project_slug"]
     click.echo(f"\n🚀 Vercel setup for {github_repo}…")
@@ -726,9 +758,6 @@ def _vercel_setup(
         if create:
             existing = create
             click.echo(f"  ✓ Created CMS project row: {slug}")
-
-    # 1. Reuse preview_token if present, else generate a fresh one
-    preview_token = existing.get("preview_token") or secrets.token_urlsafe(32)
 
     # 2. Find or create Vercel project — use Vercel's productionBranch if we
     #    find an existing project (authoritative source), else fall back to
@@ -767,16 +796,37 @@ def _vercel_setup(
     framework = manifest.get("framework", "")
     env_prefix = _env_prefix(framework)
 
-    endpoint_prod = f"{cms_endpoint_base}/content/{slug}"
-    endpoint_preview = f"{cms_endpoint_base}/content/{slug}/draft"
+    # CMS endpoint is the locale-less base on BOTH targets; the generated site
+    # appends `/{locale}` (and `/draft` when a preview token is present) at fetch
+    # time. Draft-vs-published is decided by the token's presence, not the URL.
+    endpoint_base_url = f"{cms_endpoint_base}/content/{slug}"
     endpoint_var = f"{env_prefix}CMS_ENDPOINT"
-    preview_token_var = f"{env_prefix}CMS_PREVIEW_TOKEN"
-
-    vercel.set_env_var(vercel_token, project_id, endpoint_var, endpoint_prod, target=["production"])
-    vercel.set_env_var(vercel_token, project_id, endpoint_var, endpoint_preview, target=["preview"])
     vercel.set_env_var(
-        vercel_token, project_id, preview_token_var, preview_token, target=["preview"]
+        vercel_token, project_id, endpoint_var, endpoint_base_url, target=["production"]
     )
+    vercel.set_env_var(
+        vercel_token, project_id, endpoint_var, endpoint_base_url, target=["preview"]
+    )
+
+    # Preview token — the SINGLE source of truth is the backend rotate endpoint,
+    # which writes BOTH the DB `projects.preview_token` AND the Vercel var. The
+    # admin PATCH deliberately drops `preview_token` (audit BE-004 token-fixation),
+    # so PATCHing it is a silent no-op — that bug left the DB token NULL while the
+    # Vercel var was set, so `/draft` 401'd and preview/localhost could never show
+    # drafts. Provision set-if-absent so re-runs stay idempotent. The key is the
+    # SERVER-ONLY `CMS_PREVIEW_TOKEN` (never NEXT_PUBLIC_ — a credential read only
+    # in server components / request config must not be inlined into client JS).
+    preview_token = existing.get("preview_token")
+    if not preview_token:
+        rotated = _http("POST", f"{base}/admin/projects/{slug}/rotate-preview-token", headers) or {}
+        preview_token = rotated.get("preview_token")
+    if preview_token:
+        # Mirror onto Vercel ourselves too: rotate skips its Vercel write silently
+        # when the backend VERCEL_TOKEN is unset, so this guarantees the preview
+        # deployment carries the token before we trigger the build.
+        vercel.set_env_var(
+            vercel_token, project_id, "CMS_PREVIEW_TOKEN", preview_token, target=["preview"]
+        )
 
     # Set booking API base when booking is detected
     if manifest.get("booking", {}).get("detected"):
@@ -832,7 +882,8 @@ def _vercel_setup(
             # production deploy URL (the public main-branch site).
             "website_url": production_url,
             "preview_url": preview_url,
-            "preview_token": preview_token,
+            # NOTE: preview_token is intentionally NOT sent here — AdminProjectPatchIn
+            # drops it (BE-004). It is provisioned above via the rotate endpoint.
             "default_locale": default_locale,
             "locales": locales,
         },

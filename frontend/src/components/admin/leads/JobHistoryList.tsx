@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { useQuery } from "@/hooks/useQuery";
 import { LeadBadge } from "./LeadBadge";
 import { SCRAPE_JOB_STATUS_BADGE_CN, SCRAPE_JOB_STATUS_LABEL } from "@/lib/leadEnums";

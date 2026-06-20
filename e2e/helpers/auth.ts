@@ -13,8 +13,13 @@ export async function login(page: Page, email: string, password: string) {
     const cookies = await page.context().cookies();
     return cookies.some((c) => c.name === "sid");
   }).toBe(true);
+  // /dashboard no longer renders a projects overview — it redirects to the
+  // last-visited (or first) project workspace, or stays put with an empty
+  // state for users who own no projects (e.g. the e2e admin). The sidebar's
+  // "Projects" chapter is the stable post-login landmark either way.
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: /projects/i })).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard(\/[^/?]+)?$/);
+  await expect(page.getByText("Projects", { exact: true }).first()).toBeVisible();
 }
 
 export async function logout(page: Page) {

@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# DeepL translation source-hash cache (regenerable build artifact; its SHA-1
+# hashes trip secret scanners as false positives)
+messages/.translation-cache.json

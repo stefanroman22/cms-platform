@@ -2,21 +2,13 @@
 
 import { LazyMotion, domAnimation, MotionConfig, m } from "motion/react";
 import { ChevronDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { HeroButton } from "@/components/ui/HeroButton";
 import { TrustBadge } from "@/components/ui/TrustBadge";
+import { TextReveal } from "@/components/motion/TextReveal";
 import { scrollToHash } from "@/lib/scroll";
 
-const TRUST = [
-  "Human-reviewed code",
-  "EU-based",
-  "GDPR compliant",
-  "Managed hosting included",
-] as const;
-
-const EYEBROW_TEXT = "Roman Technologies";
-const HEADLINE_TEXT = "We make your idea or need come alive";
-const SUBTEXT =
-  "Custom websites, apps, AI Agents and workflows for ambitious companies, at a price that respects your budget.";
+const TRUST_KEYS = ["humanReviewed", "euBased", "gdpr", "hosting"] as const;
 
 const EXPO = [0.16, 1, 0.3, 1] as const;
 
@@ -57,6 +49,8 @@ function FadeIn({
 }
 
 export function HeroSection() {
+  const t = useTranslations("hero");
+
   return (
     <LazyMotion features={domAnimation}>
       <MotionConfig reducedMotion="user">
@@ -67,17 +61,20 @@ export function HeroSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: FADE, ease: EXPO, delay: D_EYEBROW }}
           >
-            {EYEBROW_TEXT}
+            {t("eyebrow")}
           </m.p>
 
-          <m.h1
+          <TextReveal
+            as="h1"
+            by="word"
+            direction="up"
+            text={t("title")}
+            delay={D_HEADLINE}
+            stagger={0.05}
+            duration={FADE}
+            distance="0.5em"
             className="max-w-[20ch] font-display text-[clamp(2.5rem,7vw,6rem)] font-bold leading-[0.96] tracking-[-0.02em] text-text-primary"
-            initial={{ opacity: 0, y: -28 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: FADE, ease: EXPO, delay: D_HEADLINE }}
-          >
-            {HEADLINE_TEXT}
-          </m.h1>
+          />
 
           <m.p
             className="mt-6 max-w-[620px] text-[1.0625rem] leading-relaxed text-text-secondary sm:text-[1.125rem]"
@@ -85,7 +82,7 @@ export function HeroSection() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: FADE, ease: EXPO, delay: D_SUBTEXT }}
           >
-            {SUBTEXT}
+            {t("subtitle")}
           </m.p>
 
           <FadeIn
@@ -93,25 +90,25 @@ export function HeroSection() {
             className="mt-9 flex flex-col items-center gap-3 sm:flex-row sm:gap-4"
           >
             <HeroButton variant="primary" onClick={() => scrollToHash("contact")}>
-              Get a free preview
+              {t("getPreview")}
             </HeroButton>
             <HeroButton variant="secondary" onClick={() => scrollToHash("pricing")}>
-              See pricing
+              {t("seePricing")}
             </HeroButton>
           </FadeIn>
 
           <FadeIn delay={D_ACTIONS} className="mt-4 text-[0.8125rem] text-text-tertiary">
-            No call required to get pricing.
+            {t("noCall")}
           </FadeIn>
 
           <FadeIn
             delay={D_ACTIONS}
             className="mt-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[0.8125rem]"
           >
-            {TRUST.map((label, i) => (
-              <span key={label} className="flex items-center gap-x-3">
-                <TrustBadge label={label} />
-                {i < TRUST.length - 1 && (
+            {TRUST_KEYS.map((key, i) => (
+              <span key={key} className="flex items-center gap-x-3">
+                <TrustBadge label={t(`trust.${key}`)} />
+                {i < TRUST_KEYS.length - 1 && (
                   <span aria-hidden="true" className="text-text-tertiary/50">
                     ·
                   </span>

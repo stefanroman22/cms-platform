@@ -30,7 +30,7 @@ def test_dummy_verify_runs_on_malformed_key():
     ):
         result = admin_keys.verify_admin_api_key("notakey")
         assert result is None
-        mock_ph.verify.assert_called_once_with(admin_keys._DUMMY_HASH, "x")
+        mock_ph.verify.assert_called_once_with(admin_keys._dummy_hash(), "x")
 
 
 def test_dummy_verify_runs_on_wrong_env_segment():
@@ -44,7 +44,7 @@ def test_dummy_verify_runs_on_wrong_env_segment():
             "cmsk_xx_aaaaaaaaaaaaaaaa_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         )
         assert result is None
-        mock_ph.verify.assert_called_once_with(admin_keys._DUMMY_HASH, "x")
+        mock_ph.verify.assert_called_once_with(admin_keys._dummy_hash(), "x")
 
 
 def test_dummy_verify_runs_on_missing_row():
@@ -59,7 +59,7 @@ def test_dummy_verify_runs_on_missing_row():
             "cmsk_dev_aaaaaaaaaaaaaaaa_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         )
         assert result is None
-        mock_ph.verify.assert_called_once_with(admin_keys._DUMMY_HASH, "x")
+        mock_ph.verify.assert_called_once_with(admin_keys._dummy_hash(), "x")
 
 
 def test_dummy_verify_runs_on_short_lookup_segment():
@@ -71,4 +71,4 @@ def test_dummy_verify_runs_on_short_lookup_segment():
     ):
         result = admin_keys.verify_admin_api_key("cmsk_dev_short_secret")
         assert result is None
-        mock_ph.verify.assert_called_once_with(admin_keys._DUMMY_HASH, "x")
+        mock_ph.verify.assert_called_once_with(admin_keys._dummy_hash(), "x")

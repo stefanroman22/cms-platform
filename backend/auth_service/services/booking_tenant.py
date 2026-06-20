@@ -66,21 +66,25 @@ def _to_config(row: dict, *, website_url: str | None = None) -> TenantConfig:
 
 def _load_where(column: str, value: str) -> TenantConfig | None:
     sb = get_supabase_admin()
-    res = sb.table("booking_settings").select(_FIELDS).eq(column, value).limit(1).execute()
+    # Embed the client's live site (projects.website_url, used only for the email
+    # footer branding) via the booking_settings.tenant_id -> projects.id FK, so a
+    # single query serves it instead of a second per-call round-trip on every
+    # public widget read (config/services/resources/availability).
+    res = (
+        sb.table("booking_settings")
+        .select(_FIELDS + ", projects(website_url)")
+        .eq(column, value)
+        .limit(1)
+        .execute()
+    )
     rows = res.data or []
     if not rows:
         return None
     row = rows[0]
-    # Best-effort lookup of the client's live site for the email footer branding.
-    website_url = None
-    try:
-        pr = (
-            sb.table("projects").select("website_url").eq("id", row["tenant_id"]).limit(1).execute()
-        )
-        if pr.data:
-            website_url = pr.data[0].get("website_url")
-    except Exception:  # noqa: BLE001
-        website_url = None
+    proj = row.pop("projects", None)
+    if isinstance(proj, list):
+        proj = proj[0] if proj else None
+    website_url = proj.get("website_url") if isinstance(proj, dict) else None
     cfg = _to_config(row, website_url=website_url)
     return cfg if cfg.is_active else None
 

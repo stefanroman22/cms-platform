@@ -13,13 +13,26 @@ import {
   FolderKanban,
   UserPen,
 } from "lucide-react";
+import { useQuery } from "@/hooks/useQuery";
 import { logout } from "@/lib/auth";
 import { broadcastLogout } from "@/context/auth";
 import { useLoading } from "@/context/loading";
 import { useUser } from "@/context/user";
 
+interface SidebarProject {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+function fetchProjects(): Promise<SidebarProject[]> {
+  return fetch("/api/projects", { credentials: "include", cache: "no-store" }).then((r) => {
+    if (!r.ok) throw new Error("Failed to load projects.");
+    return r.json();
+  });
+}
+
 const navItems = [
-  { href: "/dashboard", label: "Projects Overview", icon: LayoutGrid, exact: true },
   { href: "/dashboard/account", label: "Account Settings", icon: User, exact: false },
   { href: "/dashboard/new-project", label: "Create New Project", icon: PlusCircle, exact: false },
 ];
@@ -37,13 +50,23 @@ interface Props {
   onLinkClick?: () => void;
 }
 
-/** The inner sidebar content — brand, nav, admin, sign-out. Used by the
- *  desktop `<Sidebar>` aside and by the mobile `<MobileNav>` drawer.
- *  No outer container so consumers control the wrapper sizing/positioning. */
+/** The inner sidebar content — brand, projects list, nav, admin, sign-out.
+ *  Used by the desktop `<Sidebar>` aside and by the mobile `<MobileNav>`
+ *  drawer. No outer container so consumers control the wrapper sizing. */
 export function SidebarPanel({ onLinkClick }: Props) {
   const pathname = usePathname();
   const { show } = useLoading();
   const { user } = useUser();
+
+  // Shared "projects" cache key with the rest of the dashboard, so the list
+  // is usually served instantly from cache / sessionStorage.
+  const {
+    data: projects,
+    loading: projectsLoading,
+    error: projectsError,
+    refresh: refreshProjects,
+  } = useQuery<SidebarProject[]>("projects", fetchProjects, { ttl: 5 * 60 * 1000 });
+  const projectList = Array.isArray(projects) ? projects : [];
 
   async function handleSignOut() {
     show();
@@ -77,25 +100,92 @@ export function SidebarPanel({ onLinkClick }: Props) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon, exact }) => {
-          const isActive = exact ? pathname === href : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onLinkClick}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-zinc-900 text-white dark:bg-zinc-700 dark:text-white"
-                  : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-              }`}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 p-3 overflow-y-auto">
+        {/* Projects chapter — each project is a list item with a dot bullet.
+            Clicking one opens its workspace; the active one is highlighted. */}
+        <p className="px-3 mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <LayoutGrid className="h-3.5 w-3.5 shrink-0" />
+          Projects
+        </p>
+        <div className="space-y-0.5">
+          {projectsLoading && projectList.length === 0 && (
+            <div className="space-y-1.5 px-3 py-1.5" aria-hidden="true">
+              {[...Array(2)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-7 animate-pulse rounded-md bg-zinc-100 dark:bg-zinc-800"
+                />
+              ))}
+            </div>
+          )}
+          {/* The sidebar is the only project switcher, so a failed fetch must
+              not masquerade as "no projects". */}
+          {!projectsLoading && projectsError && projectList.length === 0 && (
+            <div className="px-3 py-1.5">
+              <p className="text-sm text-red-600 dark:text-red-400">
+                Couldn&rsquo;t load projects.
+              </p>
+              <button
+                type="button"
+                onClick={refreshProjects}
+                className="mt-1 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {!projectsLoading && !projectsError && projectList.length === 0 && (
+            <p className="px-3 py-1.5 text-sm text-zinc-400 dark:text-zinc-500">No projects yet.</p>
+          )}
+          {projectList.map((project) => {
+            const href = `/dashboard/${project.slug}`;
+            const isActive = pathname === href || pathname.startsWith(`${href}/`);
+            return (
+              <Link
+                key={project.id}
+                href={href}
+                onClick={onLinkClick}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-zinc-900 text-white dark:bg-zinc-700 dark:text-white"
+                    : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${
+                    isActive ? "bg-accent" : "bg-zinc-300 dark:bg-zinc-600"
+                  }`}
+                />
+                <span className="truncate">{project.name}</span>
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="my-3 border-t border-zinc-100 dark:border-zinc-800" />
+
+        <div className="space-y-0.5">
+          {navItems.map(({ href, label, icon: Icon, exact }) => {
+            const isActive = exact ? pathname === href : pathname.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={onLinkClick}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-zinc-900 text-white dark:bg-zinc-700 dark:text-white"
+                    : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
       {/* Admin section */}

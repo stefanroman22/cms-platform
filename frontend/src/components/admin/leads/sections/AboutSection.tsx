@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { Check, Plus, Trash2, X } from "lucide-react";
 import { fadeUp, rowAdd, staggerFast } from "@/lib/animations";
 import type { Lead } from "../types";

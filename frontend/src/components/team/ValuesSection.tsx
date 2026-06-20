@@ -2,43 +2,25 @@
 
 import { LazyMotion, domAnimation, MotionConfig, m } from "motion/react";
 import { HeartHandshake, Users, KeyRound, Eye, type LucideIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Reveal, REVEAL_EASE } from "@/components/motion/Reveal";
 
 interface Value {
   icon: LucideIcon;
-  title: string;
-  description: string;
+  key: "clientFirst" | "teamwork" | "ownership" | "transparency";
 }
 
 /** Culture values shown on the Team page. Local const mirrors WorkSection's SERVICES. */
 const VALUES: Value[] = [
-  {
-    icon: HeartHandshake,
-    title: "Client comes first",
-    description:
-      "We start from your goals, not our stack. Every decision is measured by what moves your business forward.",
-  },
-  {
-    icon: Users,
-    title: "Teamwork",
-    description:
-      "Engineering, security and strategy work as one team, so nothing falls between the cracks.",
-  },
-  {
-    icon: KeyRound,
-    title: "Ownership",
-    description:
-      "You own everything we build — code, data and roadmap. No lock-in, no black boxes.",
-  },
-  {
-    icon: Eye,
-    title: "Transparency",
-    description:
-      "Clear quotes, honest timelines, and a human who answers. You always know where things stand.",
-  },
+  { icon: HeartHandshake, key: "clientFirst" },
+  { icon: Users, key: "teamwork" },
+  { icon: KeyRound, key: "ownership" },
+  { icon: Eye, key: "transparency" },
 ];
 
 export function ValuesSection() {
+  const t = useTranslations("values");
+
   return (
     <LazyMotion features={domAnimation}>
       <MotionConfig reducedMotion="user">
@@ -56,10 +38,10 @@ export function ValuesSection() {
             <div className="mx-auto max-w-2xl text-center">
               <Reveal inView amount={0.4}>
                 <p className="mb-4 text-[0.78rem] font-semibold uppercase tracking-[0.34em] text-accent">
-                  What we stand for
+                  {t("eyebrow")}
                 </p>
                 <h2 className="font-display text-[clamp(1.8rem,4vw,2.75rem)] font-bold leading-[1.1] tracking-[-0.02em] text-text-primary">
-                  Our values
+                  {t("heading")}
                 </h2>
               </Reveal>
             </div>
@@ -67,7 +49,7 @@ export function ValuesSection() {
             <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {VALUES.map((value, i) => (
                 <Reveal
-                  key={value.title}
+                  key={value.key}
                   inView
                   amount={0.3}
                   direction="up"
@@ -89,10 +71,10 @@ export function ValuesSection() {
                       <value.icon className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
                     </m.span>
                     <h3 className="mt-5 font-display text-lg font-semibold text-text-primary">
-                      {value.title}
+                      {t(`${value.key}.title`)}
                     </h3>
                     <p className="mt-2 text-sm leading-relaxed text-text-secondary">
-                      {value.description}
+                      {t(`${value.key}.description`)}
                     </p>
                   </m.div>
                 </Reveal>

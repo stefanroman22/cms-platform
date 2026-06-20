@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { Layers } from "lucide-react";
+import { Link } from "@/i18n/navigation";
 
 interface LogoProps {
   /** "dark" (default) — white text for dark backgrounds.

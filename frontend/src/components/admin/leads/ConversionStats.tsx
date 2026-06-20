@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Banknote, CheckCircle2, Percent, Send, TrendingUp, XCircle } from "lucide-react";
 import { staggerFast, fadeUp } from "@/lib/animations";
 import type { ConversionSummary } from "./types";

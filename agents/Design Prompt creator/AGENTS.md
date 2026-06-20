@@ -28,6 +28,10 @@ Local-only. No remote triggering (no GitHub Actions, no cron). Stefan invokes fr
 | 5 | Generate | [phases/5-generate.md](./phases/5-generate.md) | Invoke `lead-to-design-prompt` skill with enriched context |
 | 6 | Write back | [phases/6-writeback.md](./phases/6-writeback.md) | UPDATE `leads.design_prompt`, create feedback template |
 
+## Design standards baked into every prompt
+
+Beyond the universal UX baseline (intro loader, themed scrollbar, page transitions — enforced by Phase 5's sanity check), every generated prompt must encode **Motion & Performance Standards** (Phase 5 seeds these verbatim into the `additional_context`): restrained motion from one shared token set (header/hero/section reveals, 1–2 per view), a first-class branded page-load/navigation spinner, opacity-only page transitions, and performance budgets (fast LCP, lazy heavy media + 3D with mobile fallback, server-first data, `prefers-reduced-motion`). Sell "fast + tastefully animated", never gratuitous motion.
+
 ## Constants
 
 | Name | Value | Used by |

@@ -3,6 +3,7 @@
 import { type ComponentType } from "react";
 import { LazyMotion, domAnimation, MotionConfig } from "motion/react";
 import { Mail, Phone, MapPin, Clock } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Reveal } from "@/components/motion/Reveal";
 import type { ContactDetails } from "@/content/contact";
 
@@ -55,44 +56,42 @@ function Row({
 }
 
 export function ContactInfo({ details }: { details: ContactDetails }) {
+  const t = useTranslations("contactInfo");
+
   return (
     <LazyMotion features={domAnimation}>
       <MotionConfig reducedMotion="user">
         <div>
           <Reveal inView amount={0.4}>
-            <h2 className="font-display text-xl font-semibold text-text-primary">
-              Reach us directly
-            </h2>
+            <h2 className="font-display text-xl font-semibold text-text-primary">{t("heading")}</h2>
           </Reveal>
           <Reveal inView amount={0.4} delay={0.05}>
-            <p className="mt-2 text-sm leading-relaxed text-text-secondary">
-              Prefer email or a quick call? Here is where to find us.
-            </p>
+            <p className="mt-2 text-sm leading-relaxed text-text-secondary">{t("subheading")}</p>
           </Reveal>
 
           <ul className="mt-8 space-y-6">
             <Row
               icon={Mail}
-              label="Email"
+              label={t("email")}
               value={details.email}
               href={`mailto:${details.email}`}
               delay={0.05}
             />
             <Row
               icon={Phone}
-              label="Phone"
+              label={t("phone")}
               value={details.phone}
               href={`tel:${details.phoneHref}`}
               delay={0.1}
             />
             <Row
               icon={MapPin}
-              label="Location"
+              label={t("location")}
               value={details.location}
               sub={details.address || undefined}
               delay={0.15}
             />
-            <Row icon={Clock} label="Hours" value={details.hours} delay={0.2} />
+            <Row icon={Clock} label={t("hours")} value={details.hours} delay={0.2} />
           </ul>
         </div>
       </MotionConfig>

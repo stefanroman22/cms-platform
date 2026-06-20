@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ExternalLink, Loader2, Save, Trash2, X } from "lucide-react";
 import {
   AI_WORKFLOW_STATUS_LABEL,

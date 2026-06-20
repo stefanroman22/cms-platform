@@ -79,3 +79,30 @@ def test_reminder_html_drops_unsafe_colour():
     )
     assert "<script>" not in html_body
     assert "boom" not in html_body
+
+
+# ---- add-to-calendar button (customer reminder) ----
+
+
+def test_reminder_html_has_add_to_calendar_when_times_given():
+    """The reminder must offer 'Add to calendar' to the customer, even for an
+    in-person business (no meeting URL)."""
+    from datetime import UTC, datetime
+
+    html_body = render_html(
+        name="Jane",
+        when_label="Today · 15:00",
+        note=None,
+        meeting_url="",  # in-person — no meeting link
+        start_utc=datetime(2026, 6, 11, 13, 0, tzinfo=UTC),
+        end_utc=datetime(2026, 6, 11, 13, 45, tzinfo=UTC),
+        business_name="Samir Kapsalon",
+    )
+    assert "Add to Google Calendar" in html_body
+    assert "calendar.google.com/calendar/render" in html_body
+
+
+def test_reminder_html_no_add_to_calendar_without_times():
+    """Back-compat: no datetimes → no calendar button (and no crash)."""
+    html_body = render_html(name="Jane", when_label="t", note=None, meeting_url="")
+    assert "Add to Google Calendar" not in html_body

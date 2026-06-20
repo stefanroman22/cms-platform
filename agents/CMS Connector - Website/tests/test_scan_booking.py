@@ -13,6 +13,7 @@ Covers:
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 import scan
@@ -272,6 +273,53 @@ def test_booking_lib_ts_vite_prefix(tmp_path):
     lib_path = tmp_path / "lib" / "booking.ts"
     content = lib_path.read_text(encoding="utf-8")
     assert "VITE_BOOKING_API_BASE" in content
+
+
+# ---------------------------------------------------------------------------
+# Test 3b: staff image_url is seeded on the resource + typed in lib/booking.ts
+# ---------------------------------------------------------------------------
+
+
+def test_resource_image_url_seeded_and_typed(tmp_path):
+    """A staff portrait in the manifest is POSTed as `image_url` on the resource,
+    and lib/booking.ts's Resource type carries the optional image_url field so the
+    generated booking UI can render an avatar (with a default fallback)."""
+    manifest = _booking_manifest()
+    manifest["booking"]["resources"] = [
+        {"name": "Sam", "type": "staff", "image_url": "https://cdn.example/sam.jpg"},
+        {"name": "Alex", "type": "staff"},  # no image → omitted from body
+    ]
+
+    resource_bodies: list[dict] = []
+
+    def fake_urlopen(req):
+        url = req.get_full_url()
+        if "/bookings/resources" in url and req.get_method() == "POST":
+            resource_bodies.append(json.loads(req.data.decode()))
+            return _urlopen_resp(b'{"id": "res1"}')
+        if "/bookings/services" in url:
+            return _urlopen_resp(b'{"id": "svc1"}')
+        return _urlopen_resp(b"{}")
+
+    def fake_http(method, url, headers, body=None):
+        return {"updated": 1}
+
+    with (
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+        patch.object(scan, "_http", side_effect=fake_http),
+    ):
+        scan._provision_booking(
+            manifest["booking"], "acme", "http://localhost:8001", "tok", tmp_path
+        )
+
+    assert len(resource_bodies) == 2
+    sam = next(b for b in resource_bodies if b["name"] == "Sam")
+    alex = next(b for b in resource_bodies if b["name"] == "Alex")
+    assert sam.get("image_url") == "https://cdn.example/sam.jpg"
+    assert "image_url" not in alex, "no image → field omitted (backend defaults to empty)"
+
+    content = (tmp_path / "lib" / "booking.ts").read_text(encoding="utf-8")
+    assert "image_url" in content, "Resource type must expose image_url for avatars"
 
 
 # ---------------------------------------------------------------------------

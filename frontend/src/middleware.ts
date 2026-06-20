@@ -1,24 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import createIntlMiddleware from "next-intl/middleware";
+import { routing } from "@/i18n/routing";
+import {
+  resolveLocaleFromCountry,
+  hasLocalePrefix,
+  stripLocale,
+  DEFAULT_LOCALE,
+} from "@/lib/locale";
 
-const PROTECTED_ROUTES = ["/dashboard"];
-const AUTH_ROUTES = ["/log-in"];
+const intlMiddleware = createIntlMiddleware(routing);
+
 const AUTH_SERVICE_URL = process.env.FASTAPI_URL ?? "http://localhost:8001";
-
-// Canonical host for the CMS admin UI. Any request arriving on the legacy
-// Vercel default subdomain (cms-frontend-roman.vercel.app) is permanently
-// redirected here so the old URL is effectively unreachable.
 const CANONICAL_HOST = "roman-technologies.dev";
-
-// Short-lived middleware-level auth cache cookie.
-// Set after a successful /auth/me so we skip the upstream call on every navigation.
-// TTL must be shorter than the access token lifetime (15 min) so we never serve
-// a stale "verified" stamp after the access token has already expired.
 const VERIFIED_COOKIE = "auth_verified";
-// SEC-019: this stamp lets the middleware skip the upstream /auth/me check, so its
-// TTL is also the window during which a server-side-revoked session keeps being
-// served protected pages. Keep it short (60s) so revocation takes effect quickly
-// while still skipping the upstream call for rapid back-to-back navigation.
 const VERIFIED_TTL_SECONDS = 60;
+const LOCALE_COOKIE = "NEXT_LOCALE";
+const LOCALE_TTL_SECONDS = 60 * 60 * 24 * 365;
 
 function markVerified(response: NextResponse): void {
   response.cookies.set(VERIFIED_COOKIE, "1", {
@@ -35,10 +32,40 @@ function clearVerified(response: NextResponse): void {
   response.cookies.set(VERIFIED_COOKIE, "", { maxAge: 0, path: "/" });
 }
 
+async function isAuthenticated(request: NextRequest): Promise<boolean> {
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  try {
+    const res = await fetch(`${AUTH_SERVICE_URL}/auth/me`, {
+      headers: { Cookie: cookieHeader },
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Authed users hitting any /log-in (en or prefixed) bounce to the dashboard.
+async function maybeRedirectLoggedIn(
+  request: NextRequest,
+  intlResponse: NextResponse
+): Promise<NextResponse> {
+  // Exact /log-in match (or a /log-in/* sub-path) — never /log-in-anything-else.
+  const path = stripLocale(request.nextUrl.pathname);
+  if (path !== "/log-in" && !path.startsWith("/log-in/")) return intlResponse;
+  // No session cookie at all → definitely logged out; skip the upstream /auth/me.
+  if (!request.cookies.get("sid")) return intlResponse;
+  if (request.cookies.get(VERIFIED_COOKIE)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+  if (await isAuthenticated(request)) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+  return intlResponse;
+}
+
 export async function middleware(request: NextRequest) {
-  // ── Legacy host redirect ────────────────────────────────────────────────
-  // Move anyone on the *.vercel.app URL to the custom domain. Runs for
-  // every matched path (including the landing page).
+  // ── Legacy host redirect (unchanged) ────────────────────────────────────
   const host = request.headers.get("host") ?? "";
   if (host.startsWith("cms-frontend-roman.") && host.endsWith(".vercel.app")) {
     const url = request.nextUrl.clone();
@@ -49,53 +76,60 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  const isProtected = PROTECTED_ROUTES.some((r) => pathname.startsWith(r));
-  const isAuthRoute = AUTH_ROUTES.some((r) => pathname.startsWith(r));
-
-  if (!isProtected && !isAuthRoute) return NextResponse.next();
-
-  const cookies = request.cookies;
-  const cookieHeader = request.headers.get("cookie") ?? "";
-
-  // ── Fast path: both sid and auth_verified present ───────────────────────
-  // Skip upstream call entirely — the verified stamp confirms a recent /auth/me
-  if (cookies.get("sid") && cookies.get(VERIFIED_COOKIE)) {
-    if (isAuthRoute) return NextResponse.redirect(new URL("/dashboard", request.url));
+  // ── API + widget: never localized, no auth ──────────────────────────────
+  if (pathname.startsWith("/api") || pathname.startsWith("/w")) {
     return NextResponse.next();
   }
 
-  // ── Slow path: verify with FastAPI ───────────────────────────────────────
-  let isAuthenticated = false;
-  try {
-    const res = await fetch(`${AUTH_SERVICE_URL}/auth/me`, {
-      headers: { Cookie: cookieHeader },
-      cache: "no-store",
-    });
-    isAuthenticated = res.ok;
-  } catch {
-    isAuthenticated = false;
-  }
-
-  if (isProtected && !isAuthenticated) {
-    const response = NextResponse.redirect(new URL("/log-in", request.url));
-    clearVerified(response);
+  // ── Dashboard: locale-free, auth-protected (unchanged semantics) ─────────
+  if (pathname.startsWith("/dashboard")) {
+    if (request.cookies.get("sid") && request.cookies.get(VERIFIED_COOKIE)) {
+      return NextResponse.next();
+    }
+    if (!(await isAuthenticated(request))) {
+      const response = NextResponse.redirect(new URL("/log-in", request.url));
+      clearVerified(response);
+      return response;
+    }
+    const response = NextResponse.next();
+    markVerified(response);
     return response;
   }
 
-  if (isAuthRoute && isAuthenticated) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // ── Marketing area (intl) ────────────────────────────────────────────────
+  const firstVisit = !request.cookies.get(LOCALE_COOKIE) && !hasLocalePrefix(pathname);
+
+  if (firstVisit) {
+    const locale = resolveLocaleFromCountry(request.headers.get("x-vercel-ip-country"));
+    if (locale !== DEFAULT_LOCALE) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/${locale}${pathname === "/" ? "" : pathname}`;
+      const response = NextResponse.redirect(url);
+      response.cookies.set(LOCALE_COOKIE, locale, {
+        path: "/",
+        maxAge: LOCALE_TTL_SECONDS,
+        sameSite: "lax",
+      });
+      return response;
+    }
   }
 
-  // Authenticated — stamp the verified cookie so next navigation is fast
-  const response = NextResponse.next();
-  if (isAuthenticated) markVerified(response);
-  return response;
+  const intlResponse = intlMiddleware(request);
+  if (firstVisit) {
+    // English (or unknown country): pin the cookie so Accept-Language can't override.
+    intlResponse.cookies.set(LOCALE_COOKIE, DEFAULT_LOCALE, {
+      path: "/",
+      maxAge: LOCALE_TTL_SECONDS,
+      sameSite: "lax",
+    });
+  }
+  return maybeRedirectLoggedIn(request, intlResponse);
 }
 
 export const config = {
   // Match every non-static path so the legacy-host redirect runs regardless
-  // of which page the visitor is hitting. The auth-flow logic inside the
-  // handler early-returns for paths other than /dashboard and /log-in.
+  // of which page the visitor is hitting. The handler routes /api + /w to a
+  // pass-through, /dashboard to auth, and everything else through next-intl.
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js|woff2?)).*)",
   ],

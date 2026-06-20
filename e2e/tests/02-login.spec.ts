@@ -7,7 +7,9 @@ const PASSWORD = process.env.E2E_USER_PASSWORD!;
 test.describe("Login flow", () => {
   test("happy path — login → dashboard renders", async ({ page }) => {
     await login(page, EMAIL, PASSWORD);
-    await expect(page.getByRole("heading", { name: /projects/i })).toBeVisible();
+    // /dashboard redirects into a project workspace; the project name is the h1.
+    await expect(page).toHaveURL(/\/dashboard\/[^/?]+/);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
   test("wrong password — error shown, no cookie", async ({ page }) => {

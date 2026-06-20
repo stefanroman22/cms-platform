@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { CheckCircle2, Pencil, Trash2, X, Save, Info } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
 import * as cache from "@/lib/cache";

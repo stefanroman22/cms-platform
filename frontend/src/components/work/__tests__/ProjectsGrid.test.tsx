@@ -8,13 +8,14 @@ if (typeof globalThis.IntersectionObserver === "undefined") {
 }
 
 import { describe, it, expect } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderWithIntl } from "@/test/intl";
 import { ProjectsGrid } from "../ProjectsGrid";
 
 describe("ProjectsGrid", () => {
   it("renders all projects with their key info by default", () => {
-    render(<ProjectsGrid />);
+    renderWithIntl(<ProjectsGrid />);
     expect(screen.getByText("Akris Website")).toBeInTheDocument();
     expect(screen.getByText("Pluxbox Website")).toBeInTheDocument();
     expect(screen.getByText("Roman Mariana - Business Website")).toBeInTheDocument();
@@ -24,7 +25,7 @@ describe("ProjectsGrid", () => {
 
   it("filters projects by name", async () => {
     const user = userEvent.setup();
-    render(<ProjectsGrid />);
+    renderWithIntl(<ProjectsGrid />);
     await user.type(screen.getByLabelText(/search projects/i), "akris");
     expect(screen.getByText("Akris Website")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("Pluxbox Website")).not.toBeInTheDocument());
@@ -32,7 +33,7 @@ describe("ProjectsGrid", () => {
 
   it("shows an empty state when nothing matches", async () => {
     const user = userEvent.setup();
-    render(<ProjectsGrid />);
+    renderWithIntl(<ProjectsGrid />);
     await user.type(screen.getByLabelText(/search projects/i), "zzzzz");
     expect(screen.getByText(/no projects match/i)).toBeInTheDocument();
     expect(screen.queryByText("Akris Website")).not.toBeInTheDocument();

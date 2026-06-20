@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useEffect, useRef, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer, ContactShadows } from "@react-three/drei";
 import type { MotionValue } from "motion/react";
 import { Laptop } from "./Laptop";
@@ -43,6 +43,40 @@ function CameraRig({ progress, reducedMotion }: SceneProps) {
   return null;
 }
 
+// Drives on-demand rendering: with frameloop="demand" the Canvas only paints
+// when invalidate() is called. We invalidate on every scroll-progress change
+// while the section is active, so scrubbing stays smooth but a static laptop
+// (user stopped scrolling) stops repainting identical frames. The !warming
+// effect paints one settling frame when the warm-up loop ends.
+function ScrollInvalidator({
+  progress,
+  active,
+  warming,
+}: {
+  progress: MotionValue<number>;
+  active: boolean;
+  warming: boolean;
+}) {
+  const invalidate = useThree((s) => s.invalidate);
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
+  useEffect(() => {
+    if (!warming) invalidate();
+  }, [warming, invalidate]);
+
+  useEffect(() => {
+    const unsub = progress.on("change", () => {
+      if (activeRef.current) invalidate();
+    });
+    return unsub;
+  }, [progress, invalidate]);
+
+  return null;
+}
+
 // `active` is true only while the section is near the viewport. We render every
 // frame then (smooth scroll-scrubbing) and freeze the loop when scrolled away.
 // `warming` forces a few frames right after mount — even off-screen — so the
@@ -62,11 +96,12 @@ export default function LaptopScene({
   return (
     <Canvas
       dpr={[1, 1.5]}
-      frameloop={warming || active ? "always" : "never"}
+      frameloop={warming ? "always" : "demand"}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
       camera={{ fov: 30, position: [0, 1.2, 6] }}
       style={{ background: "transparent" }}
     >
+      <ScrollInvalidator progress={progress} active={active} warming={warming} />
       <CameraRig progress={progress} reducedMotion={reducedMotion} />
 
       <ambientLight intensity={0.55} />

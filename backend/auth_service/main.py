@@ -4,6 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -23,6 +24,7 @@ from .routers.booking import router as booking_router  # noqa: E402
 from .routers.booking_admin import router as booking_admin_router  # noqa: E402
 from .routers.forms import router as forms_router  # noqa: E402
 from .routers.issues import router as issues_router  # noqa: E402
+from .routers.seo import router as seo_router  # noqa: E402
 from .routers.slack_events import router as slack_events_router  # noqa: E402
 
 # ── Main app ──────────────────────────────────────────────────────────────────
@@ -130,6 +132,11 @@ if not IS_PROD:
 
 app.add_middleware(SecurityHeadersMiddleware)
 
+# Compress JSON responses (content trees, appointment/availability lists compress
+# ~75-90%). Honours Accept-Encoding; skips bodies < minimum_size. ETag/304 logic
+# lives in the handlers (computed on the uncompressed body) and is unaffected.
+app.add_middleware(GZipMiddleware, minimum_size=512)
+
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(content.router)
@@ -142,6 +149,7 @@ app.include_router(publish.router)
 app.include_router(slack_events_router)
 app.include_router(booking_router)
 app.include_router(booking_admin_router)
+app.include_router(seo_router)
 
 
 @app.get("/health")

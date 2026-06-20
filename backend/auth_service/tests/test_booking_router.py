@@ -182,6 +182,53 @@ def test_reminders_sends_for_due_offset(client, monkeypatch):
     assert call_kwargs["offset_min"] == 120
 
 
+def test_reminders_same_day_booking_only_near_offset_fires(client, monkeypatch):
+    """Requirement (d): with offsets [24h, 1h], an imminent (same-day) booking only
+    fires the 1h reminder — the 24h window is already in the past, so it never
+    matches. This falls out of the send-window math (no created_at guard needed).
+    Also asserts the add-to-calendar datetimes + business name reach `.send`."""
+    monkeypatch.setattr(settings, "BOOKING_CRON_SECRET", "s3cr3t")
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "k")
+    now = datetime.now(UTC)
+    start_utc = now + timedelta(minutes=62)  # inside the 1h send window, far past the 24h one
+    end_utc = start_utc + timedelta(minutes=45)
+    cfg = _make_tenant_with_offsets([1440, 60])  # 24h + 1h
+    due = [
+        {
+            "id": "b1",
+            "tenant_id": "t1",
+            "customer_id": "c1",
+            "notes": None,
+            "start_utc": start_utc.isoformat(),
+            "end_utc": end_utc.isoformat(),
+        }
+    ]
+    with (
+        patch("auth_service.routers.booking.booking_repo.due_reminders", return_value=due),
+        patch("auth_service.routers.booking.booking_tenant.load_tenant_by_id", return_value=cfg),
+        patch(
+            "auth_service.routers.booking.booking_repo.load_customer",
+            return_value={"email": "j@a.com", "name": "Jane", "timezone": "Europe/London"},
+        ),
+        patch(
+            "auth_service.routers.booking.booking_repo.notification_already_sent",
+            return_value=False,
+        ),
+        patch("auth_service.routers.booking.booking_repo.record_notification") as record,
+        patch("auth_service.routers.booking.booking_reminder_email.send") as snd,
+    ):
+        r = client.post("/booking/cron/reminders", headers={"X-Cron-Secret": "s3cr3t"})
+    assert r.status_code == 200
+    assert r.json()["sent"] == 1  # only the 1h reminder, NOT the 24h one
+    snd.assert_called_once()
+    assert record.call_args.kwargs["idempotency_key"] == "b1:reminder:60"
+    # add-to-calendar plumbing: the datetimes + business name reach the email layer
+    k = snd.call_args.kwargs
+    assert k["start_utc"].isoformat() == start_utc.isoformat()
+    assert k["end_utc"].isoformat() == end_utc.isoformat()
+    assert k["business_name"] == cfg.business_name
+
+
 def test_reminders_use_booking_snapshot_name(client, monkeypatch):
     """Reminder email uses the booking's snapshot name, not the (possibly
     overwritten) shared customer row's name."""

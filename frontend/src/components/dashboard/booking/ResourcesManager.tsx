@@ -9,6 +9,7 @@ import * as cache from "@/lib/cache";
 import { listResources } from "./api";
 import type { BookingResource } from "./api";
 import { ResourceFormDrawer } from "./ResourceFormDrawer";
+import { StaffAvatar } from "./StaffAvatar";
 
 interface Props {
   projectSlug: string;
@@ -73,28 +74,33 @@ export function ResourcesManager({ projectSlug }: Props) {
       {!loading && resources.length > 0 && (
         <div className={`${dashboardSectionCardCn} divide-y divide-zinc-100 dark:divide-zinc-800`}>
           {resources.map((r) => (
-            <div key={r.id} className="flex items-center justify-between px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    {r.name}
-                  </span>
-                  {r.type && (
-                    <span className="rounded-full bg-zinc-100 px-1.5 py-px text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                      {r.type}
+            <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                {(r.type ?? "staff") === "staff" && (
+                  <StaffAvatar src={r.image_url} name={r.name} size={36} />
+                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      {r.name}
                     </span>
-                  )}
-                  {!(r.is_active ?? true) && (
-                    <span className="rounded-full bg-zinc-100 px-1.5 py-px text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                      inactive
-                    </span>
+                    {r.type && (
+                      <span className="rounded-full bg-zinc-100 px-1.5 py-px text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                        {r.type}
+                      </span>
+                    )}
+                    {!(r.is_active ?? true) && (
+                      <span className="rounded-full bg-zinc-100 px-1.5 py-px text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                        inactive
+                      </span>
+                    )}
+                  </div>
+                  {(r.capacity ?? 1) > 1 && (
+                    <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+                      Capacity: {r.capacity}
+                    </p>
                   )}
                 </div>
-                {(r.capacity ?? 1) > 1 && (
-                  <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-                    Capacity: {r.capacity}
-                  </p>
-                )}
               </div>
               <button
                 type="button"

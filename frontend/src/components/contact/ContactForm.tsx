@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { LazyMotion, domAnimation, MotionConfig, AnimatePresence, m } from "motion/react";
 import { Send } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { HeroButton } from "@/components/ui/HeroButton";
 import { SubmitFeedback } from "@/components/ui/SubmitFeedback";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,8 @@ type Phase = "idle" | "sending" | "sent" | "error";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function ContactForm({ recipient }: { recipient: string }) {
+  const t = useTranslations("contactForm");
+
   const [values, setValues] = useState<Record<Field, string>>({
     name: "",
     email: "",
@@ -35,11 +38,10 @@ export function ContactForm({ recipient }: { recipient: string }) {
 
   function validate(): Partial<Record<Field, string>> {
     const e: Partial<Record<Field, string>> = {};
-    if (!values.name.trim()) e.name = "Please add your name.";
-    if (!values.email.trim()) e.email = "Please add your email.";
-    else if (!EMAIL_RE.test(values.email.trim())) e.email = "That email does not look right.";
-    if (values.message.trim().length < 10)
-      e.message = "Tell us a little more (at least 10 characters).";
+    if (!values.name.trim()) e.name = t("errName");
+    if (!values.email.trim()) e.email = t("errEmailEmpty");
+    else if (!EMAIL_RE.test(values.email.trim())) e.email = t("errEmailInvalid");
+    if (values.message.trim().length < 10) e.message = t("errMessage");
     return e;
   }
 
@@ -100,17 +102,21 @@ export function ContactForm({ recipient }: { recipient: string }) {
               >
                 <SubmitFeedback
                   status={phase === "sending" ? "loading" : phase === "sent" ? "success" : "error"}
-                  successText="Message sent — talk soon!"
+                  loadingText={t("sending")}
+                  successText={t("success")}
                   errorText={
                     <>
-                      Something went wrong. Email me directly at{" "}
-                      <a
-                        href={`mailto:${recipient}`}
-                        className="text-accent underline-offset-2 hover:underline"
-                      >
-                        {recipient}
-                      </a>
-                      .
+                      {t.rich("error", {
+                        recipient,
+                        link: (chunks) => (
+                          <a
+                            href={`mailto:${recipient}`}
+                            className="text-accent underline-offset-2 hover:underline"
+                          >
+                            {chunks}
+                          </a>
+                        ),
+                      })}
                     </>
                   }
                 />
@@ -121,7 +127,7 @@ export function ContactForm({ recipient }: { recipient: string }) {
                       onClick={() => reset(phase === "sent")}
                       className="text-sm font-medium text-text-secondary underline-offset-4 outline-none transition-colors hover:text-accent focus-visible:underline"
                     >
-                      {phase === "sent" ? "Send another message" : "Try again"}
+                      {phase === "sent" ? t("sendAnother") : t("tryAgain")}
                     </button>
                   </div>
                 )}
@@ -143,7 +149,7 @@ export function ContactForm({ recipient }: { recipient: string }) {
                       htmlFor="contact-name"
                       className="mb-1.5 block text-sm font-medium text-text-secondary"
                     >
-                      Name <span className="text-accent">*</span>
+                      {t("name")} <span className="text-accent">*</span>
                     </label>
                     <input
                       id="contact-name"
@@ -155,7 +161,7 @@ export function ContactForm({ recipient }: { recipient: string }) {
                       aria-invalid={!!errors.name}
                       aria-describedby={errors.name ? "contact-name-error" : undefined}
                       className={cn(fieldBase, errors.name ? fieldErr : fieldOk)}
-                      placeholder="Jane Doe"
+                      placeholder={t("namePlaceholder")}
                     />
                     {errors.name && (
                       <p
@@ -173,7 +179,7 @@ export function ContactForm({ recipient }: { recipient: string }) {
                       htmlFor="contact-email"
                       className="mb-1.5 block text-sm font-medium text-text-secondary"
                     >
-                      Email <span className="text-accent">*</span>
+                      {t("email")} <span className="text-accent">*</span>
                     </label>
                     <input
                       id="contact-email"
@@ -185,7 +191,7 @@ export function ContactForm({ recipient }: { recipient: string }) {
                       aria-invalid={!!errors.email}
                       aria-describedby={errors.email ? "contact-email-error" : undefined}
                       className={cn(fieldBase, errors.email ? fieldErr : fieldOk)}
-                      placeholder="jane@company.com"
+                      placeholder={t("emailPlaceholder")}
                     />
                     {errors.email && (
                       <p
@@ -204,7 +210,7 @@ export function ContactForm({ recipient }: { recipient: string }) {
                     htmlFor="contact-company"
                     className="mb-1.5 block text-sm font-medium text-text-secondary"
                   >
-                    Company <span className="text-text-tertiary">(optional)</span>
+                    {t("company")} <span className="text-text-tertiary">{t("optional")}</span>
                   </label>
                   <input
                     id="contact-company"
@@ -214,7 +220,7 @@ export function ContactForm({ recipient }: { recipient: string }) {
                     value={values.company}
                     onChange={update("company")}
                     className={cn(fieldBase, fieldOk)}
-                    placeholder="Acme Inc."
+                    placeholder={t("companyPlaceholder")}
                   />
                 </div>
 
@@ -223,7 +229,7 @@ export function ContactForm({ recipient }: { recipient: string }) {
                     htmlFor="contact-message"
                     className="mb-1.5 block text-sm font-medium text-text-secondary"
                   >
-                    Message <span className="text-accent">*</span>
+                    {t("message")} <span className="text-accent">*</span>
                   </label>
                   <textarea
                     id="contact-message"
@@ -234,7 +240,7 @@ export function ContactForm({ recipient }: { recipient: string }) {
                     aria-invalid={!!errors.message}
                     aria-describedby={errors.message ? "contact-message-error" : undefined}
                     className={cn(fieldBase, "resize-y", errors.message ? fieldErr : fieldOk)}
-                    placeholder="A few lines about your project, timeline and budget."
+                    placeholder={t("messagePlaceholder")}
                   />
                   {errors.message && (
                     <p
@@ -249,18 +255,21 @@ export function ContactForm({ recipient }: { recipient: string }) {
 
                 <HeroButton type="submit" variant="primary" className="w-full">
                   <Send className="h-4 w-4" aria-hidden={true} />
-                  Send message
+                  {t("send")}
                 </HeroButton>
 
                 <p className="text-center text-xs text-text-tertiary">
-                  Or email us directly at{" "}
-                  <a
-                    href={`mailto:${recipient}`}
-                    className="text-text-secondary underline-offset-2 hover:text-accent hover:underline"
-                  >
-                    {recipient}
-                  </a>
-                  .
+                  {t.rich("orEmail", {
+                    recipient,
+                    link: (chunks) => (
+                      <a
+                        href={`mailto:${recipient}`}
+                        className="text-text-secondary underline-offset-2 hover:text-accent hover:underline"
+                      >
+                        {chunks}
+                      </a>
+                    ),
+                  })}
                 </p>
               </m.form>
             )}

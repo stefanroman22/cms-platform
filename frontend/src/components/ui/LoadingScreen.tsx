@@ -1,12 +1,14 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
+import { useTranslations } from "next-intl";
 
 interface LoadingScreenProps {
   isVisible: boolean;
 }
 
 export function LoadingScreen({ isVisible }: LoadingScreenProps) {
+  const t = useTranslations("common");
   return (
     <AnimatePresence>
       {isVisible && (
@@ -82,7 +84,7 @@ export function LoadingScreen({ isVisible }: LoadingScreenProps) {
               color: "rgba(255,255,255,0.27)",
             }}
           >
-            Loading experience
+            {t("loadingExperience")}
           </p>
         </motion.div>
       )}

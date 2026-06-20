@@ -11,9 +11,12 @@ import {
   dashboardErrorBannerCn,
   dashboardSuccessBannerCn,
 } from "@/lib/styles";
+import * as cache from "@/lib/cache";
 import { getHours, putHours, createException, deleteException, listResources } from "./api";
 import type { BookingHour, BookingException, BookingResource } from "./api";
 import { createOverviewPrefs } from "./overview/prefsStore";
+import { DatePicker } from "@/components/dashboard/DatePicker";
+import { TimePicker } from "@/components/dashboard/TimePicker";
 
 interface Props {
   projectSlug: string;
@@ -77,8 +80,14 @@ export function HoursEditor({ projectSlug }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [hoursMsg, setHoursMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  // True when a staff member has no personal hours yet, so the grid is showing
+  // the (read-derived) business default as a starting point.
+  const [inherited, setInherited] = useState(false);
 
   const [newDate, setNewDate] = useState("");
+  const [excMode, setExcMode] = useState<"all_day" | "custom">("all_day");
+  const [excStart, setExcStart] = useState("09:00");
+  const [excEnd, setExcEnd] = useState("13:00");
   const [addingException, setAddingException] = useState(false);
   const [excError, setExcError] = useState<string | null>(null);
 
@@ -90,8 +99,19 @@ export function HoursEditor({ projectSlug }: Props) {
   }, [raw]);
 
   // Re-derive the weekly grid whenever the scope or the underlying rows change.
+  // A staff member with no personal hours inherits the business default: we show
+  // those hours as the starting point WITHOUT persisting anything, so the backend
+  // fallback (this staff is bookable on business hours) stays intact until the
+  // owner explicitly edits & saves their own schedule.
   useEffect(() => {
-    setRows(hoursToWeekdays(inScope(allHours, scope)));
+    const own = inScope(allHours, scope);
+    if (scope !== BUSINESS && own.length === 0) {
+      setRows(hoursToWeekdays(inScope(allHours, BUSINESS)));
+      setInherited(true);
+    } else {
+      setRows(hoursToWeekdays(own));
+      setInherited(false);
+    }
     setHoursMsg(null);
   }, [allHours, scope]);
 
@@ -147,6 +167,10 @@ export function HoursEditor({ projectSlug }: Props) {
       const res = await putHours(projectSlug, { resource_id: scope || null, hours });
       // Server returns ALL scopes' rows — refresh the master list.
       setAllHours(res.hours ?? []);
+      // Write through the shared `booking-hours:${slug}` cache so the Overview
+      // day-window reflects this edit on its next mount (preserve exceptions —
+      // putHours returns hours only).
+      cache.set(hoursKey, { hours: res.hours ?? [], exceptions: allExceptions });
       setHoursMsg({ type: "ok", text: "Hours saved." });
     } catch (err) {
       setHoursMsg({ type: "err", text: err instanceof Error ? err.message : "Save failed." });
@@ -160,14 +184,28 @@ export function HoursEditor({ projectSlug }: Props) {
       setExcError("Date is required.");
       return;
     }
+    if (excMode === "custom" && excStart >= excEnd) {
+      setExcError("Closing time must be after the opening time.");
+      return;
+    }
     setAddingException(true);
     setExcError(null);
     try {
-      const exc = await createException(projectSlug, {
-        date: newDate.trim(),
-        is_closed: true,
-        resource_id: scope || null,
-      });
+      // all_day  => fully closed (is_closed=true).
+      // custom   => open ONLY during [start,end] for that date; everything else
+      //             that day is closed. This is the backend's day-override and is
+      //             what actually constrains the public scheduler.
+      const body =
+        excMode === "all_day"
+          ? { date: newDate.trim(), is_closed: true, resource_id: scope || null }
+          : {
+              date: newDate.trim(),
+              is_closed: false,
+              start_time: excStart,
+              end_time: excEnd,
+              resource_id: scope || null,
+            };
+      const exc = await createException(projectSlug, body);
       setAllExceptions((prev) => [...prev, exc]);
       setNewDate("");
     } catch (err) {
@@ -230,6 +268,13 @@ export function HoursEditor({ projectSlug }: Props) {
         <h2 className="mb-4 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           Weekly hours
         </h2>
+        {inherited && (
+          <p className="mb-3 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300">
+            Showing the <span className="font-medium">business default</span> — this staff member
+            has no personal hours yet. Edit and save to give them their own schedule; the business
+            hours stay unchanged.
+          </p>
+        )}
         <div className={`${dashboardSectionCardCn} divide-y divide-zinc-100 dark:divide-zinc-800`}>
           {rows.map((row) => (
             <div key={row.weekday} className="px-4 py-3">
@@ -252,20 +297,18 @@ export function HoursEditor({ projectSlug }: Props) {
               <div className="mt-2 space-y-2">
                 {row.intervals.map((iv, idx) => (
                   <div key={idx} className="flex items-center gap-2">
-                    <input
-                      type="time"
+                    <TimePicker
                       value={iv.start_time}
-                      onChange={(e) =>
-                        updateInterval(row.weekday, idx, "start_time", e.target.value)
-                      }
-                      className={`${dashboardInputCn} w-32`}
+                      onChange={(v) => updateInterval(row.weekday, idx, "start_time", v)}
+                      ariaLabel="Opens at"
+                      className="w-28"
                     />
                     <span className="text-xs text-zinc-400">to</span>
-                    <input
-                      type="time"
+                    <TimePicker
                       value={iv.end_time}
-                      onChange={(e) => updateInterval(row.weekday, idx, "end_time", e.target.value)}
-                      className={`${dashboardInputCn} w-32`}
+                      onChange={(v) => updateInterval(row.weekday, idx, "end_time", v)}
+                      ariaLabel="Closes at"
+                      className="w-28"
                     />
                     <button
                       type="button"
@@ -311,19 +354,80 @@ export function HoursEditor({ projectSlug }: Props) {
         </h2>
 
         <div className={`${dashboardSectionCardCn} p-4`}>
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
+          {/* All-day vs custom-hours toggle */}
+          <div
+            role="group"
+            aria-label="Closure type"
+            className="mb-3 inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 dark:border-zinc-700 dark:bg-zinc-800/50"
+          >
+            {(
+              [
+                ["all_day", "Closed all day"],
+                ["custom", "Custom hours"],
+              ] as const
+            ).map(([mode, label]) => {
+              const active = excMode === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setExcMode(mode);
+                    setExcError(null);
+                  }}
+                  className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-zinc-100"
+                      : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[10rem] flex-1">
               <label className={dashboardFieldLabelCn}>Date</label>
-              <input
-                type="date"
+              <DatePicker
                 value={newDate}
-                onChange={(e) => {
-                  setNewDate(e.target.value);
+                onChange={(v) => {
+                  setNewDate(v);
                   setExcError(null);
                 }}
-                className={dashboardInputCn}
+                ariaLabel="Closed date"
               />
             </div>
+            {excMode === "custom" && (
+              <>
+                <div>
+                  <label className={dashboardFieldLabelCn}>Open from</label>
+                  <TimePicker
+                    value={excStart}
+                    onChange={(v) => {
+                      setExcStart(v);
+                      setExcError(null);
+                    }}
+                    ariaLabel="Open from"
+                    className="w-28"
+                  />
+                </div>
+                <div>
+                  <label className={dashboardFieldLabelCn}>Open until</label>
+                  <TimePicker
+                    value={excEnd}
+                    onChange={(v) => {
+                      setExcEnd(v);
+                      setExcError(null);
+                    }}
+                    ariaLabel="Open until"
+                    className="w-28"
+                  />
+                </div>
+              </>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -336,6 +440,11 @@ export function HoursEditor({ projectSlug }: Props) {
               Add
             </button>
           </div>
+          <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+            {excMode === "all_day"
+              ? `Fully closed that day${scope === BUSINESS ? " for the whole business" : " for this staff member"}.`
+              : "Open only during these hours that day — the rest of the day is closed to bookings."}
+          </p>
           {excError && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{excError}</p>}
 
           {scopeExceptions.length === 0 && (
@@ -347,8 +456,15 @@ export function HoursEditor({ projectSlug }: Props) {
           {scopeExceptions.length > 0 && (
             <ul className="mt-4 space-y-1.5">
               {scopeExceptions.map((exc) => (
-                <li key={exc.id} className="flex items-center justify-between text-sm">
-                  <span className="font-mono text-zinc-700 dark:text-zinc-300">{exc.date}</span>
+                <li key={exc.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-zinc-700 dark:text-zinc-300">{exc.date}</span>
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                      {exc.is_closed === false && exc.start_time && exc.end_time
+                        ? `Open ${exc.start_time.slice(0, 5)}–${exc.end_time.slice(0, 5)}`
+                        : "Closed all day"}
+                    </span>
+                  </span>
                   <button
                     type="button"
                     onClick={() => handleDeleteException(exc.id)}

@@ -6,6 +6,7 @@ import { X, Loader2, CalendarClock } from "lucide-react";
 import { dashboardInputCn, dashboardFieldLabelCn } from "@/lib/styles";
 import { actOnAppointment, getAvailability } from "./api";
 import type { BookingAppointment, BookingService, AvailabilitySlot } from "./api";
+import { DatePicker } from "@/components/dashboard/DatePicker";
 
 interface Props {
   projectSlug: string;
@@ -383,11 +384,11 @@ function DrawerBody({ projectSlug, appointment, services, timezone, onClose, onC
                   </p>
                   <div className="mb-3">
                     <label className={dashboardFieldLabelCn}>Date</label>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={rescheduleDate}
-                      onChange={(e) => setRescheduleDate(e.target.value)}
-                      className={`${dashboardInputCn} max-w-xs`}
+                      onChange={(v) => setRescheduleDate(v)}
+                      ariaLabel="New appointment date"
+                      className="max-w-xs"
                     />
                   </div>
                   {slotsLoading && (

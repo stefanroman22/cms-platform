@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { X, Save, Trash2, Loader2 } from "lucide-react";
+import { X, Save, Trash2, Loader2, Upload } from "lucide-react";
 import { dashboardInputCn, dashboardFieldLabelCn } from "@/lib/styles";
-import { createResource, patchResource, deleteResource } from "./api";
+import { createResource, patchResource, deleteResource, uploadStaffImage } from "./api";
 import type { BookingResource } from "./api";
+import { StaffAvatar } from "./StaffAvatar";
 
 interface Props {
   projectSlug: string;
@@ -18,6 +19,7 @@ type Draft = {
   name: string;
   type: string;
   capacity: string;
+  image_url: string;
   is_active: boolean;
   sort_order: string;
 };
@@ -27,6 +29,7 @@ function resourceToDraft(r: BookingResource): Draft {
     name: r.name,
     type: r.type ?? "staff",
     capacity: String(r.capacity ?? 1),
+    image_url: r.image_url ?? "",
     is_active: r.is_active ?? true,
     sort_order: String(r.sort_order ?? 0),
   };
@@ -36,6 +39,7 @@ const emptyDraft: Draft = {
   name: "",
   type: "staff",
   capacity: "1",
+  image_url: "",
   is_active: true,
   sort_order: "0",
 };
@@ -95,10 +99,26 @@ function DrawerBody({ projectSlug, resource, onClose, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const prefersReduced = useReducedMotion();
   const press = prefersReduced ? {} : { whileTap: { scale: 0.97 } };
+
+  async function handlePickImage(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const { url } = await uploadStaffImage(projectSlug, file);
+      setField("image_url", url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Image upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   useEffect(() => {
     setDraft(resource ? resourceToDraft(resource) : emptyDraft);
@@ -119,6 +139,7 @@ function DrawerBody({ projectSlug, resource, onClose, onSaved }: Props) {
         name: draft.name.trim(),
         type: draft.type,
         capacity: parseInt(draft.capacity, 10) || 1,
+        image_url: draft.image_url,
         is_active: draft.is_active,
         sort_order: parseInt(draft.sort_order, 10) || 0,
       };
@@ -247,6 +268,53 @@ function DrawerBody({ projectSlug, resource, onClose, onSaved }: Props) {
       )}
 
       <div className="mt-5 space-y-4">
+        {/* Photo — shown next to this staff member in the calendar and on the
+            customer booking flow. Optional: a default avatar is used when empty. */}
+        <div>
+          <label className={dashboardFieldLabelCn}>Photo</label>
+          <div className="flex items-center gap-4">
+            <StaffAvatar src={draft.image_url} name={draft.name} size={56} />
+            <div className="flex flex-col gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  void handlePickImage(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                >
+                  {uploading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="h-3.5 w-3.5" />
+                  )}
+                  {uploading ? "Uploading…" : draft.image_url ? "Replace photo" : "Upload photo"}
+                </button>
+                {draft.image_url && (
+                  <button
+                    type="button"
+                    onClick={() => setField("image_url", "")}
+                    disabled={uploading}
+                    className="cursor-pointer rounded-md px-2 py-1.5 text-xs font-medium text-zinc-500 transition-colors hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500">PNG, JPG or WebP.</p>
+            </div>
+          </div>
+        </div>
+
         <div>
           <label className={dashboardFieldLabelCn}>Name</label>
           <input

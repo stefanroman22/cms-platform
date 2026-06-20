@@ -49,6 +49,8 @@ export interface BookingResource {
   name: string;
   type?: string;
   capacity?: number;
+  /** Public-facing avatar URL. Empty/absent => UI shows a default placeholder. */
+  image_url?: string | null;
   is_active?: boolean;
   sort_order?: number;
 }
@@ -152,6 +154,8 @@ export interface ResourceIn {
   name: string;
   type?: string;
   capacity?: number;
+  /** Staff avatar URL ("" => default placeholder). */
+  image_url?: string;
   is_active?: boolean;
   sort_order?: number;
 }
@@ -636,3 +640,7 @@ export async function uploadBookingLogo(slug: string, file: File): Promise<{ url
   await throwOnError(r);
   return r.json();
 }
+
+/** Staff avatars reuse the booking image-upload endpoint (same validation +
+ *  storage bucket); the returned URL is stored on the resource as `image_url`. */
+export const uploadStaffImage = uploadBookingLogo;

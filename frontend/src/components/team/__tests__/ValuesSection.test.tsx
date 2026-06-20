@@ -9,12 +9,13 @@ if (typeof globalThis.IntersectionObserver === "undefined") {
 }
 
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderWithIntl } from "@/test/intl";
 import { ValuesSection } from "../ValuesSection";
 
 describe("ValuesSection", () => {
   it("renders all four values with their descriptions", () => {
-    render(<ValuesSection />);
+    renderWithIntl(<ValuesSection />);
     expect(screen.getByText("Client comes first")).toBeInTheDocument();
     expect(screen.getByText("Teamwork")).toBeInTheDocument();
     expect(screen.getByText("Ownership")).toBeInTheDocument();

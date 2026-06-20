@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { fadeUp, staggerFast } from "@/lib/animations";
 import type { Lead } from "../types";
 import { EditableSectionShell } from "./EditableSectionShell";

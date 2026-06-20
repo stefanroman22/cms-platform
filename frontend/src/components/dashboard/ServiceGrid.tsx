@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { BoxSelect, Mail } from "lucide-react";
 import { PageTabs } from "@/components/dashboard/PageTabs";
 import { ServiceCard, type ServiceCardService } from "@/components/dashboard/ServiceCard";
@@ -21,19 +21,12 @@ function sortPages(pages: string[]): string[] {
 
 interface ServiceGridProps {
   services: ServiceCardService[];
-  projectSlug: string;
   isAdmin: boolean;
   removingKey: string | null;
   onRemove: (serviceKey: string) => void;
 }
 
-export function ServiceGrid({
-  services,
-  projectSlug,
-  isAdmin,
-  removingKey,
-  onRemove,
-}: ServiceGridProps) {
+export function ServiceGrid({ services, isAdmin, removingKey, onRemove }: ServiceGridProps) {
   // Separate email services — they get their own section regardless of page
   const emailServices = services.filter((s) => EMAIL_TYPES.has(s.service_type_slug));
   const contentServices = services.filter((s) => !EMAIL_TYPES.has(s.service_type_slug));
@@ -58,6 +51,17 @@ export function ServiceGrid({
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", page);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  // Editing happens inline (CmsSection swaps the grid for the editor when
+  // `?service=` is present). Encode the current tab too so browser back —
+  // and copied links — restore the grid exactly as it was.
+  function editHref(serviceKey: string): string {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", "cms");
+    params.set("tab", effectivePage);
+    params.set("service", serviceKey);
+    return `${pathname}?${params.toString()}`;
   }
 
   const visibleServices = contentServices.filter(
@@ -110,7 +114,7 @@ export function ServiceGrid({
                     <ServiceCard
                       key={svc.id}
                       service={svc}
-                      projectSlug={projectSlug}
+                      editHref={editHref(svc.service_key)}
                       isAdmin={isAdmin}
                       removing={removingKey === svc.service_key}
                       onRemove={onRemove}
@@ -138,7 +142,7 @@ export function ServiceGrid({
               <ServiceCard
                 key={svc.id}
                 service={svc}
-                projectSlug={projectSlug}
+                editHref={editHref(svc.service_key)}
                 isAdmin={isAdmin}
                 removing={removingKey === svc.service_key}
                 onRemove={onRemove}

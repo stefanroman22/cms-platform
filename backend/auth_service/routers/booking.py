@@ -391,7 +391,14 @@ def list_resources(slug: str, service_id: str = Query("")) -> JSONResponse:
     return JSONResponse(
         content={
             "resources": [
-                {"id": r["id"], "name": r["name"], "type": r.get("type", "generic")}
+                {
+                    "id": r["id"],
+                    "name": r["name"],
+                    "type": r.get("type", "generic"),
+                    # Avatar for the customer-facing barber picker. "" => the site
+                    # falls back to a default placeholder.
+                    "image_url": r.get("image_url") or "",
+                }
                 for r in resources
             ]
         }
@@ -814,7 +821,12 @@ async def manage_reschedule(request: Request, token: str, body: RescheduleIn) ->
     locale = cfg.locale
     from_name = cfg.email_from_name or cfg.business_name or None
     try:
-        key_resched = f"{b['id']}:reschedule"
+        # The idempotency key MUST vary per reschedule, else the 2nd (and later)
+        # reschedule emails are suppressed by `notification_already_sent`. The DB
+        # count was just incremented to (old+1); mirror that here so each
+        # reschedule sends exactly one confirmation.
+        new_count = (b.get("reschedule_count") or 0) + 1
+        key_resched = f"{b['id']}:reschedule:{new_count}"
         if not booking_repo.notification_already_sent(key_resched):
             booking_manage_email.send_reschedule(
                 name=b.get("customer_name") or cust.get("name", ""),
@@ -875,10 +887,20 @@ async def send_reminders(request: Request) -> JSONResponse:
             continue
         cust = booking_repo.load_customer(b["customer_id"]) or {}
         start = datetime.fromisoformat(b["start_utc"]).astimezone(_UTC)
+        end = (
+            datetime.fromisoformat(b["end_utc"]).astimezone(_UTC)
+            if b.get("end_utc")
+            else start + timedelta(minutes=30)
+        )
         brand = _brand_for(cfg)
         locale = cfg.locale
         for offset_min in cfg.reminder_offsets_min:
-            # 5-minute send window: send_start <= now < send_end
+            # 5-minute send window: send_start <= now < send_end. This is also what
+            # gives the desired "smart" behaviour for free: a same-day booking's 24h
+            # window is already in the past (never matches), so only the 1h reminder
+            # fires; a booking made <1h before start has BOTH windows in the past, so
+            # no reminder fires. No created_at comparison is needed (and one would be
+            # unreachable here anyway, since `created <= now < send_end` always holds).
             send_start = start - timedelta(minutes=offset_min + 5)
             send_end = start - timedelta(minutes=offset_min)
             if not (send_start <= now < send_end):
@@ -894,6 +916,9 @@ async def send_reminders(request: Request) -> JSONResponse:
                     when_label=_when_label(start, cust.get("timezone") or cfg.timezone),
                     meeting_url=cfg.meeting_url,
                     manage_url="",
+                    start_utc=start,
+                    end_utc=end,
+                    business_name=cfg.business_name,
                     brand=brand,
                     locale=locale,
                     copy=cfg.email_copy,
@@ -931,12 +956,11 @@ def legacy_availability(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Bad range") from exc
     now = datetime.now(UTC)
-    days, cur = [], d0
-    while cur <= d1:
-        if _availability_for_day(cfg=cfg, service=service, day=cur, now_utc=now):
-            days.append(cur.isoformat())
-        cur += timedelta(days=1)
-    return JSONResponse(content={"days": days})
+    # Batched: load resources/hours/exceptions/busy ONCE for the range instead of
+    # re-querying per calendar day (was ~4-5 round-trips/day). Same per-day math;
+    # the legacy shape only needs the dates that have >=1 slot.
+    rng = _availability_for_range(cfg=cfg, service=service, d0=d0, d1=d1, now_utc=now)
+    return JSONResponse(content={"days": [d["date"] for d in rng]})
 
 
 @router.get("/slots")

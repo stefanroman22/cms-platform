@@ -20,6 +20,11 @@ export type ScopeValue = string;
 /** Default staff scope: every staff member's bookings. */
 export const DEFAULT_SCOPE: ScopeValue = "all";
 
+/** Calendar granularity. Day-first by request, defaulting to the day timeline. */
+export type CalendarView = "day" | "week" | "month";
+export const CALENDAR_VIEWS: CalendarView[] = ["day", "week", "month"];
+export const DEFAULT_CALENDAR_VIEW: CalendarView = "day";
+
 const STORAGE_PREFIX = "booking.overview.v1.";
 
 interface StoredPrefs {
@@ -27,6 +32,8 @@ interface StoredPrefs {
   statView?: string;
   /** "all" | resource_id */
   scope?: ScopeValue;
+  /** day | week | month — persisted so the owner reopens to the same view. */
+  calendarView?: CalendarView;
 }
 
 export interface OverviewPrefsStore {
@@ -34,6 +41,8 @@ export interface OverviewPrefsStore {
   setStatView(view: string): void;
   getScope(): ScopeValue;
   setScope(scope: ScopeValue): void;
+  getCalendarView(): CalendarView;
+  setCalendarView(view: CalendarView): void;
 }
 
 function safeRead(key: string): StoredPrefs {
@@ -74,6 +83,16 @@ export function createOverviewPrefs(projectKey: string): OverviewPrefsStore {
     setScope(scope) {
       const current = safeRead(key);
       safeWrite(key, { ...current, scope });
+    },
+    getCalendarView() {
+      const { calendarView } = safeRead(key);
+      return CALENDAR_VIEWS.includes(calendarView as CalendarView)
+        ? (calendarView as CalendarView)
+        : DEFAULT_CALENDAR_VIEW;
+    },
+    setCalendarView(view) {
+      const current = safeRead(key);
+      safeWrite(key, { ...current, calendarView: view });
     },
   };
 }

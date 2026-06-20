@@ -18,7 +18,6 @@ export interface ContactDetails {
 }
 
 export interface ContactContent {
-  hero: { eyebrow: string; title: string; lead: string };
   details: ContactDetails;
 }
 

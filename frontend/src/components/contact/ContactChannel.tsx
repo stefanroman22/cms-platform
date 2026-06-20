@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LazyMotion, domMax, MotionConfig, AnimatePresence, m } from "motion/react";
+import { useTranslations } from "next-intl";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { ContactForm } from "@/components/contact/ContactForm";
 import { BookingCalendar } from "@/components/booking/BookingCalendar";
@@ -19,6 +20,8 @@ type Channel = "email" | "call";
  */
 export function ContactChannel({ recipient }: { recipient: string }) {
   const [channel, setChannel] = useState<Channel>("email");
+  const tChannel = useTranslations("contactChannel");
+  const tSection = useTranslations("contactSection");
 
   return (
     <LazyMotion features={domMax}>
@@ -28,8 +31,8 @@ export function ContactChannel({ recipient }: { recipient: string }) {
           onChange={setChannel}
           layoutId="contact-channel"
           options={[
-            { value: "email", label: "Email" },
-            { value: "call", label: "Book a call" },
+            { value: "email", label: tChannel("email") },
+            { value: "call", label: tChannel("bookCall") },
           ]}
         />
 
@@ -55,8 +58,8 @@ export function ContactChannel({ recipient }: { recipient: string }) {
               >
                 <BookingCalendar
                   slug="roman-technologies-website"
-                  heading="Book a call with Stefan"
-                  subheading="45-minute call"
+                  heading={tSection("bookingHeading")}
+                  subheading={tSection("bookingSubheading")}
                   avatarUrl="/team/stefan-roman-call-picture.jpeg"
                 />
               </m.div>

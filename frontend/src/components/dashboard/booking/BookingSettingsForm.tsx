@@ -27,8 +27,6 @@ type Draft = {
   meeting_url: string;
   email_from_name: string;
   slot_granularity_min: string;
-  reminders_enabled: boolean;
-  reminder_offsets_min: string; // comma-separated ints
   calendar_provider: string;
 };
 
@@ -42,8 +40,6 @@ function settingsToDraft(s: BookingSettings): Draft {
     meeting_url: s.meeting_url ?? "",
     email_from_name: s.email_from_name ?? "",
     slot_granularity_min: String(s.slot_granularity_min ?? 15),
-    reminders_enabled: s.reminders_enabled ?? true,
-    reminder_offsets_min: (s.reminder_offsets_min ?? [1440, 120]).join(", "),
     calendar_provider: s.calendar_provider ?? "none",
   };
 }
@@ -87,11 +83,6 @@ export function BookingSettingsForm({ projectSlug }: Props) {
     setMsg(null);
     setSlugError(null);
     try {
-      const offsets = draft.reminder_offsets_min
-        .split(",")
-        .map((s) => parseInt(s.trim(), 10))
-        .filter((n) => !Number.isNaN(n));
-
       const updated = await patchSettings(projectSlug, {
         business_name: draft.business_name.trim() || undefined,
         timezone: draft.timezone.trim() || undefined,
@@ -101,8 +92,6 @@ export function BookingSettingsForm({ projectSlug }: Props) {
         meeting_url: draft.meeting_url.trim() || undefined,
         email_from_name: draft.email_from_name.trim() || undefined,
         slot_granularity_min: parseInt(draft.slot_granularity_min, 10) || undefined,
-        reminders_enabled: draft.reminders_enabled,
-        reminder_offsets_min: offsets.length ? offsets : undefined,
         calendar_provider: draft.calendar_provider || undefined,
       });
       cache.set(cacheKey, updated);
@@ -251,44 +240,9 @@ export function BookingSettingsForm({ projectSlug }: Props) {
               </select>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className={`${dashboardFieldLabelCn} mb-0`}>Enable reminders</label>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={draft.reminders_enabled}
-                onClick={() => set("reminders_enabled", !draft.reminders_enabled)}
-                className={`relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full transition-colors ${
-                  draft.reminders_enabled
-                    ? "bg-zinc-900 dark:bg-zinc-100"
-                    : "bg-zinc-200 dark:bg-zinc-700"
-                }`}
-              >
-                <span
-                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform dark:bg-zinc-900 ${
-                    draft.reminders_enabled ? "translate-x-4" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </div>
-
-            {draft.reminders_enabled && (
-              <div>
-                <label className={dashboardFieldLabelCn}>
-                  Reminder offsets (minutes, comma-separated)
-                </label>
-                <p className="mb-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-                  E.g. 1440, 120 sends reminders 24h and 2h before.
-                </p>
-                <input
-                  type="text"
-                  value={draft.reminder_offsets_min}
-                  onChange={(e) => set("reminder_offsets_min", e.target.value)}
-                  placeholder="1440, 120"
-                  className={dashboardInputCn}
-                />
-              </div>
-            )}
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              Email reminders are configured under <span className="font-medium">Policies</span>.
+            </p>
 
             <div className="flex justify-end pt-1">
               <button

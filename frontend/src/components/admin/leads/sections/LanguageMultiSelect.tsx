@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { X } from "lucide-react";
 import { searchLanguages } from "@/lib/languages";
 

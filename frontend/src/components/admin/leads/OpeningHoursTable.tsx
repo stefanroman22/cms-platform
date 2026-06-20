@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Clock } from "lucide-react";
 import { fadeUp, staggerFast } from "@/lib/animations";
 

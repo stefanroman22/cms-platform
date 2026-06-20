@@ -47,6 +47,10 @@ class ResourceIn(BaseModel):
     name: str
     type: str = "generic"
     capacity: int = 1
+    # Public-facing avatar shown next to the staff member on the customer booking
+    # flow and in the owner's calendar. Empty string => the UI falls back to a
+    # default placeholder avatar (no image is ever stored as a hard requirement).
+    image_url: str = ""
     is_active: bool = True
     sort_order: int = 0
 

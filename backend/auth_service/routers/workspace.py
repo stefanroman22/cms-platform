@@ -2,6 +2,7 @@ import logging
 import secrets
 import string
 import uuid
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -209,6 +210,37 @@ async def get_service(
     return flat
 
 
+def _repeater_schema_of(content: object) -> list | None:
+    """Return a repeater content blob's non-empty `_schema`, else None.
+
+    `_schema` is structural metadata (the per-item field definitions) the
+    dashboard editor needs to render the repeater. It is seeded at create time
+    from `item_schema`; a content write that omits it must NOT drop it."""
+    if isinstance(content, dict):
+        schema = content.get("_schema")
+        if isinstance(schema, list) and schema:
+            return schema
+    return None
+
+
+def _grafted_repeater_content(content: dict, *fallback_blobs: object) -> dict:
+    """Guarantee a repeater save carries a non-empty `_schema`.
+
+    Keeps the incoming `_schema` when present; otherwise grafts the first
+    non-empty one found in the fallback blobs (the stored default/target-locale
+    content). This makes the schema sticky so an items-only payload — e.g. the
+    connector's seed PUT, or any client that round-trips only `items` — can
+    never wipe the field definitions and leave an uneditable repeater. Returns
+    `content` unchanged when no schema is available anywhere."""
+    if _repeater_schema_of(content) is not None:
+        return content
+    for blob in fallback_blobs:
+        schema = _repeater_schema_of(blob)
+        if schema is not None:
+            return {**content, "_schema": schema}
+    return content
+
+
 @router.put("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
 async def save_service(
     project_slug: str,
@@ -268,6 +300,24 @@ async def save_service(
     )
     by_locale = {r["locale"]: r for r in (rows.data or [])}
 
+    # A repeater's `_schema` is structural, not editable content. A payload that
+    # omits it (the connector's items-only seed PUT, or any client that
+    # round-trips only `items`) must not wipe it — re-graft the canonical schema
+    # from the stored default locale (where create seeded it) or target locale.
+    # Applied to the source `content_in` so the translation source, override
+    # diff, and every per-locale upsert all carry it.
+    content_in = body.content
+    if service_type == "repeater":
+        d = by_locale.get(default_locale) or {}
+        t = by_locale.get(loc) or {}
+        content_in = _grafted_repeater_content(
+            body.content,
+            d.get("draft_content"),
+            d.get("published_content"),
+            t.get("draft_content"),
+            t.get("published_content"),
+        )
+
     # Closure: captures svc_id, now, user, and seed from the enclosing scope.
     def _upsert(target_locale: str, content: dict, meta: dict | None) -> None:
         payload: dict = {
@@ -287,7 +337,7 @@ async def save_service(
 
     if loc == default_locale:
         prev_default = (by_locale.get(default_locale) or {}).get("draft_content") or {}
-        _upsert(default_locale, body.content, None)
+        _upsert(default_locale, content_in, None)
         # Propagate to every other locale. The provider is only constructed when
         # there is something to translate, so single-locale projects never touch
         # the engine. A translation failure for one locale is logged and skipped —
@@ -300,7 +350,7 @@ async def save_service(
                 try:
                     new_content, new_meta = sync_locale_draft(
                         service_type,
-                        body.content,
+                        content_in,
                         prev_default,
                         trow.get("draft_content"),
                         trow.get("translation_meta") or {},
@@ -323,13 +373,13 @@ async def save_service(
         default_content = (by_locale.get(default_locale) or {}).get("draft_content") or {}
         prev_target = (by_locale.get(loc) or {}).get("draft_content") or {}
         prev_meta = dict((by_locale.get(loc) or {}).get("translation_meta") or {})
-        new_segs = segments_of(service_type, body.content)
+        new_segs = segments_of(service_type, content_in)
         prev_segs = segments_of(service_type, prev_target)
         src_segs = segments_of(service_type, default_content)
         for path, value in new_segs.items():
             if value != prev_segs.get(path):
                 prev_meta[path] = {"src_hash": src_hash(src_segs.get(path, ""))}
-        _upsert(loc, body.content, prev_meta)
+        _upsert(loc, content_in, prev_meta)
 
     # Return fresh state for the edited locale
     return await get_service(project_slug, service_key, request, locale=loc)
@@ -721,18 +771,17 @@ async def admin_list_clients(request: Request, include_test: bool = False):
         .execute()
     )
 
+    # One query for all active projects, counted per user in Python, instead of a
+    # count='exact' round-trip per user (was U+1 serial calls on a sync client that
+    # blocks the worker per call).
+    proj_rows = sb.table("projects").select("user_id").eq("is_active", True).execute()
+    counts = Counter(p["user_id"] for p in (proj_rows.data or []))
+
     out = []
     for u in users_result.data or []:
         if not include_test and is_test_email(u.get("email")):
             continue
-        count_result = (
-            sb.table("projects")
-            .select("id", count="exact")
-            .eq("user_id", u["id"])
-            .eq("is_active", True)
-            .execute()
-        )
-        out.append({**u, "projects_count": count_result.count or 0})
+        out.append({**u, "projects_count": counts.get(u["id"], 0)})
     return out
 
 

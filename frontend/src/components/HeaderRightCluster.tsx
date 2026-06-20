@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { Menu, X, User } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Logo } from "@/components/ui/Logo";
 import { backdrop, drawerRight, fadeIn, staggerFast } from "@/lib/animations";
 import { ctaButtonCn, navLinkCn } from "@/lib/styles";
 import { useAuth } from "@/context/auth";
 import { NavLink } from "@/components/nav/NavLink";
+import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { NAV_LINKS } from "@/lib/nav-links";
 
 export function HeaderRightCluster() {
+  const tn = useTranslations("nav");
+  const th = useTranslations("header");
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isLoggedIn } = useAuth();
   const close = () => setMobileOpen(false);
@@ -40,7 +44,7 @@ export function HeaderRightCluster() {
               <button
                 onClick={() => window.open("/dashboard", "cms-dashboard")}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-                aria-label="Open dashboard"
+                aria-label={th("openDashboard")}
               >
                 <User className="h-4 w-4 cursor-pointer" />
               </button>
@@ -55,7 +59,7 @@ export function HeaderRightCluster() {
               className="absolute inset-0 flex items-center"
             >
               <Link href="/log-in" className={ctaButtonCn}>
-                Log In
+                {th("logIn")}
               </Link>
             </motion.div>
           )}
@@ -66,7 +70,7 @@ export function HeaderRightCluster() {
       <button
         onClick={() => setMobileOpen(true)}
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-white md:hidden"
-        aria-label="Open menu"
+        aria-label={th("openMenu")}
       >
         <Menu className="h-5 w-5" />
       </button>
@@ -97,7 +101,7 @@ export function HeaderRightCluster() {
                 <button
                   onClick={close}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-white"
-                  aria-label="Close menu"
+                  aria-label={th("closeMenu")}
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -108,16 +112,16 @@ export function HeaderRightCluster() {
                 initial="hidden"
                 animate="visible"
                 className="flex flex-col gap-1 p-4"
-                aria-label="Mobile navigation"
+                aria-label={tn("mobileNav")}
               >
                 {NAV_LINKS.map((link) => (
-                  <motion.div key={link.label} variants={fadeIn}>
+                  <motion.div key={link.key} variants={fadeIn}>
                     <NavLink
                       href={link.href}
                       onNavigate={close}
                       className={`block rounded-lg px-4 py-3 text-base ${navLinkCn}`}
                     >
-                      {link.label}
+                      {tn(link.key)}
                     </NavLink>
                   </motion.div>
                 ))}
@@ -132,19 +136,23 @@ export function HeaderRightCluster() {
                       }}
                       className={ctaButtonCn}
                     >
-                      Open Dashboard
+                      {th("openDashboardButton")}
                     </button>
                   ) : (
                     <Link href="/log-in" onClick={close} className={ctaButtonCn}>
-                      Log In
+                      {th("logIn")}
                     </Link>
                   )}
                 </motion.div>
 
                 <motion.div variants={fadeIn} className="pt-2">
                   <Link href="/contact" onClick={close} className={ctaButtonCn}>
-                    Get in touch
+                    {th("getInTouch")}
                   </Link>
+                </motion.div>
+
+                <motion.div variants={fadeIn} className="mt-2 border-t border-white/[0.06] pt-4">
+                  <LanguageSwitcher variant="drawer" />
                 </motion.div>
               </motion.nav>
             </motion.div>

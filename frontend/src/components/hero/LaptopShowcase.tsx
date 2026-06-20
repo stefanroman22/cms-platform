@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
+import { useTranslations } from "next-intl";
 import {
   LazyMotion,
   domAnimation,
@@ -30,22 +31,17 @@ const LaptopScene = dynamic(() => import("./LaptopScene"), {
   loading: () => <HeroSceneSkeleton />,
 });
 
-const SR_DESCRIPTION =
-  "Decorative animation of a laptop opening to reveal the Roman Technologies content management system in use by Café Nordlys, a sample client.";
-
 const EXPO = [0.16, 1, 0.3, 1] as const;
 
 // Each caption owns a scroll segment; sides alternate left → right → left → right
 // and sit in the outer margins so they never cover the laptop screen.
-const CAPTIONS: { text: string; side: "left" | "right" }[] = [
-  { text: "Manage your projects in one place", side: "left" },
-  {
-    text: "Change content and adjust your project yourself 24/7 using our agentic software",
-    side: "right",
-  },
-  { text: "Hosted, secured, monitored — by us.", side: "left" },
-  { text: "Every major release is human-reviewed to ensure correctness", side: "right" },
-];
+const CAPTION_KEYS: { key: "manage" | "adjust" | "hosted" | "reviewed"; side: "left" | "right" }[] =
+  [
+    { key: "manage", side: "left" },
+    { key: "adjust", side: "right" },
+    { key: "hosted", side: "left" },
+    { key: "reviewed", side: "right" },
+  ];
 
 /** True only while a scrollToHash() jump is animating. Lets scroll-linked
  *  scenes freeze instead of scrubbing through their whole timeline. */
@@ -59,10 +55,12 @@ function ShowcaseCaptions({
   progress,
   reducedMotion,
   frozen,
+  captions,
 }: {
   progress: MotionValue<number>;
   reducedMotion: boolean;
   frozen: boolean;
+  captions: string[];
 }) {
   const [active, setActive] = useState(reducedMotion ? 0 : -1);
 
@@ -80,7 +78,7 @@ function ShowcaseCaptions({
     setActive(p >= SCREEN_MOUNT_AT ? progressToFeature(p) : -1);
   });
 
-  const side = active >= 0 ? CAPTIONS[active].side : "left";
+  const side = active >= 0 ? CAPTION_KEYS[active].side : "left";
   const dx = side === "left" ? -28 : 28;
 
   return (
@@ -98,7 +96,7 @@ function ShowcaseCaptions({
               side === "left" ? "left-[3vw] text-left" : "right-[3vw] text-right"
             )}
           >
-            {CAPTIONS[active].text}
+            {captions[active]}
           </m.p>
         )}
       </AnimatePresence>
@@ -107,6 +105,9 @@ function ShowcaseCaptions({
 }
 
 export function LaptopShowcase() {
+  const t = useTranslations("laptop");
+  const captions = CAPTION_KEYS.map((c) => t(`captions.${c.key}`));
+
   const sectionRef = useRef<HTMLElement>(null);
   const isDesktop = useIsDesktop(768);
 
@@ -126,12 +127,16 @@ export function LaptopShowcase() {
   //   • the section scrolls into view (`once: true` latches it on), or
   //   • the hero intro has finished, then an idle slot warms it proactively
   //     so it's ready by the time the user scrolls down.
-  // Kick off the heavy 3D chunk download immediately (network only) so it is
-  // cached well before we mount — fast scrollers then get the scene with no
-  // load wait. The dynamic() below reuses this same already-fetched chunk.
+  // Kick off the heavy 3D chunk download (network only) once we've CONFIRMED a
+  // desktop viewport, so it is cached well before we mount — fast scrollers then
+  // get the scene with no load wait. The dynamic() below reuses this same
+  // already-fetched chunk. Gated on `mounted && isDesktop`: useIsDesktop returns
+  // true on the first render (SSR-safe default), so without the `mounted` gate
+  // the ~950 KB Three.js/R3F chunk would download once even on phones, which
+  // render MobileLaptopFallback and never use it.
   useEffect(() => {
-    void import("./LaptopScene");
-  }, []);
+    if (mounted && isDesktop) void import("./LaptopScene");
+  }, [mounted, isDesktop]);
 
   const nearView = useInView(sectionRef, { margin: "0px 0px -120px 0px", once: true });
   const [idleWarmed, setIdleWarmed] = useState(false);
@@ -249,12 +254,13 @@ export function LaptopShowcase() {
             )}
           </div>
 
-          <span className="sr-only">{SR_DESCRIPTION}</span>
+          <span className="sr-only">{t("srDescription")}</span>
 
           <ShowcaseCaptions
             progress={scrollYProgress}
             reducedMotion={prefersReduced}
             frozen={programmatic}
+            captions={captions}
           />
         </div>
       </section>

@@ -8,7 +8,8 @@ import hashlib
 import logging
 import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
@@ -153,7 +154,11 @@ async def patch_settings(project_slug: str, body: SettingsPatch, request: Reques
         raise HTTPException(status_code=409, detail="That public link is already taken")
     if not fields:
         raise HTTPException(status_code=422, detail="No fields to update")
-    return JSONResponse(content=booking_admin_repo.update_settings(tenant_id, fields))
+    # Mirror GET/enable: re-add the synthetic `enabled: True` so any client that
+    # caches the PATCH response (the dashboard does) keeps the flag and doesn't
+    # flip to the "Enable bookings" CTA on save.
+    updated = booking_admin_repo.update_settings(tenant_id, fields)
+    return JSONResponse(content={"enabled": True, **updated})
 
 
 # ---- services ----
@@ -337,6 +342,29 @@ def _flatten_appointment(row: dict) -> dict:
     return out
 
 
+def _local_day_to_utc(
+    date_str: str | None, tz_name: str, *, end_exclusive: bool = False
+) -> str | None:
+    """Interpret a date-only `YYYY-MM-DD` as a TENANT-LOCAL calendar day and return
+    the UTC instant of its (local) midnight. With `end_exclusive`, return the
+    midnight of the NEXT day, so a `start_utc < that` bound includes the whole day.
+
+    `start_utc` is a timestamptz; comparing it against a bare date coerces to UTC
+    midnight, which both drops same-day appointments (inclusive upper bound) and
+    shifts the window for non-UTC tenants. Converting to a tz-aware instant fixes
+    both. Returns None for a missing/invalid date (the bound is then skipped)."""
+    if not date_str:
+        return None
+    try:
+        d = date.fromisoformat(date_str[:10])
+    except ValueError:
+        return date_str  # fall back to the raw value (defensive)
+    if end_exclusive:
+        d = d + timedelta(days=1)
+    tz = ZoneInfo(tz_name or "UTC")
+    return datetime.combine(d, time.min, tzinfo=tz).astimezone(UTC).isoformat()
+
+
 @router.get("/projects/{project_slug}/bookings/appointments")
 async def list_appointments(
     project_slug: str,
@@ -348,13 +376,23 @@ async def list_appointments(
     to: str | None = Query(None),
 ) -> JSONResponse:
     tenant_id = await _tenant(project_slug, request)
+    # Only resolve the tenant timezone when a date filter is actually applied —
+    # avoids an extra query on the common unfiltered list. Inclusive lower bound,
+    # exclusive upper bound (both tz-aware UTC instants) so the whole `to` day is
+    # included and non-UTC tenants are scoped to their own calendar day.
+    date_from = date_to = None
+    if from_ or to:
+        cfg = booking_tenant.load_tenant_by_id(tenant_id)
+        tz_name = cfg.timezone if cfg else "UTC"
+        date_from = _local_day_to_utc(from_, tz_name)
+        date_to = _local_day_to_utc(to, tz_name, end_exclusive=True)
     rows = booking_admin_repo.list_appointments(
         tenant_id,
         status=status,
         service_id=service_id,
         resource_id=resource_id,
-        date_from=from_,
-        date_to=to,
+        date_from=date_from,
+        date_to=date_to,
     )
     return JSONResponse(content={"appointments": [_flatten_appointment(r) for r in rows]})
 
@@ -641,10 +679,14 @@ async def get_booking_stats(
     if cfg is None:
         raise HTTPException(status_code=404, detail="Bookings not enabled")
     now = datetime.now(UTC)
+    tz_name = cfg.timezone or "UTC"
     date_from = from_ or (now - timedelta(days=90)).date().isoformat()
     date_to = to or (now + timedelta(days=90)).date().isoformat()
     rows = booking_admin_repo.list_bookings_for_stats(
-        tenant_id, date_from, date_to, resource_id=resource_id
+        tenant_id,
+        _local_day_to_utc(date_from, tz_name),
+        _local_day_to_utc(date_to, tz_name, end_exclusive=True),
+        resource_id=resource_id,
     )
     return JSONResponse(content=compute_booking_stats(rows, now_utc=now, tz_name=cfg.timezone))
 

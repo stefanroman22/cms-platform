@@ -69,26 +69,23 @@ def load_active_resources(tenant_id: str) -> list[dict]:
 def load_eligible_resources(tenant_id: str, service_id: str) -> list[dict]:
     """Active resources linked to this service via booking_service_resources."""
     sb = get_supabase_admin()
-    links = (
-        sb.table("booking_service_resources")
-        .select("resource_id")
-        .eq("tenant_id", tenant_id)
-        .eq("service_id", service_id)
-        .execute()
-    )
-    ids = [r["resource_id"] for r in (links.data or [])]
-    if not ids:
-        return []
+    # Single embedded inner-join via the booking_service_resources.resource_id ->
+    # booking_resources.id FK: active resources that have a link row for this
+    # (tenant, service), instead of a separate resource_id query + .in_() round-trip.
     res = (
         sb.table("booking_resources")
-        .select("*")
+        .select("*, booking_service_resources!inner(service_id)")
         .eq("tenant_id", tenant_id)
         .eq("is_active", True)
-        .in_("id", ids)
+        .eq("booking_service_resources.tenant_id", tenant_id)
+        .eq("booking_service_resources.service_id", service_id)
         .order("sort_order")
         .execute()
     )
-    return res.data or []
+    rows = res.data or []
+    for r in rows:
+        r.pop("booking_service_resources", None)
+    return rows
 
 
 def load_hours(tenant_id: str) -> list[dict]:
@@ -335,7 +332,7 @@ def due_reminders(*, now_utc: datetime, window_end_utc: datetime) -> list[dict]:
     sb = get_supabase_admin()
     res = (
         sb.table("bookings")
-        .select("id, tenant_id, customer_id, customer_name, notes, start_utc")
+        .select("id, tenant_id, customer_id, customer_name, notes, start_utc, end_utc")
         .eq("status", "confirmed")
         .is_("reminder_sent_at", "null")
         .gte("start_utc", now_utc.isoformat())

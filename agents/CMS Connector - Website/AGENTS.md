@@ -22,7 +22,7 @@ Loaded from SKILL.md. See SKILL.md for first steps and token rules.
 | 2 | Scan + report | [phases/2-scan.md](./phases/2-scan.md) | Markdown integration report for human review |
 | 3 | Review | [phases/3-review.md](./phases/3-review.md) | User approval gate (no disk writes) |
 | 4 | Integration | [phases/4-integration.md](./phases/4-integration.md) | Provision CMS services, wire Resend, set up Vercel |
-| 5 | Testing | [phases/5-testing.md](./phases/5-testing.md) | End-to-end test matrix passes |
+| 5 | Testing | [phases/5-testing.md](./phases/5-testing.md) | End-to-end test matrix passes, incl. **5i per-service content round-trip** (every service drives cms-preview/localhost on save + production on publish; revert restores) |
 | 6 | Client onboarding + confirmation | [phases/6-confirmation.md](./phases/6-confirmation.md) | Create client account, transfer project ownership, send branded welcome email via Resend, delete temp files, print summary |
 
 Each phase doc contains: goal, inputs, steps, outputs, failure messages, self-improvement hook.
@@ -152,6 +152,38 @@ For multilingual sites (manifest `locales` has >1 entry):
 - The `key_value` / `Record<string,string>` contract is **unchanged per locale** — each locale's content is its own flat `Record<string,string>` (or array shape coalesced client-side). No nested locale maps at the JS layer.
 - Locale-invariant assets (logo, file download URLs) are marked `translatable:false` in the manifest; the site fetches them from the default-locale response regardless of active locale.
 - Legacy `GET {base}/content/{slug}` (no locale segment) still returns default-locale content and must remain supported for back-compat (single-locale sites and CMS preview thumbnails).
+
+### SEO/GEO area contract
+
+The **SEO/GEO Optimizer** agent (the 4th pipeline agent) owns a dedicated set of `seo_*`
+Supabase tables (`seo_page_meta`, `seo_articles`, and the run/audit/plan/change tables). It
+writes them autonomously; client + admin edit them via the dashboard "SEO & GEO" section. For
+the agent's published SEO to reach the live site, generated sites must **CONSUME** its public
+read endpoints. This contract is binding for all generated client websites:
+
+- **`generateMetadata` prefers stored SEO meta — fetch the ACTIVE locale.** Generated sites
+  fetch `GET {backend}/projects/{slug}/seo/public/meta?route=<route>&locale=<active-locale>`
+  (the active next-intl locale) and PREFER the stored `title`/`description`/`og` text when
+  present, falling back to the build-time `seo-pro` output. **The per-field default-locale
+  fallback is now SERVER-SIDE** — the public endpoint fills any missing/untranslated locale
+  field from the project's default-locale row, so the site **never merges locales itself**
+  and never sees an empty translated field. **Never throw** — fall back on any error; ISR ~60s.
+- **`generateMetadata` generates the CODED tags itself, per locale.** `canonical`, `hreflang`
+  (`alternates.languages`), `og:locale`, and JSON-LD `inLanguage` are **language-invariant
+  codes**, NOT fetched prose — the site generates them locally per active locale (the stored
+  meta supplies only the prose: title/description/OG text + JSON-LD data). SSR every locale
+  (raw-HTML content per locale, not just the default).
+- **`/blog` from stored articles — ACTIVE locale, server-side fallback.** When the project
+  has `seo_blog_route` set, the site has a `/blog` index + `/blog/[slug]` that fetch
+  `GET {backend}/projects/{slug}/seo/public/articles?locale=<active-locale>` (+ `/{articleSlug}`),
+  ISR + fallback. An untranslated article transparently shows default-locale prose because
+  the endpoint applies the per-field default fallback server-side — the site does not merge.
+- **Hard rule — NEVER provision or clobber the `seo_*` tables.** The `seo_*` Supabase tables
+  are the SEO/GEO Optimizer agent's area. The Connector **NEVER provisions them as normal
+  content services** and **NEVER clobbers them**. It **only WIRES** the site to consume the
+  public read endpoints above (`seo/public/meta`, `seo/public/articles`). When a SEO-agent
+  `site-change-spec` carries a `cms_wiring` block, consume that — do not treat `seo_*` as
+  content services.
 
 ## Glossary
 

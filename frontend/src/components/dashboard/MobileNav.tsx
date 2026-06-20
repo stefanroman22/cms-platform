@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { Layers, Menu, X } from "lucide-react";
 import { SidebarPanel } from "./SidebarPanel";
 

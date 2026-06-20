@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { X, Bot, TrendingUp, ArrowUpRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 /* NOTE for Stefan: replace /public/hero-mobile-demo-placeholder.mp4 with the
    real 5s silent screen-recording of the laptop opening. The modal below
@@ -11,11 +12,12 @@ const DEMO_SRC = "/hero-mobile-demo-placeholder.mp4";
 
 export function MobileLaptopFallback() {
   const [open, setOpen] = useState(false);
+  const t = useTranslations("laptop");
 
   return (
     <section className="relative flex flex-col items-center bg-black px-6 pb-20 pt-4 text-center">
       <p className="mb-8 max-w-[34ch] text-[0.95rem] leading-relaxed text-text-secondary">
-        A content system your customers never see — and you barely have to touch.
+        {t("mobileIntro")}
       </p>
 
       <div className="w-full max-w-[420px]">
@@ -25,7 +27,7 @@ export function MobileLaptopFallback() {
             onClick={() => setOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-[10px] border border-border bg-transparent px-4 py-2 text-[0.875rem] font-medium text-text-primary outline-none transition-colors hover:border-accent/50 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
-            See it open
+            {t("seeItOpen")}
             <ArrowUpRight className="h-4 w-4 text-accent" strokeWidth={2} />
           </button>
         </div>
@@ -51,7 +53,7 @@ export function MobileLaptopFallback() {
             >
               <button
                 onClick={() => setOpen(false)}
-                aria-label="Close demo"
+                aria-label={t("closeDemo")}
                 className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-text-primary outline-none transition-colors hover:bg-black/70 focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <X className="h-4 w-4" />
@@ -65,7 +67,7 @@ export function MobileLaptopFallback() {
                 loop
                 playsInline
               >
-                <p className="p-6 text-sm text-text-secondary">Demo video coming soon.</p>
+                <p className="p-6 text-sm text-text-secondary">{t("demoComingSoon")}</p>
               </video>
             </m.div>
           </m.div>

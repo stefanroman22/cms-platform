@@ -14,6 +14,7 @@ Covers:
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 import scan
@@ -276,3 +277,69 @@ def test_single_locale_provision_no_per_locale_puts():
     put_idx = call_log.index(put_calls[0])
     patch_idx = call_log.index(patch_calls[0])
     assert put_idx < patch_idx, "PATCH must come after the default seed PUT"
+
+
+# ---------------------------------------------------------------------------
+# Test 4: Repeater seed PUTs carry `_schema` (regression)
+# ---------------------------------------------------------------------------
+
+
+def test_repeater_seed_put_includes_schema_all_locales():
+    """A repeater's seed PUT must fold `item_schema` into the content as
+    `_schema`, on BOTH the default-locale and each per-locale seed. The seed PUT
+    replaces content wholesale, so omitting `_schema` clobbers what the create
+    step seeded and leaves the dashboard with an uneditable repeater (the exact
+    samir-kapsalon production bug)."""
+    item_schema = [
+        {"key": "day", "label": "Day", "type": "string"},
+        {"key": "open", "label": "Opens", "type": "string"},
+    ]
+    manifest = {
+        "project_slug": "demo",
+        "locales": ["nl", "en"],
+        "default_locale": "nl",
+        "services": [
+            {
+                "service_type_slug": "repeater",
+                "service_key": "opening_hours",
+                "label": "Opening hours",
+                "display_order": 0,
+                "page_name": "Home",
+                "translatable": True,
+                "item_schema": item_schema,
+                "initial_content": {
+                    "nl": {"items": [{"day": "Maandag", "open": "09:00"}]},
+                    "en": {"items": [{"day": "Monday", "open": "09:00"}]},
+                },
+            }
+        ],
+    }
+
+    seed_bodies: dict[str, dict] = {}  # url -> parsed JSON body
+
+    def fake_urlopen(req):
+        if req.get_method() == "PUT":
+            seed_bodies[req.get_full_url()] = json.loads(req.data.decode())
+        return _urlopen_resp()
+
+    def fake_http(method, url, headers, body=None):
+        return {"updated": 1}
+
+    with (
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+        patch.object(scan, "_http", side_effect=fake_http),
+    ):
+        scan._provision(manifest, "http://localhost:8001", "tok")
+
+    assert seed_bodies, "expected at least one seed PUT"
+    # Both the default-locale seed and the ?locale=en seed must carry _schema.
+    for url, payload in seed_bodies.items():
+        content = payload["content"]
+        assert content.get("_schema") == item_schema, f"missing _schema in seed PUT {url}"
+        # Items must be preserved alongside the grafted schema.
+        assert "items" in content, f"items dropped in seed PUT {url}"
+
+    default_puts = [u for u in seed_bodies if "locale=" not in u]
+    locale_puts = [u for u in seed_bodies if "locale=en" in u]
+    assert len(default_puts) == 1, "expected one default-locale seed PUT"
+    assert len(locale_puts) == 1, "expected one ?locale=en seed PUT"

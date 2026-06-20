@@ -2,55 +2,40 @@
 
 import { LazyMotion, domAnimation, MotionConfig, m } from "motion/react";
 import { Bot, Globe, AppWindow, Workflow, type LucideIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Reveal, REVEAL_EASE } from "@/components/motion/Reveal";
 
 interface Service {
   icon: LucideIcon;
-  title: string;
-  desc: string;
+  key: "aiAgents" | "websites" | "apps" | "automation";
 }
 
 /** What Roman Technologies does — AI agents first, as requested. */
-export const SERVICES: Service[] = [
-  {
-    icon: Bot,
-    title: "We build AI agents",
-    desc: "Autonomous agents that handle real work end-to-end — not just chatbots.",
-  },
-  {
-    icon: Globe,
-    title: "We develop websites",
-    desc: "Fast, beautiful, SEO-ready sites that turn visitors into customers.",
-  },
-  {
-    icon: AppWindow,
-    title: "We build software applications",
-    desc: "Web, mobile and desktop apps engineered to scale with you.",
-  },
-  {
-    icon: Workflow,
-    title: "We create automation workflows with AI",
-    desc: "AI-driven workflows that run your busywork around the clock.",
-  },
+const SERVICES: Service[] = [
+  { icon: Bot, key: "aiAgents" },
+  { icon: Globe, key: "websites" },
+  { icon: AppWindow, key: "apps" },
+  { icon: Workflow, key: "automation" },
 ];
 
+type WhatWeDoT = ReturnType<typeof useTranslations>;
+
 /** The intro copy (eyebrow + heading + lead) shared by both layouts. */
-function Intro({ centered }: { centered: boolean }) {
+function Intro({ centered, t }: { centered: boolean; t: WhatWeDoT }) {
   return (
     <Reveal inView amount={0.4} direction="up" distance={24}>
       <p className="mb-4 text-[0.78rem] font-semibold uppercase tracking-[0.34em] text-accent">
-        What we build
+        {t("eyebrow")}
       </p>
       <h2 className="font-display text-[clamp(2rem,5vw,3.25rem)] font-bold leading-[1.05] tracking-[-0.02em] text-text-primary">
-        What do we do?
+        {t("heading")}
       </h2>
       <p
         className={`mt-5 text-[1.0625rem] leading-relaxed text-text-secondary ${
           centered ? "mx-auto max-w-xl" : "max-w-md"
         }`}
       >
-        From a single landing page to full AI platforms — here&apos;s how we help ambitious
-        companies ship.
+        {t("lead")}
       </p>
     </Reveal>
   );
@@ -64,15 +49,17 @@ function Intro({ centered }: { centered: boolean }) {
  * self-contained section.
  */
 export function WhatWeDo({ layout }: { layout: "split" | "full" }) {
+  const t = useTranslations("whatWeDo");
+
   if (layout === "split") {
     return (
       <div>
-        <Intro centered={false} />
+        <Intro centered={false} t={t} />
         <ul className="mt-8 space-y-5">
           {SERVICES.map((s, i) => (
             <Reveal
               as="li"
-              key={s.title}
+              key={s.key}
               inView
               amount={0.6}
               direction="up"
@@ -85,9 +72,11 @@ export function WhatWeDo({ layout }: { layout: "split" | "full" }) {
               </span>
               <div>
                 <h3 className="font-display text-base font-semibold text-text-primary">
-                  {s.title}
+                  {t(`${s.key}.title`)}
                 </h3>
-                <p className="mt-1 text-sm leading-relaxed text-text-secondary">{s.desc}</p>
+                <p className="mt-1 text-sm leading-relaxed text-text-secondary">
+                  {t(`${s.key}.description`)}
+                </p>
               </div>
             </Reveal>
           ))}
@@ -110,12 +99,12 @@ export function WhatWeDo({ layout }: { layout: "split" | "full" }) {
           />
           <div className="relative z-10 mx-auto max-w-6xl">
             <div className="mx-auto max-w-3xl text-center">
-              <Intro centered />
+              <Intro centered t={t} />
             </div>
             <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {SERVICES.map((s, i) => (
                 <Reveal
-                  key={s.title}
+                  key={s.key}
                   inView
                   amount={0.3}
                   direction="up"
@@ -137,9 +126,11 @@ export function WhatWeDo({ layout }: { layout: "split" | "full" }) {
                       <s.icon className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
                     </m.span>
                     <h3 className="mt-5 font-display text-lg font-semibold text-text-primary">
-                      {s.title}
+                      {t(`${s.key}.title`)}
                     </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-text-secondary">{s.desc}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-text-secondary">
+                      {t(`${s.key}.description`)}
+                    </p>
                   </m.div>
                 </Reveal>
               ))}

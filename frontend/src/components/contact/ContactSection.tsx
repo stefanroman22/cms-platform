@@ -1,6 +1,7 @@
 "use client";
 
 import { LazyMotion, domAnimation, MotionConfig } from "motion/react";
+import { useTranslations } from "next-intl";
 import { Reveal } from "@/components/motion/Reveal";
 import { BookingCalendar } from "@/components/booking/BookingCalendar";
 import { ContactForm } from "@/components/contact/ContactForm";
@@ -12,6 +13,8 @@ import { contact } from "@/content/contact";
  * in on scroll.
  */
 export function ContactSection() {
+  const t = useTranslations("contactSection");
+
   return (
     <section id="contact" className="relative overflow-hidden bg-black px-6 py-16 lg:py-24">
       {/* Subtle gold ambient glow, echoing the hero + pricing sections. */}
@@ -28,14 +31,13 @@ export function ContactSection() {
           <div className="relative z-10 mx-auto max-w-5xl">
             <Reveal inView amount={0.4} className="mx-auto max-w-2xl text-center">
               <p className="mb-4 text-[0.78rem] font-semibold uppercase tracking-[0.34em] text-accent">
-                Let&apos;s talk
+                {t("eyebrow")}
               </p>
               <h2 className="font-display text-[clamp(2rem,5vw,3.25rem)] font-bold leading-[1.05] tracking-[-0.02em] text-text-primary">
-                Book a call or send a message
+                {t("heading")}
               </h2>
               <p className="mx-auto mt-5 max-w-xl text-[1.0625rem] leading-relaxed text-text-secondary">
-                Grab a 45-minute slot with me, Stefan — or leave your details below and I&apos;ll
-                reply within one business day.
+                {t("subheading")}
               </p>
             </Reveal>
 
@@ -43,8 +45,8 @@ export function ContactSection() {
               <Reveal inView amount={0.15} direction="up" distance={28}>
                 <BookingCalendar
                   slug="roman-technologies-website"
-                  heading="Book a call with Stefan"
-                  subheading="45-minute call"
+                  heading={t("bookingHeading")}
+                  subheading={t("bookingSubheading")}
                   avatarUrl="/team/stefan-roman-call-picture.jpeg"
                 />
               </Reveal>

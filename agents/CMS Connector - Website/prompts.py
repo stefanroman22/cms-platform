@@ -58,6 +58,13 @@ Repeater field types: `string`, `richtext`, `url`, `tags`.
   Reference implementation: `lib/contactFields.ts → resolveContactCards`.
 - For business opening hours, use a `repeater` with item schema \
   `[day:string, open:string, close:string]`.
+- For review / rating COUNTS (a Google "150 reviews" badge, a "rated by N guests" line, \
+  an "N reviews" stat, a "read all N reviews" link): seed the count as a rounded "N+" \
+  string — round DOWN to a clean number (105 → "100+", 240 → "200+") — NEVER the exact \
+  number. There is no live Google Maps sync, so an exact count goes stale and forces the \
+  owner to keep editing it after every new review. The rating value itself ("4.8") stays \
+  as-is. Keep the field CMS-editable. Only seed an exact count when the build has a real, \
+  automated reviews API feeding it live.
 
 ## Hard rules — NEVER include
 
@@ -103,7 +110,11 @@ include. Otherwise exclude.
   duration_min AND price (EUR — always include a price per bookable service; the \
   customer sees it and the owner can edit it later), resource/staff names, opening \
   hours as weekday 0=Sun..6=Sat with \
-  local start/end times, locale, timezone). Leave `destination_email` empty — \
+  local start/end times, locale, timezone). For each staff member, set \
+  `image_url` to their portrait URL when the source clearly shows one (e.g. a \
+  team/about section, or the `team_members` repeater's portrait) — match by name; \
+  otherwise leave it `""` (the booking UI renders a default avatar, so a photo is \
+  never required). Leave `destination_email` empty — \
   Stefan sets the client email in the report; it defaults to his email at provision. \
   The client's booking UI components are WIRED to the headless booking API at \
   integration time; list the source file paths to connect in \
@@ -150,7 +161,7 @@ Return only:
     "calendar_provider": "none",
     "reminders": { "enabled": true, "offsets_min": [1440, 120] },
     "services":  [{ "name": "Consultation", "duration_min": 30, "price": 30 }],
-    "resources": [{ "name": "Staff", "type": "staff" }],
+    "resources": [{ "name": "Staff", "type": "staff", "image_url": "" }],
     "hours":     [{ "weekday": 1, "start_time": "09:00", "end_time": "17:00" }],
     "field_mapping": {
       "service_id": "<client form field for the chosen service>",

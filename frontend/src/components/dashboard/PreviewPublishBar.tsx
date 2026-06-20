@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { ExternalLink, CheckCircle2, Check } from "lucide-react";
 import { PublishConfirmModal } from "./PublishConfirmModal";
 

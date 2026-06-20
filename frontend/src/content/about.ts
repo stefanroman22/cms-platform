@@ -1,17 +1,17 @@
 /**
  * About-page content. Edit everything in `about.json` — this module just adds
- * types so the components stay safe. To change copy, the team, emails, LinkedIn
- * links or which image a person uses, open `about.json`. To swap a photo, drop
- * a file into `public/team/` and point that member's `image` at it
+ * types so the components stay safe. The team's role and description copy lives
+ * in `messages/*.json` under `about.team.members.<id>`; this file holds the
+ * data-only member records (name, image, email, LinkedIn). To swap a photo,
+ * drop a file into `public/team/` and point that member's `image` at it
  * (e.g. "/team/stefan-roman.jpg").
  */
 import data from "./about.json";
 
 export interface TeamMember {
+  /** Stable id; matches the key under `about.team.members` in the messages. */
+  id: string;
   name: string;
-  role: string;
-  /** Shown as the overlay that fades in when hovering the photo. */
-  description: string;
   /** Path under /public, e.g. "/team/stefan-roman.svg". */
   image: string;
   email: string;
@@ -19,9 +19,7 @@ export interface TeamMember {
 }
 
 export interface AboutContent {
-  hero: { eyebrow: string; title: string; lead: string };
-  story: { heading: string; paragraphs: string[] };
-  team: { heading: string; subheading: string; members: TeamMember[] };
+  members: TeamMember[];
 }
 
 export const about = data as AboutContent;

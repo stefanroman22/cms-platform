@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderWithIntl } from "@/test/intl";
 import { PricingSection } from "../PricingSection";
 
 // jsdom lacks IntersectionObserver (Reveal `inView`) and matchMedia
@@ -30,7 +31,7 @@ if (typeof window !== "undefined" && !window.matchMedia) {
 describe("PricingSection feature tooltips", () => {
   it("shows the full tooltip text on click, portaled out of the clipping card", async () => {
     const user = userEvent.setup();
-    render(<PricingSection />);
+    renderWithIntl(<PricingSection />);
 
     // "24/7 maintenance" is a feature whose tooltip overflowed the card edge.
     await user.click(screen.getByRole("button", { name: "24/7 maintenance" }));
