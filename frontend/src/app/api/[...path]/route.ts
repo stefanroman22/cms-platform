@@ -29,6 +29,11 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ pat
   const isBodyless = request.method === "GET" || request.method === "HEAD";
   const body = isBodyless ? undefined : await request.arrayBuffer();
 
+  // The public availability read is the one hot, cacheable GET. We forward the backend's
+  // edge Cache-Control (below) for it so Vercel's CDN serves repeats; every other route
+  // stays uncached. Exact-segment match so "/unavailability"-style paths never qualify.
+  const isAvailabilityGet = request.method === "GET" && targetPath.endsWith("/availability");
+
   let upstream: Response;
   try {
     upstream = await fetch(url, {
@@ -58,6 +63,14 @@ async function handler(request: NextRequest, { params }: { params: Promise<{ pat
 
   const ct = upstream.headers.get("content-type");
   if (ct) outHeaders.set("content-type", ct);
+
+  // Forward the backend's Cache-Control only for the availability GET, so Vercel's CDN
+  // can cache repeat reads (s-maxage) and revalidate in the background (stale-while-
+  // revalidate). Mutations and other reads carry no cache header and remain dynamic.
+  if (isAvailabilityGet) {
+    const cc = upstream.headers.get("cache-control");
+    if (cc) outHeaders.set("cache-control", cc);
+  }
 
   const responseBody = upstream.status === 204 ? null : await upstream.arrayBuffer();
 

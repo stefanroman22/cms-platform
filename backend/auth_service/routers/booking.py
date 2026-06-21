@@ -405,7 +405,11 @@ def list_resources(slug: str, service_id: str = Query("")) -> JSONResponse:
     )
 
 
-@router.get("/{slug}/availability", dependencies=[Depends(_public_read_limit)])
+# Availability is intentionally NOT behind _public_read_limit (unlike the sibling public
+# reads): it is the highest-frequency read, and the edge Cache-Control below collapses
+# repeats so a per-request Postgres limiter round-trip would only add latency. Write paths
+# keep their limiter and remain the abuse + double-booking boundary.
+@router.get("/{slug}/availability")
 def availability(
     slug: str,
     service_id: str,
@@ -430,7 +434,14 @@ def availability(
         now_utc=datetime.now(UTC),
         resource_id=resource_id.strip() or None,
     )
-    return JSONResponse(content=_range_to_grouped(rng))
+    # Hot, idempotent public read: let Vercel's edge absorb repeats. s-maxage caches the
+    # response for 30s; stale-while-revalidate serves it for a further 60s while refreshing
+    # in the background. Brief staleness is safe — double-booking is rejected at write time
+    # by the btree_gist exclusion, not by this read.
+    return JSONResponse(
+        content=_range_to_grouped(rng),
+        headers={"Cache-Control": "s-maxage=30, stale-while-revalidate=60"},
+    )
 
 
 @router.get("/{slug}/contract", dependencies=[Depends(_public_read_limit)])

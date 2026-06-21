@@ -275,7 +275,7 @@ Body fields (all required):
 
 **d. Generate `lib/booking.ts` + set env var**
 
-- Generate `lib/booking.ts` in the client repo. This file exports `getServices`, `getAvailability`, and `createBooking` wired to `{ENVPREFIX}BOOKING_API_BASE`.
+- Generate `lib/booking.ts` in the client repo. This file exports `getServices`, `getResources`, `getAvailability`, **`getAvailabilityHorizon`** (the preload-once helper — see (e)), and `createBooking` wired to `{ENVPREFIX}BOOKING_API_BASE`.
 - Set the env var with the framework-aware prefix:
   - Next.js → `NEXT_PUBLIC_BOOKING_API_BASE`
   - Vite → `VITE_BOOKING_API_BASE`
@@ -286,7 +286,8 @@ Body fields (all required):
 
 Connect the components listed in `booking.ui_wiring.components` (or the iframe fallback) to the generated lib:
 - Service picker → `getServices()`
-- Date/time selector → `getAvailability(serviceId, from, to)`
+- Staff picker → `getResources(serviceId)`
+- Date/time selector → **`getAvailabilityHorizon(serviceId, resourceId?)` — PRELOAD ONCE.** Call it a single time when the service (and barber) are chosen, hold the returned `date → slots` map in state, and drive ALL week/month navigation from that map with pure date math. **Never** put the visible week/month offset in the fetch effect's dependency list — refetching per arrow click is the slow anti-pattern that made early samir-kapsalon laggy. The backend range query is batched and the read is edge-cached, so one wide request is as cheap as one day and the calendar is instant thereafter. `frontend/src/components/booking/BookingCalendar.tsx` in the CMS repo is the canonical reference.
 - Form submit → `createBooking(payload)` → on success, display the returned `manage_url`
 - Do **not** build a reschedule/cancel UI in the client repo.
 

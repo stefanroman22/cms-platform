@@ -513,6 +513,23 @@ export async function getAvailability(
   if (!r.ok) throw new Error("booking: availability failed");
   return (await r.json()).days as {{ date: string; slots: Slot[] }}[];
 }}
+// Preload the WHOLE booking horizon in ONE request, as a date -> slot-starts map.
+// THIS is the fast pattern for the day/time picker: call it once when the service (and
+// barber) are chosen, then drive week/month navigation from the returned map with pure
+// date math — never refetch per page. The backend range query is batched (a wide horizon
+// costs the same DB round-trips as one day) and the read is edge-cached, so the calendar
+// becomes instant after a single request. `days` defaults to ~6 months of forward browsing.
+export async function getAvailabilityHorizon(
+  serviceId: string, resourceId?: string, days = 182,
+): Promise<Record<string, string[]>> {{
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const today = new Date();
+  const to = new Date(today.getTime() + days * 86400_000);
+  const grouped = await getAvailability(serviceId, iso(today), iso(to), resourceId);
+  const map: Record<string, string[]> = {{}};
+  for (const d of grouped) map[d.date] = d.slots.map((s) => s.start_utc);
+  return map;
+}}
 export async function createBooking(input: {{
   service_id: string; resource_id?: string; start_utc: string;
   customer: {{ name: string; email: string; phone?: string; tz?: string }};

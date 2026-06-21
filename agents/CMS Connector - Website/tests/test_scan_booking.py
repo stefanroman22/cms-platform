@@ -226,7 +226,7 @@ def test_booking_lib_ts_written(tmp_path):
         patch.object(scan, "_http", side_effect=fake_http),
     ):
         scan._provision_booking(
-            manifest["booking"], "acme", "http://localhost:8001", "tok", tmp_path
+            manifest["booking"], "acme", "http://localhost:8001", "tok", tmp_path, framework="next"
         )
 
     lib_path = tmp_path / "lib" / "booking.ts"
@@ -237,6 +237,7 @@ def test_booking_lib_ts_written(tmp_path):
     assert "getServices" in content
     assert "getResources" in content, "must expose the barber-selection step"
     assert "getAvailability" in content
+    assert "getAvailabilityHorizon" in content, "preload-once helper must ship to every client"
     assert "resource_id" in content, "per-barber selection must be wired into create"
     assert "createBooking" in content
     # Next.js framework → NEXT_PUBLIC_ prefix
