@@ -1,7 +1,7 @@
 # Website Builder — quick reference
 
 Claude Code subagent that turns a Claude Design export into a production-ready, multilingual
-Next.js 16 site in a sibling folder under `scratch\<business-name>\`. Runs on Opus 4.8,
+Vite + React 19 SPA (SSG-prerendered) in a sibling folder under `scratch\<business-name>\`. Runs on Opus 4.8,
 effort: xhigh.
 
 ## How to use
@@ -17,10 +17,11 @@ more invocations and `phases/GOAL_TEMPLATE.md` for `/goal` and `/ralph-loop` pre
 
 ## What it produces
 
-`scratch\<business-name>\` — a Next.js 16 App Router site with `app/[locale]/` routing,
-`components/sections/`, next-intl i18n, `messages/{en,nl}.json`, SEO (sitemap/robots/JSON-LD/OG/
+`scratch\<business-name>\` — a Vite + React 19 SPA pre-rendered by vite-react-ssg, with
+React Router v7 locale-prefixed routes, `src/pages/` + `src/routes.tsx`, react-i18next i18n,
+`messages/{en,nl}.json`, SEO (prebuild sitemap/robots/OG + React 19 hoisted head + JSON-LD/
 hreflang), Motion animations, Playwright E2E, a `.learnings/` log, `BUILD_PLAN.md`, and
-`_design-manifest.json`. `output: 'standalone'` for Hetzner Docker.
+`_design-manifest.json`. Static `dist/` output (Vercel static or nginx Docker).
 
 ## Files
 
@@ -31,11 +32,11 @@ hreflang), Motion animations, Playwright E2E, a `.learnings/` log, `BUILD_PLAN.m
 - `phases/GOAL_TEMPLATE.md` — `/goal` and `/ralph-loop` presets
 - `learnings-template/` — seeded into each generated site's `.learnings/`
 - `.claude/agents/website-builder.md` — the executable subagent
-- `.claude/skills/{design-handoff,nextjs-app-scaffolding,i18n-setup,seo-pro,responsive-audit,motion-animations,playwright-user-stories}/` — bundled skills
+- `.claude/skills/{design-handoff,vite-react-scaffolding,i18n-setup,seo-pro,responsive-audit,motion-animations,playwright-user-stories}/` — bundled skills
 
 ## Defaults
 
-shadcn/ui · Motion (`motion/react`) · next-intl · EN+NL · locale prefix `always` · seed files mirror default locale (CMS auto-translates once connected) · mock images kept as-is · sibling output folder · escalate after 3 retries.
+shadcn/ui · Motion (`motion/react`) · react-i18next · Vite 7 + React 19 · vite-react-ssg · React Router v7 · TanStack Query (localStorage) · Zustand (persist) · EN+NL · locale prefix `always` · seed files mirror default locale (CMS auto-translates once connected) · mock images kept as-is · sibling output folder · escalate after 3 retries.
 
 ## Cost note
 

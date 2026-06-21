@@ -1,52 +1,72 @@
 # Frontend Architecture & Motion Patterns (reference implementation)
 
 Concrete, copy-usable patterns that REALIZE the high-level rules in `conventions.md`
-(“Motion & Performance Standards”). Read the rules there for the *why and the budgets*;
+("Motion & Performance Standards"). Read the rules there for the *why and the budgets*;
 read this for the *how* — real component shapes, token values, and hook signatures lifted
 from the CMS frontend's Akris-inspired motion/perf pass. Translate to the build's design
-tokens; do NOT copy palette/wordmark verbatim. Maps 1:1 to the Phase 8 “Motion and
-performance checklist” — each pattern below satisfies one or more of its line items.
+tokens; do NOT copy palette/wordmark verbatim. Maps 1:1 to the Phase 8 "Motion and
+performance checklist" — each pattern below satisfies one or more of its line items.
 
 ---
 
 ## 1. Canonical provider stack (ONE app-level LazyMotion, no `strict`)
 
-Mount exactly one provider island near the root. Order matters: motion runtime → global
-reduced-motion → loading overlay state → auth → nav side-effects. The marketing `layout.tsx`
-stays a Server Component and wraps this `'use client'` island; `Header`/`Footer` render as
-static SSR around `<PageTransition>{children}</PageTransition>` inside it.
+Mount exactly one provider island in the root layout route. Order matters: motion runtime →
+global reduced-motion → loading overlay state → auth → nav side-effects. In the Vite SPA
+the root layout is a component in `src/routes.tsx` that wraps `<Outlet />`; `Header`/`Footer`
+render as static markup around `<PageTransition><Outlet /></PageTransition>` inside it. No
+`'use client'` directive — every component is already client-side.
 
 ```tsx
-// app/[locale]/providers.tsx  ('use client')
+// src/routes.tsx — RootLayout (wraps <Outlet />; providers live here, NOT around a router)
+import { Outlet } from "react-router-dom";
+import { I18nextProvider } from "react-i18next";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { LazyMotion, domAnimation, MotionConfig } from "motion/react";
+import i18n from "@/i18n/config";
+import { queryClient } from "@/lib/query";
 // NOTE: no `strict` — full `motion` components (loading overlay, page transition,
 // mobile drawer) are used and strict mode rejects anything but `m.*`.
-<LazyMotion features={domAnimation}>
-  <MotionConfig reducedMotion="user">
-    <LoadingProvider>
-      <AuthProvider>
-        <ScrollToTopOnNavigate />
-        <RouteLoader />
-        {children}
-      </AuthProvider>
-    </LoadingProvider>
-  </MotionConfig>
-</LazyMotion>
+
+function RootLayout() {
+  return (
+    <I18nextProvider i18n={i18n}>
+      <QueryClientProvider client={queryClient}>
+        <LazyMotion features={domAnimation}>
+          <MotionConfig reducedMotion="user">
+            <LoadingProvider>
+              <AuthProvider>
+                <ScrollToTopOnNavigate />
+                <RouteLoader />
+                <Outlet />
+              </AuthProvider>
+            </LoadingProvider>
+          </MotionConfig>
+        </LazyMotion>
+      </QueryClientProvider>
+    </I18nextProvider>
+  );
+}
 ```
 
 If the build is single-context (no auth) drop `AuthProvider`; keep the rest. The whole stack
-is the home of the “one app-level LazyMotion + `MotionConfig`” checklist item.
+is the home of the "one app-level LazyMotion + `MotionConfig`" checklist item.
 
 ---
 
-## 2. Page-change loading spinner (App Router has no router-events API)
+## 2. Page-change loading spinner (React Router + Suspense fallback)
 
 Two-phase pattern — **START** on a delegated capture-phase click, **COMMIT** on the
-`usePathname()` change — plus a min-display window and a safety net. The decision of *whether*
+`useLocation()` change — plus a min-display window and a safety net. The decision of *whether*
 a click is a real internal nav is a PURE, unit-testable helper (no React, no framework).
 
+`src/components/RouteLoader.tsx` is used as the `<Suspense fallback={<RouteLoader />}>` on
+every lazy route in `src/routes.tsx`. It also doubles as the delegated-click spinner for
+instant client navigations via React Router, covering the case where the chunk is already
+cached but the URL has changed.
+
 ```ts
-// lib/route-loader.ts — pure + testable
+// src/lib/route-loader.ts — pure + testable
 export function shouldTriggerRouteLoad({ href, currentOrigin, currentPath }: {
   href: string | null | undefined; currentOrigin: string; currentPath: string;
 }): boolean {
@@ -62,36 +82,54 @@ export function shouldTriggerRouteLoad({ href, currentOrigin, currentPath }: {
 ```
 
 ```tsx
-// components/nav/RouteLoader.tsx  ('use client') — mounted inside <LoadingProvider>
+// src/components/RouteLoader.tsx — mounted inside <LoadingProvider>
+// Used both as a Suspense fallback and as a delegated-click spinner.
+import { useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
+import { shouldTriggerRouteLoad } from "@/lib/route-loader";
+
 const MIN_DISPLAY = 450;     // never flash on instant client navs
 const SAFETY_TIMEOUT = 6000; // force-hide if a nav never commits (cancelled click)
 
-// START — capture phase fires before React handlers
-const onClick = (e: MouseEvent) => {
-  if (e.defaultPrevented) return;
-  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // new-tab modifiers
-  const anchor = (e.target as Element | null)?.closest?.("a");
-  if (!anchor) return;
-  if (anchor.target && anchor.target !== "_self") return;   // new tab/window
-  if (anchor.hasAttribute("download")) return;
-  if (!shouldTriggerRouteLoad({ href: anchor.getAttribute("href"),
-        currentOrigin: location.origin, currentPath: location.pathname })) return;
-  shownAtRef.current = performance.now();
-  show();
-  window.clearTimeout(safetyRef.current);
-  safetyRef.current = window.setTimeout(() => hide(), SAFETY_TIMEOUT);
-};
-document.addEventListener("click", onClick, { capture: true });
+export function RouteLoader() {
+  const { pathname } = useLocation();
+  const firstRender = useRef(true);
+  const shownAtRef = useRef<number | null>(null);
+  const safetyRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const { show, hide } = useLoadingContext(); // from <LoadingProvider>
 
-// COMMIT — pathname effect hides after MIN_DISPLAY (firstRender guard skips initial load)
-useEffect(() => {
-  if (firstRender.current) { firstRender.current = false; return; }
-  window.clearTimeout(safetyRef.current);
-  const elapsed = shownAtRef.current == null ? MIN_DISPLAY : performance.now() - shownAtRef.current;
-  const remaining = Math.max(0, MIN_DISPLAY - elapsed);
-  const id = window.setTimeout(() => { hide(); shownAtRef.current = null; }, remaining);
-  return () => window.clearTimeout(id);
-}, [pathname, hide]);
+  // START — capture phase fires before React handlers
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented) return;
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const anchor = (e.target as Element | null)?.closest?.("a");
+      if (!anchor) return;
+      if (anchor.target && anchor.target !== "_self") return;
+      if (anchor.hasAttribute("download")) return;
+      if (!shouldTriggerRouteLoad({ href: anchor.getAttribute("href"),
+            currentOrigin: location.origin, currentPath: location.pathname })) return;
+      shownAtRef.current = performance.now();
+      show();
+      clearTimeout(safetyRef.current);
+      safetyRef.current = setTimeout(() => hide(), SAFETY_TIMEOUT);
+    };
+    document.addEventListener("click", onClick, { capture: true });
+    return () => document.removeEventListener("click", onClick, { capture: true });
+  }, [show, hide]);
+
+  // COMMIT — pathname effect hides after MIN_DISPLAY (firstRender guard skips initial load)
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
+    clearTimeout(safetyRef.current);
+    const elapsed = shownAtRef.current == null ? MIN_DISPLAY : performance.now() - shownAtRef.current;
+    const remaining = Math.max(0, MIN_DISPLAY - elapsed);
+    const id = setTimeout(() => { hide(); shownAtRef.current = null; }, remaining);
+    return () => clearTimeout(id);
+  }, [pathname, hide]);
+
+  return null; // visual overlay rendered by LoadingProvider
+}
 ```
 
 The overlay itself is `position: fixed z-[9999]` so it sits above sticky headers/menus — keep
@@ -100,17 +138,26 @@ ancestor creates a stacking context and breaks `fixed`). Lazy the overlay so its
 never ships on cold load:
 
 ```tsx
-// context/loading.tsx
-const LoadingScreen = dynamic(
-  () => import("@/components/ui/LoadingScreen").then((m) => ({ default: m.LoadingScreen })),
-  { ssr: false } // spinner + arc CSS load only when shown; avoids SSR hydration mismatch
+// src/context/loading.tsx
+import { lazy } from "react";
+
+const LoadingScreen = lazy(() =>
+  import("@/components/ui/LoadingScreen").then((m) => ({ default: m.LoadingScreen }))
 );
-// render {isVisible && <LoadingScreen isVisible={isVisible} />} from the provider
+// render {isVisible && <Suspense fallback={null}><LoadingScreen isVisible={isVisible} /></Suspense>}
+// from the provider — spinner + arc CSS load only when shown
 ```
 
-This is distinct from `app/[locale]/loading.tsx` (the route-SEGMENT loader for server-render
-waits, covered in conventions.md “Motion — inter-page route loader”). Both exist: the segment
-loader covers RSC fetch waits, this delegated-click loader covers instant client navs.
+In `src/routes.tsx`, every lazy page is wrapped in `<Suspense fallback={<RouteLoader />}>`:
+
+```tsx
+import { lazy, Suspense } from "react";
+import { RouteLoader } from "@/components/RouteLoader";
+
+const HomePage = lazy(() => import("@/pages/HomePage"));
+
+{ index: true, element: <Suspense fallback={<RouteLoader />}><HomePage /></Suspense> }
+```
 
 ---
 
@@ -119,7 +166,9 @@ loader covers RSC fetch waits, this delegated-click loader covers instant client
 Define tokens ONCE and reuse via variants. Real values from the CMS frontend:
 
 ```ts
-// lib/animations.ts
+// src/lib/animations.ts
+import type { Variants } from "motion/react";
+
 export const REVEAL_EASE = [0.16, 1, 0.3, 1] as const; // ease-out-expo — the signature curve
 export const fadeDown: Variants = { hidden: { opacity: 0, y: -16 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" } } };
@@ -136,6 +185,9 @@ the right-side cluster** (auth buttons / locale switcher / hamburger) in a motio
 must stay a direct flex child so it never animates/delays on auth-state toggles:
 
 ```tsx
+import { m } from "motion/react";
+import { stagger, fadeDown } from "@/lib/animations";
+
 <m.div variants={stagger} initial="hidden" animate="visible" className="flex h-14 …">
   <m.div variants={fadeDown}><Logo /></m.div>
   <nav className="hidden md:flex">
@@ -159,7 +211,10 @@ fade duration so beats stack, not lockstep). Container carries `aria-label` (ful
 tokens are `aria-hidden`.
 
 ```tsx
-// hero choreography (HeroSection)
+// hero choreography (src/components/sections/HeroSection.tsx)
+import { m } from "motion/react";
+import { TextReveal } from "@/components/ui/TextReveal";
+
 const FADE = 0.5, STAGGER = 0.28, EXPO = [0.16, 1, 0.3, 1] as const; // STAGGER < FADE => overlap
 const D_EYEBROW = 0.1, D_HEADLINE = 0.38, D_SUBTEXT = 0.66, D_ACTIONS = 0.94;
 
@@ -172,14 +227,22 @@ const D_EYEBROW = 0.1, D_HEADLINE = 0.38, D_SUBTEXT = 0.66, D_ACTIONS = 0.94;
 ```
 
 ```tsx
-// TextReveal — one m.span per token, per-token delay = delay + i*stagger
-const tokens = text.split(" ");                 // by="word"
-const hidden = { opacity: 0, y: "-0.5em" };     // directionOffset("up")
-return createElement(Tag, { "aria-label": text }, tokens.map((t, i) => (
-  <m.span key={i} aria-hidden="true" className="inline-block whitespace-pre-wrap"
-    initial={hidden} animate={{ opacity: 1, x: 0, y: 0 }}
-    transition={{ duration: FADE, ease: REVEAL_EASE, delay: delay + i * stagger }}>{t}</m.span>
-)));
+// src/components/ui/TextReveal.tsx — one m.span per token, per-token delay = delay + i*stagger
+import { createElement } from "react";
+import { m } from "motion/react";
+import { REVEAL_EASE } from "@/lib/animations";
+
+export function TextReveal({
+  as: Tag = "p", by = "word", text, delay = 0, stagger = 0.05, duration = 0.5,
+}: TextRevealProps) {
+  const tokens = text.split(" ");                 // by="word"
+  const hidden = { opacity: 0, y: "-0.5em" };    // directionOffset("up")
+  return createElement(Tag, { "aria-label": text }, tokens.map((t, i) => (
+    <m.span key={i} aria-hidden="true" className="inline-block whitespace-pre-wrap"
+      initial={hidden} animate={{ opacity: 1, x: 0, y: 0 }}
+      transition={{ duration, ease: REVEAL_EASE, delay: delay + i * stagger }}>{t}</m.span>
+  )));
+}
 ```
 
 Optional scroll cue (ChevronDown) loops only AFTER the hero settles: `delay = D_ACTIONS + FADE + 0.2`.
@@ -193,6 +256,9 @@ put `whileInView` + `viewport` on the PARENT container with `staggerFast`; child
 only `variants={fadeUp}` and NO `whileInView` of their own.
 
 ```tsx
+import { m } from "motion/react";
+import { staggerFast, fadeUp } from "@/lib/animations";
+
 // parent — the ONLY whileInView
 <m.div variants={staggerFast} initial="hidden" whileInView="visible"
        viewport={{ once: true, amount: 0.15 }}
@@ -232,18 +298,22 @@ the underline's left offset to the button's actual padding:
 Never let a Three.js/WebGL hero block first paint. Pattern:
 
 ```tsx
-// LaptopShowcase — pre-warm + dual trigger
+// src/components/sections/LaptopShowcase.tsx — pre-warm + dual trigger
+import { lazy, Suspense, useEffect, useState } from "react";
+import { useInView } from "motion/react";
+
 useEffect(() => { void import("./LaptopScene"); }, []);                 // kick the network fetch now
 const nearView = useInView(sectionRef, { margin: "0px 0px -120px 0px", once: true });
 // + a requestIdleCallback(…, { timeout: 1000 }) ~800ms after mount sets idleWarmed
-const showScene = nearView || idleWarmed;                              // whichever fires first
-if (!isDesktop) return <MobileLaptopFallback />;                       // CSS/DOM mock, no WebGL on phones
-const LaptopScene = dynamic(() => import("./LaptopScene"),
-  { ssr: false, loading: () => <HeroSceneSkeleton /> });               // reserve space, no CLS
+const showScene = nearView || idleWarmed;                               // whichever fires first
+if (!isDesktop) return <MobileLaptopFallback />;                        // CSS/DOM mock, no WebGL on phones
+const LaptopScene = lazy(() => import("./LaptopScene"));
+// render: {showScene && <Suspense fallback={<HeroSceneSkeleton />}><LaptopScene /></Suspense>}
 ```
 
 ```tsx
-// LaptopScene — on-demand render; only repaints on scroll/warm-up, not 60fps at rest
+// src/components/sections/LaptopScene.tsx — on-demand render
+// only repaints on scroll/warm-up, not 60fps at rest
 <Canvas dpr={[1, 1.5]} frameloop={warming ? "always" : "demand"}     // warm ~220ms then demand
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}>
   <Environment resolution={256} frames={1}> {/* procedural Lightformers — NO HDR fetch, no network failure */}
@@ -259,21 +329,48 @@ tick — never competing loops. Skip the whole loop on `prefers-reduced-motion`.
 
 ---
 
-## 8. SWR data layer (`useQuery`) — in-memory + sessionStorage tiers + inflight dedup
+## 8. TanStack Query data layer (`useQuery`) — localStorage-persisted + inflight dedup
 
-Serve cached instantly, revalidate in the background, never refetch the same key twice in
-parallel. Whitelist stable keys for sessionStorage so hard reloads paint sub-1s from cache.
+Serve cached data instantly, revalidate in the background, never refetch the same key twice in
+parallel. The `QueryClient` is localStorage-persisted via `persistQueryClient` +
+`createSyncStoragePersister` (set up in `src/lib/query.ts` from `vite-react-scaffolding`), so
+hard reloads paint sub-1s from the persisted cache.
 
 ```ts
-useQuery<T>(key, fetcher, { ttl = 2*60_000, refetchInterval, enabled = true })
-//  → in-memory cache serves first (loading=false if hit)
-//  → if cache.isStale(key, ttl) → silent background refetch
-//  → cache.promotePersisted(key) lifts whitelisted keys (e.g. "account","projects") from sessionStorage
-//  → setInflight(key, promise) dedups concurrent callers onto ONE promise
-//  → cache.subscribe(key, …) propagates external cache.set(key, data) without a refetch
+// src/lib/query.ts (shape from vite-react-scaffolding)
+import { QueryClient } from "@tanstack/react-query";
+import { persistQueryClient } from "@tanstack/react-query-persist-client";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+
+export const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 2 * 60_000 } }, // 2-min default TTL
+});
+
+persistQueryClient({
+  queryClient,
+  persister: createSyncStoragePersister({ storage: window.localStorage }),
+});
 ```
 
-Tier TTLs by volatility: static content ≈ infinite, semi-static minutes/hours, volatile short.
-Prefer server-side fetch for first paint; fire independent requests together (no waterfall
-where one query's input depends on a prior query's output). Reserve `force-dynamic` for
-genuinely per-request auth-gated pages.
+Consuming CMS content in a page component:
+
+```tsx
+import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+
+export function ServicesSection() {
+  const { t } = useTranslation();
+  const { data } = useQuery({
+    queryKey: ["cms", "services"],
+    queryFn: () => fetch(`${import.meta.env.VITE_CMS_ENDPOINT}/services`).then((r) => r.json()),
+    staleTime: 5 * 60_000,
+  });
+  // falls back to bundled t("services.items") from messages/<locale>.json until CMS returns data
+  const items = data ?? (t("services.items", { returnObjects: true }) as ServiceItem[]);
+  return <>{items.map((item) => <ServiceCard key={item.id} {...item} />)}</>;
+}
+```
+
+Tier `staleTime` by volatility: static content ≈ `Infinity`, semi-static `minutes/hours`, volatile short.
+Fire independent requests together (no waterfall). Global app state (locale choice, booking
+state, UI flags) lives in Zustand `persist` stores in `src/lib/store.ts`.

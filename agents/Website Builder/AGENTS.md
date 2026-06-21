@@ -9,8 +9,8 @@ Guidelines here apply to this agent only — they do not cascade to other agents
 
 ## What it does
 
-Turns a Claude Design export (URL or local folder) into a production-grade, multilingual
-Next.js 16 site in a sibling folder under `C:\Users\stefa\.gemini\antigravity\scratch\<business-name>\`.
+Turns a Claude Design export (URL or local folder) into a Vite + React 19 SPA with build-time
+SSG pre-rendering in a sibling folder under `C:\Users\stefa\.gemini\antigravity\scratch\<business-name>\`.
 
 **Thoroughness:** runs at `xhigh` reasoning effort. Be exhaustive — multi-pass self-review of every phase, verify at all breakpoints, and don't declare a phase done until you've re-checked it. (This is a restricted subagent: it does NOT have the Workflow/Agent tool, so it cannot fan out multi-agent work — depth comes from xhigh effort + disciplined multi-pass rigor.)
 
@@ -22,11 +22,16 @@ Next.js 16 site in a sibling folder under `C:\Users\stefa\.gemini\antigravity\sc
 | Thinking effort | `xhigh` |
 | Component library | shadcn/ui (vendored) |
 | Animation library | Motion (`motion/react` import) |
-| i18n library | next-intl |
+| i18n library | react-i18next |
+| Build tool | Vite 7 + React 19 |
+| SSG | vite-react-ssg |
+| Router | React Router v7 (library mode) |
+| Data cache | TanStack Query (localStorage-persisted) |
+| App state | Zustand (persist) |
 | Default locales | EN + NL |
 | Locale prefix style | `always` (`/en/about`, `/nl/about`) |
 | Translation strategy | Seed files mirror default locale; CMS auto-translates once connected |
-| Hosting target | Vercel-compatible with `output: 'standalone'` for Hetzner Docker |
+| Hosting target | Static `dist/` (Vercel static or nginx Docker) |
 | CMS coupling | Standalone marketing sites |
 | Output folder | Sibling to "CMS - websites" at `scratch\<business-name>\` |
 | Mock images | Copied from design into `public/images/<section>/`, never replaced with stock |
@@ -41,27 +46,27 @@ Next.js 16 site in a sibling folder under `C:\Users\stefa\.gemini\antigravity\sc
 2. **Clarify** — confirm output folder name, locale set, and anything genuinely ambiguous
    (one question at a time). Write `BUILD_PLAN.md` with checkboxes for every page, section,
    locale, and test.
-3. **Scaffold** — apply `nextjs-app-scaffolding` + `i18n-setup`. Scaffold the Next.js app,
-   install deps, wire next-intl, create the canonical folder structure, copy mock images to
-   `public/images/<section>/`, copy `agents/Website Builder/learnings-template/*` into the
+3. **Scaffold** — apply `vite-react-scaffolding` + `i18n-setup`. Scaffold the Vite + React 19
+   app, install deps, wire react-i18next, create the canonical folder structure, copy mock images
+   to `public/images/<section>/`, copy `agents/Website Builder/learnings-template/*` into the
    new project's `.learnings/`. If `ui-ux-pro-max` is present, generate a tailored design
    system and reconcile with the design's tokens (design wins on conflicts).
 4. **Implement** — for each section in `BUILD_PLAN.md`, build `components/sections/<name>.tsx`.
    Apply `frontend-design` + `ui-ux-pro-max` if present (else the fallback principles below).
    Wire animations via `motion-animations` (motion/react only). Use shadcn primitives. All
-   strings flow through next-intl. Check off only after the section renders for ALL locales.
-5. **SEO** — apply `seo-pro`. `generateMetadata` per locale, separate `viewport` export,
-   `alternates.languages` hreflang, `app/sitemap.ts`, `app/robots.ts`, JSON-LD per page type,
-   OG images. **`generateMetadata` also prefers stored `seo_page_meta` when present** — it
-   fetches `GET /projects/{slug}/seo/public/meta?route=&locale=<active-locale>` (the **active**
-   locale) and uses the stored **prose** (title/description/OG text + JSON-LD data), falling
-   back to the build-time `seo-pro` output (ISR ~60s; never throw). **The per-field
-   default-locale fallback is SERVER-SIDE** — the endpoint fills any missing/untranslated
-   locale field from the default-locale row, so the site fetches one active-locale response and
-   **never merges locales itself**. The **coded tags are generated LOCALLY per locale** —
-   `canonical`, `hreflang`, `og:locale`, JSON-LD `inLanguage` are language-invariant codes, not
-   fetched. **SSR every locale** (raw-HTML content per locale, not just the default). The
-   SEO/GEO Optimizer agent owns that stored SEO area.
+   strings flow through react-i18next. Check off only after the section renders for ALL locales.
+5. **SEO** — apply `seo-pro`. Per-page head via `lib/head.ts` rendered as React 19 hoisted
+   `<title>/<meta>/<link>` tags (baked into pre-rendered HTML by vite-react-ssg); plain
+   `<meta name="viewport">`; hreflang `<link>` per locale generated locally; `src/seo/sitemap.gen.ts`
+   → `public/sitemap.xml`; `src/seo/robots.gen.ts` → `public/robots.txt`; JSON-LD per page type;
+   OG images via `src/seo/og.gen.ts` (satori + sharp). `lib/seo-meta.ts` fetches
+   `GET /projects/{slug}/seo/public/meta?route=&locale=<locale>` at **build time** (no ISR),
+   prefers stored prose, falls back to build-time output, never throws. The **coded tags
+   (`canonical`, `hreflang`, `og:locale`, JSON-LD `inLanguage`) are generated LOCALLY per locale**
+   in `lib/head.ts` — not fetched. The per-field default-locale fallback is SERVER-SIDE (the
+   endpoint fills missing/untranslated fields; the site fetches one locale response and never
+   merges locales itself). **Pre-render every locale** (raw-HTML content per locale). The
+   SEO/GEO Optimizer agent owns the stored SEO area.
 6. **Responsive + a11y** — apply `responsive-audit`. Sweep 375/768/1024/1440, fix overflow and
    tap targets, run `npx @axe-core/cli` against every locale root. If `ui-ux-pro-max` present,
    run its accessibility checks too.
@@ -79,20 +84,23 @@ initial build). The SEO agent emits a validated **`site-change-spec`** (built + 
 `agents/SEO-GEO Optimizer/site_change_spec.py`); this agent consumes it and runs
 [`phases/9-incremental.md`](./phases/9-incremental.md). Properties:
 
-- **Additive-only** — adds new `app/[locale]/<route>/page.tsx` files + appended sections;
-  **never** breaks or restructures an existing route, never a full rebuild.
-- **SEO-area-aware** — generated pages consume the public SEO endpoints **for the active
-  locale**: `generateMetadata` prefers stored `seo_page_meta`
-  (`GET /projects/{slug}/seo/public/meta?route=&locale=<active-locale>`), and
-  `consumes: seo_articles` pages fetch
-  `GET /projects/{slug}/seo/public/articles?locale=<active-locale>` for a `/blog` index/post
-  (ISR + never-throw fallback). The **per-field default-locale fallback is server-side** (the
-  site never merges locales); the **coded tags — canonical/hreflang/og:locale/inLanguage — are
-  generated locally per locale** (language-invariant codes, not fetched), and every locale is
-  SSR'd (raw-HTML content per locale). The Builder consumes — it never writes the `seo_*` area
-  (the SEO/GEO Optimizer owns it).
+- **Additive-only** — adds a route-table entry in `src/routes.tsx` + `src/pages/<name>.tsx` +
+  the locale×route pre-render entry in `src/main.tsx`; appends sections; **never** breaks or
+  restructures an existing route, never a full rebuild.
+- **SEO-area-aware** — generated pages consume the public SEO endpoints for every pre-render
+  locale: `lib/head.ts` + `lib/seo-meta.ts` fetch
+  `GET /projects/{slug}/seo/public/meta?route=&locale=<locale>` at **build time** (prefers
+  stored prose, falls back, never throws). `consumes: seo_articles` pages fetch
+  `GET /projects/{slug}/seo/public/articles` for a `/blog` index + `/blog/:slug` routes whose
+  pre-render list is generated from article slugs fetched at build time; client refetch keeps
+  content fresh for humans. The **per-field default-locale fallback is server-side** (the site
+  never merges locales); the **coded tags — canonical/hreflang/og:locale/inLanguage — are
+  generated locally per locale** in `lib/head.ts`. **Pre-render every locale** (raw-HTML content
+  per locale). The Builder consumes — it never writes the `seo_*` area (the SEO/GEO Optimizer
+  owns it).
 - **`cms-preview` only, never publishes** — pushes the additive routes to `cms-preview` and
-  hands back to the SEO agent's Phase-6 visual-QA gate, which publishes only when all-green.
+  hands back to the SEO agent's Phase-6 visual-QA gate (a `pre-render` content-in-raw-HTML
+  check), which publishes only when all-green. A publish triggers the rebuild hook (Plan B).
 - Each new page meets the same bar as a from-scratch page (full `seo-pro` metadata,
   responsive, Motion, per-locale i18n, Playwright smoke).
 
@@ -101,8 +109,9 @@ initial build). The SEO agent emits a validated **`site-change-spec`** (built + 
 - **Pick a clear aesthetic direction** before coding (brutally minimal, editorial, refined/
   luxury, organic, retro-futuristic, playful). Commit and execute precisely.
 - **Typography**: avoid Inter/Roboto/Arial/system-ui for the display font (reads as "AI
-  default"). Pair a distinctive display font with a refined body via `next/font/google`
-  (e.g. Fraunces, Instrument Serif, Cabinet Grotesk + Inter, Geist Sans, IBM Plex Sans).
+  default"). Pair a distinctive display font with a refined body via `@fontsource*` + CSS
+  `@import` (e.g. Fraunces, Instrument Serif, Cabinet Grotesk + Inter, Geist Sans, IBM Plex
+  Sans). NEVER `next/font`.
 - **Color**: a dominant color with sharp accents beats timid, evenly-distributed palettes.
   Avoid purple-gradient-on-white.
 - **Motion**: high-impact moments > scattered micro-interactions.
@@ -112,21 +121,18 @@ initial build). The SEO agent emits a validated **`site-change-spec`** (built + 
 
 ## Known implementation gotchas (must-handle)
 
-- **Browser-translation hydration shim.** In-browser translators (Google/Chrome) reparent text
-  nodes into `<font>` wrappers; React's commit-phase `removeChild`/`insertBefore` against the
-  original parent then throws `NotFoundError` and — with no error boundary — escalates to a full
-  root unmount (the booking form vanishes on re-render). Ship a `beforeInteractive` shim patching
-  `Node.prototype.removeChild`/`insertBefore`: when `child.parentNode !== this`, detach from the
-  actual parent (removeChild) / append to the intended parent (insertBefore) instead of throwing.
-  React 19 never calls `replaceChild` — do NOT patch it. Add `suppressHydrationWarning` on `<html>`
-  (covers translator `lang`/`class` mutation + next/font Turbopack-dev hash mismatch).
-- **Next 16 root layout.** The topmost layout MUST render `<html>`/`<body>`. For the `app/[locale]/`
-  pattern make `app/[locale]/layout.tsx` the ROOT layout — do NOT keep a pass-through
-  `app/layout.tsx` returning `{children}`, or Next 16 errors "Missing `<html>` and `<body>` tags".
-- **Env / CORS / dev-origin.** Client fetches need `NEXT_PUBLIC_*` base URLs in `.env.local`, and
+- **SPA mount + translation shim in `index.html`.** `index.html` is the SPA entry: it holds
+  `<html>`/`<body>`, the SPA mount `<div id="root">`, and the translation-resilience shim as the
+  FIRST inline `<script>` (before the module script). The shim patches
+  `Node.prototype.removeChild`/`insertBefore`: when `child.parentNode !== this`, operate on the
+  actual parent instead of throwing (in-browser translators reparent text nodes into `<font>`
+  wrappers; without the shim, React's commit-phase DOM ops throw `NotFoundError` and can unmount
+  the root). Do NOT patch `replaceChild`. Add `suppressHydrationWarning` on `<html>` (covers
+  translator `lang`/`class` mutation on the SSG-hydrated path).
+- **Env / CORS / dev-origin.** Client fetches need `VITE_*` base URLs in `.env.local`, and
   GUARD a missing base (never fetch `"undefined/..."`). A separate-origin backend must allow
-  `http://localhost:<port>` in its CORS allowlist (or proxy same-origin via a Next rewrite). Open
-  dev at `localhost`, NOT `127.0.0.1`, or Next blocks "cross-origin" dev resources (HMR/fonts).
+  `http://localhost:<port>` in its CORS allowlist (or proxy same-origin via a Vite proxy). Open
+  dev at the Vite-printed origin (usually `http://localhost:5173`), not a different port.
 - **Week-paginated day picker.** Fetch availability per VISIBLE week (lazy), refetch on prev/next
   arrow nav, and reset to week 0 when the service/barber changes; render all 7 cells in a
   `grid repeat(7,1fr)` (no horizontal scroll), disable sold-out days, and slide weeks directionally
@@ -141,10 +147,10 @@ initial build). The SEO agent emits a validated **`site-change-spec`** (built + 
   viewport (320→1440): compact centred layout, `@media (max-height)` tiers shrinking type/spacing,
   drop only the least-important secondary line on tiny legacy phones (≤360w AND ≤600h). The "manage
   your booking" link is its OWN themed hover-able accent link, distinct from the "Date & time" label.
-- **Route loader (`loader.routeLoading`).** Elevate `app/[locale]/loading.tsx` to a full-screen
-  themed splash (wordmark + spinner + a short business-flavoured status line) using a DEDICATED i18n
-  key `loader.routeLoading` — not the intro loader's copy; z-index above the header/mobile menu;
-  respect reduced-motion.
+- **Route loader (`loader.routeLoading`).** Use a full-screen themed splash (wordmark + spinner +
+  a short business-flavoured status line) as the React Router Suspense `fallback`
+  (`components/RouteLoader.tsx`) with a DEDICATED i18n key `loader.routeLoading` — not the intro
+  loader's copy; z-index above the header/mobile menu; respect reduced-motion.
 
 ## Self-improvement
 

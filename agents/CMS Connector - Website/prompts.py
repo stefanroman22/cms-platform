@@ -82,7 +82,9 @@ include. Otherwise exclude.
 ## Other rules
 
 - `service_key`: snake_case, lowercase, URL-safe, stable across reruns — these keys \
-  double as next-intl message namespaces resolved via `t("<service_key>.<field>")`.
+  double as message namespaces resolved via `t("<service_key>.<field>")` (framework-agnostic: \
+  next-intl for Next.js sites, react-i18next for Vite sites — the namespaced-key shape is \
+  identical, so the same `service_key`s work for both).
 - `display_order`: 1, 2, 3... in the order they appear in the report.
 - `initial_content`: extract current values verbatim, preserving data types.
 - `page_name`: title-case page name where the content lives ("Home", "About", \
@@ -91,13 +93,16 @@ include. Otherwise exclude.
 - Detect framework: look for `next.config`, `vite.config`, `astro.config`, \
   `nuxt.config`, `svelte.config`. Return one of: `next`, `vite-react`, `astro`, \
   `nuxt`, `svelte`, `other`.
-- Detect locales: read `i18n/routing.ts` for `defineRouting({ locales, defaultLocale })` \
-  to extract the locale array and default. Cross-check against the filenames present \
-  under `messages/` (each `<locale>.json` is evidence of a real locale). If neither \
-  source exists, treat the site as single-locale: `locales` = one code read from the \
-  `<html lang>` attribute of the entry file (fall back to `"en"`), \
-  `default_locale` = that same code. Report `"locales": [...]` and \
-  `"default_locale": "..."` at the top level of the manifest.
+- Detect locales: **Next.js sites (next-intl):** read `i18n/routing.ts` for \
+  `defineRouting({ locales, defaultLocale })` to extract the locale array and default; \
+  cross-check against filenames under `messages/` (each `<locale>.json` confirms a real \
+  locale). **Vite + react-i18next sites:** read `SUPPORTED_LOCALES` and `DEFAULT_LOCALE` \
+  from `src/lib/config.ts` and/or `src/i18n/config.ts`; cross-check against filenames \
+  under `src/i18n/messages/` (each `<locale>.json` is evidence of a real locale — NOTE: \
+  NOT `public/locales/...`). If neither framework source exists, treat the site as \
+  single-locale: `locales` = one code read from the `<html lang>` attribute of the \
+  entry file (fall back to `"en"`), `default_locale` = that same code. \
+  Report `"locales": [...]` and `"default_locale": "..."` at the top level of the manifest.
 - Detect booking / scheduling intent: emit a top-level `"booking"` block (see \
   schema below) when ANY of the following signals are present — a calendar or \
   date-time slot picker; an "appointment / book a call / book a table / reserve / \

@@ -3,10 +3,15 @@
 **No skill.** Runs commands + records lessons.
 
 **Do:**
-- `npm run build` — must exit 0 (no TypeScript or build errors).
-- Optionally `npx unlighthouse-ci --site http://127.0.0.1:3000`; note scores in `BUILD_PLAN.md`.
-- Final grep gates: zero `framer-motion`, zero `next-i18next`/`react-i18next`, zero raw `<img `
-  outside `app/opengraph-image.tsx` / `app/og/`.
+- `npm run build` (vite-react-ssg) — must exit 0 (no TypeScript or build errors).
+- Optionally `npx unlighthouse-ci --site http://127.0.0.1:5173`; note scores in `BUILD_PLAN.md`.
+- Final grep gates:
+  - FAIL (must return zero matches): `framer-motion`, `next-intl`, `generateMetadata`,
+    `app/[locale]`, `next/image`, `NEXT_PUBLIC_`.
+  - REQUIRE (must return at least one match each): `react-i18next`, `vite-react-ssg`,
+    `VITE_CMS_ENDPOINT`.
+  - Zero raw `<img ` outside `src/seo/og.gen.ts` / `public/og/` (OG generation; raw `<img>` is
+    correct there — do not flag it).
 - If a build/test failure is hard to diagnose and `superpowers` is installed, use its debugging
   methodology (root-cause-first).
 - Append at least one generalizable lesson to `agents/Website Builder/LEARNINGS.md`. If the
@@ -21,4 +26,4 @@
 - [ ] Heavy/3D modules are `ssr:false` + skeleton + mobile fallback; render loops are viewport-aware / on-demand.
 - [ ] Reduced-motion verified; build + tests green.
 
-**Report to the user:** output folder path, what was built, locales scaffolded, test results, what's mock vs real, any silent judgment calls. Note whether `NEXT_PUBLIC_CMS_ENDPOINT` is set (messages live from CMS) or unset (seed files active).
+**Report to the user:** output folder path, what was built, locales scaffolded, test results, what's mock vs real, any silent judgment calls. Note whether `VITE_CMS_ENDPOINT` is set (messages live from CMS) or unset (seed files active).
