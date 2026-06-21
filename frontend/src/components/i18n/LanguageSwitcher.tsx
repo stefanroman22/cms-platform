@@ -21,6 +21,13 @@ export function LanguageSwitcher({ variant = "nav" }: { variant?: Variant }) {
   function select(next: Locale) {
     setOpen(false);
     if (next === active) return;
+    // Persist the explicit choice (localStorage mirror; the NEXT_LOCALE cookie is
+    // the server-side source of truth that survives reloads + drives SSR).
+    try {
+      localStorage.setItem("preferred-locale", next);
+    } catch {
+      /* ignore */
+    }
     startTransition(() => router.replace(pathname, { locale: next }));
   }
 

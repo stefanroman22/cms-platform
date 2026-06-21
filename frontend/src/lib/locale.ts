@@ -9,13 +9,11 @@ export const LOCALE_NAMES: Record<Locale, string> = {
   ro: "Română",
 };
 
-// ISO-3166-1 alpha-2 country → preferred locale. Everything else → English.
-// BE (Flanders) and MD (Moldova) included as sensible linguistic defaults; edit freely.
+// ISO-3166-1 alpha-2 country → preferred locale. ONLY the Netherlands gets Dutch
+// and ONLY Romania gets Romanian; every other country falls back to English.
 const COUNTRY_TO_LOCALE: Record<string, Locale> = {
   NL: "nl",
-  BE: "nl",
   RO: "ro",
-  MD: "ro",
 };
 
 export function resolveLocaleFromCountry(country: string | null | undefined): Locale {

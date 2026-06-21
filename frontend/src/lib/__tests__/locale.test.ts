@@ -13,9 +13,11 @@ describe("resolveLocaleFromCountry", () => {
     expect(resolveLocaleFromCountry("NL")).toBe("nl");
     expect(resolveLocaleFromCountry("RO")).toBe("ro");
   });
-  it("maps Dutch/Romanian-adjacent countries", () => {
-    expect(resolveLocaleFromCountry("BE")).toBe("nl");
-    expect(resolveLocaleFromCountry("MD")).toBe("ro");
+  it("maps only NL→nl and RO→ro; every other country → English", () => {
+    expect(resolveLocaleFromCountry("BE")).toBe("en");
+    expect(resolveLocaleFromCountry("MD")).toBe("en");
+    expect(resolveLocaleFromCountry("DE")).toBe("en");
+    expect(resolveLocaleFromCountry("GB")).toBe("en");
   });
   it("is case-insensitive", () => {
     expect(resolveLocaleFromCountry("nl")).toBe("nl");

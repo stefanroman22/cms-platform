@@ -10,10 +10,17 @@ import { RouteLoader } from "@/components/nav/RouteLoader";
 
 export function MarketingProviders({ children }: { children: React.ReactNode }) {
   // Root <html lang> stays "en" statically; reflect the active marketing locale
-  // for assistive tech on the client (hreflang covers SEO).
+  // for assistive tech on the client (hreflang covers SEO), and persist it to
+  // localStorage so the chosen language is remembered after loading.
   const locale = useLocale();
   useEffect(() => {
     document.documentElement.lang = locale;
+    try {
+      localStorage.setItem("preferred-locale", locale);
+    } catch {
+      // localStorage unavailable (private mode / blocked) — the NEXT_LOCALE
+      // cookie still persists the choice server-side.
+    }
   }, [locale]);
 
   return (
