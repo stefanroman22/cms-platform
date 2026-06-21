@@ -30,15 +30,15 @@ Always import Motion from `motion/react`, never from `framer-motion`. The packag
 
 ### Imports — i18n library
 
-Always use `next-intl` for internationalization, never `next-i18next` or `react-i18next`.
+Always use `react-i18next` for internationalization, never `next-intl` or `next-i18next`.
 
-**Rationale:** `next-intl` is the de facto i18n library for Next.js App Router with full RSC support. The others either don't work with App Router (`next-i18next`) or don't integrate with Next's routing system (`react-i18next`).
+**Rationale:** `react-i18next` integrates with Vite + React Router v7 (library mode). `next-intl` is Next.js-specific and does not apply to the Vite/SSG stack.
 **Established:** initial setup
 **Source:** initial setup
 
 ### Routing — locale prefix
 
-Every page lives under `app/[locale]/`. Even single-locale projects use the locale prefix — it makes adding new locales later trivial.
+Every page is a React Router route under the `/:locale` segment (`routes.tsx` + `pages/`). Even single-locale projects use the locale prefix — it makes adding new locales later trivial.
 
 **Rationale:** Avoids painful migrations later when the user decides to add another market.
 **Established:** initial setup
@@ -48,25 +48,25 @@ Every page lives under `app/[locale]/`. Even single-locale projects use the loca
 
 Non-default locale `messages/<locale>.json` files are **build-time seeds / pre-connection fallbacks**. The default-locale file holds real copy; non-default seed files mirror it (same values — no `[XX]`/`[NL]` placeholders to hand-maintain).
 
-Once the site is connected to the CMS (CMS Connector agent sets `NEXT_PUBLIC_CMS_ENDPOINT`), `i18n/request.ts` loads messages live from the CMS per locale. The CMS auto-translates the default locale into the others (DeepL when configured, else echoes the source). No separate translation pipeline is needed.
+Once the site is connected to the CMS (CMS Connector agent sets `VITE_CMS_ENDPOINT`), `src/lib/cms-content.ts` loads messages live from the CMS per locale. The CMS auto-translates the default locale into the others (DeepL when configured, else echoes the source). No separate translation pipeline is needed.
 
 **Rationale:** Placeholders caused visible garbage text in QA and required a manual translation step. The CMS handles translation automatically post-connection; seeds keep the site functional before that point.
 **Established:** 2026-06-06
 **Source:** user instruction
 
-### Metadata — viewport export separation
+### Metadata — viewport and head tags
 
-In `app/layout.tsx`, `themeColor`, `width`, and `initialScale` go in the `viewport` export, NOT in the `metadata` export.
+viewport is a plain `<meta>`; head tags are React 19 hoisted. Set `themeColor`, `width`, and `initialScale` via ordinary `<meta>` elements hoisted into `<head>` by React 19's built-in head hoisting — no framework-specific `viewport` export.
 
-**Rationale:** Breaking change since Next.js 15. Putting them in `metadata` produces a warning and is silently ignored.
+**Rationale:** The Vite/React 19 SSG stack has no `generateMetadata` / `viewport` export API. React 19 hoists `<title>`, `<meta>`, `<link>` placed anywhere in the component tree into `<head>` natively.
 **Established:** initial setup
 **Source:** initial setup
 
-### Images — never raw img tags
+### Images — use img with srcset, never next/image
 
-Use `next/image` for every image except inside `next/og` ImageResponse. Always include `alt`, `width`, `height` (or `fill` with sized parent), and `sizes` for non-priority images.
+Use `<img>` with `srcset`/`sizes` (or a small `<Image>` wrapper). NEVER `next/image`. Always include `alt`, `width`, `height`, and `sizes`.
 
-**Rationale:** Performance (CLS, LCP) and a11y.
+**Rationale:** Performance (CLS, LCP) and a11y. The Vite/React 19 SSG stack has no `next/image` — it is a Next.js-specific component.
 **Established:** initial setup
 **Source:** initial setup
 
@@ -78,19 +78,19 @@ The agent generates new sites as siblings to "CMS - websites" at `C:\Users\stefa
 **Established:** initial setup
 **Source:** user instruction
 
-### Routing — root layout lives in `app/[locale]/layout.tsx`
+### Routing — app shell and root HTML
 
-Make `app/[locale]/layout.tsx` the ROOT layout: it renders `<html>`/`<body>`. Do NOT keep a pass-through `app/layout.tsx` that just returns `{children}`.
+The app shell is `src/App.tsx`/route layout; `index.html` holds `<html>`/`<body>` + the translation shim. Do NOT place `<html>`/`<body>` inside any React component — they live exclusively in `index.html`.
 
-**Rationale:** Next 16 errors "Missing `<html>` and `<body>` tags in the root layout" — a redundant `app/layout.tsx` wrapper either duplicates or strips the html/body the App Router expects on the topmost layout.
+**Rationale:** Vite/React 19 SSG uses `index.html` as the entry-point template. `<html>` and `<body>` belong there alongside the inline translation-shim script (the first `<script>` in `index.html`). The React tree is mounted inside the `<div id="root">`.
 **Established:** 2026-06-17
 **Source:** self-observed failure
 
 ### Hydration — browser-translation resilience (every multilingual site)
 
-On every multilingual site, ship two things: (1) a tiny `beforeInteractive` shim that patches `Node.prototype.removeChild` + `insertBefore` so that when `child.parentNode !== this`, `removeChild` detaches the node from its ACTUAL parent and returns it, and `insertBefore` APPENDS the node to the intended parent instead of throwing; (2) `suppressHydrationWarning` on `<html>`. Do NOT patch `replaceChild` (React 19 never calls it).
+On every multilingual site, ship two things: (1) a tiny inline `<script>` shim (the first `<script>` in `index.html`, before the app's module script) that patches `Node.prototype.removeChild` + `insertBefore` so that when `child.parentNode !== this`, `removeChild` detaches the node from its ACTUAL parent and returns it, and `insertBefore` APPENDS the node to the intended parent instead of throwing; (2) `suppressHydrationWarning` on `<html>`. Do NOT patch `replaceChild` (React 19 never calls it).
 
-**Rationale:** In-browser translators (Google/Chrome auto-translate) reparent text nodes into `<font>` wrappers and mutate `<html lang>`/class. React's commit phase then calls the native `removeChild`/`insertBefore` against the original parent, the call throws `NotFoundError`, and with no error boundary React escalates to a FULL root unmount — interactive components (e.g. the booking form) vanish on the next re-render. The shim keeps the page translatable into any language without crashing; `suppressHydrationWarning` also silences next/font's Turbopack-dev hash mismatch. Real users who don't translate are unaffected.
+**Rationale:** In-browser translators (Google/Chrome auto-translate) reparent text nodes into `<font>` wrappers and mutate `<html lang>`/class. React's commit phase then calls the native `removeChild`/`insertBefore` against the original parent, the call throws `NotFoundError`, and with no error boundary React escalates to a FULL root unmount — interactive components (e.g. the booking form) vanish on the next re-render. The shim keeps the page translatable into any language without crashing; `suppressHydrationWarning` also covers benign hydration attribute diffs on the SSG-hydrated shell. Real users who don't translate are unaffected.
 **Established:** 2026-06-17
 **Source:** self-observed failure
 
@@ -112,11 +112,19 @@ Confirmation/success screens must fit FULLY without scrolling on EVERY viewport 
 
 ### Motion — inter-page route loader uses a dedicated localized line
 
-The route-segment loader (`app/[locale]/loading.tsx`) is a first-class, full-screen-capable themed splash: brand wordmark + spinner + a SHORT, business-flavoured status line from a DEDICATED i18n key (`loader.routeLoading`) — never reuse the intro loader's loading copy. Theme to the palette, z-index ABOVE the header + mobile menu, respect reduced-motion.
+The route loader is a React Router Suspense `fallback` (`components/RouteLoader.tsx`): a first-class, full-screen-capable themed splash: brand wordmark + spinner + a SHORT, business-flavoured status line from a DEDICATED i18n key (`loader.routeLoading`) — never reuse the intro loader's loading copy. Theme to the palette, z-index ABOVE the header + mobile menu, respect reduced-motion.
 
 **Rationale:** A small in-content spinner reads as a glitch between pages; a dedicated key keeps the inter-page copy distinct from the first-load intro and translatable per locale.
 **Established:** 2026-06-17
 **Source:** self-observed failure
+
+### State — data caching and app state
+
+data caching = TanStack Query persisted to localStorage; app state = Zustand `persist`. Use `@tanstack/react-query` with `createSyncStoragePersister` (localStorage) for all server-data caching. Use Zustand with the `persist` middleware (localStorage) for global app state. The old "never use localStorage" rule is SUPERSEDED — localStorage is first-class on the Vite/SSG stack.
+
+**Rationale:** There is no Next.js server-side cache (fetch cache / ISR / Route Handlers with revalidation) on the Vite/SSG stack. TanStack Query + Zustand persisted to localStorage replace those patterns and give stale-while-revalidate + offline resilience out of the box.
+**Established:** 2026-06-20
+**Source:** stack migration — Vite + React 19 (SSG)
 
 <!-- ── Motion & Performance Standards (promoted 2026-06-17 from the CMS frontend's
      Akris-inspired motion/perf pass). Fast + tastefully animated by default.
@@ -166,11 +174,11 @@ For route transitions use an opacity-only cross-fade (`AnimatePresence mode="wai
 **Established:** 2026-06-17
 **Source:** promoted — CMS frontend motion/perf pass
 
-### Performance — thin client boundary + lazy heavy modules
+### Performance — route-level lazy splitting + lazy heavy modules
 
-Keep `'use client'` at provider/island level so server components render most HTML. Lazy-load heavy or below-the-fold interactive modules (3D, charts, video) with `next/dynamic` `ssr:false` + a skeleton fallback that reserves space (no layout shift). Pre-warm the chunk on idle and mount on viewport-intersection so it never blocks first paint or the hero intro.
+Use route-level `React.lazy` per page (already in `routes.tsx`). Lazy-load heavy or below-the-fold interactive modules (3D, charts, video) with `React.lazy` + `Suspense` + a skeleton fallback that reserves space (no layout shift). Use Vite `manualChunks` for vendor split. Pre-warm the chunk on idle and mount on viewport-intersection so it never blocks first paint or the hero intro. Never add `'use client'` — in a Vite SPA every component is client-rendered.
 
-**Rationale:** Heavy modules in the initial/critical path delay TTI and can hitch the hero animation.
+**Rationale:** Heavy modules in the initial/critical path delay TTI and can hitch the hero animation. RSC/`next/dynamic`/`'use client'` are Next.js concepts that do not exist in Vite.
 **Established:** 2026-06-17
 **Source:** promoted — CMS frontend motion/perf pass
 
@@ -190,10 +198,10 @@ Cap `devicePixelRatio` (~1.5), bake the environment/reflections procedurally ins
 **Established:** 2026-06-17
 **Source:** promoted — CMS frontend motion/perf pass
 
-### Performance — SWR data layer + server-first fetch
+### Performance — SWR data layer (TanStack Query + localStorage)
 
-Default to stale-while-revalidate with in-flight de-duplication and content-tiered freshness (static ≈ infinite, semi-static minutes/hours, volatile short TTL): serve cached instantly, revalidate in the background. Prefer server-side fetching for first paint; kick off independent requests together and avoid client fetch waterfalls (watch for a query whose input depends on a prior query's output). Reserve `force-dynamic` for genuinely per-request auth-gated pages.
+Default to stale-while-revalidate with in-flight de-duplication and content-tiered freshness (static ≈ infinite, semi-static minutes/hours, volatile short TTL): serve cached instantly, revalidate in the background. Use TanStack Query persisted to localStorage (`lib/query.ts`) for CMS content and booking data. Kick off independent requests together and avoid client fetch waterfalls (watch for a query whose input depends on a prior query's output). There is no server-side fetch or `force-dynamic` in the Vite SSG stack — all data fetching is client-side or build-time.
 
-**Rationale:** Redundant requests and client-side waterfalls are the cheapest perf regressions to avoid on a content site.
+**Rationale:** Redundant requests and client-side waterfalls are the cheapest perf regressions to avoid on a content site. `force-dynamic` is a Next.js Route Handler concept that does not exist in Vite.
 **Established:** 2026-06-17
 **Source:** promoted — CMS frontend motion/perf pass

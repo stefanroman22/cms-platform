@@ -18,6 +18,47 @@ lines (the empty scaffold is skipped to save tokens).
 
 <!-- Append below. Newest at the top. -->
 
+## 2026-06-21 — Validated Vite+React19 SSG build; pinned the working stack
+
+**Build:** Lumière Bistro dry-run (French bistro, Antwerp — PoC to validate the SSG stack)
+**Lesson:** Build exit 0 confirmed: per-locale raw-HTML pre-render (EN + NL), localized content +
+hoisted `<title>`/`<meta>`, full hreflang sets, and localStorage wiring (TanStack Query persister
++ Zustand persist) all verified via a real dry-run. BUT the stack as documented did NOT install
+cleanly on current npm dist-tags — 3 ERESOLVE failures + 1 hard runtime crash were hit and fixed.
+WORKING pins and workarounds (all now in the updated vite-react-scaffolding skill):
+- **Vite ^7**: `npm create vite@latest` scaffolds Vite 8 (exceeds vite-react-ssg `vite@^7` peer
+  cap); pin immediately after scaffold with `npm install -D vite@^7 @vitejs/plugin-react@^4`.
+- **vite-react-ssg@0.9.0**: npm `latest` tag points at `0.9.1-beta.1` prerelease; pin stable.
+- **.npmrc `legacy-peer-deps=true`** + `--legacy-peer-deps` on SSG install: vite-react-ssg 0.9.0
+  declares `react-router-dom@^6.14.1` peerOptional, conflicts with mandated RR v7.
+- **patch-package `react-router-dom/server.js` shim**: vite-react-ssg imports the v6
+  `react-router-dom/server.js` subpath that RR7 removed (`ERR_PACKAGE_PATH_NOT_EXPORTED`).
+  Shim content: `export { createStaticHandler, createStaticRouter, StaticRouterProvider } from "react-router-dom";`
+  + `"./server.js": "./server.js"` in RR's `exports` map. Run `npx patch-package react-router-dom`
+  to persist under `patches/`; add `"postinstall": "patch-package"` to scripts. Track vite-react-ssg
+  for native RR7 support to retire later.
+- **`ViteReactSSG({ routes })`**: export name is `ViteReactSSG` (NOT `ViteSSG`); arg 1 is a
+  `{ routes }` object not a bare array.
+- **`ssgOptions`**: `entry: "src/main.tsx"` (default is `.ts`), `formatting: "none"` (only
+  `'prettify' | 'none'` are valid; `'prettify'` breaks hydration; `'minify'` is invalid),
+  `dirStyle: "nested"` (emits `dist/<locale>/index.html` for clean `/en/` URLs).
+- **`onPageRendered` for `<html lang>`**: vite-react-ssg does not rewrite the static `lang="en"`
+  in index.html; React 19 cannot hoist onto existing `<html>`. Use `ssgOptions.onPageRendered`
+  to string-replace `<html lang="...">` with the route's locale segment.
+**Apply:** Scaffold per the updated `vite-react-scaffolding` skill — these pins are mandatory.
+
+## 2026-06-20 — Builder now emits Vite + React 19 (SSG), not Next.js
+
+**Lesson:** From-scratch builds are Vite 7 + React 19 SPAs pre-rendered by vite-react-ssg
+(React Router v7 library mode, react-i18next, TanStack Query + Zustand persisted to
+localStorage). SEO moves from `generateMetadata`/ISR to build-time head hoisting + prebuild
+sitemap/robots/OG + a build-snapshot-plus-client-refetch freshness model. The old "never use
+localStorage" rule is SUPERSEDED — localStorage is now first-class. The Next-root-layout lesson
+below is obsolete for new builds.
+
+**Apply:** Scaffold via `vite-react-scaffolding`; never `create-next-app`/`app/`/`next-intl`/
+`generateMetadata`.
+
 ## 2026-06-17 — Shim Node.removeChild/insertBefore so in-browser translators can't crash React
 
 **Build:** samir-kapsalon

@@ -16,7 +16,7 @@
   right cluster, per-word hero `TextReveal` + multi-beat choreography, the GRID = one
   container-stagger rule, the `first:pl-0` underline gotcha, 3D dual-trigger mount +
   `frameloop="demand"`, SWR `useQuery`), copy from `learnings-template/frontend-patterns.md`.
-- All UI strings via next-intl `useTranslations()` / `getTranslations()` — never hardcoded.
+- All UI strings via react-i18next `useTranslation()` + `t("ns.key")` — never hardcoded.
 - Mobile-first Tailwind (default = mobile; `md:`/`lg:`/`xl:` upscale).
 
 **Gate:** Check off a `BUILD_PLAN.md` item ONLY after the section renders correctly for ALL
