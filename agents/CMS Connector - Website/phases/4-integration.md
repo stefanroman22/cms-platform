@@ -38,7 +38,9 @@ Phase 6). Otherwise reuse the existing row.
    - **Preview token** — do **NOT** set a `NEXT_PUBLIC_*`/prefixed token (that inlines a credential into the client bundle), and do **NOT** PATCH `preview_token` onto the project row (`AdminProjectPatchIn` deliberately drops it — audit BE-004 — so the PATCH is a silent no-op that leaves the DB token NULL while Vercel has one → `/draft` 401s → drafts never show). Instead, provision it via the **rotate endpoint**, the single writer of both stores:
      - If the project row has no `preview_token`, `POST /admin/projects/{slug}/rotate-preview-token` (admin bearer). It writes the DB `preview_token` AND the Vercel **`CMS_PREVIEW_TOKEN`** (server-only key, preview target). It returns the token.
      - Mirror that token onto Vercel yourself too — `set_env_var("CMS_PREVIEW_TOKEN", token, target=["preview"])` (literal unprefixed key) — because rotate skips its Vercel write silently when the backend `VERCEL_TOKEN` is unset. Set this BEFORE triggering the build.
-     - The token key is the server-only **`CMS_PREVIEW_TOKEN`** for ALL frameworks (it is read only in server components / `i18n/request.ts`, never a client component). Re-runs are idempotent: reuse the existing DB token, never rotate when one already exists.
+     - The token key is the server-only **`CMS_PREVIEW_TOKEN`** for Next.js sites (read only in server components / `i18n/request.ts`, never a client component).
+     - **Vite + React 19 SPA sites** also set **`VITE_CMS_PREVIEW_TOKEN`** on the Vercel **preview** environment (preview-only; absent on production). This is the client-visible env var `src/lib/cms-content.ts` reads via `import.meta.env.VITE_CMS_PREVIEW_TOKEN` to branch draft vs. published. Value is the same DB token.
+     - Re-runs are idempotent: reuse the existing DB token, never rotate when one already exists.
    - Create `cms-preview` branch from production branch if missing.
    - Trigger production + preview deployments (env + token must already be set so the build/runtime carries them).
    - PATCH the CMS project row with `github_repo`, `production_branch` (resolved in this step from Vercel `productionBranch` or GitHub `default_branch` — see [AGENTS.md → Branch standardization](../AGENTS.md)), `vercel_project_id`, `production_url`, `preview_url`. **Never** `preview_token` (see above).
@@ -60,7 +62,9 @@ non-text data (images, hours, contact, brand) from **static constants in
 `general_brand_name` get silently dropped. You MUST close that gap:
 
 0. **Draft vs published fetch (so cms-preview AND localhost show SAVED-but-unpublished
-   edits).** `lib/cms-content.ts` must branch on the **server-only** `CMS_PREVIEW_TOKEN`:
+   edits).**
+
+   **Next.js sites — `lib/cms-content.ts` branches on the server-only `CMS_PREVIEW_TOKEN`:**
    - Token present (preview deployment + localhost `.env.local`) → fetch
      `{base}/{locale}/draft` with header `X-CMS-Preview-Token: <token>` and
      `cache: "no-store"`. This shows the latest SAVED draft before publishing.
@@ -77,6 +81,19 @@ non-text data (images, hours, contact, brand) from **static constants in
    The canonical multilingual reference is the samir-kapsalon `lib/cms-content.ts`
    (single-locale sites: the it-global-services `src/lib/cms.ts` pattern).
 
+   **Vite + React 19 SPA sites — `src/lib/cms-content.ts` branches on `VITE_CMS_PREVIEW_TOKEN`:**
+   - This is a client-side TanStack Query fetch (localStorage-persisted). Branch on the env var:
+     - `VITE_CMS_PREVIEW_TOKEN` present (preview deploy + `.env.local`) → fetch
+       `{base}/{locale}/draft` with header `X-CMS-Preview-Token: <token>`,
+       `cache: 'no-store'`, TanStack `staleTime: 0`. Shows latest SAVED draft before publishing.
+     - `VITE_CMS_PREVIEW_TOKEN` absent (production) → fetch `{base}/{locale}` (published)
+       with a short TanStack `staleTime` (e.g. 60 000 ms). **No `next:{revalidate}` / ISR** —
+       CMS publish appears on the next client load; the crawler SSG snapshot refreshes on rebuild.
+   - Same safe fallback chain: draft not-ok/401 → retry published URL; published not-ok → return
+     the local `src/i18n/messages/<locale>.json` seed. Never throws.
+   - `.env.local` for localhost must set `VITE_CMS_PREVIEW_TOKEN` (matching the DB token)
+     so the developer sees drafts locally, identical to the preview deploy.
+
 1. **`lib/cms-content.ts`** — deep-merges the fetched per-locale payload (draft or
    published per point 0) over the local `messages/<locale>.json`. It must map EVERY
    service type, not a subset:
@@ -90,6 +107,15 @@ non-text data (images, hours, contact, brand) from **static constants in
    …). Map service keys to the site's ACTUAL `t()` namespaces — the scan's keys
    often don't match the built site's namespaces, so reconcile them here.
 
+   **Vite + React 19 SPA — `src/lib/cms-content.ts`:** same per-service-type mapping and
+   dedicated `site` namespace as above — the merge logic is IDENTICAL. The only differences are:
+   - File path: `src/lib/cms-content.ts` (under `src/`).
+   - Fetch mechanism: client-side **TanStack Query** with localStorage persistence (not `getMessages()`).
+   - Seed path: merges over `src/i18n/messages/<locale>.json` (NOT `messages/<locale>.json`).
+   - A build-time SSG snapshot bakes published content; the client refetch keeps humans fresh.
+   The same `t("<service_key>.<field>")` namespaced-key shape is consumed by react-i18next `useTranslation`,
+   so the same service keys and namespace layout apply across both frameworks.
+
 2. **`lib/cms-site.ts`** — export `resolveSite(messages)` returning the site data
    with a SAFE FALLBACK to the `lib/site.ts` constants when a service is absent
    (the site must never break if the CMS is unreachable). Do the shape bridging
@@ -98,6 +124,13 @@ non-text data (images, hours, contact, brand) from **static constants in
    hours rows). Components call `resolveSite(await getMessages())` (Server) or
    `resolveSite(useMessages())` (Client) and read from it INSTEAD of importing the
    static constant directly.
+
+   **Vite + React 19 SPA — `src/lib/cms-site.ts`:** `resolveSite(messages)` contract is
+   UNCHANGED — same safe-fallback to `src/lib/site.ts` constants, same shape bridging. The only
+   difference is that components read merged messages via the react-i18next context
+   (`useTranslation`) instead of `getMessages()`. Components call
+   `resolveSite(mergedMessages)` where `mergedMessages` is the TanStack-hydrated object
+   from `src/lib/cms-content.ts`.
 
 3. **Audit before declaring done — check EVERY render surface, not just one.** For
    each provisioned service key, confirm a component consumes its resolved value.
@@ -150,6 +183,8 @@ this phase only WIRES consumption of the public read endpoints.
    for content + booking). No new secret is needed — `GET /projects/{slug}/seo/public/{meta,articles}`
    is public (ETag/ISR).
 
+**Next.js sites:**
+
 2. **Generate `lib/seo-meta.ts`** (mirrors `lib/cms-content.ts`: ISR + never-throw fallback).
    It exports a fetch helper that calls
    `GET {backend}/projects/{slug}/seo/public/meta?route=<route>&locale=<active-locale>` (the
@@ -169,7 +204,7 @@ this phase only WIRES consumption of the public read endpoints.
    locale. **SSR every locale** (each locale's content lands in the raw HTML, not just the
    default — AI/Google bots don't run JS).
 
-4. **`/blog` only when articles exist — ACTIVE locale, server-side fallback.** Provision/wire
+4. **`/blog` only when articles exist — ACTIVE locale, server-side fallback (Next.js).** Provision/wire
    the `/blog` index + `/blog/[slug]` (fetching
    `GET {backend}/projects/{slug}/seo/public/articles?locale=<active-locale>` + `/{articleSlug}`,
    ISR + fallback) and set `projects.seo_blog_route` (e.g. `/blog`) ONLY once the SEO agent has
@@ -178,6 +213,34 @@ this phase only WIRES consumption of the public read endpoints.
    article transparently shows default-locale prose because the endpoint applies the per-field
    default fallback **server-side** — the site does not merge. Do not scaffold an empty `/blog`
    on a normal connector run.
+
+**Vite + React 19 SPA sites:**
+
+2. **Generate `src/lib/seo-meta.ts`** (build-time SSG snapshot + optional client TanStack refetch;
+   never throws). It exports a fetch helper that calls
+   `GET {backend}/projects/{slug}/seo/public/meta?route=<route>&locale=<locale>` at **build time**
+   for the SSG snapshot; optionally also as a SEPARATE client TanStack Query for freshness (its
+   own query — NOT the build-time in-process meta cache, which is build-process-only). On any
+   non-ok/error returns `null` so the caller falls back to the build-time `seo-pro` output. It
+   NEVER throws. The per-field default-locale fallback is SERVER-SIDE (same as Next): the endpoint
+   fills any missing/untranslated field, the helper never merges locales itself.
+
+3. **No `generateMetadata` — use `src/lib/head.ts` with React 19 hoisted tags.** There is no
+   `generateMetadata` in Vite SPAs. Instead, `src/lib/head.ts` emits React 19 hoisted
+   `<title>`, `<meta>`, and `<link>` tags. When `src/lib/seo-meta.ts` returns stored prose
+   (`title`/`description`/`og` text + JSON-LD data), PREFER it over build-time; otherwise keep
+   the build-time `seo-pro` output. The **coded tags are generated LOCALLY per active locale**
+   — `canonical`, `hreflang`, `og:locale`, and JSON-LD `inLanguage` are emitted by `src/lib/head.ts`
+   per locale without fetching. The endpoint applies per-field default-locale fallback server-side
+   so the site never merges locale fields itself.
+
+4. **`/blog` + `/blog/:slug` — pre-rendered from build-time article slugs (Vite).** Pre-render
+   the `/blog` index + `/blog/:slug` from build-time article slugs fetched via
+   `GET {backend}/projects/{slug}/seo/public/articles?locale=<locale>`; add a client TanStack
+   refetch for freshness. Set `projects.seo_blog_route` (e.g. `/blog`) ONLY once the SEO agent
+   has created articles. An untranslated article transparently shows default-locale prose because
+   the endpoint applies the per-field default fallback server-side. Do not scaffold an empty
+   `/blog` on a normal connector run.
 
 ### 4.2 — Booking provisioning (only if `booking.detected` in manifest)
 

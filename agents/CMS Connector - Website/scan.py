@@ -336,7 +336,9 @@ def _env_prefix(framework: str) -> str:
         return "VITE_"
     if "astro" in fw:
         return "PUBLIC_"
-    return "NEXT_PUBLIC_"
+    # Vite is the pipeline default (the website-builder now ships Vite + React 19
+    # SPAs); the explicit next/astro detections above still win for legacy/imported sites.
+    return "VITE_"
 
 
 def _provision_booking(
