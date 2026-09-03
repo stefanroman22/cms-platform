@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**13** finding(s) (SEC-059/060/061 added 2026-09-03). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-03.
 
 ---
 
@@ -502,5 +502,209 @@ Read backend/auth_service/routers/forms.py directly. The injection is real and t
 **Recommendation**
 
 HTML-escape both key and value before interpolation, mirroring the rest of the codebase: import html and use html.escape(key) / html.escape(value) (and html.escape(submitted_at), project_name, form_key for completeness). This is a one-line-per-field change consistent with the existing BE-006 pattern already applied in every other email builder.
+
+---
+
+<a id="sec-059"></a>
+
+## SEC-059 — Tenant `accent_color` interpolated raw into booking confirmation email button `style` attributes (missing `safe_hex`)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | HTML / email-template injection (SEC-045 class regression) |
+| **Dimension** | xss-html |
+| **Location** | `backend/auth_service/services/booking_email.py:51,70` (source: `models/booking_admin_schemas.py:13-14`; `routers/booking.py:49` `_brand_for`) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: medium) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+`_cta_block` receives `accent=_brand.accent`, which comes from the tenant's
+`booking_settings.accent_color` / `primary_color` (`routers/booking.py` `_brand_for`, line 49:
+`accent = cfg.accent_color or cfg.primary_color`). That column is written via
+`PATCH /projects/{slug}/bookings/settings` whose `SettingsPatch.accent_color`/`primary_color` are plain
+`str | None` with **no validation** (`models/booking_admin_schemas.py:13-14`; `booking_admin_repo.update_settings`
+writes it verbatim). `_cta_block` computes `link_color = safe_hex(accent, …)` at line 43 and uses *that* safe
+value for the meeting-link anchor — but the actual buttons emit the **raw** `accent` into `style` at line 51
+(`border:1px solid {accent}`) and line 70 (`background:{accent}`), unlike `header()`/`accent_rule()` which route
+it through `_safe_accent`. So the SEC-045 fix that neutralized the header/brand chrome does **not** cover these
+two button sinks — a genuine regression of an acknowledged vuln class in the new per-color-customization code.
+
+**Attack scenario**
+
+A malicious or compromised project owner sets `accent_color` to e.g.
+`#000"><a href="https://evil.example/verify">Confirm your booking</a><a x="`. The value is neither hex-validated
+nor HTML-escaped, so it breaks out of the double-quoted `style` attribute and the `<a>` tag, injecting
+attacker-chosen HTML/links/images into the branded confirmation email delivered — from the platform's trusted
+Resend/DKIM domain — to **every external booking visitor**. The add-to-calendar button (line 51) is built on
+every visitor confirmation (`add_to_cal_url` is always supplied), so line 51 fires unconditionally.
+
+**Evidence**
+
+```python
+link_color = email_layout.safe_hex(accent, "#18181b")   # safe value used only for the meeting-link anchor
+...
+    f"border:1px solid {accent};color:{add_color};text-decoration:none;font-size:14px;font-weight:600;"  # line 51: RAW accent
+...
+    f'<a href="{esc}" style="display:inline-block;margin:0 4px;background:{accent};color:{join_color};...'  # line 70: RAW accent
+```
+
+**Adversarial verification**
+
+Confirmed. The verifier re-read all four files: `safe_hex` is computed but only consumed by the meeting-link
+anchor (line 67); lines 51 and 70 interpolate raw `accent` into double-quoted `style` attributes with no
+`html.escape`/`safe_hex`. `accent` is fully tenant-controlled and unvalidated end-to-end (schema `str|None` →
+repo verbatim → `_brand_for` raw). `email_layout.py` shows `header()`/`accent_rule()` DO sanitize via
+`_safe_accent` with an explicit SEC-045 comment, so the two buttons are a missed instance of that class.
+Medium, not high: the injector is an authenticated owner and the victims are that tenant's own booking visitors
+(not cross-tenant); the sink is an HTML email where mainstream clients strip `<script>`, so the practical impact
+is HTML/content injection (attacker images, phishing links, layout spoofing) inside a legitimately-branded,
+DKIM-signed email.
+
+**Exploitability:** Authenticated project owner sets `booking_settings.accent_color`/`primary_color` (no
+server-side hex validation). `_brand_for` reads it raw into `Brand.accent`; `render_visitor_html` passes it as
+`accent` to `_cta_block`, which emits it raw at line 51 (every confirmation) and line 70 (when a meeting_url is
+set). Attacker == tenant owner; victims are that tenant's own booking visitors.
+
+**Recommendation**
+
+Never interpolate the raw `accent` into markup. Sanitize once at the top of `_cta_block`
+(`accent = email_layout.safe_hex(accent, "#18181b")`) and use that value at lines 51 and 70, exactly as
+`header()`/`accent_rule()` already do. As defense-in-depth, also validate `accent_color`/`primary_color` with a
+hex regex in `SettingsPatch`. Fix alongside SEC-060 (the same class in `booking_manage_email._button`).
+
+---
+
+<a id="sec-060"></a>
+
+## SEC-060 — Tenant `accent` interpolated raw into reschedule/cancel client email button `_button()`
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | HTML / email-template injection (SEC-045 class regression) |
+| **Dimension** | xss-html |
+| **Location** | `backend/auth_service/services/booking_manage_email.py:48,155` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: medium) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+`_button()` (line 42/48) declares `accent: str = "#18181b"` and interpolates it **raw** into the button `style`
+at line 48: `style="display:inline-block;background:{accent};color:{label_color};` — no `safe_hex`, no
+`html.escape`. `render_reschedule_client` builds the "Join" CTA at lines 152-157 with `accent=_brand.accent`
+(the raw, unvalidated tenant `accent_color`/`primary_color`). Critically, the same function computes a sanitized
+`accent = email_layout.safe_hex(_brand.accent, "#18181b")` at line 115, but that safe local is only consumed by
+the sibling `addcal_btn`; the `_button` call deliberately passes the raw `_brand.accent`, bypassing
+sanitization.
+
+**Attack scenario**
+
+A tenant supplies `accent_color = '#000"><img src=x onerror=…>'` (or an anchor-breakout string) plus a valid
+https `meeting_url`. On any reschedule of a booking for that project,
+`send_reschedule → render_reschedule_client → _button` emits the raw accent into the button `style`, injecting
+arbitrary HTML into the reschedule-confirmation email delivered to the visitor (and into the
+`/bookings/email-preview` reschedule render).
+
+**Evidence**
+
+```python
+def _button(*, url: str, label: str, accent: str = "#18181b", label_color: str = "#ffffff") -> str:
+    safe = email_layout.safe_url(url)
+    if not safe:
+        return ""
+    return (
+        '<tr><td style="padding:20px 32px 8px" align="center">'
+        f'<a href="{html.escape(safe)}" style="display:inline-block;background:{accent};color:{label_color};'
+        ...
+    )
+```
+
+**Adversarial verification**
+
+Confirmed. The verifier confirmed `_button` interpolates raw `accent`, that the Join CTA passes `_brand.accent`
+(raw) while the sanitized `safe_hex` local at line 115 is used only for `addcal_btn`, and that
+`accent_color` is unvalidated on write. `tests/test_email_escaping.py:34` explicitly exercises
+`accent='#000;"><script>alert(1)</script>'` against `header()`, proving malicious accents reach the `Brand`
+object — so `_button` is a real gap in the otherwise-consistent SEC-045 allowlist. Medium: authenticated
+tenant injector, own-tenant visitor victims, HTML-email sink (scripts stripped by clients → content/phishing
+injection).
+
+**Exploitability:** Authenticated project owner sets a breakout `accent_color` and a valid https meeting_url;
+on any reschedule for that project the raw accent reaches the button `style`. Not cross-tenant.
+
+**Recommendation**
+
+Sanitize inside `_button` (`accent = email_layout.safe_hex(accent, "#18181b")` before use) so every caller is
+safe, or pass the already-`safe_hex`'d `accent` (line 115) into the `_button` call instead of raw
+`_brand.accent`. Fix together with SEC-059.
+
+---
+
+<a id="sec-061"></a>
+
+## SEC-061 — New `/seo/translate` endpoint triggers a paid-DeepL amplification loop with no rate limit (SEC-034 regression)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Weak/missing rate limiting → paid-cost amplification / DoS |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/seo.py:247-250` (fan-out: `seo.py:197-244`, `translation/seo_translate.py`, `translation/deepl.py`) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: medium) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+`POST /projects/{project_slug}/seo/translate` is authenticated (`require_project_access`) but carries **no rate
+limit**. `_translate_seo_for_project` loops over **every** default-locale `seo_page_meta`/`seo_articles` row,
+then over **every** non-default target locale, and for each calls `seo_translate.translate_seo_prose`, which
+issues a **separate paid DeepL HTTP request per prose field** (title/description/og/excerpt/body — `deepl.py`
+sends one POST per single-item call, no batching). One HTTP request to `/seo/translate` therefore fans out to
+O(rows × locales × fields) billable DeepL calls. This is the exact class the codebase already guards elsewhere:
+`workspace.py:263-273` wraps the identical paid-translation path with
+`pg_rate_limit.enforce(f"save_translate:{project['id']}", limit=120, window_seconds=60)` citing **SEC-034**. The
+new SEO endpoint reintroduces the unguarded path.
+
+**Attack scenario**
+
+Any user with access to a single project (including a low-privilege client) hammers `/seo/translate` in a tight
+loop, running up the shared DeepL account bill and exhausting translation quota for all tenants — a paid-cost
+amplification DoS.
+
+**Evidence**
+
+```python
+@router.post("/projects/{project_slug}/seo/translate")
+async def translate_seo(project_slug: str, body: SeoTranslateIn, request: Request) -> dict:
+    user = await user_via_bearer_or_session(request)
+    project = require_project_access(project_slug, user)
+    return _translate_seo_for_project(project, body.kind)   # no pg_rate_limit / @limiter
+```
+
+**Adversarial verification**
+
+Confirmed. The verifier re-read `seo.py:247-251` (only `user_via_bearer_or_session` + `require_project_access`,
+no limiter), the nested loop (197-244), `seo_translate.py` (`_one` per field), and `deepl.py` (one POST per
+call), and confirmed the mitigated sibling at `workspace.py:263-272`. A grep for `pg_rate_limit`/`enforce` in
+`seo.py` returns no matches — the guard is genuinely absent. Not a cross-tenant/auth issue, so medium (weak/
+missing rate limiting enabling abuse).
+
+**Exploitability:** Authenticated user with access to any single project sends repeated POSTs; each request is
+O(rows × locales × fields) billable DeepL calls, replayable with no throttle → quota exhaustion / cost
+amplification affecting all tenants on the shared DeepL account.
+
+**Recommendation**
+
+Add `pg_rate_limit.enforce` with a per-project bucket (e.g. `f"seo_translate:{project['id']}"`) before invoking
+`_translate_seo_for_project`, mirroring the SEC-034 guard in `workspace.py`. Consider batching texts into a
+single DeepL call per (row, locale) to cut fan-out, and a per-invocation cap on rows processed.
 
 ---

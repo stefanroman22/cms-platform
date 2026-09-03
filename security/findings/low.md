@@ -2,7 +2,7 @@
 
 _Hardening / defense-in-depth. Address opportunistically._
 
-**31** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**37** finding(s) (SEC-062…067 added 2026-09-03). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-03.
 
 ---
 
@@ -1442,5 +1442,317 @@ Verified the core injection by reading the cited code. In email_layout.py:64-74 
 **Recommendation**
 
 Validate accent_color/primary_color/widget_color against a strict hex/CSS-color regex in SettingsPatch (reject anything not matching ^#[0-9A-Fa-f]{3,8}$), run business_name through html.escape() at render time in header()/footer(), and pass logo_url/canonical_url through email_layout.safe_url() (already used for other links) before interpolating into src/href. The booking body copy already escapes name/when/note; the chrome (header/footer/brand) should follow the same rule.
+
+---
+
+<a id="sec-062"></a>
+
+## SEC-062 — `pg_rate_limit` fails open on DB error, dropping the per-account login lockout during a Postgres brownout
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Rate limiting / brute-force (defense-in-depth) |
+| **Dimension** | authn-session |
+| **Location** | `backend/auth_service/core/pg_rate_limit.py:35-37,53-55` (consumer: `routers/auth.py:77,80-90`) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+`allow()` (lines 25-37) catches every `Exception` and returns `True`; `over_limit()` (lines 43-55) catches
+every `Exception` and returns `False` — both **fail open**. The `/auth/login` per-account lockout is built
+entirely on these (`auth.py:80` gates on `over_limit(fail_bucket, 10, 900)`, `auth.py:90` counts a failure via
+`allow(...)`). During any Supabase/Postgres degradation or RPC error, the durable 10-fails/15-min lockout **and**
+the shared login counter silently vanish, leaving only the in-memory `@limiter.limit("30/minute")` decorator
+(`auth.py:77`), which — per the module's own docstring — resets per Vercel serverless invocation and is
+effectively N×limit across warm instances.
+
+**Evidence**
+
+```python
+except Exception:
+    logger.exception("rate_limit_hit failed; failing open (bucket=%s)", bucket)
+    return True
+```
+
+**Adversarial verification**
+
+Confirmed. Both helpers fail open; the login lockout depends entirely on them; the only fallback is the weak
+in-memory throttle. Genuinely **defense-in-depth only**: argon2id + strong-password entropy remain the primary
+barrier, the fail-open is explicitly documented as an intentional availability tradeoff ("a transient DB error
+must never lock every user out"), and it triggers only during a DB brownout, not steady state. Low is correct.
+
+**Exploitability:** Only during a Supabase/Postgres degradation window — an attacker timing a credential-stuffing
+burst bypasses the durable 10/account lockout and falls back to the in-memory 30/min-per-warm-instance throttle.
+Steady-state the DB-backed lockout holds; primary barrier unaffected.
+
+**Recommendation**
+
+For the login-failure bucket specifically, consider fail-closed (or a stricter static per-IP cap) or degrade to
+a conservative in-memory ceiling when the Postgres limiter is unavailable, rather than removing the account
+lockout entirely on transient errors. At minimum, alert on sustained `rate_limit_*` RPC failures so a DB brownout
+used as a brute-force window is visible.
+
+---
+
+<a id="sec-063"></a>
+
+## SEC-063 — Public SEO consumer endpoints are unauthenticated with no rate limiting (enumeration / scraping)
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Rate limiting / enumeration (defense-in-depth) |
+| **Dimension** | ratelimit-dos / public-tokens |
+| **Location** | `backend/auth_service/routers/seo.py:168-181` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+`GET /projects/{slug}/seo/public/meta` and `/seo/public/articles` are unauthenticated and carry no
+`@limiter.limit`/`pg_rate_limit` guard. Each request runs a slug lookup plus a published-meta/articles query;
+`public_meta` takes an arbitrary `route` query param, allowing unbounded enumeration of routes/locales and
+unmetered scraping of every project's published SEO content across all tenants. Exposure is bounded because only
+already-`published` content is returned (mirroring the pre-existing unlimited `content.py` public reads), so this
+is a DoS/enumeration hardening gap rather than data exposure.
+
+**Evidence**
+
+```python
+@router.get("/projects/{project_slug}/seo/public/meta")
+async def public_meta(project_slug: str, route: str, locale: str) -> dict:
+    pid = _project_id_by_slug(project_slug)
+    if not pid:
+        return {}
+    return seo_repo.published_meta(pid, route, locale) or {}
+```
+
+**Adversarial verification**
+
+Confirmed. Neither handler declares an auth dependency or a limiter; the router has no limiter dependency. Only
+published content is returned. Low is correct.
+
+**Exploitability:** Unauthenticated attacker issues unlimited GETs, enumerating routes/locales and scraping
+published SEO content with no abuse ceiling. No secret/private data beyond published content.
+
+**Recommendation**
+
+Apply an IP-keyed slowapi `@limiter.limit` plus a shared `pg_rate_limit` bucket (as the public `booking.py`/
+`forms.py` endpoints do) to the `seo/public/*` routes, and add `Cache-Control` headers to offload repeat reads.
+
+---
+
+<a id="sec-064"></a>
+
+## SEC-064 — SEO-GEO `site_change_spec.route` is not path-validated before the Website Builder writes `app/[locale]/<route>/page.tsx`
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Path traversal (defense-in-depth; LLM-mediated) |
+| **Dimension** | agents |
+| **Location** | `agents/SEO-GEO Optimizer/site_change_spec.py:52-62` (consumer: `agents/Website Builder/phases/9-incremental.md` step 2) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+`validate_site_change_spec()` checks only that `route` is truthy (plus `page_type`/`consumes`/`locales`
+membership) — **no** path-safety validation (no `..`, absolute-path, or charset check). The Website Builder then
+writes `app/[locale]/<route>/page.tsx` additively from this route. The `route` is authored by the SEO planner
+LLM, whose plan is influenced by the untrusted competitor content of SEC-058, so a route like
+`../../../../etc/cron.d/x` would escape the intended `app/[locale]/` tree.
+
+**Evidence**
+
+```python
+for i, p in enumerate(pages):
+    if not p.get("route"):
+        errs.append(f"pages[{i}]: missing route")
+    if p.get("page_type") not in PAGE_TYPES:
+```
+
+**Adversarial verification**
+
+Confirmed as a **defense-in-depth gap**, not a reachable medium overwrite: `site_change_spec.py` is pure
+(builds/validates a JSON dict only), `apply.py` phase 5 defers all `new_page` items and writes nothing, and the
+actual file creation is an LLM agent action guided by markdown prose, standing behind the additive-only rule, the
+cms-preview-only branch, a per-locale Playwright smoke, and the mandatory seo-visual-qa gate before publish. Real
+missing sanitization on a cross-agent contract value influenced by untrusted input; low is correct.
+
+**Exploitability:** LLM-mediated, multiply-gated; no deterministic code sink. Requires prompt-injecting the
+planner (via SEC-058) into a malicious route, that route surviving the validator, and a separate LLM agent
+literally treating `../..` as a filesystem path despite its additive-only rule.
+
+**Recommendation**
+
+In `validate_site_change_spec`, reject any route that is not a normalized, single-slash, safe relative path
+(forbid `..`, backslashes, null bytes, absolute OS paths; enforce a strict `^(/[a-z0-9-]+)+$` allowlist). Have the
+Website Builder `realpath`-confine every write under `app/[locale]/` before creating files.
+
+---
+
+<a id="sec-065"></a>
+
+## SEC-065 — SEO-GEO `render_check.fetch_raw()` performs an unrestricted `urllib` request on an externally-influenced URL
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | SSRF / local-file read (agent host; operator-triggered) |
+| **Dimension** | ssrf-outbound |
+| **Location** | `agents/SEO-GEO Optimizer/render_check.py:18-23` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+`fetch_raw()` opens whatever URL it is handed with `urllib.request.urlopen` and **no scheme allowlist, no
+redirect restriction, and no private-IP guard**; the inline `# noqa: S310 (trusted client URLs)` comment merely
+asserts trust. The `url` originates from the project's stored site URL / lead link (tenant/lead-controllable) and
+the per-locale URL map. Python's default opener includes `FileHandler`/`FTPHandler`/`HTTPRedirectHandler`, so
+`file:///etc/passwd`, `ftp://`, and attacker-controlled 30x redirects to `http://169.254.169.254/` all resolve.
+The fetched bytes flow into signals and the gate's content-in-raw-HTML check.
+
+**Evidence**
+
+```python
+def fetch_raw(url: str, timeout: int = 20) -> str:
+    """GET the raw HTML (no JS execution). Raises urllib errors to the caller."""
+    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "text/html"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (trusted client URLs)
+        raw = resp.read(_BYTE_CAP)
+```
+
+**Adversarial verification**
+
+Confirmed. No validation anywhere upstream (grep for scheme/urlparse/allowlist/169.254/localhost/file:// found
+none). Kept at **low** rather than the scale's "high (SSRF to metadata)" because this is an internal stdlib agent
+utility, not a network-reachable web endpoint: exploitation requires an operator to run the agent against a
+maliciously-configured tenant/lead URL (indirect reachability), and impact is confined to what the agent host can
+reach.
+
+**Exploitability:** A malicious tenant/lead sets their stored site URL to `file:///etc/passwd` /
+`http://169.254.169.254/latest/meta-data/` / an attacker-controlled 302 to an internal host; when an operator
+runs the SEO-GEO agent against that project, `fetch_raw()` opens it with no restriction. Not directly reachable by
+an unauthenticated network attacker.
+
+**Recommendation**
+
+Restrict `fetch_raw` to http/https only, resolve the host and reject private/link-local/loopback/metadata ranges
+before connecting, disable or re-validate redirects against the same allowlist, and drop the "trusted client
+URLs" assumption. (Related standing scraper findings: SEC-049/SEC-052.)
+
+---
+
+<a id="sec-066"></a>
+
+## SEC-066 — `promote.yml` downloads and executes the gitleaks binary without checksum verification in the privileged promote job
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Supply-chain integrity (CI) |
+| **Dimension** | ci-workflows |
+| **Location** | `.github/workflows/promote.yml:42-43` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+The promote workflow curl-pipes a gitleaks release tarball from github.com and immediately executes the extracted
+binary. The version is pinned (`8.21.2`) but there is **no SHA256/integrity check** on the downloaded asset. This
+runs inside the `promote` job, which holds `PROMOTE_TOKEN` (a fine-grained PAT that fast-forwards protected
+`main`) plus the FE/BE production deploy hooks — and gitleaks is itself the secret-scan **gate**, so a tampered
+binary could both run in a prod-writing context and silently pass the scan.
+
+**Evidence**
+
+```yaml
+curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+./gitleaks detect --source . --no-git --redact --verbose --config .gitleaks.toml
+```
+
+**Adversarial verification**
+
+Confirmed. Version-pin is not integrity verification — a mutable GitHub release asset can be replaced under a
+fixed tag. Not a live/reachable exploit (depends on HTTPS transport being broken or the release asset being
+tampered — neither attacker-controllable in normal operation), so a hardening/defense-in-depth gap. Note the
+other actions in this same file (checkout, setup-node, setup-python) ARE SHA-pinned; the standard
+`sha256sum -c` mitigation is absent here.
+
+**Exploitability:** Requires a TLS/MITM compromise or replacement of the pinned GitHub release asset. If realized,
+the malicious binary runs in a job that can fast-forward protected `main` and trigger both prod deploy hooks, and
+could silently pass the secret-scan gate. Low likelihood, high impact → low.
+
+**Recommendation**
+
+Verify a known-good SHA256 of the tarball before extraction/execution
+(`echo '<sha256>  file' | sha256sum -c`), or install gitleaks from a SHA-pinned action. Keep the scan early, but
+fail closed on checksum mismatch. (Tracked under the SEC-024 SHA-pin standard.)
+
+---
+
+<a id="sec-067"></a>
+
+## SEC-067 — Multi-tenant form-submission access control relies on the client-forgeable `Origin` header
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Access control (defense-in-depth) |
+| **Dimension** | public-tokens |
+| **Location** | `backend/auth_service/routers/forms.py:135-140` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+The multi-tenant public form endpoint `POST /{project_slug}/{form_key}` sends email to the project owner's
+configured destination. Its only access control beyond rate limiting is an `Origin`-header allow-list. The
+`Origin` request header is trivially spoofable by any non-browser client (curl/script) — it is not a
+same-origin-policy-enforced value server-side. An attacker who reads a client's public site source (the
+`allowed_origins` is effectively the site's own domain) can set `Origin: https://client-site.com` and submit
+form emails, defeating the "fail-closed" intent the code comment claims. The real protection is the rate
+limiter, not the Origin check.
+
+**Evidence**
+
+```python
+origin = request.headers.get("origin", "")
+if origin not in allowed_origins:
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Origin not allowed for this project")
+```
+
+**Adversarial verification**
+
+Confirmed, but impact is bounded: the endpoint only emails the project owner's own pre-configured
+`destination_email` (no attacker-chosen recipient, no cross-tenant read/write, and the SEC-032 `reply_to`
+fullmatch prevents header injection); two rate limiters gate abuse (per-process slowapi `5/10minutes` + the
+cross-instance `pg_rate_limit.enforce(limit=5, window_seconds=600)`). Residual risk is spamming the owner's own
+inbox at 5/10min per IP-bucket (rotatable across IPs) — a hardening gap, not an authorization/data-exposure flaw.
+
+**Exploitability:** curl/script sets a spoofed `Origin` matching the project's public domain and POSTs; bounded
+to rate-limited emails to the owner's own destination. IP rotation needed to exceed the cap.
+
+**Recommendation**
+
+Treat the Origin allow-list as best-effort UX only, not an access-control boundary (as the `/contact` endpoint
+already documents). For genuine anti-abuse add the honeypot field the marketing `/contact` form uses and/or a
+CAPTCHA/proof-of-work, and keep the cross-instance `pg_rate_limit` as the primary control.
 
 ---

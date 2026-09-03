@@ -5,22 +5,40 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-07** (remediation in progress)
+## Status snapshot — last full review **2026-09-03** (remediation ongoing)
 
 | Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **10** | **31** | **10** | **56** | 14 |
+| **1** | **6** | **13** | **37** | **11** | **68** | 17 |
 
-**2 in-progress** (`SEC-001`, `SEC-002` — partially remediated 2026-06-07), 54 open. See the
-remediation note in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+**No open critical** (the single critical `SEC-001` is fixed). 29 fixed, 33 open, 4 obsolete (CI overhaul),
+1 accepted-risk (`SEC-054`), 1 needs-decision (`SEC-039`). The 2026-09-03 review added **12 new findings**
+(`SEC-057…068`), concentrated in the new SEO/GEO feature and the new SEO-GEO agent. See
+[`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
 
-### Remediation progress
-- **`SEC-001` (critical) + `SEC-002` (high) + `SEC-056` (high)** — *in-progress, code-complete, pending one CI validation run.* Closed in code: cross-tenant `SOLVER_GITHUB_TOKEN` theft and the `node -e` RCE; added prompt fencing, input hardening, pre-push secret-scan, and credential teardown; and **egress isolation** (`step-security/harden-runner`, SHA-pinned, `block` mode) so an injected agent can't exfiltrate the Claude OAuth token. **Action needed:** one `workflow_dispatch` run of the Solver with `egress_policy=audit` to confirm the egress allowlist is complete — then all three flip to `fixed`.
+> **MCP gap:** the Supabase and Vercel MCP servers were **absent** in the 2026-09-03 headless run. DB posture was
+> reviewed from the migration SQL as source of truth; live advisor/GRANT + Vercel env-scoping confirmation is
+> deferred to a review with MCP available.
 
-### The next things to fix
-1. **Validate the egress allowlist** — run the Solver workflow once via `workflow_dispatch` with `egress_policy=audit`, check StepSecurity's reported destinations, add any missing legit host, then rely on `block`. Closes SEC-001/SEC-002/SEC-056.
-2. **`SEC-004` (high)** — **anon/authenticated can EXECUTE the `SECURITY DEFINER` `claim_*_solver_issue` RPCs** (unauthenticated cross-tenant issue disclosure + pipeline DoS via the public Supabase anon key). Pure `REVOKE`, no schema change.
-3. **`SEC-003` (high)** — Booking owner can create a booking against **another tenant's `resource_id`** (cross-tenant calendar DoS via the global GiST exclusion constraint).
+### Top open risks (2026-09-03)
+- **`SEC-058` (high)** — the new **SEO-GEO agent** feeds untrusted competitor/client site content into its LLM
+  reasoning with **no data/instruction separation**, while the orchestrator holds pre-authorized, never-pausing
+  **service-role Supabase SQL + CMS-admin write** tools (the Solver's SEC-001/056 hardening was never applied
+  here). Prompt-injection → cross-tenant privileged writes.
+- **`SEC-057` (high)** — the agent's competitor-intel phase spec string-interpolates untrusted competitor text
+  into a **service-role `execute_sql` INSERT** → **second-order SQL injection**, RLS-bypassing/cross-tenant worst
+  case.
+- **`SEC-059`/`SEC-060` (medium)** — SEC-045 email-injection **regression**: tenant `accent_color` emitted raw
+  into booking-email button `style` attributes (`_cta_block`, `_button`) — one-line `safe_hex` fix each.
+- **`SEC-061` (medium)** — new `/seo/translate` re-opens the SEC-034 paid-DeepL amplification class (no rate
+  limit).
+
+### Carried-over top risks (still open from earlier reviews)
+- **`SEC-005`/`SEC-006` (medium, agents)** — Solver can mark any issue done cross-project; auto-commit/force-push
+  of attacker-influenced changes gated only by a single Slack ✅.
+- **`SEC-039` (needs-decision)** — credentialed CORS reflects any `*.vercel.app` origin (currently blocked only
+  by `SameSite=strict` — one control away; also correct the misleading `main.py:57` SameSite comment).
+- **`SEC-040` (low)** — dashboard CSP still permits `unsafe-inline`/`unsafe-eval`.
 
 ## How to read this folder
 
