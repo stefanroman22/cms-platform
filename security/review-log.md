@@ -5,6 +5,45 @@ changed* over time, independent of the per-finding tracker.
 
 ---
 
+## 2026-09-03 — Weekly scheduled review (multi-agent workflow)
+
+- **Method:** 13-dimension parallel finder workflow (find → adversarial verify → synthesize) + 2 reconciliation
+  agents re-reading every open finding's cited code. **37 agents total**, ~1.9M subagent tokens. Every confirmed
+  finding cites `file:line` + a verbatim snippet and was independently re-verified by a skeptical agent that
+  defaulted to false-positive. **22 candidates → 18 confirmed, 4 dismissed** (3 recorded in `dismissed.md`; the
+  4th was a severity dispute recorded as the confirmed SEC-065).
+- **MCP GAP (noted per methodology):** the Supabase and Vercel MCP servers were **absent** in this headless cloud
+  run (only a design-system connector was present). DB posture (RLS/GRANT/policy on the new SEO tables) was
+  reviewed from the migration SQL as source of truth; live `get_advisors` / `execute_sql` GRANT confirmation and
+  the Vercel `get_project` env-scoping check are **deferred to a run with MCP available**.
+- **Since last review (2026-06-09 → 2026-09-03, 7 commits):** scanned the new **SEO/GEO feature**
+  (`routers/seo.py`, `services/seo_repo.py`, `models/seo_schemas.py`, `translation/seo_translate.py`,
+  `migrations/2026_06_14_seo_geo.sql`, `frontend/.../seo/*`), the new **`agents/SEO-GEO Optimizer/`** agent,
+  booking changes (per-text email colors, add-to-calendar buttons, `booking_resource_image` migration), the
+  rewritten `frontend/src/middleware.ts` + i18n/locale-cookie work, `admin_keys`/`auth_service` changes, and the
+  `admins-see-all-projects` change in `projects.py`.
+- **New findings (12): SEC-057…068** — 2 high, 3 medium, 6 low, 1 info. Headliners: **SEC-058** (SEO agent
+  lethal-trifecta: untrusted competitor/site content → LLM reasoning with no data/instruction separation +
+  pre-authorized service-role SQL/CMS-admin writes) and **SEC-057** (second-order SQLi via competitor content
+  interpolated into a service-role `execute_sql` INSERT). **SEC-059/060** are a SEC-045 email-injection
+  regression (tenant `accent` raw into booking-email button `style`); **SEC-061** re-opens the SEC-034
+  paid-DeepL amplification class on the new `/seo/translate` endpoint.
+- **Status changes:** `SEC-046` open→**fixed** (bearer/session principal now normalized at the dep boundary).
+  `SEC-007/023/025/026` open→**obsolete** (workflows + `.github/dependabot.yml` deleted in the 2026-06-09 CI
+  overhaul; residual dep-update posture now `SEC-068`). All other open findings re-verified still-present;
+  `SEC-039` re-affirmed needs-decision (plus: the `main.py:57` comment misstates the cookie as SameSite=None
+  while the code sets strict/lax — correct the comment when fixing); `SEC-054` re-affirmed accepted-risk.
+- **Verified-clean (did NOT become findings):** the 9 new SEO tables are correctly hardened — RLS enabled with
+  **no** public policies and **no** anon/authenticated GRANTs (mirrors booking; dismissed a "no REVOKE"
+  candidate). `seo_repo` mutations scope by **both** `project_id` and row `id` (no IDOR). The new booking-email
+  per-text colors go through `safe_hex` (only the `accent` **button** paths regressed — SEC-059/060). GZip on
+  credentialed JSON was assessed for BREACH and dismissed. `patch_service`/`patch_resource` cross-tenant
+  resource validation holds (SEC-003/022 fixes intact).
+- **Headline posture:** internet-facing edges remain fail-closed; the **agentic layer is again the dominant new
+  risk** — the new SEO-GEO agent reproduces the exact pre-authorized-tools + no-fencing pattern that made the
+  Solver dangerous (SEC-001/002), but this time the pre-authorized tool is **service-role SQL**. Fix SEC-057/058
+  as a class with SEC-016 (nonce-fenced untrusted data + parameterized, project-scoped writes).
+
 ## 2026-06-08 — Notes: password policy + leaked-password protection
 
 - **Leaked-password protection (advisor `auth_leaked_password_protection`) — deferred (accepted-risk).** It is a Supabase **Pro-plan** Auth feature (Authentication → Attack Protection) and the project is on the Free plan, so it cannot be enabled. Revisit on upgrade.

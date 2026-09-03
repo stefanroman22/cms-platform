@@ -2,7 +2,7 @@
 
 _Best-practice notes and accepted-by-design observations._
 
-**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**11** finding(s) (SEC-068 added 2026-09-03; SEC-046 → fixed). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-03.
 
 ---
 
@@ -10,10 +10,15 @@ _Best-practice notes and accepted-by-design observations._
 
 ## SEC-046 — Bearer auth path returns a plain dict while the rest of the codebase assumes a UserOut object, creating an authZ-shape fragility
 
+> **2026-09-03 reconciliation: FIXED.** The authZ-shape fragility the info finding described (the bearer path
+> returning a plain dict) is closed at the dependency boundary — the bearer and session paths now converge on a
+> proper user object before any router consumes it, so downstream `.is_admin`/`.id` access no longer depends on
+> which auth path was taken. Status flipped to `fixed`.
+
 | | |
 |---|---|
 | **Severity** | info |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-09-03) |
 | **Category** | Type-confusion / defensive coding |
 | **Dimension** | admin-priv |
 | **Location** | `backend/auth_service/routers/deps.py:60-75,86-91; backend/auth_service/services/admin_keys.py:135-140` |
@@ -453,5 +458,52 @@ Read the cited code directly. frontend/src/app/(widget)/w/[slug]/page.tsx:18-19 
 **Recommendation**
 
 Optionally constrain the targetOrigin if the set of embedding origins is known; otherwise acceptable since no sensitive data is transmitted. The embed.js inbound origin check is correct and should be kept.
+
+---
+
+<a id="sec-068"></a>
+
+## SEC-068 — No `.github/dependabot.yml` and no CI dependency scan — no automated mechanism surfaces vulnerable dependencies
+
+| | |
+|---|---|
+| **Severity** | info |
+| **Status** | open |
+| **Category** | Supply-chain process (defense-in-depth) |
+| **Dimension** | deps-supplychain |
+| **Location** | `.github/dependabot.yml` (absent) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: info) |
+| **First seen** | 2026-09-03 |
+
+**Description**
+
+There is no Dependabot configuration anywhere in the repo (`find . -name 'dependabot*'` returns nothing), and the
+former `dependabot-auto-merge.yml` workflow was deleted in the 2026-06-09 CI overhaul. Combined with the removal
+of push-triggered CI, there is no automated mechanism surfacing vulnerable npm/pip dependencies as update PRs.
+This is the posture note that **supersedes the now-obsolete SEC-025** (whose original wording — "Dependabot does
+not cover scraper/Solver" — no longer applies now that Dependabot is off entirely). Pip installs do use
+`--require-hashes` against `requirements.lock` (good), and `codeql.yml` provides static scanning, but neither bumps
+or flags stale/vulnerable dependency versions.
+
+**Evidence**
+
+`.github/workflows/` contains only `codeql.yml`, `promote.yml`, `solver-agent.yml`; no `dependabot.yml`, no
+`dependabot-auto-merge.yml`.
+
+**Adversarial verification**
+
+Confirmed. Pure process/defense-in-depth gap with no attacker-reachable code path — it does not read/modify data,
+bypass auth, or expose secrets, and any real risk requires a separately-existing vulnerable transitive dependency
+this finding does not identify. Partially mitigated by CodeQL + `--require-hashes`. Info is appropriate.
+
+**Exploitability:** Not exploitable — the absence of an automated dependency-update tool, not a reachable flaw.
+
+**Recommendation**
+
+Add `.github/dependabot.yml` with ecosystems for the frontend (`npm`, `frontend/`), backend (`pip`, `backend/`),
+the agent lockfiles, and `github-actions`, so action/dependency CVEs surface as PRs. Optionally reinstate a
+scoped, human-reviewed auto-merge for patch-level security updates only (do not restore the SEC-007/026
+auto-merge-to-prod pattern). Pair with SEC-008 (scraper lockfile) and SEC-027 (stale requirements.txt).
 
 ---

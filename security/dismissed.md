@@ -1,6 +1,6 @@
 # Dismissed findings (false positives / non-issues)
 
-These 14 candidate findings were raised by a finder agent but **adversarially verified as false positives or non-issues**. Kept here so future reviews don't re-raise them. Reviewed 2026-06-07.
+These 17 candidate findings were raised by a finder agent but **adversarially verified as false positives or non-issues**. Kept here so future reviews don't re-raise them. Reviewed 2026-09-03 (D-01…D-14 from 2026-06-07; D-15…D-17 added 2026-09-03).
 
 ---
 
@@ -180,3 +180,53 @@ The finding's own recommendation ("take the RIGHTMOST entry") would be actively 
 Caveat (separate, pre-existing, not this finding): both limiters are in-memory/per-process — slowapi default storage and bearer_limiter.py's documented process-local Bucket — so on serverless the counters fragment per warm instance. That weakens absolute throttle ceilings but is acknowledged in bearer_limiter.py's docstring and is unrelated to the XFF-spoofing claim under review.
 
 ---
+
+## D-15 — New SEO tables enable RLS but do not `REVOKE` anon/authenticated grants (defense-in-depth gap)
+
+- **Claimed severity:** low · **Dimension:** supabase-db · **Verdict:** false_positive
+- **Location:** `backend/migrations/2026_06_14_seo_geo.sql:159-167`
+
+**Why dismissed:** The candidate argued the SEO migration should add explicit `REVOKE … FROM anon, authenticated`
+alongside the `enable row level security` calls. Re-reading lines 159-167, all 9 SEO tables (`seo_runs`,
+`seo_audits`, `seo_plan_items`, `seo_changes`, `seo_competitors`, `seo_page_meta`, `seo_articles`,
+`seo_learnings`, `seo_jobs`) run `enable row level security` and **no** `CREATE POLICY` is defined for any of
+them. With RLS enabled and zero policies, PostgREST access via the `anon`/`authenticated` roles is **default-deny**
+— those roles can read/write nothing, regardless of table-level `GRANT`s, because RLS with no permissive policy
+blocks every row. The service-role client used by the backend bypasses RLS by design (this is the documented
+architecture). This exactly mirrors the booking tables' hardening and is correct as written; an explicit `REVOKE`
+would be belt-and-suspenders, not a fix for a live exposure. Not a finding. (Contrast SEC-013, which was a real
+issue precisely because RLS was **disabled** there — here it is enabled.)
+
+## D-16 — `GZipMiddleware` compresses credentialed JSON responses (BREACH exposure surface)
+
+- **Claimed severity:** info · **Dimension:** secrets-config · **Verdict:** false_positive
+- **Location:** `backend/auth_service/main.py:138`
+
+**Why dismissed:** The new `app.add_middleware(GZipMiddleware, minimum_size=512)` does compress authenticated JSON
+responses, and BREACH-style attacks theoretically exploit compression + a secret + attacker-controlled reflected
+input in the same response. But the preconditions do not hold here: the API is JSON (not an HTML page with a
+reflected attacker-controlled parameter echoed alongside a CSRF/secret token), responses are not a
+compression-oracle the attacker can query character-by-character with controlled guesses, and the session token
+lives in an `HttpOnly` cookie never emitted in a response body. Standard BREACH requires the attacker to inject a
+guess string into the same response that also contains the secret and measure length across many requests; the
+CMS JSON endpoints don't reflect attacker input next to secrets that way. This is a generic "compression is on"
+observation with no concrete oracle in this app. Not a finding.
+
+## D-17 — `patch_service` / `patch_resource` do not pre-validate that the path id belongs to the tenant (IDOR)
+
+- **Claimed severity:** info · **Dimension:** authz-idor · **Verdict:** false_positive
+
+**Why dismissed:** Re-read `booking_admin.py:209-218`. `patch_service` resolves `tenant_id` from the path slug via
+`_tenant()` (which is `require_project_access`-gated), validates any body `resource_ids` against
+`_validate_resource_ids(tenant_id, …)` (the SEC-022 fix), and the underlying repo `update`/`patch` calls are
+scoped by `tenant_id` in their WHERE clause — so a foreign `service_id`/`resource_id` in the path simply matches
+no row for this tenant and updates nothing (fails closed), rather than mutating another tenant's row. The
+tenant-scoped repo filter is the authorization boundary; a separate pre-fetch "does this id belong to me" check
+would be redundant. No cross-tenant write path exists. Not a finding. (The SEO repo `update_article`/
+`delete_*` follow the same `project_id`+`id` scoping — also verified clean.)
+
+---
+
+> **Note:** a 4th refuted candidate this cycle — "SEO `render_check.fetch_raw` is a *medium* SSRF" — was a
+> severity dispute, not a dismissal: the underlying missing scheme/redirect/IP validation is real but
+> operator-triggered and confined to the agent host, so it is recorded as the confirmed **SEC-065 (low)**, not here.
