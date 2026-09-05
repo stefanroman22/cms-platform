@@ -227,7 +227,7 @@ once that validation run is clean.
 | | |
 |---|---|
 | **Severity** | high |
-| **Status** | open |
+| **Status** | 🚧 in-progress (2026-09-05: PR #64 — parameter-safe competitor persistence + phase-spec/AGENTS.md guard; awaiting human review, alters privileged-agent write semantics) |
 | **Category** | Second-order SQL injection (agent-mediated) |
 | **Dimension** | injection |
 | **Location** | `agents/SEO-GEO Optimizer/phases/2-competitor-intel.md:54-57` (same pattern in phases `1-load-context.md`, `3-audit.md`, `4-plan.md`, `5-apply.md`) |
@@ -304,7 +304,7 @@ phase specs must forbid raw `'<...>'` templating of any name/url/analysis/trigge
 | | |
 |---|---|
 | **Severity** | high |
-| **Status** | open |
+| **Status** | 🚧 in-progress (2026-09-05: PR #65 — nonce-fenced untrusted-data blocks + UNTRUSTED_DATA_POLICY in analyst/planner prompts; awaiting human review. Systemic follow-up: parameterized project_id-scoped repo layer + cross-project write gate) |
 | **Category** | Prompt injection → privileged action (lethal-trifecta) |
 | **Dimension** | agents |
 | **Location** | `agents/SEO-GEO Optimizer/competitor.py:77-122; prompts.py (COMPETITOR_ANALYST_PROMPT / PLANNER_PROMPT); AGENTS.md (Autonomy)` |

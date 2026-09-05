@@ -29,6 +29,27 @@
 > (`SEC-001/002/003/004/009–014/018–022/028/030–035/038/041–045/053/056`) remains **fixed** — no
 > regressions detected in the changed code (the new `seo_repo` mirrors the hardened booking scoping).
 
+> **Remediation 2026-09-05 (Saturday automated solver).** Processed the 5 highest-priority open
+> findings from this review (both highs + the three new mediums). **Fixed → dev:** `SEC-059` (PR #61),
+> `SEC-060` (PR #62) — tenant `accent` now allowlisted via `safe_hex` in the booking-email button
+> helpers; `SEC-061` (PR #63) — `/seo/translate` now rate-limited per project (SEC-034 parity). Each
+> auto-merged to `dev` with full backend suite green (573 passed) + a vuln-driving regression test.
+> **In-progress (PRs left OPEN for human review — they alter privileged SEO-GEO agent semantics):**
+> `SEC-057` (PR #64) — competitor persistence moved off raw string-interpolated SQL onto deterministic,
+> unit-tested `apply.build_competitor_insert_sql`/`sql_str` + phase-spec/AGENTS.md guards; `SEC-058`
+> (PR #65) — scraped text now nonce-fenced with an `UNTRUSTED_DATA_POLICY` in the analyst/planner
+> prompts (mirrors the Solver's SEC-001). Systemic follow-up for both: constrain the agent to a
+> parameterized, `project_id`-scoped repo layer instead of raw service-role `execute_sql`, and gate any
+> cross-project write. **Flagged for humans, NOT auto-fixed this run:** `SEC-005` — the real, live part
+> (anon/authenticated EXECUTE on the `claim_*` RPCs) already has its REVOKE in
+> `backend/migrations/2026_06_08_security_anon_surface_hardening.sql:94-97`; it needs **live MCP/GRANT
+> verification against prod** (deferred here — no MCP, and prod DB changes are human-only). `SEC-006`
+> (Solver diff-policy gate) and `SEC-008` (scraper hash-pinning) are deferred to next week (needing a
+> design decision / lockfile generation, respectively). NB: `dev`'s own `security/` tree is the older
+> **2026-06-20** lineage with different ID assignments; this tracker (the 2026-09-03 review branch) is
+> authoritative, so the fix PRs deliberately do not edit dev's divergent tracker — these status rows are
+> the canonical record and ride into `dev` when the review PR merges.
+
 This table is the **source of truth for status**. Detail for each finding lives in [`findings/`](./findings/) by severity. IDs are stable and never reused (see [`methodology.md`](./methodology.md) §5–6). Status: `open` · `in-progress` · `fixed` · `accepted-risk` · `false-positive` · `wont-fix`.
 
 > **Remediation 2026-06-07 — `SEC-001` (critical) + `SEC-002` + `SEC-056` (high): FIXED.** The full
@@ -124,11 +145,11 @@ _Status (updated 2026-09-03): **29 fixed** (+SEC-046), **33 open** (+12 new SEC-
 
 | ID | Sev | Title | Location | Dimension | Status |
 |---|---|---|---|---|---|
-| [SEC-057](findings/high.md#sec-057) | high | SEO-GEO agent competitor-intel phase string-interpolates untrusted competitor site content into a service-role `execute_sql` INSERT — second-order SQL injection (RLS-bypassing / cross-tenant worst case) | `agents/SEO-GEO Optimizer/phases/2-competitor-intel.md:54-57 (also phases 1/3/4/5)` | injection | open |
-| [SEC-058](findings/high.md#sec-058) | high | Untrusted competitor/client site content fed into the SEO-GEO agent's LLM reasoning with no data/instruction separation while the orchestrator holds pre-authorized, never-pausing service-role Supabase SQL + CMS-admin write tools (prompt-injection → privileged cross-tenant writes) | `agents/SEO-GEO Optimizer/competitor.py:77-122; prompts.py; AGENTS.md (Autonomy)` | agents | open |
-| [SEC-059](findings/medium.md#sec-059) | medium | Tenant `accent_color` interpolated raw into booking confirmation email button `style` attributes in `_cta_block` (missing `safe_hex` — SEC-045 class regression in new per-color code) | `backend/auth_service/services/booking_email.py:51,70` | xss-html | open |
-| [SEC-060](findings/medium.md#sec-060) | medium | Tenant `accent` interpolated raw into reschedule/cancel client email button `_button()` (same SEC-045 class; sibling addcal button is sanitized, `_button` is not) | `backend/auth_service/services/booking_manage_email.py:48,155` | xss-html | open |
-| [SEC-061](findings/medium.md#sec-061) | medium | New `POST /projects/{slug}/seo/translate` triggers a paid-DeepL amplification loop (O(rows×locales×fields) billable calls) with no rate limit — SEC-034 regression on the new endpoint | `backend/auth_service/routers/seo.py:247-250` | ratelimit-dos | open |
+| [SEC-057](findings/high.md#sec-057) | high | SEO-GEO agent competitor-intel phase string-interpolates untrusted competitor site content into a service-role `execute_sql` INSERT — second-order SQL injection (RLS-bypassing / cross-tenant worst case) | `agents/SEO-GEO Optimizer/phases/2-competitor-intel.md:54-57 (also phases 1/3/4/5)` | injection | 🚧 in-progress (PR #64 — awaiting human review) |
+| [SEC-058](findings/high.md#sec-058) | high | Untrusted competitor/client site content fed into the SEO-GEO agent's LLM reasoning with no data/instruction separation while the orchestrator holds pre-authorized, never-pausing service-role Supabase SQL + CMS-admin write tools (prompt-injection → privileged cross-tenant writes) | `agents/SEO-GEO Optimizer/competitor.py:77-122; prompts.py; AGENTS.md (Autonomy)` | agents | 🚧 in-progress (PR #65 — awaiting human review) |
+| [SEC-059](findings/medium.md#sec-059) | medium | Tenant `accent_color` interpolated raw into booking confirmation email button `style` attributes in `_cta_block` (missing `safe_hex` — SEC-045 class regression in new per-color code) | `backend/auth_service/services/booking_email.py:51,70` | xss-html | ✅ fixed (PR #61 → dev) |
+| [SEC-060](findings/medium.md#sec-060) | medium | Tenant `accent` interpolated raw into reschedule/cancel client email button `_button()` (same SEC-045 class; sibling addcal button is sanitized, `_button` is not) | `backend/auth_service/services/booking_manage_email.py:48,155` | xss-html | ✅ fixed (PR #62 → dev) |
+| [SEC-061](findings/medium.md#sec-061) | medium | New `POST /projects/{slug}/seo/translate` triggers a paid-DeepL amplification loop (O(rows×locales×fields) billable calls) with no rate limit — SEC-034 regression on the new endpoint | `backend/auth_service/routers/seo.py:247-250` | ratelimit-dos | ✅ fixed (PR #63 → dev) |
 | [SEC-062](findings/low.md#sec-062) | low | `pg_rate_limit` fails open on any DB error, silently dropping the per-account login lockout + shared login counter during a Postgres brownout (brute-force window) | `backend/auth_service/core/pg_rate_limit.py:35-37,53-55` | authn-session | open |
 | [SEC-063](findings/low.md#sec-063) | low | Public SEO consumer endpoints (`/seo/public/meta`, `/seo/public/articles`) are unauthenticated with no rate limiting — route/locale enumeration + unmetered scraping of published SEO content | `backend/auth_service/routers/seo.py:168-181` | ratelimit-dos | open |
 | [SEC-064](findings/low.md#sec-064) | low | SEO-GEO `site_change_spec.route` is not path-validated before the Website Builder writes `app/[locale]/<route>/page.tsx` (LLM-authored route influenced by untrusted input; traversal defense-in-depth gap) | `agents/SEO-GEO Optimizer/site_change_spec.py:52-62` | agents | open |

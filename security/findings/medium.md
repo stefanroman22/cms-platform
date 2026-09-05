@@ -512,7 +512,7 @@ HTML-escape both key and value before interpolation, mirroring the rest of the c
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-09-05: PR #61 → dev — `accent` allowlisted via `safe_hex` at the top of `_cta_block`; +2 regression tests) |
 | **Category** | HTML / email-template injection (SEC-045 class regression) |
 | **Dimension** | xss-html |
 | **Location** | `backend/auth_service/services/booking_email.py:51,70` (source: `models/booking_admin_schemas.py:13-14`; `routers/booking.py:49` `_brand_for`) |
@@ -585,7 +585,7 @@ hex regex in `SettingsPatch`. Fix alongside SEC-060 (the same class in `booking_
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-09-05: PR #62 → dev — `accent` allowlisted via `safe_hex` inside `_button`; +2 regression tests) |
 | **Category** | HTML / email-template injection (SEC-045 class regression) |
 | **Dimension** | xss-html |
 | **Location** | `backend/auth_service/services/booking_manage_email.py:48,155` |
@@ -653,7 +653,7 @@ safe, or pass the already-`safe_hex`'d `accent` (line 115) into the `_button` ca
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-09-05: PR #63 → dev — `pg_rate_limit.enforce("seo_translate:{project_id}", 30/60s)` before the fan-out, mirroring SEC-034; +1 regression test) |
 | **Category** | Weak/missing rate limiting → paid-cost amplification / DoS |
 | **Dimension** | ratelimit-dos |
 | **Location** | `backend/auth_service/routers/seo.py:247-250` (fan-out: `seo.py:197-244`, `translation/seo_translate.py`, `translation/deepl.py`) |
