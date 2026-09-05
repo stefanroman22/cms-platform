@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, status
 
+from ..core import pg_rate_limit
 from ..models.seo_schemas import (
     SeoArticleIn,
     SeoArticleOut,
@@ -248,4 +249,15 @@ def _translate_seo_for_project(project: dict, kind: str) -> dict:
 async def translate_seo(project_slug: str, body: SeoTranslateIn, request: Request) -> dict:
     user = await user_via_bearer_or_session(request)
     project = require_project_access(project_slug, user)
+    # SEC-061: one call fans out to O(rows × locales × fields) billable DeepL requests.
+    # Bound the spend with a shared per-project limit (Postgres-backed, so it holds across
+    # serverless instances), mirroring the SEC-034 guard on workspace.save_translate. The
+    # limit sits well above any real "translate my SEO content" cadence but stops a tight
+    # replay loop from amplifying paid-DeepL cost / exhausting quota for all tenants.
+    pg_rate_limit.enforce(
+        f"seo_translate:{project['id']}",
+        limit=30,
+        window_seconds=60,
+        detail="Translating too fast. Please wait a moment and try again.",
+    )
     return _translate_seo_for_project(project, body.kind)
