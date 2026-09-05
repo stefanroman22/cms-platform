@@ -195,6 +195,8 @@ def test_public_meta_falls_back_to_default(monkeypatch):
 
 def test_translate_endpoint_fills_locales(monkeypatch):
     _auth(monkeypatch)  # admin
+    # SEC-061: keep the rate-limiter hermetic (no real DB) and within limit here.
+    monkeypatch.setattr("auth_service.core.pg_rate_limit.allow", lambda *a, **k: True)
     calls = {}
 
     def fake_fill(project, kind):
@@ -207,3 +209,24 @@ def test_translate_endpoint_fills_locales(monkeypatch):
     )
     r = client.post("/projects/acme/seo/translate", json={"kind": "meta"})
     assert r.status_code == 200 and calls["kind"] == "meta"
+
+
+def test_translate_endpoint_rate_limited(monkeypatch):
+    """SEC-061: over the per-project bucket, the paid-DeepL fan-out is refused with 429
+    BEFORE _translate_seo_for_project (and its billable DeepL calls) ever runs."""
+    _auth(monkeypatch)  # admin
+    monkeypatch.setattr("auth_service.core.pg_rate_limit.allow", lambda *a, **k: False)
+
+    called = {"fill": False}
+
+    def fake_fill(project, kind):
+        called["fill"] = True
+        return {"translated": 2}
+
+    monkeypatch.setattr(
+        "auth_service.routers.seo._translate_seo_for_project",
+        lambda project, kind: fake_fill(project, kind),
+    )
+    r = client.post("/projects/acme/seo/translate", json={"kind": "meta"})
+    assert r.status_code == 429
+    assert called["fill"] is False  # short-circuited before any DeepL work
