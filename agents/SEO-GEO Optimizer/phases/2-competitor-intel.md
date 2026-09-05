@@ -49,12 +49,22 @@ client URLs, global learnings). Caps from AGENTS.md (`WEBSEARCH_CAP=12`,
    true geo-grid map-pack rank require **paid data** — state that explicitly, never
    fabricate a number or a position.
 
-7. **Persist** to Supabase (skip writes in `dry-run`). One row per competitor:
+7. **Persist** to Supabase (skip writes in `dry-run`). One row per competitor.
 
-   ```sql
-   INSERT INTO seo_competitors (project_id, run_id, name, url, location, signals, analysis, captured_at)
-   VALUES ('<project_id>', '<run_id>', '<name>', '<url>', '<city>',
-           '<signals_json>'::jsonb, '<reasoned analysis text>', now());
+   > **SECURITY (SEC-057) — never string-interpolate competitor text into SQL.** The
+   > `name`, `url`, `city` and reasoned `analysis` all come from competitor sites you
+   > `WebFetch` — fully attacker-controlled. Building the `INSERT` by pasting them into
+   > `'<...>'` literals is second-order SQL injection against the **service-role,
+   > RLS-bypassing** `execute_sql` path (an apostrophe like `O'Brien's` alone corrupts it).
+   > **Always** render the statement with the deterministic, unit-tested helper, which
+   > escapes every value, and pass the returned string verbatim to `execute_sql`:
+
+   ```python
+   payload = apply.build_competitor_payload(
+       project_id, run_id, name, url, city, signals, analysis
+   )
+   sql = apply.build_competitor_insert_sql(payload)   # every value safely escaped
+   # → mcp__supabase__execute_sql(project_id=SUPABASE_PROJECT_ID, query=sql)
    ```
 
    (Write the per-competitor `signals` JSON on each row; the reasoned synthesis can live on

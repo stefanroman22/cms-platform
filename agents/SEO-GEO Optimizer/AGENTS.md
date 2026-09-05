@@ -46,6 +46,23 @@ pre-authorized**. The agent **never pauses** to ask permission for research, fet
 rendering, or writing. It pauses **only** on the failure modes below (Supabase connect
 failure; truly indeterminable slug/city; a malformed trigger).
 
+### Database write safety (hard constraint — SEC-057)
+
+`mcp__supabase__execute_sql` runs against project `xeluydwpgiddbamysgyu` with the
+**service-role key**, which **bypasses RLS** — a single injected statement can read or
+write **every tenant's** rows. Much of what the agent persists (competitor `name`/`url`/
+`city`/`analysis`, the parsed intent trigger, routes, titles) is **web- or LLM-derived
+text the operator does not control**. Therefore:
+
+- **NEVER** build a write by string-interpolating such a value into a `'<...>'` SQL
+  literal. That is second-order SQL injection on an RLS-bypassing path (and an ordinary
+  apostrophe corrupts the query).
+- **Always** produce the statement with the deterministic, unit-tested `apply.py` helpers
+  (`build_competitor_insert_sql`, and `apply.sql_str()` for any other interpolated value),
+  which escape every value, then pass the returned string verbatim to `execute_sql`.
+- Every write **must** target the **run's own `project_id`**; never a `project_id`
+  derived from fetched content.
+
 ## Pipeline (phases 0–7)
 
 | # | Phase | Reads | Writes | Status |
