@@ -2,7 +2,7 @@
 
 _Hardening / defense-in-depth. Address opportunistically._
 
-**31** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**35** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-10.
 
 ---
 
@@ -428,7 +428,7 @@ Add probe retry/backoff before declaring failure to avoid reverting on transient
 
 <a id="sec-024"></a>
 
-## SEC-024 — Two workflows use unpinned (mutable-tag) third-party actions while the rest are SHA-pinned
+## SEC-024 — solver-agent.yml uses unpinned (mutable-tag) actions while the rest are SHA-pinned
 
 | | |
 |---|---|
@@ -436,7 +436,9 @@ Add probe retry/backoff before declaring failure to avoid reverting on transient
 | **Status** | open |
 | **Category** | Supply chain / hardening |
 | **Dimension** | ci-workflows |
-| **Location** | `.github/workflows/solver-agent.yml:29,31; .github/workflows/scraper-ci.yml:20-22` |
+| **Location** | `.github/workflows/solver-agent.yml:64 (actions/checkout@v4), :66 (actions/setup-python@v5)` |
+
+> **2026-09-10 update:** the `scraper-ci.yml` location was deleted in the CI overhaul (commit `7ae1b07`); `promote.yml` and `codeql.yml` are now fully SHA-pinned. The remaining unpinned uses are in `solver-agent.yml` (`actions/checkout@v4`, `actions/setup-python@v5` — mutable tags) while `step-security/harden-runner` in the same file is SHA-pinned. The un-checksummed gitleaks **binary** download in `promote.yml` is tracked separately as **SEC-060**.
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed (adjusted: low) |
 | **First seen** | 2026-06-07 |
@@ -1442,5 +1444,182 @@ Verified the core injection by reading the cited code. In email_layout.py:64-74 
 **Recommendation**
 
 Validate accent_color/primary_color/widget_color against a strict hex/CSS-color regex in SettingsPatch (reject anything not matching ^#[0-9A-Fa-f]{3,8}$), run business_name through html.escape() at render time in header()/footer(), and pass logo_url/canonical_url through email_layout.safe_url() (already used for other links) before interpolating into src/href. The booking body copy already escapes name/when/note; the chrome (header/footer/brand) should follow the same rule.
+
+---
+
+<a id="sec-058"></a>
+
+## SEC-058 — Public booking create performs no server-side booking-window validation (past-date, lead-time and max-advance bypass), unlike reschedule and the availability listing
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Business-logic / policy bypass |
+| **Dimension** | public-tokens |
+| **Location** | `backend/auth_service/routers/booking.py:498-513 (_create_core); services/booking_availability.py:137-163 (free_resource_ids_at)` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (low) |
+| **First seen** | 2026-09-10 |
+
+**Description**
+
+On the public create path, `_create_core` parses `body.start_utc` and immediately calls `_free_resource_for` → `booking_availability.free_resource_ids_at`, which (unlike `available_starts`, used by the `/availability` listing) takes **no** `lead_time_min`/`max_advance_days`/`now_utc` and applies **none** of the `earliest <= s <= horizon` / `day < today_host` guards. It only checks grid alignment, business hours, and non-overlap. So a caller can book a **past** date, a slot inside the service's minimum-notice (`lead_time_min`) window, or beyond `max_advance_days`. The reschedule handler explicitly re-validates this window server-side (`booking.py:776-780`, comment "client is not trusted"), making the create-path omission clearly unintended. Result: confirmed DB rows, calendar events, and host/customer emails for out-of-policy bookings.
+
+**Attack scenario**
+
+`POST /booking/{slug}` with `start_utc` = a grid-aligned business-hours slot on a past day, 1 minute from now (inside `lead_time_min`), or a year out (beyond `max_advance_days`). `free_resource_ids_at` accepts it, `insert_booking` creates a confirmed booking, and confirmation/host emails plus a calendar event fire — bypassing the tenant's booking-window policy that both the availability listing and the reschedule endpoint enforce.
+
+**Evidence**
+
+```python
+try:
+    start = datetime.fromisoformat(body.start_utc).astimezone(_UTC)
+except ValueError as exc:
+    raise HTTPException(status_code=422, detail={"field": "start_utc", ...}) from exc
+now = datetime.now(UTC)
+resource_id = _free_resource_for(cfg=cfg, service=service, start_utc=start, now_utc=now,
+                                 prefer_resource_id=body.resource_id.strip() or None)
+# no earliest/horizon/past-day check before insert; now_utc is not used for window filtering
+```
+
+**Adversarial verification**
+
+Confirmed. `_create_core` calls `_free_resource_for` with no preceding window validation; the `now_utc` it passes flows only to `free_resource_ids_at`, which applies no lead-time/max-advance/past-date guards. `available_starts` (booking_availability.py:104-135) enforces the past-day guard + earliest/horizon bounds, and `manage_reschedule` re-validates the same window with a "client is not trusted" comment — so the create path's omission is real and asymmetric. Business-logic bypass on an unauthenticated endpoint; no data exposure/IDOR/priv-esc → low.
+
+**Exploitability:** Unauthenticated out-of-window bookings and the resulting emails/calendar events; no data disclosure. Rate limiting (see SEC-057) caps volume but does not close the policy bypass.
+
+**Recommendation**
+
+Apply the `manage_reschedule` window check (booking.py:776-780) inside `_create_core` before `_free_resource_for`, or extend `free_resource_ids_at` to receive `now_utc`/`lead_time_min`/`max_advance_days` and reject past-day, sub-lead-time and beyond-horizon starts.
+
+---
+
+<a id="sec-060"></a>
+
+## SEC-060 — promote.yml downloads the gitleaks binary over the network without checksum/signature verification
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Supply chain / hardening |
+| **Dimension** | ci-workflows |
+| **Location** | `.github/workflows/promote.yml:42-43` |
+| **Reviewer confidence** | low |
+| **Verifier verdict** | confirmed (low) |
+| **First seen** | 2026-09-10 |
+
+**Description**
+
+The new manual promotion workflow's secret-scan **gate** fetches the gitleaks binary at runtime via `curl | tar` and executes it, pinned only to a mutable release tag (`v8.21.2`) with no SHA256/checksum and no signature check. This contradicts the repo's own stated posture (`docs/DEVELOPMENT.md:186`: "GitHub Actions: every action SHA-pinned") — every `actions/*` use in this same file is SHA-pinned to a 40-hex commit, yet the executable that gates promotion is pulled unverified. Blast radius is limited: this step runs **before** `PROMOTE_TOKEN`/`FE_PROD_DEPLOY_HOOK`/`BE_PROD_DEPLOY_HOOK` enter any step env, and the job's `GITHUB_TOKEN` is `contents:read`, so the reward is gate-defeat / working-tree tamper rather than direct secret theft — hence low.
+
+**Attack scenario**
+
+An attacker who tampers with the gitleaks GitHub release asset for tag `v8.21.2` (mutable) or compromises the gitleaks maintainer account serves a trojaned binary. On the next maintainer-triggered promotion (`workflow_dispatch` only), that binary executes on the runner, can silently make gitleaks exit 0 (defeating the secret-scan gate), and via RCE can commit-and-repoint HEAD before the later fast-forward push so tampered content reaches production `main`.
+
+**Evidence**
+
+```yaml
+curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+./gitleaks detect --source . --no-git --redact --verbose --config .gitleaks.toml
+```
+
+**Adversarial verification**
+
+Confirmed. The binary is fetched via `curl|tar` and executed with only a mutable tag, no checksum, no signature — a real inconsistency with the repo's SHA-pin posture (checkout `11bd719`, setup-node `49933ea`, setup-python `a26af69` are all SHA-pinned in the same file). Requires an upstream third-party compromise and is reachable only on a maintainer-triggered `workflow_dispatch`; secrets are scoped to later steps and the job token is `contents:read`, so no secret exposure → low.
+
+**Exploitability:** Requires gitleaks release-asset/maintainer compromise; realized impact on the next manual promotion is secret-scan-gate defeat and (via RCE) a tampered commit fast-forwarded to `main`. No secret theft.
+
+**Recommendation**
+
+Pin the download to a verified SHA256 (`sha256sum -c` against a hardcoded digest before extracting), or use a SHA-pinned gitleaks GitHub Action, consistent with the repo's "every action SHA-pinned" standard. (Same class as SEC-024.)
+
+---
+
+<a id="sec-062"></a>
+
+## SEC-062 — SEO/GEO agent feeds untrusted scraped competitor headings into LLM planner/analyst prompts with no data/instruction fencing
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Prompt injection (agent) |
+| **Dimension** | agents |
+| **Location** | `agents/SEO-GEO Optimizer/competitor.py:114-122 (content_gaps); prompts.py:58-76 (COMPETITOR_ANALYST_PROMPT / PLANNER_PROMPT); gate.py:14-54` |
+| **Reviewer confidence** | medium |
+| **Verifier verdict** | confirmed (low) |
+| **First seen** | 2026-09-10 |
+
+**Description**
+
+`content_gaps()` concatenates verbatim competitor page headings (scraped via WebFetch of raw HTML) into advisory strings, which Phase 2 feeds to `COMPETITOR_ANALYST_PROMPT` and Phase 4 to `PLANNER_PROMPT`. Unlike the Solver's `claim_issue.py` (which, after SEC-001, wraps untrusted client text in nonce-delimited BEGIN/END markers with an explicit data-not-instructions policy), neither prompt applies any fencing or data/instruction separation to the scraped competitor text. The planner output becomes `seo_plan_items` and drives the apply phase, whose publish gate (`gate.evaluate_gate()`) is a purely visual/rendering/build/link check with **no** content-security inspection (no check for injected `<script>`, off-site endpoints, or hostile `json_ld`). Same class as the open SEC-016, on the new SEO agent's scraped-competitor input path.
+
+**Attack scenario**
+
+A competitor embeds a short natural-language nudge in an H2/H3 heading, replicated across enough shortlisted competitors to clear the `n >= half` threshold. The heading flows through `content_gaps` into the un-fenced planner/analyst prompt and can steer the analyst/planner LLM toward an attacker-chosen topic in the client's draft content.
+
+**Evidence**
+
+```python
+gaps.append("Topics competitors cover that you do not: " + ", ".join(common[:8]) + ".")
+```
+Fed un-fenced into `COMPETITOR_ANALYST_PROMPT` / `PLANNER_PROMPT` (prompts.py:58-76), which append only `FORBIDDEN_CLAIMS`.
+
+**Adversarial verification**
+
+Confirmed at low. The structural gap is real (un-fenced scraped text into the planner/analyst prompts; `gate.py` does no content-security inspection). But the finder's concrete `<script>`-to-published-payload exploit is **not** demonstrable: the `_Collect` HTMLParser strips `<script>`/`<style>` during heading extraction (competitor.py:25-47), headings are filtered to `<60` chars (line 114), the topic must recur across `>= half` the shortlisted competitors (line 119), and GATE-FACT + the `apply.py` field allowlist bound downstream impact. Realistic ceiling: nudging the LLM's topic selection. Same disposition as SEC-016 → low, defense-in-depth.
+
+**Exploitability:** A third party controlling a shortlisted competitor site can nudge the analyst/planner LLM's topic choice; no cross-tenant access, no privilege escalation, no demonstrable published payload.
+
+**Recommendation**
+
+Wrap all scraped competitor text (headings, gaps, analysis) in nonce-delimited untrusted-data markers with an explicit data-not-instructions policy in `COMPETITOR_ANALYST_PROMPT`/`PLANNER_PROMPT`, mirroring `claim_issue.py`'s SEC-001 fencing. Add a content-security check to `gate.py` (reject new `<script>`, off-site network endpoints, untrusted `json_ld`) before publish.
+
+---
+
+<a id="sec-064"></a>
+
+## SEC-064 — New SEO router endpoints (translate/jobs) have no rate limit → paid DeepL / LLM cost amplification (reintroduces the SEC-034 gap)
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Rate limiting / cost amplification |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/seo.py:247-251 (translate_seo), :145-152 (enqueue_job); _translate_seo_for_project :197-244` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (low) |
+| **First seen** | 2026-09-10 |
+
+**Description**
+
+`seo.py` imports **no** rate limiter (neither `core.limiter` nor `core.pg_rate_limit`; confirmed by grep — the router is absent from every limiter usage site). `POST /seo/translate` calls `_translate_seo_for_project`, which loops over every default-locale `seo_page_meta`/`seo_articles` row × every non-default target locale and, for each, invokes the paid DeepL API with no per-request or per-project throttle. This is the exact cost/DoS-amplification vector SEC-034 (low) fixed for `workspace.py:266-272`, where multi-locale `save_service` is wrapped in `pg_rate_limit.enforce("save_translate:{id}", 120, 60)`. The SEO path reintroduces the gap with zero limit. `POST /seo/jobs` (line 145) also enqueues LLM audit jobs unbounded. Endpoints are authenticated (`require_project_access`), bounding the abuser pool to legitimate tenant users → low, matching SEC-034.
+
+**Attack scenario**
+
+A single authenticated tenant user (or a buggy/looping dashboard client) repeatedly `POST`s `/projects/{slug}/seo/translate`. Each call fans out to (rows × target-locales) DeepL calls with no server-side limit — and agent-translation rows are always re-translated (only human-edited rows skipped, line 226) — driving metered DeepL spend arbitrarily high and generating sustained load on `api.deepl.com`.
+
+**Evidence**
+
+```python
+@router.post("/projects/{project_slug}/seo/translate")
+async def translate_seo(project_slug: str, body: SeoTranslateIn, request: Request) -> dict:
+    user = await user_via_bearer_or_session(request)
+    project = require_project_access(project_slug, user)
+    return _translate_seo_for_project(project, body.kind)   # no rate limit; loops rows x locales -> DeepL
+```
+
+**Adversarial verification**
+
+Confirmed. `seo.py` imports no limiter (grep); `translate_seo` → `_translate_seo_for_project` loops rows×locales invoking `DeepLProvider` (POST to paid `api.deepl.com`); no idempotence (agent rows re-translated each call). `workspace.py:263-272` wraps the analogous path in `pg_rate_limit.enforce` as the SEC-034 fix; the SEO router reintroduces the gap. No global/default limiter exists (limiter.py has per-endpoint decorators only; main.py adds no rate-limit middleware). Authenticated → low, self-consistent with SEC-034.
+
+**Exploitability:** One authenticated tenant account can drive metered DeepL spend arbitrarily high (bill/quota amplification) and sustained outbound load; bounded to legitimate tenant users.
+
+**Recommendation**
+
+Wrap `translate_seo` (and `enqueue_job`) in `pg_rate_limit.enforce` keyed on the project id, mirroring `workspace.py:266-272`, so the SEC-034 DeepL-cost bound applies to the SEO path too.
 
 ---
