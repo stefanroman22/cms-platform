@@ -5,22 +5,27 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-07** (remediation in progress)
+## Status snapshot — last full review **2026-09-10** (remediation in progress)
 
 | Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **10** | **31** | **10** | **56** | 14 |
+| **1** | **4** | **13** | **35** | **11** | **64** | 15 |
 
-**2 in-progress** (`SEC-001`, `SEC-002` — partially remediated 2026-06-07), 54 open. See the
-remediation note in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+**31 fixed · 4 obsolete (CI teardown) · 1 accepted-risk · 1 needs-decision · 27 open.** The single
+critical (`SEC-001`) and all 4 highs are **fixed**. This week's review (2026-09-10) added **8 findings**
+(`SEC-057…064`: 3 medium, 4 low, 1 info) across ~3 months of new code and **fixed 1** (`SEC-046`); no new
+critical/high. See [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
 
-### Remediation progress
-- **`SEC-001` (critical) + `SEC-002` (high) + `SEC-056` (high)** — *in-progress, code-complete, pending one CI validation run.* Closed in code: cross-tenant `SOLVER_GITHUB_TOKEN` theft and the `node -e` RCE; added prompt fencing, input hardening, pre-push secret-scan, and credential teardown; and **egress isolation** (`step-security/harden-runner`, SHA-pinned, `block` mode) so an injected agent can't exfiltrate the Claude OAuth token. **Action needed:** one `workflow_dispatch` run of the Solver with `egress_policy=audit` to confirm the egress allowlist is complete — then all three flip to `fixed`.
+> **MCP gap (2026-09-10):** the Supabase & Vercel MCP servers were **unavailable** in the headless run,
+> so live advisor / RLS-GRANT / Vercel-env confirmation is deferred; DB findings this week are from
+> migration SQL. Re-verify on a run with MCP access.
 
-### The next things to fix
-1. **Validate the egress allowlist** — run the Solver workflow once via `workflow_dispatch` with `egress_policy=audit`, check StepSecurity's reported destinations, add any missing legit host, then rely on `block`. Closes SEC-001/SEC-002/SEC-056.
-2. **`SEC-004` (high)** — **anon/authenticated can EXECUTE the `SECURITY DEFINER` `claim_*_solver_issue` RPCs** (unauthenticated cross-tenant issue disclosure + pipeline DoS via the public Supabase anon key). Pure `REVOKE`, no schema change.
-3. **`SEC-003` (high)** — Booking owner can create a booking against **another tenant's `resource_id`** (cross-tenant calendar DoS via the global GiST exclusion constraint).
+### The next things to fix (2026-09-10)
+1. **`SEC-061` (medium)** — the new **SEO-GEO agent hand-builds raw SQL from scraped competitor data** for `execute_sql` against the shared RLS-bypassed DB. Route `seo_*` writes through the parameterized backend API instead of raw `execute_sql`.
+2. **`SEC-059` (medium)** — the design-prompt **Copy button** assigns unsanitized agent-written HTML to `innerHTML` → `onerror`/`onload` XSS in the admin origin (the render fix SEC-018/043 missed this second sink). Sanitize in `htmlToPlainText`.
+3. **`SEC-057` (medium)** — public **booking write** endpoints are limited only by the per-instance in-memory limiter → unauth confirmation-email bombing / cost amplification. Add the shared `pg_rate_limit.enforce` companion (as forms/reads already have).
+4. **`SEC-064`/`SEC-058` (low)** — SEO translate/jobs unthrottled DeepL cost; public booking create skips the window policy the reschedule path enforces.
+5. Carried over: **`SEC-005`/`SEC-006`** (Solver cross-project authority), **`SEC-039`** (credentialed CORS — needs a decision).
 
 ## How to read this folder
 

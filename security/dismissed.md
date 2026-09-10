@@ -1,6 +1,6 @@
 # Dismissed findings (false positives / non-issues)
 
-These 14 candidate findings were raised by a finder agent but **adversarially verified as false positives or non-issues**. Kept here so future reviews don't re-raise them. Reviewed 2026-06-07.
+These 15 candidate findings were raised by a finder agent but **adversarially verified as false positives or non-issues**. Kept here so future reviews don't re-raise them. Reviewed 2026-09-10 (D-15 added).
 
 ---
 
@@ -178,5 +178,14 @@ So on Vercel, the leftmost XFF token is written by the trusted edge (the trust b
 The finding's own recommendation ("take the RIGHTMOST entry") would be actively harmful here: on Vercel the rightmost entry IS the attacker-spoofed value, so adopting it would CREATE the vulnerability the finding claims to fix.
 
 Caveat (separate, pre-existing, not this finding): both limiters are in-memory/per-process — slowapi default storage and bearer_limiter.py's documented process-local Bucket — so on serverless the counters fragment per warm instance. That weakens absolute throttle ceilings but is acknowledged in bearer_limiter.py's docstring and is unrelated to the XFF-spoofing claim under review.
+
+---
+
+## D-15 — SEO-GEO agent `render_check.fetch_raw` fetches a stored site URL with no scheme/host allowlist (file:// and internal/metadata reachable)
+
+- **Claimed severity:** low · **Dimension:** ssrf-outbound · **Verdict:** false_positive · **Raised:** 2026-09-10
+- **Location:** `agents/SEO-GEO Optimizer/render_check.py:18-23`
+
+**Why dismissed:** The snippet is accurate — `fetch_raw()` passes a URL straight to `urllib.request.urlopen` with no scheme/host allowlist, and urllib's default opener supports `file://`/`ftp://`, so in isolation `file:///etc/passwd` would be readable (subject to the 600 KB cap), and the bandit S310 warning was silenced with "trusted client URLs". But the finding fails at the **"untrusted input reaches sink"** step. The `url` argument is the project's stored `production_url`/`website_url` (read from the `projects` table), and application-layer validation (`_http_url_validator`, added for BE-005/BE-006) rejects any non-`http(s)` value at **every** ingress that writes those fields and the lead `website` field — so the `file://`/`ftp://` disclosure (the claim's core impact) is unreachable. The two claimed actors also do not hold: a non-admin onboarded client cannot write `website_url` (admin-only endpoints), and a scraped-lead `website` cannot be a `file://`/internal-IP value (Google Maps validates the field) and is not copied into `production_url` (`scan.py` sets the Vercel URL). What remains is a pure defense-in-depth gap: no DNS-rebinding-safe block on internal/link-local hosts for an `http(s)` URL that only an admin can store on their own agent host — no trust boundary crossed, no anonymous/low-priv exploit, most-damaging file-read path impossible. Below the claimed "low" → informational only; not tracked as a finding. (If the agent is ever pointed at attacker-supplied URLs, or `_http_url_validator` is bypassed, re-open as SSRF and add an internal/link-local host block.)
 
 ---

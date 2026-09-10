@@ -2,7 +2,7 @@
 
 _Best-practice notes and accepted-by-design observations._
 
-**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**11** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-10.
 
 ---
 
@@ -10,10 +10,12 @@ _Best-practice notes and accepted-by-design observations._
 
 ## SEC-046 — Bearer auth path returns a plain dict while the rest of the codebase assumes a UserOut object, creating an authZ-shape fragility
 
+> **2026-09-10 — FIXED (commit `b6ca3bb`).** `deps.py:67` now returns `UserOut(id=..., email=..., is_admin=...)` on the bearer path instead of the raw dict from `verify_admin_api_key`, so the bearer and cookie paths hand downstream code (`require_project_access` doing `user.id`/`user.is_admin`) the same `UserOut` type. `verify_admin_api_key` is imported only by `deps.py` (grep confirms no router calls it directly), so every admin/agent path is normalized. Regression test added.
+
 | | |
 |---|---|
 | **Severity** | info |
-| **Status** | open |
+| **Status** | ✅ fixed (b6ca3bb) |
 | **Category** | Type-confusion / defensive coding |
 | **Dimension** | admin-priv |
 | **Location** | `backend/auth_service/routers/deps.py:60-75,86-91; backend/auth_service/services/admin_keys.py:135-140` |
@@ -453,5 +455,38 @@ Read the cited code directly. frontend/src/app/(widget)/w/[slug]/page.tsx:18-19 
 **Recommendation**
 
 Optionally constrain the targetOrigin if the set of embedding origins is known; otherwise acceptable since no sensitive data is transmitted. The embed.js inbound origin check is correct and should be kept.
+
+---
+
+<a id="sec-063"></a>
+
+## SEC-063 — Dependabot config deleted; no automated dependency version-update PRs remain, and CODEOWNERS/SECURITY.md still reference it (stale)
+
+| | |
+|---|---|
+| **Severity** | info |
+| **Status** | open |
+| **Category** | CI hygiene / supply chain |
+| **Dimension** | deps-supplychain |
+| **Location** | `.github/dependabot.yml (deleted in 7ae1b07); .github/CODEOWNERS:1-3; docs/SECURITY.md:150` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | needs_adjustment → info (finder claimed low) |
+| **First seen** | 2026-09-10 |
+
+**Description**
+
+Commit `7ae1b07` ("chore(ci): tear down dev/master auto-pipeline; add manual promote.yml") deleted `.github/dependabot.yml` (which opened weekly minor/patch version-update PRs across five ecosystems). After deletion, the remaining CI provides CodeQL SAST (source, not dependency CVEs), gitleaks secret scanning, and `pip install --require-hashes` / `npm ci` (integrity pinning, not CVE detection). No `npm audit` / `pip-audit` / `osv-scanner` / Dependency-Review step exists in `.github/`. `CODEOWNERS:1-3` and `docs/SECURITY.md:150` still document Dependabot as an active control, so the removal is a stale-doc regression. This is the reshaped form of the now-obsolete SEC-025/SEC-026.
+
+**Why info, not low (verifier adjustment)**
+
+The finder's central claim — "no automated dependency-vulnerability detection / no CVE alert" — is **not** supported by the tree. Dependabot **version-update PRs** (the deleted `.github/dependabot.yml`) are distinct from Dependabot **security alerts / security updates**, which are a repository/organization GitHub *setting* that lives outside the tree and is unaffected by removing the config file. The commit body of `7ae1b07` states "Dependabot teardown follow in the ops phase" (i.e. alerts were **not** torn down here), and `docs/SECURITY.md:150` still lists Dependabot as active. So CVE alerting status is **unverifiable from code** (and live GitHub/Supabase MCP was unavailable this run). What survives verification is a non-exploitable CI-hygiene item: loss of routine version-bump PRs + stale CODEOWNERS/SECURITY.md references. No attacker, request, or vulnerable code state → info.
+
+**Evidence**
+
+`git diff --stat 4bfb500 HEAD` shows `.github/dependabot.yml | 65 -------`; `CODEOWNERS:2` still reads "Used by Dependabot"; grep of `.github/` finds no `npm audit`/`pip-audit`/`safety`/`osv-scanner`/`snyk`/`dependency-review` step.
+
+**Recommendation**
+
+Confirm (via the GitHub repo Security settings — not verifiable from the tree) that Dependabot **security alerts/updates** are still enabled; if the intent was to also disable them, add a replacement (`npm audit --audit-level=high` in the frontend gate of `promote.yml` plus `pip-audit`/`osv-scanner` for the pip lockfiles, covering scraper + agents). Either way, restore `.github/dependabot.yml` (security-updates at minimum) or update the stale `CODEOWNERS`/`docs/SECURITY.md` references so the docs match reality.
 
 ---

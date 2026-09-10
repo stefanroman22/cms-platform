@@ -1,6 +1,6 @@
 # Security Findings — Live Tracker
 
-**Last full review:** 2026-06-07 · **Reviewer:** multi-agent workflow (14 dimensions, adversarial verification) · **Supabase:** xeluydwpgiddbamysgyu · **Confirmed:** 56 · **Dismissed (false-positive):** 14
+**Last full review:** 2026-09-10 · **Reviewer:** multi-agent workflow (14 dimensions, adversarial verification) · **Supabase:** xeluydwpgiddbamysgyu · **Confirmed:** 64 · **Dismissed (false-positive):** 15
 
 This table is the **source of truth for status**. Detail for each finding lives in [`findings/`](./findings/) by severity. IDs are stable and never reused (see [`methodology.md`](./methodology.md) §5–6). Status: `open` · `in-progress` · `fixed` · `accepted-risk` · `false-positive` · `wont-fix`.
 
@@ -21,13 +21,23 @@ This table is the **source of truth for status**. Detail for each finding lives 
 > standard. `master` was renamed to `main`. Status rows below to be reconciled at the next
 > security review.
 
+> **Weekly review 2026-09-10 (no live MCP).** Scanned ~3 months of new code (baseline `4bfb500`, 37 commits):
+> the SEO/GEO feature (`routers/seo.py`, `services/seo_repo.py`, migration `2026_06_14_seo_geo.sql`, the new
+> **SEO-GEO Optimizer** agent), the per-staff booking overhaul + client-branded emails, the CI/CD teardown
+> (`promote.yml` replaces the auto-pipeline; Dependabot removed), and the frontend booking-client SDK / i18n.
+> **8 new findings (SEC-057…064): 3 medium, 4 low, 1 info** — no new critical/high. **1 verified fixed** (SEC-046).
+> **4 obsoleted** by the CI teardown (SEC-007/023/025/026). Priority-1 IDOR: the new SEO router and booking
+> overhaul are **clean** (every route goes through `require_project_access`; SEC-003/022 fixes still hold).
+> **Supabase & Vercel MCP tools were UNAVAILABLE in this headless run** — DB findings are from migration SQL as
+> source of truth; live advisor/RLS/GRANT/env-posture confirmation is deferred (see `review-log.md`).
+
 ## Counts by severity
 
 | Critical | High | Medium | Low | Info | Total |
 |---|---|---|---|---|---|
-| 1 | 4 | 10 | 31 | 10 | 56 |
+| 1 | 4 | 13 | 35 | 11 | 64 |
 
-_Status (updated 2026-06-08): **28 fixed** (+ SEC-021/019 auth-session), **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS), 26 open. Remediation ongoing._
+_Status (updated 2026-09-10): **31 fixed** (SEC-046 newly fixed), **4 obsolete** (SEC-007/023/025/026, CI teardown), **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS), **27 open** (19 prior + 8 new SEC-057…064). Remediation ongoing._
 
 > **Note (FINDINGS.md is canonical for status).** Per-finding detail files may still show their
 > original `open` status inline; this table is the source of truth.
@@ -43,7 +53,7 @@ _Status (updated 2026-06-08): **28 fixed** (+ SEC-021/019 auth-session), **1 acc
 | [SEC-056](findings/high.md#sec-056) | high | Solver agent retains command execution (`npm run`) while the Claude OAuth token is present on the runner — residual exfil path after SEC-001 hardening | `.github/workflows/solver-agent.yml` (harden-runner egress block) | agents | ✅ fixed |
 | [SEC-005](findings/medium.md#sec-005) | medium | Admin issue-status update endpoint lets the Solver mark ANY issue done cross-project, decoupled from whether the agent actually fixed it | `backend/auth_service/routers/issues.py:276-344; agents/Solver - Issues…` | agents | open |
 | [SEC-006](findings/medium.md#sec-006) | medium | Solver Agent auto-commits and force-pushes attacker-influenced file changes to cms-preview, which a single Slack ✅ promotes to client production | `agents/Solver - Issues/finalize.py:42-49; agents/Solver - Issues/repo.…` | agents | open |
-| [SEC-007](findings/medium.md#sec-007) | medium | Dependabot auto-merge self-approves and merges minor/major-range bumps without independent review; a compromised dependency can reach master/prod | `.github/workflows/dependabot-auto-merge.yml:36-50` | ci-workflows | open |
+| [SEC-007](findings/medium.md#sec-007) | medium | Dependabot auto-merge self-approves and merges minor/major-range bumps without independent review; a compromised dependency can reach master/prod | `.github/workflows/dependabot-auto-merge.yml (deleted)` | ci-workflows | ⚪ obsolete (7ae1b07) |
 | [SEC-008](findings/medium.md#sec-008) | medium | Scraper dependencies are not hash-pinned and have no lockfile (DEP-009 standard not applied) | `scraper/pyproject.toml:6-16; .github/workflows/scraper-ci.yml:27-31` | deps-supplychain | open |
 | [SEC-009](findings/medium.md#sec-009) | medium | Unauthenticated HTML/email injection in multi-tenant form submissions (stored XSS in owner inbox) | `backend/auth_service/routers/forms.py` (html.escape) | public-tokens | ✅ fixed |
 | [SEC-010](findings/medium.md#sec-010) | medium | In-memory rate limiter resets per serverless invocation and is not shared across instances on Vercel, neutering every slowapi limit (login, forms, booking, admin bearer) | `backend/auth_service/core/pg_rate_limit.py + rate_limits migration` | ratelimit-dos | ✅ fixed |
@@ -59,10 +69,10 @@ _Status (updated 2026-06-08): **28 fixed** (+ SEC-021/019 auth-session), **1 acc
 | [SEC-020](findings/low.md#sec-020) | low | No per-account login throttling or lockout — only per-IP rate limiting | `backend/auth_service/routers/auth.py (Postgres login lockout)` | authn-session | ✅ fixed |
 | [SEC-021](findings/low.md#sec-021) | low | Session cookie missing Secure flag and uses SameSite=lax on HTTPS preview deployments | `backend/auth_service/routers/auth.py` (Secure on prod+preview) | authn-session | ✅ fixed |
 | [SEC-022](findings/low.md#sec-022) | low | Owner can link another tenant's resource into their own service (cross-tenant association write) via unvalidated resource_ids | `backend/auth_service/routers/booking_admin.py` (_validate_resource_ids) | authz-idor | ✅ fixed |
-| [SEC-023](findings/low.md#sec-023) | low | Auto-rollback pushes a revert to protected master using GITHUB_TOKEN and opens issues from operator-influenced commit subjects | `.github/workflows/post-deploy-smoke.yml:32-34,118-145,148-171` | ci-workflows | open |
-| [SEC-024](findings/low.md#sec-024) | low | Two workflows use unpinned (mutable-tag) third-party actions while the rest are SHA-pinned | `.github/workflows/solver-agent.yml:29,31; .github/workflows/scraper-ci…` | ci-workflows | open |
-| [SEC-025](findings/low.md#sec-025) | low | Dependabot does not cover the scraper or the Solver agent (no automated security PRs) | `.github/dependabot.yml:8-66; scraper/pyproject.toml; agents/Solver - I…` | deps-supplychain | open |
-| [SEC-026](findings/low.md#sec-026) | low | Dependabot patch/minor PRs auto-approve + auto-merge with no human review, chaining into auto-merge dev→master to prod | `.github/workflows/dependabot-auto-merge.yml:36-50` | deps-supplychain | open |
+| [SEC-023](findings/low.md#sec-023) | low | Auto-rollback pushes a revert to protected master using GITHUB_TOKEN and opens issues from operator-influenced commit subjects | `.github/workflows/post-deploy-smoke.yml (deleted)` | ci-workflows | ⚪ obsolete (7ae1b07) |
+| [SEC-024](findings/low.md#sec-024) | low | solver-agent.yml uses unpinned (mutable-tag) actions (checkout@v4, setup-python@v5) while the rest are SHA-pinned | `.github/workflows/solver-agent.yml:64,66` | ci-workflows | open |
+| [SEC-025](findings/low.md#sec-025) | low | Dependabot does not cover the scraper or the Solver agent (no automated security PRs) | `.github/dependabot.yml (deleted)` | deps-supplychain | ⚪ obsolete (7ae1b07 → SEC-063) |
+| [SEC-026](findings/low.md#sec-026) | low | Dependabot patch/minor PRs auto-approve + auto-merge with no human review, chaining into auto-merge dev→master to prod | `.github/workflows/dependabot-auto-merge.yml (deleted)` | deps-supplychain | ⚪ obsolete (7ae1b07) |
 | [SEC-027](findings/low.md#sec-027) | low | Stale, unpinned legacy backend/auth_service/requirements.txt drifted far behind the deployed manifest | `backend/auth_service/requirements.txt:1-13` | deps-supplychain | open |
 | [SEC-028](findings/low.md#sec-028) | low | Unsanitized user-controlled `sort` column passed to PostgREST `.order()` (filter/column injection) | `backend/auth_service/routers/admin_leads.py` (_SORTABLE_COLUMNS) | injection | ✅ fixed |
 | [SEC-029](findings/low.md#sec-029) | low | Cancelled-booking manage token remains valid and continues to expose customer details indefinitely | `backend/auth_service/routers/booking.py:522-571` | public-tokens | open |
@@ -82,7 +92,7 @@ _Status (updated 2026-06-08): **28 fixed** (+ SEC-021/019 auth-session), **1 acc
 | [SEC-043](findings/low.md#sec-043) | low | Design-prompt agent writeback bypasses the bleach sanitizer that protects the admin dangerouslySetInnerHTML sink | `frontend/.../DesignPromptSection.tsx` (DOMPurify on render) | xss-html | ✅ fixed |
 | [SEC-044](findings/low.md#sec-044) | low | Tenant email_copy overrides inserted unescaped into booking emails (headings/subtitles) | `backend/auth_service/services/booking_i18n.py` (tt html_escape) | xss-html | ✅ fixed |
 | [SEC-045](findings/low.md#sec-045) | low | Tenant-controlled booking brand fields (accent color, business_name, logo_url) interpolated raw into email HTML with no validation | `backend/auth_service/services/email_layout.py` (escape + hex accent) | xss-html | ✅ fixed |
-| [SEC-046](findings/info.md#sec-046) | info | Bearer auth path returns a plain dict while the rest of the codebase assumes a UserOut object, creating an authZ-shape fragility | `backend/auth_service/routers/deps.py:60-75,86-91; backend/auth_service…` | admin-priv | open |
+| [SEC-046](findings/info.md#sec-046) | info | Bearer auth path returns a plain dict while the rest of the codebase assumes a UserOut object, creating an authZ-shape fragility | `backend/auth_service/routers/deps.py:67` | admin-priv | ✅ fixed |
 | [SEC-047](findings/info.md#sec-047) | info | Session cookie not rotated to a stronger lifetime on remember-me users after password change | `backend/auth_service/routers/auth.py:117-125` | authn-session | open |
 | [SEC-048](findings/info.md#sec-048) | info | Public booking slug allows tenant existence enumeration via config endpoint | `backend/auth_service/routers/booking.py:305-320` | public-tokens | open |
 | [SEC-049](findings/info.md#sec-049) | info | Short-link expansion follows redirects without re-validating the resolved host (limited SSRF surface) | `scraper/src/scraper/urls.py:84-95 (expand_if_short)` | scraper | open |
@@ -92,6 +102,19 @@ _Status (updated 2026-06-08): **28 fixed** (+ SEC-021/019 auth-session), **1 acc
 | [SEC-053](findings/info.md#sec-053) | info | SECURITY DEFINER claim functions have mutable search_path (function_search_path_mutable) | `migrations/2026_06_08_security_anon_surface_hardening.sql` | supabase-db | ✅ fixed |
 | [SEC-054](findings/info.md#sec-054) | info | Tenant-table RLS owner policies are inert because the app does not use Supabase Auth JWTs (auth.uid() always NULL) | `backend/migrations/2026_05_09_tenant_tables_rls.sql` | supabase-db | accepted-risk |
 | [SEC-055](findings/info.md#sec-055) | info | Widget posts resize messages with wildcard target origin | `frontend/src/app/(widget)/w/[slug]/page.tsx:18-19` | xss-html | open |
+
+## New findings — 2026-09-10 review
+
+| ID | Sev | Title | Location | Dimension | Status |
+|---|---|---|---|---|---|
+| [SEC-057](findings/medium.md#sec-057) | medium | Public booking WRITE endpoints (create/cancel/reschedule/legacy) limited only by per-instance in-memory slowapi → unauth confirmation-email bombing + cost amplification | `backend/auth_service/routers/booking.py:462-466,691-692,753-754,989-990` | ratelimit-dos / public-tokens | open |
+| [SEC-058](findings/low.md#sec-058) | low | Public booking create performs no server-side booking-window validation (past-date / lead-time / max-advance bypass) | `backend/auth_service/routers/booking.py:498-513; services/booking_availability.py:137-163` | public-tokens | open |
+| [SEC-059](findings/medium.md#sec-059) | medium | Design-prompt "Copy" button parses unsanitized agent-written lead HTML via innerHTML (onerror/onload XSS in admin origin) | `frontend/src/components/admin/leads/sections/DesignPromptSection.tsx:22-32,212` | xss-html | open |
+| [SEC-060](findings/low.md#sec-060) | low | promote.yml downloads the gitleaks binary over the network without checksum/signature verification | `.github/workflows/promote.yml:42-43` | ci-workflows | open |
+| [SEC-061](findings/medium.md#sec-061) | medium | SEO/GEO agent hand-builds raw SQL from untrusted scraped competitor data for execute_sql against the shared RLS-bypassed DB (SQLi path; probabilistic/LLM-assembled) | `agents/SEO-GEO Optimizer/phases/2-competitor-intel.md:54-57; AGENTS.md:130` | agents | open |
+| [SEC-062](findings/low.md#sec-062) | low | SEO/GEO agent feeds untrusted scraped competitor headings into LLM planner/analyst prompts with no data/instruction fencing (same class as SEC-016) | `agents/SEO-GEO Optimizer/competitor.py:114-122; prompts.py:58-76` | agents | open |
+| [SEC-063](findings/info.md#sec-063) | info | Dependabot config deleted; no automated dependency version-update PRs remain, CODEOWNERS/SECURITY.md still reference it (CVE-alert status unverifiable from tree) | `.github/dependabot.yml (deleted 7ae1b07); .github/CODEOWNERS; docs/SECURITY.md` | deps-supplychain | open |
+| [SEC-064](findings/low.md#sec-064) | low | New SEO router (translate/jobs) has no rate limit → paid DeepL / LLM cost amplification (reintroduces SEC-034) | `backend/auth_service/routers/seo.py:247-251,145-152` | ratelimit-dos | open |
 
 ## Dismissed (adversarially verified as false positives / non-issues)
 
