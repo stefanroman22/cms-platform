@@ -18,10 +18,18 @@ interface Props {
 const COLLAPSED_PREVIEW_PX = 150;
 
 /** Convert the stored prompt HTML to readable plain text (block elements keep
- *  their line breaks) so the clipboard copy is paste-ready, not raw markup. */
+ *  their line breaks) so the clipboard copy is paste-ready, not raw markup.
+ *
+ *  SEC-059: `design_prompt` is agent-written and untrusted (the design-prompt
+ *  agent writes it via a raw Supabase UPDATE that bypasses the backend bleach
+ *  filter), so the raw string is sanitized with DOMPurify before it is assigned
+ *  to `innerHTML` on a node appended to the live document — otherwise markup
+ *  handlers such as `<img onerror>` / `<svg onload>` would execute in the admin
+ *  origin. This mirrors the DOMPurify sanitization already applied to the render
+ *  preview (SEC-018/SEC-043). */
 function htmlToPlainText(html: string): string {
   const el = document.createElement("div");
-  el.innerHTML = html;
+  el.innerHTML = DOMPurify.sanitize(html);
   el.style.position = "fixed";
   el.style.left = "-99999px";
   el.style.whiteSpace = "pre-wrap";
