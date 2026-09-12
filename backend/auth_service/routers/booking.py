@@ -339,6 +339,25 @@ def _public_read_limit(request: Request) -> None:
     )
 
 
+def _public_write_limit(request: Request, action: str, limit: int, window_seconds: int) -> None:
+    """SEC-057: shared (cross-instance) per-IP limit on the unauthenticated booking
+    WRITE endpoints, layered on top of the per-process slowapi decorator.
+
+    The slowapi limiter's counter lives in per-Vercel-instance process memory, so
+    an IP-rotating attacker fans out across warm instances and cold-starts to get
+    an effective cap of N×limit — and each accepted create sends a confirmation
+    email to the attacker-controlled customer address, a host-notification email,
+    and creates a calendar event. Enforcing the same cap through the Postgres
+    limiter makes it hold globally, mirroring the read path and forms.py. Limits
+    match the existing slowapi decorators so legitimate bookers are unaffected."""
+    pg_rate_limit.enforce(
+        f"booking_write:{action}:{client_ip(request)}",
+        limit=limit,
+        window_seconds=window_seconds,
+        detail="Too many requests. Please slow down and try again.",
+    )
+
+
 @router.get("/{slug}/config", dependencies=[Depends(_public_read_limit)])
 def public_config(slug: str) -> JSONResponse:
     cfg = booking_tenant.load_tenant_by_slug(slug)
@@ -462,6 +481,7 @@ class CreateIn(BaseModel):
 @router.post("/{slug}")
 @limiter.limit("5/hour", key_func=client_ip)
 async def create_booking(request: Request, slug: str, body: CreateIn) -> JSONResponse:
+    _public_write_limit(request, "create", limit=5, window_seconds=3600)
     cfg = _require_tenant(slug)
     return _create_core(cfg, body)
 
@@ -691,6 +711,7 @@ def manage_get(token: str) -> JSONResponse:
 @router.post("/manage/{token}/cancel")
 @limiter.limit("10/hour", key_func=client_ip)
 async def manage_cancel(request: Request, token: str) -> JSONResponse:
+    _public_write_limit(request, "manage", limit=10, window_seconds=3600)
     b, cfg, policy = _load_for_manage(token)
     if not b or cfg is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -753,6 +774,7 @@ class RescheduleIn(BaseModel):
 @router.post("/manage/{token}/reschedule")
 @limiter.limit("10/hour", key_func=client_ip)
 async def manage_reschedule(request: Request, token: str, body: RescheduleIn) -> JSONResponse:
+    _public_write_limit(request, "manage", limit=10, window_seconds=3600)
     b, cfg, policy = _load_for_manage(token)
     if not b or cfg is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -989,6 +1011,7 @@ class LegacyBookingRequest(BaseModel):
 @router.post("")
 @limiter.limit("5/hour", key_func=client_ip)
 async def legacy_create(request: Request, body: LegacyBookingRequest) -> JSONResponse:
+    _public_write_limit(request, "create", limit=5, window_seconds=3600)
     cfg = _require_tenant(_LEGACY_SLUG)
     services = booking_repo.load_active_services(cfg.tenant_id)
     if not services:

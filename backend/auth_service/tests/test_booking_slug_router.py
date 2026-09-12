@@ -128,6 +128,40 @@ def test_create_conflict_returns_409(client, monkeypatch):
     assert r.status_code == 409
 
 
+def test_create_shared_rate_limit_returns_429(client):
+    """SEC-057: the create write path is gated by the shared Postgres limiter
+    (not only the per-process slowapi decorator) so the cap holds across Vercel
+    serverless instances. When the shared limiter says "over", create returns 429
+    before any tenant lookup, email send, or calendar write."""
+    with patch("auth_service.routers.booking.pg_rate_limit.allow", return_value=False):
+        r = client.post(
+            "/booking/acme",
+            json={
+                "service_id": "s1",
+                "start_utc": "2099-06-10T06:00:00+00:00",
+                "customer": {"name": "Jane", "email": "jane@acme.com", "tz": "Europe/London"},
+            },
+        )
+    assert r.status_code == 429, r.text
+
+
+def test_manage_cancel_shared_rate_limit_returns_429(client):
+    """SEC-057: the manage cancel write path is also gated by the shared limiter."""
+    with patch("auth_service.routers.booking.pg_rate_limit.allow", return_value=False):
+        r = client.post("/booking/manage/some-token/cancel")
+    assert r.status_code == 429, r.text
+
+
+def test_manage_reschedule_shared_rate_limit_returns_429(client):
+    """SEC-057: the manage reschedule write path is also gated by the shared limiter."""
+    with patch("auth_service.routers.booking.pg_rate_limit.allow", return_value=False):
+        r = client.post(
+            "/booking/manage/some-token/reschedule",
+            json={"slot_start": "2099-06-10T06:00:00+00:00"},
+        )
+    assert r.status_code == 429, r.text
+
+
 def test_tenant_isolation_route_scopes_to_resolved_tenant(client):
     """Isolation: the route only ever queries the tenant resolved from the slug.
     The client supplies no tenant id, so it cannot reach another tenant's data."""
