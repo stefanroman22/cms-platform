@@ -39,6 +39,23 @@ This table is the **source of truth for status**. Detail for each finding lives 
 
 _Status (updated 2026-09-10): **31 fixed** (SEC-046 newly fixed), **4 obsolete** (SEC-007/023/025/026, CI teardown), **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS), **27 open** (19 prior + 8 new SEC-057…064). Remediation ongoing._
 
+> **Remediation 2026-09-12 (weekly automated solver — processed all 6 open mediums).**
+> **Merged to `dev`** (auto-merge gate met; prod still gated by the manual `promote.yml`):
+> **SEC-059** (design-prompt Copy XSS → DOMPurify, PR #68), **SEC-057** (booking write
+> endpoints → shared Postgres rate limiter, PR #69), **SEC-008** (scraper hash-pinned
+> lockfiles + `click<8.2`, PR #70). **Left OPEN for human review (partial):** **SEC-006**
+> (solver CI/deploy/env-path push gate — the `<script>`/endpoint policy + Slack diff-surfacing
+> need product decisions, PR #71 draft), **SEC-061** (SEO-GEO `sql_safe` escaping primitive +
+> mandate — the durable parameterized-endpoint + MCP-grant-restriction fix is architectural,
+> PR #72 draft). **SEC-005 → in-progress, no code change:** its exploitable core is already
+> covered by the SEC-004 migration (`2026_06_08_security_anon_surface_hardening.sql`) — **a
+> human must confirm that migration is applied to prod** — and the finding's app-level
+> recommendation would break legitimate manual admin resolution, so it was intentionally not
+> implemented. ⚠️ **Cross-cycle ID collision:** SEC-057/059/061 name *different* findings in
+> the 2026-06-20 (dev) / 2026-09-03 / 2026-09-10 review cycles; the fix PR bodies pin the
+> canonical 2026-09-10 meaning. SEC-005/006/008 are stable across cycles. See PR bodies + the
+> run report.
+
 > **Note (FINDINGS.md is canonical for status).** Per-finding detail files may still show their
 > original `open` status inline; this table is the source of truth.
 
@@ -51,10 +68,10 @@ _Status (updated 2026-09-10): **31 fixed** (SEC-046 newly fixed), **4 obsolete**
 | [SEC-003](findings/high.md#sec-003) | high | Owner can create a booking against another tenant's resource (cross-tenant write + silent DoS) via unvalidated resource_id | `backend/auth_service/routers/booking_admin.py` (eligible-resource check) | authz-idor | ✅ fixed |
 | [SEC-004](findings/high.md#sec-004) | high | anon/authenticated can EXECUTE SECURITY DEFINER solver-claim RPCs — dequeue/poison the auto-fix queue + cross-tenant issue disclosure | `migrations/2026_06_08_security_anon_surface_hardening.sql` | supabase-db | ✅ fixed |
 | [SEC-056](findings/high.md#sec-056) | high | Solver agent retains command execution (`npm run`) while the Claude OAuth token is present on the runner — residual exfil path after SEC-001 hardening | `.github/workflows/solver-agent.yml` (harden-runner egress block) | agents | ✅ fixed |
-| [SEC-005](findings/medium.md#sec-005) | medium | Admin issue-status update endpoint lets the Solver mark ANY issue done cross-project, decoupled from whether the agent actually fixed it | `backend/auth_service/routers/issues.py:276-344; agents/Solver - Issues…` | agents | open |
-| [SEC-006](findings/medium.md#sec-006) | medium | Solver Agent auto-commits and force-pushes attacker-influenced file changes to cms-preview, which a single Slack ✅ promotes to client production | `agents/Solver - Issues/finalize.py:42-49; agents/Solver - Issues/repo.…` | agents | open |
+| [SEC-005](findings/medium.md#sec-005) | medium | Admin issue-status update endpoint lets the Solver mark ANY issue done cross-project, decoupled from whether the agent actually fixed it | `backend/auth_service/routers/issues.py:276-344; agents/Solver - Issues…` | agents | in-progress |
+| [SEC-006](findings/medium.md#sec-006) | medium | Solver Agent auto-commits and force-pushes attacker-influenced file changes to cms-preview, which a single Slack ✅ promotes to client production | `agents/Solver - Issues/finalize.py:42-49; agents/Solver - Issues/repo.…` | agents | in-progress |
 | [SEC-007](findings/medium.md#sec-007) | medium | Dependabot auto-merge self-approves and merges minor/major-range bumps without independent review; a compromised dependency can reach master/prod | `.github/workflows/dependabot-auto-merge.yml (deleted)` | ci-workflows | ⚪ obsolete (7ae1b07) |
-| [SEC-008](findings/medium.md#sec-008) | medium | Scraper dependencies are not hash-pinned and have no lockfile (DEP-009 standard not applied) | `scraper/pyproject.toml:6-16; .github/workflows/scraper-ci.yml:27-31` | deps-supplychain | open |
+| [SEC-008](findings/medium.md#sec-008) | medium | Scraper dependencies are not hash-pinned and have no lockfile (DEP-009 standard not applied) | `scraper/pyproject.toml:6-16; .github/workflows/scraper-ci.yml:27-31` | deps-supplychain | ✅ fixed (dev #70) |
 | [SEC-009](findings/medium.md#sec-009) | medium | Unauthenticated HTML/email injection in multi-tenant form submissions (stored XSS in owner inbox) | `backend/auth_service/routers/forms.py` (html.escape) | public-tokens | ✅ fixed |
 | [SEC-010](findings/medium.md#sec-010) | medium | In-memory rate limiter resets per serverless invocation and is not shared across instances on Vercel, neutering every slowapi limit (login, forms, booking, admin bearer) | `backend/auth_service/core/pg_rate_limit.py + rate_limits migration` | ratelimit-dos | ✅ fixed |
 | [SEC-011](findings/medium.md#sec-011) | medium | No per-account lockout or throttle on /auth/login (only forgeable per-IP limit) | `backend/auth_service/routers/auth.py (Postgres login lockout)` | ratelimit-dos | ✅ fixed |
@@ -107,11 +124,11 @@ _Status (updated 2026-09-10): **31 fixed** (SEC-046 newly fixed), **4 obsolete**
 
 | ID | Sev | Title | Location | Dimension | Status |
 |---|---|---|---|---|---|
-| [SEC-057](findings/medium.md#sec-057) | medium | Public booking WRITE endpoints (create/cancel/reschedule/legacy) limited only by per-instance in-memory slowapi → unauth confirmation-email bombing + cost amplification | `backend/auth_service/routers/booking.py:462-466,691-692,753-754,989-990` | ratelimit-dos / public-tokens | open |
+| [SEC-057](findings/medium.md#sec-057) | medium | Public booking WRITE endpoints (create/cancel/reschedule/legacy) limited only by per-instance in-memory slowapi → unauth confirmation-email bombing + cost amplification | `backend/auth_service/routers/booking.py:462-466,691-692,753-754,989-990` | ratelimit-dos / public-tokens | ✅ fixed (dev #69) |
 | [SEC-058](findings/low.md#sec-058) | low | Public booking create performs no server-side booking-window validation (past-date / lead-time / max-advance bypass) | `backend/auth_service/routers/booking.py:498-513; services/booking_availability.py:137-163` | public-tokens | open |
-| [SEC-059](findings/medium.md#sec-059) | medium | Design-prompt "Copy" button parses unsanitized agent-written lead HTML via innerHTML (onerror/onload XSS in admin origin) | `frontend/src/components/admin/leads/sections/DesignPromptSection.tsx:22-32,212` | xss-html | open |
+| [SEC-059](findings/medium.md#sec-059) | medium | Design-prompt "Copy" button parses unsanitized agent-written lead HTML via innerHTML (onerror/onload XSS in admin origin) | `frontend/src/components/admin/leads/sections/DesignPromptSection.tsx:22-32,212` | xss-html | ✅ fixed (dev #68) |
 | [SEC-060](findings/low.md#sec-060) | low | promote.yml downloads the gitleaks binary over the network without checksum/signature verification | `.github/workflows/promote.yml:42-43` | ci-workflows | open |
-| [SEC-061](findings/medium.md#sec-061) | medium | SEO/GEO agent hand-builds raw SQL from untrusted scraped competitor data for execute_sql against the shared RLS-bypassed DB (SQLi path; probabilistic/LLM-assembled) | `agents/SEO-GEO Optimizer/phases/2-competitor-intel.md:54-57; AGENTS.md:130` | agents | open |
+| [SEC-061](findings/medium.md#sec-061) | medium | SEO/GEO agent hand-builds raw SQL from untrusted scraped competitor data for execute_sql against the shared RLS-bypassed DB (SQLi path; probabilistic/LLM-assembled) | `agents/SEO-GEO Optimizer/phases/2-competitor-intel.md:54-57; AGENTS.md:130` | agents | in-progress |
 | [SEC-062](findings/low.md#sec-062) | low | SEO/GEO agent feeds untrusted scraped competitor headings into LLM planner/analyst prompts with no data/instruction fencing (same class as SEC-016) | `agents/SEO-GEO Optimizer/competitor.py:114-122; prompts.py:58-76` | agents | open |
 | [SEC-063](findings/info.md#sec-063) | info | Dependabot config deleted; no automated dependency version-update PRs remain, CODEOWNERS/SECURITY.md still reference it (CVE-alert status unverifiable from tree) | `.github/dependabot.yml (deleted 7ae1b07); .github/CODEOWNERS; docs/SECURITY.md` | deps-supplychain | open |
 | [SEC-064](findings/low.md#sec-064) | low | New SEO router (translate/jobs) has no rate limit → paid DeepL / LLM cost amplification (reintroduces SEC-034) | `backend/auth_service/routers/seo.py:247-251,145-152` | ratelimit-dos | open |
