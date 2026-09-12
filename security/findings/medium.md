@@ -13,13 +13,15 @@ _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or aut
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | in-progress |
 | **Category** | Token scope / authorization |
 | **Dimension** | agents |
 | **Location** | `backend/auth_service/routers/issues.py:276-344; agents/Solver - Issues/backend_api.py:23-37` |
 | **Reviewer confidence** | medium |
 | **Verifier verdict** | partially_confirmed (adjusted: medium) |
 | **First seen** | 2026-06-07 |
+
+**Remediation 2026-09-12 (automated solver).** The independently-exploitable core (anon/authenticated EXECUTE on `claim_next_solver_issue`/`claim_specific_solver_issue`) is already remediated by `backend/migrations/2026_06_08_security_anon_surface_hardening.sql` (REVOKE from public/anon/authenticated + service_role-only GRANT + pinned search_path), tracked as SEC-004 → fixed. **HUMAN ACTION:** confirm that migration is actually applied to the production DB — the 2026-09-10 run had no live MCP, and an earlier live check saw the grants still present. The finding's remaining app-level recommendation (require `agent_commit_sha` before an admin `done` transition) is intentionally NOT implemented: `admin_update_issue_status` is also the human/cookie path for legitimate manual resolution (won't-fix, resolved-out-of-band), so that gate would break valid admin behaviour. No safe, in-scope code change remains for this run.
 
 **Description**
 
@@ -68,13 +70,15 @@ Scope the solver's automation credential to only the status transition it needs,
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | in-progress |
 | **Category** | Untrusted-input → privileged action |
 | **Dimension** | agents |
 | **Location** | `agents/Solver - Issues/finalize.py:42-49; agents/Solver - Issues/repo.py:85-101; backend/auth_service/services/github_merge.py:25-46` |
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed (adjusted: medium) |
 | **First seen** | 2026-06-07 |
+
+**Remediation 2026-09-12 (automated solver) — PARTIAL, PR #71 (open, draft).** Added a machine-checked scope gate (`repo._assert_no_sensitive_paths_in_staged_diff`) that refuses to push any staged diff touching a CI/deploy/env path (`.github/`, `.env*`, `vercel.json`, `.vercel/`, `Dockerfile`, `docker-compose*`, `Procfile`, `.git/`) — closing the zero-false-positive infra-tampering vector riding the auto-push to cms-preview → prod. **Still open (needs human/product decision):** a policy for injected `<script>`/new-network-endpoint content in ordinary website files, and surfacing the full diff in the Slack approval. Left open for human review; keep in-progress.
 
 **Description**
 
@@ -166,13 +170,15 @@ Restrict auto-merge to semver-patch only (drop minor), or further gate on a cura
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (dev #70) |
 | **Category** | supply-chain / dependency integrity |
 | **Dimension** | deps-supplychain |
 | **Location** | `scraper/pyproject.toml:6-16; .github/workflows/scraper-ci.yml:27-31` |
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed (adjusted: medium) |
 | **First seen** | 2026-06-07 |
+
+**Remediation 2026-09-12 (automated solver) — FIXED on dev, PR #70 (merged).** Added `scraper/requirements.lock` + `requirements-dev.lock` (`pip-compile --generate-hashes`, py3.11 deploy target) and switched the README install to `--require-hashes` + `pip install -e . --no-deps`. Also pinned transitive `click<8.2` (typer 0.13.1 breaks on click ≥8.2). Verified: `--require-hashes` install succeeds; full scraper suite 145 passed. The `scraper-ci.yml` location was obsolete (workflow deleted in the CI teardown).
 
 **Description**
 
@@ -512,13 +518,15 @@ HTML-escape both key and value before interpolation, mirroring the rest of the c
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (dev #69) |
 | **Category** | Rate limiting / DoS / email abuse |
 | **Dimension** | ratelimit-dos / public-tokens |
 | **Location** | `backend/auth_service/routers/booking.py:462-466 (create), 691-692 (cancel), 753-754 (reschedule), 989-990 (legacy create)` |
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed (medium) |
 | **First seen** | 2026-09-10 |
+
+**Remediation 2026-09-12 (automated solver) — FIXED on dev, PR #69 (merged).** Added a shared Postgres-backed per-IP limiter (`_public_write_limit`) to `create_booking`, `legacy_create`, `manage_cancel`, `manage_reschedule`, mirroring the read path and forms.py. Limits match the existing slowapi decorators (create 5/h, manage 10/h) and fail open. Full backend suite 576 passed.
 
 **Description**
 
@@ -558,13 +566,15 @@ Add a shared `pg_rate_limit.enforce` (per-IP and/or per-slug bucket) inside `_cr
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (dev #68) |
 | **Category** | Stored XSS (admin dashboard) |
 | **Dimension** | xss-html |
 | **Location** | `frontend/src/components/admin/leads/sections/DesignPromptSection.tsx:22-32 (htmlToPlainText), :212 (CopyPromptButton html={lead.design_prompt})` |
 | **Reviewer confidence** | medium |
 | **Verifier verdict** | confirmed (medium) |
 | **First seen** | 2026-09-10 |
+
+**Remediation 2026-09-12 (automated solver) — FIXED on dev, PR #68 (merged).** `htmlToPlainText` now runs the raw agent HTML through `DOMPurify.sanitize` before assigning `innerHTML`, mirroring the render preview. Regression test added; frontend build + suite green (one pre-existing unrelated failure).
 
 **Description**
 
@@ -609,13 +619,15 @@ Sanitize before parsing in `htmlToPlainText` (`el.innerHTML = DOMPurify.sanitize
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | in-progress |
 | **Category** | Injection (agent-authored SQL) / cross-tenant |
 | **Dimension** | agents |
 | **Location** | `agents/SEO-GEO Optimizer/phases/2-competitor-intel.md:54-57 (raw INSERT template); AGENTS.md:130 (execute_sql = all reads/writes); competitor.py:77-89 (scraped signals)` |
 | **Reviewer confidence** | medium |
 | **Verifier verdict** | needs_adjustment → medium (finder claimed high) |
 | **First seen** | 2026-09-10 |
+
+**Remediation 2026-09-12 (automated solver) — PARTIAL, PR #72 (open, draft).** Added `agents/SEO-GEO Optimizer/sql_safe.py` (`literal`/`json_literal`, deterministic escaping) and mandated its use in Phase 2 + AGENTS.md for every scraped/LLM value going into `execute_sql` (phases 1/3/4/5/7 too). Removes the hand-escaping gap. **Still open (needs human decision):** the durable fix is a parameterized backend endpoint + a restricted MCP grant (the agent is probabilistic and could still skip the helper). Left open for human review; keep in-progress.
 
 **Description**
 
