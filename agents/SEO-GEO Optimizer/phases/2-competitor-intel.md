@@ -49,16 +49,44 @@ client URLs, global learnings). Caps from AGENTS.md (`WEBSEARCH_CAP=12`,
    true geo-grid map-pack rank require **paid data** — state that explicitly, never
    fabricate a number or a position.
 
-7. **Persist** to Supabase (skip writes in `dry-run`). One row per competitor:
+7. **Persist** to Supabase (skip writes in `dry-run`). One row per competitor.
+
+   **SECURITY — SEC-061 (mandatory):** `name`, `url`, `location`/`city`, the `signals`
+   JSON, and the `analysis` prose are UNTRUSTED — they come from scraped competitor sites
+   and LLM output. `mcp__supabase__execute_sql` runs against the shared, RLS-bypassed
+   project, so a value like `Bob's Barbers` or a crafted `x','y'); drop ...` breaks a
+   hand-built literal and can run cross-tenant SQL. **Never** paste a scraped/LLM value
+   between quotes yourself. Escape **every** such value with the deterministic
+   `sql_safe` helper (a plain Python helper, like `competitor.extract_competitor_signals`)
+   and interpolate only its output:
+
+   ```python
+   # sql_safe.literal(v) -> a safe single-quoted SQL string literal (or NULL)
+   # sql_safe.json_literal(obj) -> a safe quoted literal cast to ::jsonb
+   sql = (
+       "INSERT INTO seo_competitors "
+       "(project_id, run_id, name, url, location, signals, analysis, captured_at) "
+       f"VALUES ({sql_safe.literal(project_id)}, {sql_safe.literal(run_id)}, "
+       f"{sql_safe.literal(name)}, {sql_safe.literal(url)}, {sql_safe.literal(city)}, "
+       f"{sql_safe.json_literal(signals)}, {sql_safe.literal(analysis)}, now())"
+   )
+   # then: mcp__supabase__execute_sql(query=sql)
+   ```
+
+   The resulting query (safe — the apostrophe is doubled, breakout payloads stay inside
+   one literal):
 
    ```sql
    INSERT INTO seo_competitors (project_id, run_id, name, url, location, signals, analysis, captured_at)
-   VALUES ('<project_id>', '<run_id>', '<name>', '<url>', '<city>',
-           '<signals_json>'::jsonb, '<reasoned analysis text>', now());
+   VALUES ('<project_id>', '<run_id>', 'Bob''s Barbers', 'https://…', 'Rotterdam',
+           '{"jsonld_types":["LocalBusiness"]}'::jsonb, '<reasoned analysis text>', now());
    ```
 
-   (Write the per-competitor `signals` JSON on each row; the reasoned synthesis can live on
-   each row or on a summary row — keep it queryable for the dashboard Competitors tab.)
+   The **same `sql_safe` rule applies to every `execute_sql` write in phases 1/3/4/5/7**
+   (`seo_audits`, `seo_plan_items`, `seo_page_meta`, `seo_articles`, `seo_learnings`) that
+   interpolates a scraped or LLM-authored value. (Write the per-competitor `signals` JSON on
+   each row; the reasoned synthesis can live on each row or on a summary row — keep it
+   queryable for the dashboard Competitors tab.)
 
 8. Echo: *"Phase 2: `<N>` competitors analyzed · `<M>` content gaps found."* Carry the
    gap list + write-up into Phase 4.

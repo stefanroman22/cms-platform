@@ -114,6 +114,8 @@ routing/layout — new-page CODE only flows through the Builder + the gate (hard
     `score_local`, `assemble_audit`); ids align with `rubric/rubric.yaml`.
   - [`competitor.py`](./competitor.py) — competitor signal extraction + content-gap
     reasoning substrate (`extract_competitor_signals`, `content_gaps`).
+  - [`sql_safe.py`](./sql_safe.py) — **mandatory** SQL-literal escaping for untrusted
+    scraped/LLM values before they go into `execute_sql` (`literal`, `json_literal`; SEC-061).
   - [`apply.py`](./apply.py) — build the `seo_page_meta` / `seo_articles` DRAFT payloads +
     the `seo_changes` before/after diff (`build_page_meta_payload`, `build_article_payload`,
     `diff_before_after`). Phase 5.
@@ -128,7 +130,15 @@ routing/layout — new-page CODE only flows through the Builder + the gate (hard
   `COMPETITOR_ANALYST_PROMPT`, `PLANNER_PROMPT`, `AUDITOR_GUIDE`) + the
   **`FORBIDDEN_CLAIMS`** block (the 11 refuted claims) + `CONFIRMED_LEVERS`.
 - **Supabase MCP** (`mcp__supabase__execute_sql`) — all reads/writes, project
-  `xeluydwpgiddbamysgyu`.
+  `xeluydwpgiddbamysgyu`. **SECURITY (SEC-061):** `execute_sql` runs against the shared,
+  RLS-bypassed project, and it takes a raw query string (no parameter binding). Any value
+  that originates from scraped sites or LLM output (competitor `name`/`url`/`location`,
+  scraped headings, `analysis` prose, `signals`/other JSON) is UNTRUSTED and a
+  SQL-injection vector if hand-interpolated. **Never** place such a value between quotes
+  yourself — escape it with [`sql_safe.py`](./sql_safe.py) (`sql_safe.literal(v)` /
+  `sql_safe.json_literal(obj)`) and interpolate only its output, in **every** phase that
+  writes (2 `seo_competitors`, plus 1/3/4/5/7). Durable fix (tracked, not yet done):
+  persist through a parameterized backend endpoint and restrict the MCP grant.
 - **CMS-admin SEO translate endpoint** — `POST /projects/{slug}/seo/translate`
   (body `{kind: "meta" | "article"}`, admin bearer). Phase 5 calls it after writing the
   **default-locale** `seo_page_meta` / `seo_articles` rows to fill the non-default locales'
