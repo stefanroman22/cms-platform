@@ -43,6 +43,28 @@ _SECRET_PATTERNS = (
     r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",  # JWT (e.g. service-role key)
 )
 
+# SECURITY (SEC-006): the agent edits files driven by UNTRUSTED client issue text
+# with unrestricted Write/Edit, then finalize.py unconditionally commits and pushes
+# the whole working tree to the client's cms-preview branch, which a single Slack ✅
+# promotes to production. A prompt-injected agent could ride that push by touching
+# CI/workflow, deploy, or env files (e.g. a malicious GitHub Action, a Vercel
+# rewrite to an exfil endpoint, or an injected .env) — none of which a legitimate
+# automated website-content/style fix ever needs to change. Refuse to push any
+# staged diff that adds, modifies, or deletes such a sensitive infra path. This is
+# a machine-checked scope gate (the agent's "git FORBIDDEN / minimum change" prompt
+# lines are not enforced controls). A false positive fails the run safely (the
+# issue is released, not pushed) rather than shipping unreviewed infra changes.
+_SENSITIVE_PATH_PATTERNS = (
+    r"(?:^|/)\.github/",  # CI workflows, actions, CODEOWNERS, dependabot
+    r"(?:^|/)\.env(?:\.[^/]*)?$",  # env / secrets files (.env, .env.production, …)
+    r"(?:^|/)vercel\.json$",  # Vercel deploy config (routes/rewrites/headers)
+    r"(?:^|/)\.vercel/",  # Vercel project linkage
+    r"(?:^|/)Dockerfile$",  # container build
+    r"(?:^|/)docker-compose(?:\.[^/]*)?\.ya?ml$",  # container orchestration
+    r"(?:^|/)Procfile$",  # process/deploy declaration
+    r"(?:^|/)\.git/",  # git internals (hooks, config)
+)
+
 
 def _token() -> str:
     return os.environ["SOLVER_GITHUB_TOKEN"]
@@ -130,6 +152,31 @@ def _assert_no_secrets_in_staged_diff(path: str) -> None:
             )
 
 
+def _assert_no_sensitive_paths_in_staged_diff(path: str) -> None:
+    """Refuse to push if the staged diff touches a CI/deploy/env path.
+
+    Defense-in-depth (SEC-006) against a prompt-injected agent smuggling a
+    privileged change (malicious GitHub Action, Vercel rewrite to an exfil
+    endpoint, injected .env) into the auto-pushed cms-preview branch that a
+    single Slack approval promotes to production. A legitimate website
+    content/style fix never edits these paths. Raises RuntimeError so the
+    workflow's failure path releases the issue instead of pushing.
+    """
+    raw = _run(["git", "-C", path, "diff", "--cached", "--name-only"], check=False).stdout
+    names = raw.splitlines() if isinstance(raw, str) else []
+    for name in names:
+        name = name.strip()
+        if not name:
+            continue
+        for pattern in _SENSITIVE_PATH_PATTERNS:
+            if re.search(pattern, name):
+                raise RuntimeError(
+                    "refusing to push: staged diff modifies a protected "
+                    f"CI/deploy/env path ({name!r}, matched {pattern!r}) — an "
+                    "automated website fix must not change infrastructure files"
+                )
+
+
 def commit_and_push(*, path: str, issue_id: str, issue_title: str) -> str:
     """Stage all changes, commit, push current HEAD to origin (plain push).
 
@@ -148,6 +195,7 @@ def commit_and_push(*, path: str, issue_id: str, issue_title: str) -> str:
     )
     _run(["git", "-C", path, "add", "-A"])
     _assert_no_secrets_in_staged_diff(path)
+    _assert_no_sensitive_paths_in_staged_diff(path)
     _run(["git", "-C", path, "commit", "-m", message])
     sha_result = _run(["git", "-C", path, "rev-parse", "HEAD"])
     sha = sha_result.stdout.strip()

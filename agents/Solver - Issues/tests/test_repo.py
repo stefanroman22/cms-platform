@@ -266,6 +266,65 @@ def test_push_allowed_for_clean_diff(monkeypatch):
     assert any("push" in a for a in calls)
 
 
+def _fake_run_with_staged_files(staged_files: list[str], monkeypatch):
+    """subprocess.run stub whose `git diff --cached --name-only` returns the given
+    file list and whose content diff is secret-free. Records all calls."""
+    monkeypatch.setenv("SOLVER_GITHUB_TOKEN", "ghs_test")
+    calls: list = []
+
+    def fake(args, **kwargs):
+        calls.append(args)
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        if "diff" in args and "--cached" in args and "--name-only" in args:
+            result.stdout = "\n".join(staged_files) + "\n"
+        elif "diff" in args and "--cached" in args:
+            result.stdout = "+  <h1>Fixed hero heading</h1>"  # secret-free content
+        elif "rev-parse" in args:
+            result.stdout = "abc123\n"
+        elif "get-url" in args:
+            result.stdout = "https://github.com/owner/name.git\n"
+        return result
+
+    monkeypatch.setattr(repo.subprocess, "run", fake)
+    return calls
+
+
+@pytest.mark.parametrize(
+    "sensitive_file",
+    [
+        ".github/workflows/deploy.yml",
+        ".github/actions/evil/action.yml",
+        ".env",
+        ".env.production",
+        "vercel.json",
+        "app/.env.local",
+        "Dockerfile",
+    ],
+)
+def test_push_refused_when_diff_touches_ci_deploy_or_env_path(sensitive_file, monkeypatch):
+    """SEC-006: a prompt-injected agent must not smuggle a CI/deploy/env change
+    into the auto-pushed cms-preview branch. Any staged sensitive path aborts the
+    push before commit."""
+    calls = _fake_run_with_staged_files([sensitive_file, "src/pages/index.tsx"], monkeypatch)
+    with pytest.raises(RuntimeError, match="protected"):
+        repo.commit_and_push(path="./client-repo", issue_id="i1", issue_title="t")
+    # Must abort before committing or pushing.
+    assert not any("commit" in a for a in calls)
+    assert not any("push" in a for a in calls)
+
+
+def test_push_allowed_for_website_only_diff(monkeypatch):
+    """A normal website content/style fix (no CI/deploy/env paths) pushes as usual."""
+    calls = _fake_run_with_staged_files(
+        ["src/pages/index.tsx", "src/styles/hero.css", "public/logo.svg"], monkeypatch
+    )
+    sha = repo.commit_and_push(path="./client-repo", issue_id="i1", issue_title="t")
+    assert sha == "abc123"
+    assert any("push" in a for a in calls)
+
+
 def test_commit_truncates_long_title(fake_run, monkeypatch):
     monkeypatch.setattr(
         repo.subprocess, "run", lambda args, **kw: MagicMock(returncode=0, stdout="sha\n")
