@@ -18,10 +18,29 @@ git clone git@github.com:stefanroman22/cms-platform.git
 cd cms-platform/scraper
 python3.11 -m venv venv
 source venv/Scripts/activate   # or venv/bin/activate on Linux/macOS
-pip install -e ".[dev]"
+# DEP-009: install hash-verified deps from the lockfile, then the package itself
+# with --no-deps so no unpinned/unverified artifact can slip in. The scraper
+# holds the Supabase SERVICE_ROLE key (RLS bypass), so its supply chain is
+# hash-pinned exactly like the backend and the agents.
+pip install --require-hashes -r requirements-dev.lock
+pip install -e . --no-deps
 python -m playwright install --with-deps chromium
 cp .env.example .env
 # Fill in SUPABASE_URL and SUPABASE_SERVICE_KEY in .env
+```
+
+For a runtime-only install (no test/lint tooling), use `requirements.lock`
+instead of `requirements-dev.lock`.
+
+### Updating dependencies (regenerating the lockfiles)
+
+The lockfiles are generated with `pip-compile --generate-hashes` (DEP-009).
+After changing a version in `pyproject.toml`, regenerate both locks:
+
+```bash
+pip install pip-tools
+pip-compile --generate-hashes --output-file=requirements.lock pyproject.toml
+pip-compile --generate-hashes --extra=dev --output-file=requirements-dev.lock pyproject.toml
 ```
 
 ## Env vars
