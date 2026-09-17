@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**12** finding(s) (SEC-009/010/011/012/013/014 fixed; SEC-005/006/007/008 + new SEC-058/061 open). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-17.
 
 ---
 
@@ -502,5 +502,97 @@ Read backend/auth_service/routers/forms.py directly. The injection is real and t
 **Recommendation**
 
 HTML-escape both key and value before interpolation, mirroring the rest of the codebase: import html and use html.escape(key) / html.escape(value) (and html.escape(submitted_at), project_name, form_key for completeness). This is a one-line-per-field change consistent with the existing BE-006 pattern already applied in every other email builder.
+
+---
+
+<a id="sec-058"></a>
+
+## SEC-058 — Legacy unauth booking `/availability` & `/slots` lack the per-IP limit every other public booking read has; `/availability` range is unbounded (single-request CPU DoS)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Rate limiting / DoS |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/booking.py:944-963` (legacy shims) vs :342/:408 (limited slug-scoped reads) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: medium) |
+| **First seen** | 2026-09-17 |
+
+**Description**
+
+Every slug-scoped public booking read is gated by `dependencies=[Depends(_public_read_limit)]` (120/min/IP via the Postgres limiter, added in the SEC-012/030/035 remediation) — e.g. `/{slug}/config` (:342), `/{slug}/availability` (:408). The two **legacy** endpoints `@router.get("/availability")` (:944) and `@router.get("/slots")` (:966) omit that dependency entirely, so they are unauthenticated with **no rate limit**. Worse, `legacy_availability` passes the caller-supplied `from`/`to` straight into `_availability_for_range` with no bound check, and the core loop iterates day-by-day (`while cur <= d1: cur += timedelta(days=1)`), so a single request with a multi-millennium span forces hundreds of thousands of slot computations.
+
+**Attack scenario**
+
+An anonymous attacker sends `GET /booking/availability?from=2000-01-01&to=3000-01-01` (tenant is hardcoded to the legacy slug `roman-technologies-website`). Each request loops ~365k+ calendar days building per-day slot lists; with no `_public_read_limit` gate there is no throttle, exhausting CPU / serverless invocations and degrading the booking service for real widget users. Repeating the unbounded requests amplifies the DoS.
+
+**Evidence**
+
+```python
+@router.get("/availability")
+def legacy_availability(from_: str = Query(..., alias="from"), to: str = Query(...)) -> JSONResponse:
+    cfg = _require_tenant(_LEGACY_SLUG)
+    ...
+    d0 = datetime.strptime(from_, "%Y-%m-%d").date()
+    d1 = datetime.strptime(to, "%Y-%m-%d").date()
+    now = datetime.now(UTC)
+    rng = _availability_for_range(cfg=cfg, service=service, d0=d0, d1=d1, now_utc=now)
+```
+
+**Adversarial verification**
+
+Read the file directly. Confirmed `legacy_availability` (:944) and `legacy_slots` (:966) carry bare `@router.get` decorators with no `dependencies`, whereas `/{slug}/config`/`/services`/`/resources`/`/availability`/`/contract` all carry `dependencies=[Depends(_public_read_limit)]`. `_public_read_limit` (:330-339) is a genuine per-IP 120/60s limiter backed by `pg_rate_limit`. `legacy_availability` passes user-supplied `d0`/`d1` straight into `_availability_for_range` with no bound check; the core loop has no cap on span. Both endpoints are anonymous GETs (no CSRF/token/body). Severity medium (unauth CPU-amplification DoS, not data exposure).
+
+**Exploitability:** Attacker = any anonymous client (no auth/session/tenant scoping — the legacy shims hardcode tenant #1). A single wide-range request drives ~365k+ day iterations; unlimited requests compound it. No preconditions beyond network access.
+
+**Recommendation**
+
+Add `dependencies=[Depends(_public_read_limit)]` to the legacy `/availability` and `/slots` routes (matching the slug-scoped reads), and clamp/reject the requested range in `_availability_for_range` (e.g. reject when `(d1 - d0).days` exceeds `service.max_advance_days` or a small constant). Apply the same span clamp to the slug-scoped `/{slug}/availability` for defense-in-depth.
+
+---
+
+<a id="sec-061"></a>
+
+## SEC-061 — `promote.yml` downloads and executes the gitleaks binary with no checksum/signature verification, in a job holding a `contents:write` PAT and prod deploy hooks
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Supply chain / CI integrity |
+| **Dimension** | ci-workflows / deps-supplychain |
+| **Location** | `.github/workflows/promote.yml:40-43` |
+| **Reviewer confidence** | medium |
+| **Verifier verdict** | confirmed (adjusted: medium) |
+| **First seen** | 2026-09-17 |
+
+**Description**
+
+The manual production-promote job (`on: workflow_dispatch`, fast-forwards `main` ← `dev`) fetches a prebuilt gitleaks release tarball over the network, extracts it, and executes `./gitleaks` — with no SHA256 checksum, cosign signature, or digest pin. The version tag `v8.21.2` is pinned, but GitHub release assets are **mutable** (a tag's asset can be deleted/re-uploaded and the tag moved), so the version pin does not guarantee byte-integrity. Unlike `solver-agent.yml`, this job has **no `step-security/harden-runner` egress block** (grep for `harden-runner` in `promote.yml` returns nothing), so the downloaded binary runs with unrestricted network egress in a job that holds `PROMOTE_TOKEN` (a fine-grained `contents:write` PAT) and later curls the production deploy hooks.
+
+**Attack scenario**
+
+An attacker who compromises the gitleaks upstream (maintainer/org account or the release-asset delivery path) replaces the v8.21.2 linux asset with a trojaned binary. On the next manual promote run, `./gitleaks` executes arbitrary code on the runner: it can modify files in the checked-out `dev` tree before the fast-forward push to `refs/heads/main`, then the subsequent deploy-hook curls ship the poisoned tree to production. With no egress restriction it can also exfiltrate `PROMOTE_TOKEN` and any other secret in scope.
+
+**Evidence**
+
+```yaml
+      - name: Secret scan (gitleaks)
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --source . --no-git --redact --verbose --config .gitleaks.toml
+```
+
+**Adversarial verification**
+
+The cited lines are real and verbatim; the fetch has no checksum, signature, or digest pin. `grep` confirms no `harden-runner` in `promote.yml` (only `solver-agent.yml` has it), so the runner has unrestricted network. `PROMOTE_TOKEN` (`contents:write` PAT), the prod deploy hooks, and the `main ← dev` fast-forward push are all present in the same job, so the privileged-job blast-radius framing holds. Tellingly, every *other* external input in the same file is integrity-controlled (actions SHA-pinned; pip `--require-hashes`) — the gitleaks download is the one unverified executable. TLS covers wire integrity, so the residual is upstream/asset compromise, not in-transit tampering; likelihood is low but impact is high (arbitrary code in the prod-promotion job). Note: the earlier "`gitleaks-action@v2` unpinned" concern (from change notes / SEC-024) is a **false alarm** — `promote.yml` uses this pinned-version curl download, not the action; the real gap is the missing checksum, captured here.
+
+**Exploitability:** Attacker = whoever can compromise the gitleaks upstream/release asset. Preconditions: (1) upstream/asset compromise; (2) a maintainer runs the `workflow_dispatch` promote (the routine prod path). No egress guard to contain a trojaned binary.
+
+**Recommendation**
+
+Pin the download to a SHA256 digest and verify before executing (`echo '<sha256>  gitleaks.tar.gz' | sha256sum -c -`), or run gitleaks via a SHA-pinned `gitleaks/gitleaks-action` commit, or install from a hash-pinned package. Additionally add `step-security/harden-runner` with `egress-policy: block` to the promote job (as `solver-agent.yml` already does) so an untrusted binary cannot exfiltrate the PAT.
 
 ---

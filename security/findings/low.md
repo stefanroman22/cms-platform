@@ -2,7 +2,7 @@
 
 _Hardening / defense-in-depth. Address opportunistically._
 
-**31** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**35** finding(s) (SEC-018–045 mostly fixed; new SEC-059/060/062/063 open). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-17.
 
 ---
 
@@ -1442,5 +1442,182 @@ Verified the core injection by reading the cited code. In email_layout.py:64-74 
 **Recommendation**
 
 Validate accent_color/primary_color/widget_color against a strict hex/CSS-color regex in SettingsPatch (reject anything not matching ^#[0-9A-Fa-f]{3,8}$), run business_name through html.escape() at render time in header()/footer(), and pass logo_url/canonical_url through email_layout.safe_url() (already used for other links) before interpolating into src/href. The booking body copy already escapes name/when/note; the chrome (header/footer/brand) should follow the same rule.
+
+---
+
+<a id="sec-059"></a>
+
+## SEC-059 — Authenticated SEO `/translate` has no rate limit and fires unbounded paid DeepL calls per request (cost/quota DoS)
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Rate limiting / cost DoS |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/seo.py:247-251` (fan-out `_translate_seo_for_project` :197-244) |
+| **Reviewer confidence** | medium |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-17 |
+
+**Description**
+
+`translate_seo` loops over every default-locale `seo_page_meta` / `seo_articles` row × every non-default target locale and calls the translation provider per prose field. The endpoint has only `user_via_bearer_or_session` + `require_project_access` — **no rate limit** (unlike `workspace.save_service`, which got a per-project limit in the SEC-034 remediation). When `TRANSLATION_PROVIDER=deepl`, each request fans out to many paid DeepL calls.
+
+**Attack scenario**
+
+A logged-in project owner (or a compromised tenant session) repeatedly POSTs `/projects/{slug}/seo/translate` with many meta/article rows and several configured locales. Each request fans out to dozens of paid DeepL translate calls; with no limit, the caller runs up cost / exhausts the shared DeepL quota and can saturate the provider for other tenants.
+
+**Evidence**
+
+```python
+@router.post("/projects/{project_slug}/seo/translate")
+async def translate_seo(project_slug: str, body: SeoTranslateIn, request: Request) -> dict:
+    user = await user_via_bearer_or_session(request)
+    project = require_project_access(project_slug, user)
+    return _translate_seo_for_project(project, body.kind)
+```
+
+**Adversarial verification**
+
+Verified against the files: `translate_seo` has no `@limiter.limit` / `pg_rate_limit` gate; `_translate_seo_for_project` loops every default-locale row × every target locale → `provider.translate` per field. Cross-tenant is NOT possible — `require_project_access` enforces `project["user_id"] == user.id` (or `is_admin`), so a caller only fans out over their **own** project's rows. Severity lowered from medium to **low** because the default provider is `null` (no network/cost) unless `TRANSLATION_PROVIDER=deepl` is set, and the blast radius is the caller's own project plus shared quota. Still a real cost/quota-amplification gap parallel to SEC-034.
+
+**Exploitability:** Attacker = any authenticated project owner (own project only). Real cost only when the DeepL provider is configured. Impact: paid-API cost run-up + shared-quota exhaustion.
+
+**Recommendation**
+
+Add a per-project (and/or per-IP) limit to `translate_seo` and `enqueue_job` via `pg_rate_limit` with a small window (a few runs/hour/project), short-circuit when a recent translate run for the same kind already ran (dedup on `seo_last_run_at`), and cap the rows/fields translated per request.
+
+---
+
+<a id="sec-060"></a>
+
+## SEC-060 — Tenant `accent_color` reaches booking-confirmation email `style` attributes unescaped in `_cta_block` (SEC-045 hex allowlist bypassed)
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | HTML/email-template injection |
+| **Dimension** | xss-html |
+| **Location** | `backend/auth_service/services/booking_email.py:43-70` (`_cta_block`) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-17 |
+
+**Description**
+
+`_cta_block` computes a sanitized `link_color = email_layout.safe_hex(accent, "#18181b")` at :43 and uses it correctly at :67, but interpolates the **raw** `accent` parameter into two style attributes — `border:1px solid {accent}` (:51) and `background:{accent}` (:70) — bypassing the SEC-045 hex allowlist. `accent` is `_brand.accent` = `cfg.accent_color or cfg.primary_color` (booking.py:49-55, unsanitized), and `accent_color` is a free-form `str | None` in `SettingsPatch` (booking_admin_schemas.py:14) written verbatim by `update_settings`. The sibling builders (`booking_reminder_email.py:70`, `booking_manage_email.py:115`) go through `safe_hex`; this one CTA builder does not.
+
+**Attack scenario**
+
+A tenant/project owner sets `accent_color` to `#000"><img src=https://evil/x.png>` via `PATCH /projects/{slug}/bookings/settings`. When any visitor books through that tenant's public widget, the confirmation email rendered by `_cta_block` breaks out of the CTA button's `style` attribute and injects attacker-chosen HTML (tracking pixels, spoofed links) into an email delivered to the tenant's own customers from the platform's shared Resend sending identity.
+
+**Evidence**
+
+```python
+    link_color = email_layout.safe_hex(accent, "#18181b")   # sanitized value, used at :67
+    ...
+    add_btn = (f'<a href="{cal}" style="...border:1px solid {accent};color:{add_color};...'  # :51 RAW accent
+        ...)
+    ... f'<a href="{esc}" style="...background:{accent};color:{join_color};...'                # :70 RAW accent
+```
+
+**Adversarial verification**
+
+Cited lines are real and exact. `booking_email.py:43` computes the sanitized `link_color` and uses it at :67, but :51 and :70 interpolate the raw `accent` into double-quoted `style` attributes, bypassing the `safe_hex` regex (`#[0-9a-fA-F]{3,8}`) applied consistently elsewhere. Data flow confirmed end to end: `accent = _brand.accent` ← `_brand_for` `cfg.accent_color or cfg.primary_color` (no sanitize) ← free-form `SettingsPatch.accent_color`. Severity **low**: the injection sink is an email delivered to the tenant's **own** customers (self-owned blast radius), gated by authenticated owner access, and rendered in email clients that heavily sandbox HTML/strip scripts — so it is HTML/pixel injection, not script XSS. Still a real regression of the SEC-045 escaping guarantee.
+
+**Exploitability:** Attacker = authenticated tenant owner (settings PATCH is ownership-gated). Impact: HTML/pixel injection into confirmation emails sent to that tenant's customers from the shared sending identity.
+
+**Recommendation**
+
+Replace the two raw `{accent}` interpolations at :51 and :70 with the already-computed `link_color` (or a dedicated `safe_hex(accent, "#18181b")`) so every emitted color passes the hex allowlist — matching the reminder/manage builders. Defense-in-depth: validate `accent_color`/`primary_color` against `^#[0-9A-Fa-f]{3,8}$` in `SettingsPatch`.
+
+---
+
+<a id="sec-062"></a>
+
+## SEC-062 — Backend `vercel.json` security-header block is silently dropped by the legacy `routes` schema (CSP/HSTS/COOP/CORP not delivered)
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Security headers / config correctness |
+| **Dimension** | secrets-config |
+| **Location** | `backend/vercel.json:5-21` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: info→low) |
+| **First seen** | 2026-09-17 |
+
+**Description**
+
+`backend/vercel.json` uses the legacy `builds`/`routes` deployment schema (:2-7) while also declaring a modern top-level `headers` block (:8-21). Per Vercel's configuration contract, `headers` (and `redirects`/`rewrites`/`cleanUrls`/`trailingSlash`) are **not applied when `routes` is present** — so the declared `Content-Security-Policy: default-src 'none'; …`, `Strict-Transport-Security`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, and `Cross-Origin-Resource-Policy` are silently omitted from backend responses rather than the deploy failing. This directly corrects the SEC-050 assumption that "the backend relies on edge config for CSP": the edge config is inert. The only headers that actually reach clients are the two emitted by `SecurityHeadersMiddleware` (`core/security_headers.py`): `X-Frame-Options` and `X-Content-Type-Options`.
+
+**Attack scenario**
+
+The security posture the config author believes is in force (verifiable by a header check on the API domain) is not delivered: HSTS is absent on the API domain, and CSP/COOP/CORP hardening does not apply. Impact is low because the backend serves JSON only (no HTML document for CSP `base-uri`/`form-action` to constrain, and the clickjacking/MIME headers that matter for an API *are* still emitted by app middleware) — but the config is misleading and HSTS on the API host is a real, low-value loss.
+
+**Evidence**
+
+```json
+  "routes": [ { "src": "/(.*)", "dest": "/vercel_entry.py" } ],
+  "headers": [ { "source": "/(.*)", "headers": [
+    { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+    { "key": "Content-Security-Policy", "value": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" },
+    { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+    { "key": "Cross-Origin-Resource-Policy", "value": "same-site" }, ... ] } ]
+```
+
+**Adversarial verification**
+
+Read `backend/vercel.json` directly: legacy `builds` (:2-4) + `routes` (:5-7) coexist with the top-level `headers` block (:8-22). Vercel forbids combining `routes` with `headers`, so the declared headers are not reliably applied. `core/security_headers.py` confirms only `X-Frame-Options` + `X-Content-Type-Options` are added by app middleware. No direct attacker path (JSON-only API), so kept **low** (config correctness + missing HSTS), but it invalidates the SEC-050 "edge covers it" reconciliation.
+
+**Recommendation**
+
+Migrate `backend/vercel.json` off the legacy `builds`/`routes` schema (use `rewrites` instead of `routes`, or rely on Vercel's zero-config Python detection) so the `headers` block is honored; OR emit the full header set (CSP, Referrer-Policy, Permissions-Policy, COOP, CORP, HSTS) from `SecurityHeadersMiddleware` so delivery does not depend on Vercel config. Then re-evaluate SEC-050.
+
+---
+
+<a id="sec-063"></a>
+
+## SEC-063 — SEO-GEO Optimizer `render_check.fetch_raw` fetches arbitrary URLs with no scheme/host allowlist, no metadata-IP block, and no redirect revalidation (latent SSRF in agent tooling)
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | SSRF / outbound requests |
+| **Dimension** | ssrf-outbound |
+| **Location** | `agents/SEO-GEO Optimizer/render_check.py:18-23` |
+| **Reviewer confidence** | medium |
+| **Verifier verdict** | partial (adjusted: low) |
+| **First seen** | 2026-09-17 |
+
+**Description**
+
+`fetch_raw` passes an arbitrary `url` straight into `urllib.request.urlopen()` with the default opener: no scheme allowlist (`urllib` honors `file://`/`ftp://`), no host/IP allowlist (no block on `169.254.169.254` cloud-metadata, loopback, or RFC-1918 ranges, nor DNS names resolving to them), and no redirect revalidation (the default handler transparently follows 30x). The `# noqa: S310 (trusted client URLs)` comment holds only for the client's own site; the same unsafe fetcher pattern would be dangerous if any externally-influenced URL reached it.
+
+**Attack scenario / current reachability**
+
+Verifier (partial): the exploit the finder posited — a poisoned "competitor" domain surfacing via WebSearch and then being fetched — does **not** hold, because competitor URLs are fetched with the sandboxed `WebFetch` tool (phase 2), not `fetch_raw`. Grep of all callers shows `fetch_raw` is only invoked from the phase markdown against the **client's own** site/locale URLs loaded from the audited project's context, and it is agent-run tooling (not a FastAPI endpoint), so there is no request-reachable surface today. The finding is recorded as a **latent** unsafe-fetch pattern (defense-in-depth) in the same class as the scraper short-link SSRF (SEC-049/052), to be hardened before any untrusted URL is ever routed to it.
+
+**Evidence**
+
+```python
+def fetch_raw(url: str, timeout: int = 20) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "text/html"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (trusted client URLs)
+        raw = resp.read(_BYTE_CAP)
+    return raw.decode("utf-8", errors="replace")
+```
+
+**Adversarial verification**
+
+The code claim is genuinely supported (default opener, no scheme/IP allowlist, follows redirects, 600 KB cap only). But exploitability is materially overstated by the finder: all callers pass the client's own URLs; untrusted competitor pages go through `WebFetch`, not this function. Downgraded from medium to **low** and marked *partial* — a real unsafe pattern with no present request-reachable attacker path.
+
+**Recommendation**
+
+Before fetching: (1) require scheme in `{http, https}`; (2) resolve the hostname and reject loopback/link-local/private/ULA addresses (incl. IPv4-mapped IPv6); (3) install a custom opener whose redirect handler re-runs the same scheme+IP validation on every hop and caps redirect count. Apply the same guard uniformly to the scraper short-link expander (SEC-049/052) as a shared outbound-fetch helper.
 
 ---
