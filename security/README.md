@@ -5,22 +5,40 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-07** (remediation in progress)
+## Status snapshot — last full review **2026-09-17**
 
 | Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **10** | **31** | **10** | **56** | 14 |
+| **1** | **5** | **12** | **35** | **11** | **64** | 14 |
 
-**2 in-progress** (`SEC-001`, `SEC-002` — partially remediated 2026-06-07), 54 open. See the
-remediation note in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+All four original criticals/highs from the baseline (`SEC-001/002/056` Solver hardening, `SEC-003/004`
+booking IDOR + Supabase anon) are **fixed and re-verified with no regression**. The one **open high** is
+new this cycle: **`SEC-057`** — CMS Connector cross-tenant admin write via a prompt-injected
+`project_slug`. See [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
 
-### Remediation progress
-- **`SEC-001` (critical) + `SEC-002` (high) + `SEC-056` (high)** — *in-progress, code-complete, pending one CI validation run.* Closed in code: cross-tenant `SOLVER_GITHUB_TOKEN` theft and the `node -e` RCE; added prompt fencing, input hardening, pre-push secret-scan, and credential teardown; and **egress isolation** (`step-security/harden-runner`, SHA-pinned, `block` mode) so an injected agent can't exfiltrate the Claude OAuth token. **Action needed:** one `workflow_dispatch` run of the Solver with `egress_policy=audit` to confirm the egress allowlist is complete — then all three flip to `fixed`.
+### What changed 2026-09-17
+- **8 new findings** (`SEC-057`…`SEC-064`) from the SEO/GEO feature, per-staff booking, branded emails,
+  the CMS Connector changes, and the new manual `promote.yml`. No new critical.
+- **`SEC-046` + `SEC-047` fixed**; **`SEC-007/023/025/026` obsolete** (CI/CD teardown deleted the cited
+  files; Dependabot disabled).
+- **Supabase anon-surface lockdown (`SEC-004/013/033/042/053`) re-verified — no regression** across all
+  migrations up to `2026_06_14`.
+- **Cross-tenant authZ on all new project-scoped endpoints is clean** (`seo.py`, `projects.py`,
+  `deps.py`) — authz-idor/admin-priv/public-tokens/injection/scraper returned zero new findings.
+- **MCP unavailable this run** (headless): Supabase `get_advisors` + Vercel `get_project` not re-pulled;
+  DB analysis from SQL migrations only.
 
-### The next things to fix
-1. **Validate the egress allowlist** — run the Solver workflow once via `workflow_dispatch` with `egress_policy=audit`, check StepSecurity's reported destinations, add any missing legit host, then rely on `block`. Closes SEC-001/SEC-002/SEC-056.
-2. **`SEC-004` (high)** — **anon/authenticated can EXECUTE the `SECURITY DEFINER` `claim_*_solver_issue` RPCs** (unauthenticated cross-tenant issue disclosure + pipeline DoS via the public Supabase anon key). Pure `REVOKE`, no schema change.
-3. **`SEC-003` (high)** — Booking owner can create a booking against **another tenant's `resource_id`** (cross-tenant calendar DoS via the global GiST exclusion constraint).
+### The next things to fix (recommended order)
+1. **`SEC-057` (high)** — pin `manifest["project_slug"] = slug` in the CMS Connector scan branch and pass
+   the trusted slug explicitly to `_provision`/`_vercel_setup`; fence the untrusted client-file content
+   (shared fix with `SEC-016`). Closes the only open cross-tenant vector.
+2. **`SEC-058` (medium)** — add `_public_read_limit` to the legacy booking `/availability` + `/slots`
+   and clamp the date range (unauth CPU DoS).
+3. **`SEC-061` (medium)** — checksum-pin the gitleaks binary in `promote.yml` and add a harden-runner
+   egress block (privileged prod-promote job).
+4. **Agent hardening class** (`SEC-005/006/016/017`, `SEC-063`) — data/instruction separation for all
+   untrusted text fed to agents; safe outbound-fetch helper.
+5. **Low/info sweep** — `SEC-059/060/062/064` + remaining tracked lows.
 
 ## How to read this folder
 

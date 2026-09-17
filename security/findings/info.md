@@ -2,7 +2,7 @@
 
 _Best-practice notes and accepted-by-design observations._
 
-**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**11** finding(s) (SEC-046/047 now fixed; new SEC-064 open). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-17.
 
 ---
 
@@ -453,5 +453,44 @@ Read the cited code directly. frontend/src/app/(widget)/w/[slug]/page.tsx:18-19 
 **Recommendation**
 
 Optionally constrain the targetOrigin if the set of embedding origins is known; otherwise acceptable since no sensitive data is transmitted. The embed.js inbound origin check is correct and should be kept.
+
+---
+
+<a id="sec-064"></a>
+
+## SEC-064 — SEO/GEO tables enable RLS but omit the `anon`/`authenticated` table REVOKE used by peer hardening migrations (defense-in-depth only)
+
+| | |
+|---|---|
+| **Severity** | info |
+| **Status** | open |
+| **Category** | Supabase DB / defense-in-depth |
+| **Dimension** | supabase-db |
+| **Location** | `backend/migrations/2026_06_14_seo_geo.sql:158-167` |
+| **Reviewer confidence** | medium |
+| **Verifier verdict** | confirmed (adjusted: info) |
+| **First seen** | 2026-09-17 |
+
+**Description**
+
+The nine new SEO/GEO tables (`seo_runs`, `seo_audits`, `seo_plan_items`, `seo_changes`, `seo_competitors`, `seo_page_meta`, `seo_articles`, `seo_learnings`, `seo_jobs`) are created in the PostgREST-exposed `public` schema and `enable row level security` with **no policies** — correct default-deny for `anon`/`authenticated`. However, unlike the two peer hardening migrations from the same feature cycle (`2026_06_08_rate_limits.sql:21` and `2026_06_08_security_anon_surface_hardening.sql:107` both `revoke all … from anon, authenticated`), this migration never revokes the table grants that Supabase's `ALTER DEFAULT PRIVILEGES` auto-issues. Not exploitable today (RLS with zero policies already denies all rows), but the leftover grants would become live if a **future** migration adds a permissive policy or disables RLS on one of these tables. `seo_learnings` is declared global/cross-client, raising the value of the belt-and-suspenders REVOKE.
+
+**Evidence**
+
+```sql
+-- ── RLS: enabled, service-role only (no public policies; app auth is in code) ──
+alter table public.seo_runs        enable row level security;
+...
+alter table public.seo_jobs        enable row level security;
+-- (no `revoke all ... from anon, authenticated;` anywhere in this file)
+```
+
+**Adversarial verification**
+
+Read the cited file and both peer migrations. Confirmed: :158-167 enable RLS on the nine tables with no policies; `grep` for revoke/grant in `seo_geo.sql` returns nothing; the two same-cycle hardening migrations DO issue `revoke all … from anon, authenticated` with comments explicitly treating it as a required belt-and-suspenders step (the SEC-004 lesson). Not exploitable today; impact requires a compounding future regression — hence **info**.
+
+**Recommendation**
+
+Append to a follow-up migration: `revoke all on table public.seo_runs, public.seo_audits, public.seo_plan_items, public.seo_changes, public.seo_competitors, public.seo_page_meta, public.seo_articles, public.seo_learnings, public.seo_jobs from anon, authenticated;` to match the `rate_limits` / `slack_processed_events` pattern. Consider a CI assertion that every new `public` table has RLS enabled AND anon/authenticated revoked.
 
 ---

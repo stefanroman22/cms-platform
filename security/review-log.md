@@ -5,6 +5,56 @@ changed* over time, independent of the per-finding tracker.
 
 ---
 
+## 2026-09-17 — Weekly scheduled review
+
+- **Method / scope:** 14-dimension multi-agent Workflow (find → adversarial verification → synthesize),
+  **34 agents**, 0 errors, ~1.9M subagent tokens. Reconciled all open/needs-decision/accepted-risk
+  findings + ran one finder per dimension focused on the **37 commits since the 2026-06-07 baseline**.
+- **Since last review (new code scanned):** the **SEO/GEO** feature (`routers/seo.py`,
+  `services/seo_repo.py`, `models/seo_schemas.py`, `translation/seo_translate.py`,
+  `migrations/2026_06_14_seo_geo.sql`, `agents/SEO-GEO Optimizer/`); **per-staff dynamic booking**
+  (booking router/repos/availability/tenant + blocks/service-price/resource-image migrations);
+  **branded booking emails** (per-text color customization, `email_layout.py`, `booking_email.py`,
+  i18n copy overrides); **CMS Connector** branch-protection stripping + 429 backoff (`github.py`,
+  `vercel.py`, `scan.py`); the **"admins see all projects"** change (`projects.py`); the **CI/CD
+  overhaul** (deleted `ci.yml`/`e2e.yml`/`auto-merge-dev-to-master.yml`/`post-deploy-smoke.yml`/
+  `scraper-ci.yml`/`dependabot-auto-merge.yml`; Dependabot disabled; new manual `promote.yml`);
+  marketing i18n (EN/NL/RO).
+- **New findings (8):** **SEC-057 (high)** CMS Connector cross-tenant admin write via prompt-injected
+  `project_slug`; **SEC-058 (medium)** legacy unauth booking `/availability`+`/slots` no rate limit +
+  unbounded range CPU DoS; **SEC-061 (medium)** `promote.yml` gitleaks binary no checksum in a
+  privileged job; **SEC-059 (low)** SEO `/translate` no rate limit (paid DeepL); **SEC-060 (low)**
+  `accent_color` unescaped in `_cta_block` (SEC-045 bypass); **SEC-062 (low)** `vercel.json` headers
+  dropped by legacy `routes` schema; **SEC-063 (low)** SEO-GEO `render_check.fetch_raw` unsafe URL
+  fetch (latent SSRF); **SEC-064 (info)** SEO tables omit anon/authenticated REVOKE.
+- **Status changes:** SEC-046 → **fixed** (b6ca3bb — bearer path now returns `UserOut`);
+  SEC-047 → **fixed** (fresh session minted post-password-change); SEC-007/023/026 → **obsolete**
+  (files deleted in 7ae1b07); SEC-025 → **obsolete** (Dependabot disabled entirely — residual: no
+  automated vuln bumps for any component); SEC-006 → materially mitigated (force-push removed, prod
+  promote now manual) but kept **open** for the unreviewed auto-push to staging; SEC-024 → residual
+  narrowed to `checkout@v4`/`setup-python@v5` in `solver-agent.yml` (scraper-ci deleted; harden-runner
+  SHA-pinned). **SEC-050 correction:** its "edge config covers CSP" premise is **wrong** — see SEC-062
+  (the `vercel.json` header block is inert under the legacy `routes` schema); kept open.
+- **Regression check (Supabase anon surface):** re-read all migrations 2026_06_09 → 2026_06_14 —
+  **no regression** of SEC-004/013/033/042/053. No `CREATE OR REPLACE` on the `claim_*` functions, no
+  re-GRANT to anon/authenticated, no RLS disabled on the hardened tables. The four new `rate_limit_*`
+  SECURITY DEFINER functions all pin `search_path=''`. SEC-054 (inert tenant RLS owner policies)
+  confirmed still true — accepted-risk unchanged.
+- **AuthZ posture on new code — clean.** Every new project-scoped endpoint proves ownership:
+  `seo.py` applies `require_project_access` on all mutations; the `projects.py` admin-visibility change
+  gates on server-side `is_admin` (non-admins still filter by `user_id`); `deps.py`
+  `require_project_access` enforces `user_id == caller or is_admin`. Dimensions authz-idor, admin-priv,
+  public-tokens, injection, and scraper returned **zero** new findings after adversarial verification.
+- **MCP gaps:** Supabase (`get_advisors`, `list_tables`, `execute_sql`) and Vercel (`get_project`) MCP
+  servers were **unavailable** in this headless cloud run (confirmed via tool search). DB/RLS/GRANT
+  analysis is from the SQL migration files only; live advisors were not re-pulled and Vercel env/
+  deployment-protection posture was reviewed from repo config (`vercel.json`, workflows). Recommend a
+  local run with MCP to re-pull advisors and confirm the SEC-062 header behavior against the live edge.
+- **Headline + remaining top risks:** the agentic/CI automation layer remains the dominant theme —
+  SEC-057 (new high) is the clearest cross-tenant vector; the internet-facing app edges (auth, public
+  booking/forms, PostgREST) stayed fail-closed with the new features. Remaining priority order:
+  SEC-057 → SEC-058/SEC-061 → SEC-005/SEC-006/SEC-016 (agent hardening) → the low/info sweep.
+
 ## 2026-06-08 — Notes: password policy + leaked-password protection
 
 - **Leaked-password protection (advisor `auth_leaked_password_protection`) — deferred (accepted-risk).** It is a Supabase **Pro-plan** Auth feature (Authentication → Attack Protection) and the project is on the Free plan, so it cannot be enabled. Revisit on upgrade.
