@@ -51,7 +51,7 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-003](findings/high.md#sec-003) | high | Owner can create a booking against another tenant's resource (cross-tenant write + silent DoS) via unvalidated resource_id | `backend/auth_service/routers/booking_admin.py` (eligible-resource check) | authz-idor | ✅ fixed |
 | [SEC-004](findings/high.md#sec-004) | high | anon/authenticated can EXECUTE SECURITY DEFINER solver-claim RPCs — dequeue/poison the auto-fix queue + cross-tenant issue disclosure | `migrations/2026_06_08_security_anon_surface_hardening.sql` | supabase-db | ✅ fixed |
 | [SEC-056](findings/high.md#sec-056) | high | Solver agent retains command execution (`npm run`) while the Claude OAuth token is present on the runner — residual exfil path after SEC-001 hardening | `.github/workflows/solver-agent.yml` (harden-runner egress block) | agents | ✅ fixed |
-| [SEC-005](findings/medium.md#sec-005) | medium | Admin issue-status update endpoint lets the Solver mark ANY issue done cross-project, decoupled from whether the agent actually fixed it | `backend/auth_service/routers/issues.py:276-344; agents/Solver - Issues…` | agents | open |
+| [SEC-005](findings/medium.md#sec-005) | medium | Admin issue-status update endpoint lets the Solver mark ANY issue done cross-project, decoupled from whether the agent actually fixed it | `backend/auth_service/routers/issues.py:276-344; agents/Solver - Issues…` | code-remediated / ⚠ verify prod DB (see 2026-09-19 note) |
 | [SEC-006](findings/medium.md#sec-006) | medium | Solver Agent auto-commits and force-pushes attacker-influenced file changes to cms-preview, which a single Slack ✅ promotes to client production | `agents/Solver - Issues/finalize.py:42-49; agents/Solver - Issues/repo.…` | agents | open |
 | [SEC-007](findings/medium.md#sec-007) | medium | Dependabot auto-merge self-approves and merges minor/major-range bumps without independent review; a compromised dependency can reach master/prod | `.github/workflows/dependabot-auto-merge.yml:36-50` | ci-workflows | obsolete |
 | [SEC-008](findings/medium.md#sec-008) | medium | Scraper dependencies are not hash-pinned and have no lockfile (DEP-009 standard not applied) | `scraper/pyproject.toml:6-16; .github/workflows/scraper-ci.yml:27-31` | ✅ fixed (#70 — `scraper/requirements.lock` + `requirements-dev.lock`; cited `scraper-ci.yml` deleted in CI teardown) |
@@ -133,6 +133,44 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 _Also reconciled this run: **SEC-008** (scraper hash-pinned lockfile) — fixed on dev by #70
 (`scraper/requirements.lock` + `requirements-dev.lock`; the `scraper-ci.yml` install path cited in the
 finding was already deleted in the CI teardown). Row above updated to `fixed`._
+
+## 2026-09-19 automated Solver routine — run summary & human-decision items
+
+> **⚠ ID reconciliation.** The unmerged `origin/security/weekly-review-2026-09-17` branch (the freshest
+> review this run sourced from) was cut from an older dev tip and its new-finding IDs (`SEC-057…SEC-064`)
+> **collide** with this tracker's own `SEC-057…SEC-068` (2026-06-20 review). Where they collide, the notes
+> below say "(2026-09-17)". Please rebase + renumber the 2026-09-17 review branch onto current dev.
+
+**Fixes shipped this run**
+
+- **SEC-057 (2026-09-17, high)** — CMS Connector cross-tenant admin write via prompt-injected
+  `project_slug`. Fixed by pinning the trusted `--slug` in the scan branch. PR
+  `security/fix-SEC-057-2026-09-19` (**open — recommend merge**; blocked from auto-merge only by a
+  pre-existing, unrelated failing agent test `test_booking_lib_ts_written`, a stale Next.js→Vite prefix test).
+- **SEC-058 (2026-09-17, medium)** — legacy unauth booking `/availability` & `/slots` rate-limit + range
+  clamp. **✅ merged to dev (#76).**
+- **SEC-006 (medium)** — fail-closed diff-policy gate before the Solver's auto-push. PR
+  `security/fix-SEC-006-2026-09-19` (**open — in-progress**, partial; recommend merge as defense-in-depth).
+- **SEC-008 (medium)** — already fixed on dev by **#70**; row reconciled to `fixed`.
+
+**Human-decision items (NOT auto-fixed)**
+
+- **SEC-005 (medium)** — The titled "admin status endpoint" claim is a **false positive** (the endpoint is
+  gated by an argon2/revocable/expiry-checked admin key; "cross-project mark-done" is intended admin
+  authority — see the 2026-09-17 adversarial verification). The real, live part (anon/authenticated
+  EXECUTE on the `claim_*` SECURITY DEFINER RPCs) is **already remediated in code**:
+  `backend/migrations/2026_06_08_security_anon_surface_hardening.sql` REVOKEs EXECUTE from
+  `public, anon, authenticated` on both `claim_next_solver_issue` / `claim_specific_solver_issue` and pins
+  `search_path=''` (this is the same remediation that closed **SEC-004**, marked fixed). **⚠ Human: confirm
+  that migration was actually applied to the shared prod Supabase DB** (`xeluydwpgiddbamysgyu`) — the
+  Supabase MCP was unavailable this run, so live ACLs could not be re-pulled, and dev + prod share one DB.
+  No new code change is warranted (a duplicate REVOKE migration would be redundant).
+- **SEC-061 (2026-09-17, medium — = this tracker's low `SEC-065`)** — `promote.yml` downloads+executes the
+  gitleaks binary with no checksum/signature, in a job holding a `contents:write` PAT + prod deploy hooks,
+  with no harden-runner egress block. **NOT auto-fixed: the automated Solver is hard-forbidden from
+  modifying `promote.yml` / the production-promotion path.** **⚠ Human:** pin the gitleaks download to a
+  SHA256 and `sha256sum -c` before executing (or use a SHA-pinned `gitleaks/gitleaks-action` commit), and
+  add `step-security/harden-runner` with `egress-policy: block` to the promote job.
 
 ## Dismissed (adversarially verified as false positives / non-issues)
 
