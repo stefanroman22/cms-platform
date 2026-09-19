@@ -123,14 +123,17 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 > different findings. The 2026-09-19 automated solver fixed the genuinely-present, still-open items
 > from that review below, keeping the **2026-09-17 review IDs** in branch/PR/commit names. Please
 > rebase + renumber the 2026-09-17 review branch onto current dev to remove the collision.
+> (Independent security PRs from this run each touch this section — expect a trivial merge conflict;
+> keep every row.)
 
 | ID (2026-09-17) | Sev | Title | Location | Status |
 |---|---|---|---|---|
 | SEC-057 | high | CMS Connector scan branch never pins the trusted `--slug`; a prompt-injected client file can retarget admin-key provisioning writes at another tenant's slug | `agents/CMS Connector - Website/scan.py:1050-1055` | ✅ fixed (2026-09-19, PR `security/fix-SEC-057-2026-09-19`) |
+| SEC-058 | medium | Legacy unauth booking `/availability` & `/slots` lacked the shared per-IP read limit; `/availability` range was unbounded (single-request CPU DoS) | `backend/auth_service/routers/booking.py` (legacy shims + `_availability_for_range`) | ✅ fixed (2026-09-19, PR #76) |
 
-_Also reconciled this run: **SEC-008** (scraper hash-pinned lockfile) — this tracker still shows it `open`
-but it was fixed on dev by #70 (`scraper/requirements.lock` + `requirements-dev.lock`; the `scraper-ci.yml`
-install path cited in the finding was already deleted in the CI teardown). Its row above should read `fixed`._
+_Also reconciled this run: **SEC-008** (scraper hash-pinned lockfile) — fixed on dev by #70
+(`scraper/requirements.lock` + `requirements-dev.lock`; the `scraper-ci.yml` install path cited in the
+finding was already deleted in the CI teardown). Row above updated to `fixed`._
 
 ## Dismissed (adversarially verified as false positives / non-issues)
 

@@ -629,3 +629,44 @@ Verifier confirmed submit_contact has only the in-memory slowapi cap (pg_rate_li
 Mirror submit_form: add pg_rate_limit.enforce(f'contact:{client_ip(request)}', limit=5, window_seconds=600, ...) plus a global per-recipient bucket (all contact mail goes to one address) so the cap holds across serverless instances. Optionally add a CAPTCHA/proof-of-work to the unauthenticated marketing form.
 
 ---
+
+<a id="sec-058-2026-09-17"></a>
+
+## SEC-058 (2026-09-17 review) — Legacy unauth booking `/availability` & `/slots` lack the per-IP limit every other public read has; `/availability` range is unbounded
+
+> **⚠ ID note:** This is finding **SEC-058 from the 2026-09-17 weekly review**, which collides with
+> this tracker's own `SEC-058` (unauth booking write-path in-memory limiter, 2026-06-20 review). Kept
+> under the 2026-09-17 ID because that is the review this fix was sourced from.
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | ✅ fixed (2026-09-19) |
+| **Category** | Rate limiting / DoS |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/booking.py` (legacy `/availability` :966, `/slots` :988; `_availability_for_range` :239) |
+
+**Description**
+
+Every slug-scoped public booking read carries `dependencies=[Depends(_public_read_limit)]` (120/min/IP
+via the shared Postgres limiter). The two legacy shims `GET /booking/availability` and
+`GET /booking/slots` (tenant hardcoded to `roman-technologies-website`) omitted it, so they were
+unauthenticated with no rate limit. `legacy_availability` also passed the caller's `from`/`to` straight
+into `_availability_for_range`, whose loop iterates day-by-day with no span cap — a single request with a
+multi-millennium range (e.g. `from=2000-01-01&to=3000-01-01`) forced ~365k+ per-day slot computations.
+
+**Fix (2026-09-19)**
+
+(1) Added `dependencies=[Depends(_public_read_limit)]` to both legacy routes, matching the slug-scoped
+reads. (2) Added a span guard at the top of `_availability_for_range` (shared by the legacy and
+slug-scoped `/{slug}/availability` paths): reject with 422 when `(d1 - d0).days` exceeds the service's
+`max_advance_days` (fallback 366). Days beyond the booking horizon never yield slots, so the clamp is
+lossless for real widget use while removing the CPU-amplification primitive.
+
+**Regression tested**
+
+`tests/test_booking_legacy_ratelimit.py` (4 tests: 429 on both legacy endpoints when over cap; 422 on an
+unbounded span with `load_eligible_resources` never called; 200 on a normal 7-day range). Full backend
+suite: 580 passed, 5 skipped.
+
+---
