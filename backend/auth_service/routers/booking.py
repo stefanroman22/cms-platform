@@ -252,6 +252,15 @@ def _availability_for_range(
     [{"date": "YYYY-MM-DD", "starts": [datetime, ...]}] for days with >=1 slot.
     `resource_id` (the customer's chosen barber): restricts the computation to that
     single barber's own calendar; an ineligible id yields no days."""
+    # SEC-058: bound the requested span so a single request cannot force an
+    # unbounded day-by-day loop (e.g. from=2000-01-01&to=3000-01-01 → ~365k
+    # iterations). Days beyond the service's booking horizon never yield slots
+    # (available_starts caps at now + max_advance_days), so capping the span at
+    # max_advance_days is lossless for real widget use while killing the DoS.
+    horizon = int(service.get("max_advance_days") or 0)
+    max_span_days = horizon if horizon > 0 else 366
+    if (d1 - d0).days > max_span_days:
+        raise HTTPException(status_code=422, detail="Requested date range is too large.")
     resources = booking_repo.load_eligible_resources(cfg.tenant_id, service["id"])
     if resource_id:
         resources = [r for r in resources if r["id"] == resource_id]
@@ -963,7 +972,7 @@ async def send_reminders(request: Request) -> JSONResponse:
 _LEGACY_SLUG = "roman-technologies-website"
 
 
-@router.get("/availability")
+@router.get("/availability", dependencies=[Depends(_public_read_limit)])
 def legacy_availability(
     from_: str = Query(..., alias="from"), to: str = Query(...)
 ) -> JSONResponse:
@@ -985,7 +994,7 @@ def legacy_availability(
     return JSONResponse(content={"days": [d["date"] for d in rng]})
 
 
-@router.get("/slots")
+@router.get("/slots", dependencies=[Depends(_public_read_limit)])
 def legacy_slots(date: str, tz: str = "") -> JSONResponse:
     cfg = _require_tenant(_LEGACY_SLUG)
     services = booking_repo.load_active_services(cfg.tenant_id)
