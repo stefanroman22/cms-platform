@@ -219,3 +219,48 @@ it; then the default `block` policy is safe to rely on. SEC-001 / SEC-002 / SEC-
 once that validation run is clean.
 
 ---
+
+<a id="sec-057-2026-09-17"></a>
+
+## SEC-057 (2026-09-17 review) — CMS Connector provisions/patches projects by a model-chosen `project_slug` derived from untrusted client website files (cross-tenant admin write via prompt injection)
+
+> **⚠ ID note:** This is finding **SEC-057 from the 2026-09-17 weekly review**, which collides with
+> this tracker's own `SEC-057` (booking accent-color email injection, 2026-06-20 review). Kept under the
+> 2026-09-17 ID because that is the review this fix was sourced from. Reconcile when merging the
+> 2026-09-17 review branch.
+
+| | |
+|---|---|
+| **Severity** | high |
+| **Status** | ✅ fixed (2026-09-19) |
+| **Category** | Prompt injection → cross-tenant authZ bypass (IDOR) |
+| **Dimension** | agents |
+| **Location** | `agents/CMS Connector - Website/scan.py:1050-1055` (sinks: `_provision` :568, `_vercel_setup` :738) |
+
+**Description**
+
+In the Claude-scan code path, the entire provisioning manifest — including `project_slug` — is produced
+by `_call_claude()` from the client website's own source files. The scan branch set only `cms_endpoint`
+on the returned manifest and **never pinned `project_slug` to the trusted `--slug` CLI value**, while the
+pre-approved-manifest branch already did (`manifest.setdefault("project_slug", slug)`). Both privileged
+consumers trust the model-produced slug: `_provision` (:568) and `_vercel_setup` (:738) route
+admin-bearer `PATCH`/`POST` calls to `/projects/{slug}/...`. Because the bearer key is a full-admin key
+(`is_admin=True` bypasses `require_project_access`), a prompt-injected file could steer the model to emit
+another tenant's slug, redirecting the writes cross-tenant.
+
+**Fix (2026-09-19)**
+
+Pin the trusted CLI slug unconditionally in the scan branch after `_call_claude`:
+`manifest["project_slug"] = slug` (overwrite, not `setdefault` — the model value is untrusted). Both
+privileged consumers now read the trusted slug. Regression test:
+`tests/test_scan_authz.py::test_scan_branch_pins_trusted_slug_over_model_output` asserts a
+model-supplied `"victim-tenant"` is overwritten by the CLI `--slug`.
+
+**Residual risk**
+
+The shared prompt-injection root cause (SEC-016 — client file content concatenated into the scan prompt
+with no data/instruction fencing) is unchanged; this fix removes the cross-tenant *write* primitive by
+pinning the slug, but hardening the prompt separation and scoping the connector to a per-onboarding key
+(recommendations 3–4) remain follow-ups.
+
+---

@@ -1051,6 +1051,12 @@ def main(
 
         manifest = _call_claude(model, slug, files)
         manifest["cms_endpoint"] = endpoint
+        # SEC-057: the manifest (incl. project_slug) is model output derived from
+        # untrusted client website files. Pin project_slug to the trusted CLI
+        # --slug so a prompt-injected file cannot retarget privileged admin-key
+        # writes (_provision / _vercel_setup) at another tenant's slug. Overwrite
+        # unconditionally — the model value is untrusted (never setdefault).
+        manifest["project_slug"] = slug
         config_path, provision_path = write_outputs(manifest, output_path)
 
     click.echo("\n✅ Done!")
