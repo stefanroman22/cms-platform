@@ -44,6 +44,32 @@ _SECRET_PATTERNS = (
 )
 
 
+# SECURITY (SEC-006): the Solver only ever makes minimal CMS *content* fixes,
+# driven by UNTRUSTED client issue text, and its output is plain-pushed to
+# cms-preview and promoted to the client's production site by a single Slack ✅
+# that shows only the issue title (no diff). A prompt-injected agent could smuggle
+# scope-creep past that diff-less approval. Refuse to push a staged diff that:
+#   (1) touches CI / deploy / build / env config — never part of a content fix, or
+#   (2) adds an external `<script src=…>` tag to a client page — a classic
+#       injection / supply-chain vector against the live site's visitors.
+# Fail closed (like the secret scan): a rejected push releases the issue as
+# failed instead of shipping the change.
+_SENSITIVE_PATH_PATTERNS = (
+    r"(?:^|/)\.github/",  # workflows / composite actions
+    r"(?:^|/)\.env(?:\.|$)",  # env files (.env, .env.production, …)
+    r"(?:^|/)vercel\.json$",
+    r"(?:^|/)netlify\.toml$",
+    r"(?:^|/)Dockerfile$",
+    r"(?:^|/)docker-compose(?:\.[\w.-]+)?\.ya?ml$",
+    r"(?:^|/)\.gitlab-ci\.yml$",
+)
+
+# Matches an added `<script … src="(https:)?//…">` — an external script include.
+_EXTERNAL_SCRIPT_RE = re.compile(
+    r"<script\b[^>]*\bsrc\s*=\s*[\"']?\s*(?:https?:)?//", re.IGNORECASE
+)
+
+
 def _token() -> str:
     return os.environ["SOLVER_GITHUB_TOKEN"]
 
@@ -130,6 +156,43 @@ def _assert_no_secrets_in_staged_diff(path: str) -> None:
             )
 
 
+def _assert_diff_within_policy(path: str) -> None:
+    """Refuse to push scope-creep an injected agent could smuggle past the
+    diff-less Slack approval into the client's production site (SEC-006).
+
+    Two high-signal, low-false-positive checks (see _SENSITIVE_PATH_PATTERNS /
+    _EXTERNAL_SCRIPT_RE for the rationale). Raises RuntimeError so the workflow's
+    failure path releases the issue instead of pushing.
+
+    Conservative subset of the SEC-006 remediation: broader policy (inline
+    scripts, new network endpoints / dependencies, per-issue file allowlists) and
+    surfacing the full machine-checked diff in the Slack approval + a second
+    review model that only sees the diff remain follow-ups for human tuning.
+    """
+    names_raw = _run(["git", "-C", path, "diff", "--cached", "--name-only"], check=False).stdout
+    names = names_raw if isinstance(names_raw, str) else ""
+    for raw_name in names.splitlines():
+        name = raw_name.strip()
+        if not name:
+            continue
+        for pattern in _SENSITIVE_PATH_PATTERNS:
+            if re.search(pattern, name):
+                raise RuntimeError(
+                    "refusing to push: staged diff modifies a CI/deploy/config file "
+                    f"outside the Solver's content-fix scope ({name!r})"
+                )
+
+    raw = _run(["git", "-C", path, "diff", "--cached"], check=False).stdout
+    diff = raw if isinstance(raw, str) else ""
+    for line in diff.splitlines():
+        # Only inspect added lines; `+++ b/file` headers start with "+++".
+        if line.startswith("+") and not line.startswith("+++") and _EXTERNAL_SCRIPT_RE.search(line):
+            raise RuntimeError(
+                "refusing to push: staged diff adds an external <script src> tag — "
+                "possible prompt-injected client-side code injection"
+            )
+
+
 def commit_and_push(*, path: str, issue_id: str, issue_title: str) -> str:
     """Stage all changes, commit, push current HEAD to origin (plain push).
 
@@ -148,6 +211,7 @@ def commit_and_push(*, path: str, issue_id: str, issue_title: str) -> str:
     )
     _run(["git", "-C", path, "add", "-A"])
     _assert_no_secrets_in_staged_diff(path)
+    _assert_diff_within_policy(path)
     _run(["git", "-C", path, "commit", "-m", message])
     sha_result = _run(["git", "-C", path, "rev-parse", "HEAD"])
     sha = sha_result.stdout.strip()

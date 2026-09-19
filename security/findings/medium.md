@@ -108,6 +108,29 @@ The mechanism is real and the cited code supports it. Issue title/description ar
 
 Add an automated diff-policy gate before push and before promotion: reject diffs that add <script> tags, new network endpoints, new dependencies, CI/workflow/env changes, or touch files outside a per-issue allowlist. Surface the full machine-checked diff (not just the title) in the Slack approval message and require the approver to confirm file count/paths. Consider running the agent's output through a second review model that only sees the diff and the original issue, flagging scope creep.
 
+**Partial fix (2026-09-19, in-progress — PR `security/fix-SEC-006-2026-09-19`)**
+
+Added a fail-closed diff-policy gate `_assert_diff_within_policy()` in
+`agents/Solver - Issues/repo.py`, called from `commit_and_push` right after the
+existing secret scan (`_assert_no_secrets_in_staged_diff`). It refuses to push a
+staged diff that (1) modifies a CI/deploy/build/env config file
+(`.github/`, `.env*`, `vercel.json`, `netlify.toml`, `Dockerfile`,
+`docker-compose*.yml`, `.gitlab-ci.yml`) — never part of a content fix — or
+(2) adds an external `<script src="(https:)?//…">` tag to a client page (the
+headline injection vector). Like the secret scan it raises `RuntimeError`, so a
+rejected push releases the issue as failed instead of shipping the change.
+Tests: `tests/test_repo.py` (7 new cases — workflow/env/vercel path rejects,
+external + protocol-relative script rejects, in-scope content fix and
+script-removal still push). Full Solver suite: 65 passed.
+
+**Left open for human review** because it changes an autonomous-pipeline
+behaviour and the remaining, judgement-heavy parts of the recommendation need a
+human decision: surfacing the full machine-checked diff (file count/paths) in
+the Slack approval message, a second review model that only sees the diff vs the
+issue, and broader/looser heuristics (inline scripts, new network endpoints, new
+dependencies, per-issue file allowlists) whose false-positive tuning affects
+Solver success rate.
+
 ---
 
 <a id="sec-007"></a>
