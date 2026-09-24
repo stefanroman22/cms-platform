@@ -2,7 +2,7 @@
 
 _Hardening / defense-in-depth. Address opportunistically._
 
-**31** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**36** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-24.
 
 ---
 
@@ -50,6 +50,8 @@ All factual claims verified by reading the code. (1) mint_admin_api_key is the o
 **Recommendation**
 
 Add an admin-gated key-management surface (list active keys, mint with a mandatory non-null expires_at, revoke by id) and set a sane default TTL when minting. Document a rotation cadence in SECURITY.md and ensure last_used_at is surfaced so stale keys can be pruned.
+
+**2026-09-24 reconciliation — partially-fixed (kept open).** **Expiry and read-time revocation are now implemented and enforced:** the migration defines `expires_at`/`revoked_at` (2026_05_06_admin_api_keys.sql:14,16); `mint_admin_api_key` accepts `expires_at` (admin_keys.py:60,79) and `scripts/mint_admin_api_key.py:42-50` prompts for it; `verify_admin_api_key` rejects revoked keys (`.is_("revoked_at","null")`, admin_keys.py:108) and expired keys (admin_keys.py:117-119). **Still missing:** any listing/rotation/self-service revocation *tooling* — the only script is `mint_admin_api_key.py`, so an operator cannot enumerate outstanding keys or revoke one without directly `UPDATE`-ing `admin_api_keys` via the service-role key. Remaining scope: an admin-gated list/revoke surface + `last_used_at` visibility.
 
 ---
 
@@ -471,6 +473,8 @@ Every claim in the finding checks out against the actual files. solver-agent.yml
 
 SHA-pin every third-party action in solver-agent.yml and scraper-ci.yml to match the rest of the repo (Dependabot already covers github-actions bumps via PR). Pin the Claude CLI to a known version+integrity rather than @latest in the privileged job, and consider scoping solver-agent secrets to only the steps that need them.
 
+**2026-09-24 reconciliation — partially-fixed (kept open).** The 2026-06 CI overhaul deleted `scraper-ci.yml`/`ci.yml`/etc.; the current workflow set is `codeql.yml`, `promote.yml`, `solver-agent.yml`. `promote.yml` and `codeql.yml` now SHA-pin every action (promote.yml:25/46/59, codeql.yml:33/36/45/48). **`solver-agent.yml` still uses mutable major tags** at its new line numbers: `uses: actions/checkout@v4` (**:64**) and `uses: actions/setup-python@v5` (**:66**) — harden-runner (:46) and gitleaks are SHA-pinned there, but these two remain re-pointable. The unpinned Claude CLI `@latest` in the same job is now tracked separately as **SEC-059**. Remaining scope: SHA-pin the two `solver-agent.yml` actions. (Line refs 29/31 in the body above are pre-overhaul.)
+
 ---
 
 <a id="sec-025"></a>
@@ -517,6 +521,8 @@ The factual claims are accurate. .github/dependabot.yml (lines 8-66) declares pi
 **Recommendation**
 
 Add two more pip `updates` blocks to dependabot.yml for `directory: "/scraper"` and `directory: "/agents/Solver - Issues"`, mirroring the existing agent block (weekly, grouped minor/patch). If/when those get hash-pinned lockfiles, point the manifest at them so Dependabot regenerates hashes on bump.
+
+**2026-09-24 reconciliation — still-present (broader now).** There is **no `.github/dependabot.yml` on the current tree at all** (the file the body above cites was removed in the 2026-06 CI overhaul that also disabled Dependabot). Dependabot version-update coverage is now zero for *every* component, not just the scraper/Solver — so the gap is wider than originally filed. GitHub security *alerts* (dependency-graph driven) can still fire, but no automated patch PRs are generated anywhere. Recommendation: re-introduce `dependabot.yml` covering `/backend`, `/frontend`, `/scraper`, and each `/agents/*` dir, or adopt an equivalent scheduled dependency-update mechanism.
 
 ---
 
@@ -1442,5 +1448,203 @@ Verified the core injection by reading the cited code. In email_layout.py:64-74 
 **Recommendation**
 
 Validate accent_color/primary_color/widget_color against a strict hex/CSS-color regex in SettingsPatch (reject anything not matching ^#[0-9A-Fa-f]{3,8}$), run business_name through html.escape() at render time in header()/footer(), and pass logo_url/canonical_url through email_layout.safe_url() (already used for other links) before interpolating into src/href. The booking body copy already escapes name/when/note; the chrome (header/footer/brand) should follow the same rule.
+
+---
+
+<a id="sec-057"></a>
+
+## SEC-057 — Per-account login-failure bucket enables targeted account-lockout DoS
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Rate limiting / availability |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/auth.py:78-96` (introduced by the SEC-011/SEC-020 login-lockout fix `730d9f2`) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-24 |
+
+**Description**
+
+The SEC-011/SEC-020 login-lockout fix added a per-account failed-login counter keyed solely on the victim's email (`login_fail:{email}`), limit 10 over a 900s window. `over_limit()` is checked **before** the password is verified, so once the bucket reaches 10, every subsequent login for that email is rejected with 429 — including the legitimate owner supplying the correct password (the success-path `rate_limit_reset` on line 96 can never fire while locked). An unauthenticated attacker who knows a target email can submit 10 wrong-password POSTs (well under the 30/min per-IP slowapi cap, so trivial from a single IP) and lock the victim out of login for up to 15 minutes, repeatable indefinitely. This is the classic inherent trade-off of per-account lockout.
+
+**Attack scenario**
+
+Attacker POSTs `/auth/login` 10× with `{email: victim, password: "wrong"}`, then re-tops the bucket every window. The victim cannot obtain a new session for the duration; existing `sid` sessions keep working (only the login endpoint is affected).
+
+**Evidence**
+
+```python
+async def login(body: LoginRequest, request: Request, response: Response):
+    fail_bucket = f"login_fail:{body.email.strip().lower()}"
+    if pg_rate_limit.over_limit(fail_bucket, _LOGIN_FAIL_LIMIT, _LOGIN_FAIL_WINDOW_SECONDS):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please wait a few minutes and try again.",
+        )
+```
+
+**Adversarial verification**
+
+Confirmed. Bucket keyed on normalized email (line 79); `_LOGIN_FAIL_LIMIT=10`/`_LOGIN_FAIL_WINDOW_SECONDS=900` (lines 33-34). `over_limit()` (→ `rate_limit_over` RPC) returns True at/over limit without counting a hit; the gate (80-84) runs before `authenticate_user` (86), so it short-circuits before password verification. 10 wrong-password POSTs fit under the 30/min per-IP cap → single-IP attack. `dismissed.md` items D-01/D-14 concern XFF-spoofing of the *per-IP* limiter, not this per-account lockout — not a known false positive. Severity low: temporary (≤15 min), targeted availability attack on login for a known account; no data exposure, no cross-tenant reach, existing sessions unaffected. Limiter is fail-open on DB error, which does not weaken the attack.
+
+**Exploitability:** unauthenticated, needs only a valid target email; single IP, seconds to trigger, indefinitely sustainable. Sole impact is denial of login.
+
+**Recommendation**
+
+Soften rather than remove the lockout: gate on account **+** source-IP/device so one attacker IP cannot lock the account globally, or replace the hard 429 with an incremental delay / CAPTCHA step so the legitimate owner with correct credentials can still authenticate. If kept as-is, document the accepted residual DoS.
+
+---
+
+<a id="sec-059"></a>
+
+## SEC-059 — Solver Agent workflow installs the Claude CLI from an unpinned `@latest` npm tag before running it over untrusted client issue text
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Supply chain / CI |
+| **Dimension** | deps-supplychain |
+| **Location** | `.github/workflows/solver-agent.yml:96` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-24 |
+
+**Description**
+
+The Solver workflow otherwise enforces a careful supply-chain posture (harden-runner egress allowlist in `block` mode, `pip install --require-hashes -r requirements.lock`, most actions SHA-pinned), but the Claude CLI itself is fetched from the mutable `@latest` dist-tag on every run and then executed headless (line 140 has `CLAUDE_CODE_OAUTH_TOKEN` in env) over attacker-influenced client issue text. If the `@anthropic-ai/claude-code` npm package (or a tag/account it depends on) is compromised, the poisoned build runs as code on the runner in the very step that holds the OAuth credential. The harden-runner egress block limits exfiltration but does not prevent local code execution or abuse of the token against the allowlisted `api.anthropic.com`. Distinct from the GitHub-Actions `uses:` pins tracked by SEC-024.
+
+**Evidence**
+
+```yaml
+          npm install -g @anthropic-ai/claude-code@latest
+          claude --version
+```
+
+**Adversarial verification**
+
+Line 96 is verbatim `npm install -g @anthropic-ai/claude-code@latest`, inside a step gated only by `steps.claim.outputs.has_issue == 'true'`. The CLI is fetched from the mutable `@latest` tag with no version pin / integrity / lockfile, in contrast to `pip install --require-hashes` (line 75) and SHA-pinned actions in the same job. The installed `claude` binary is executed headless (112-149) with `CLAUDE_CODE_OAUTH_TOKEN` in env over untrusted issue text. `dismissed.md` has no matching entry. Real, accurately located, honestly scoped. Exploitation is conditional on an upstream npm compromise; the cross-tenant `SOLVER_GITHUB_TOKEN` is deliberately kept out of the Claude step, bounding blast radius → low.
+
+**Recommendation**
+
+Pin the CLI to an exact version and verify integrity (`npm install -g @anthropic-ai/claude-code@<exact-version>`, ideally with a lockfile / `--ignore-scripts` where feasible), treating it the same way `requirements.lock` is treated.
+
+---
+
+<a id="sec-060"></a>
+
+## SEC-060 — Promote-to-prod secret-scan gate downloads and executes the gitleaks binary over curl with no checksum verification
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Supply chain / CI |
+| **Dimension** | ci-workflows |
+| **Location** | `.github/workflows/promote.yml:42` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-24 |
+
+**Description**
+
+The gitleaks version tag is pinned (v8.21.2) but the release tarball is piped straight into `tar` and the extracted binary executed as the first gate of the manual dev→main production promotion, with no sha256 verification of the asset. The same workflow uses `pip install --require-hashes` and SHA-pinned actions, so this is an internal inconsistency. If the release asset were replaced (compromised gitleaks release/account, or TLS/CDN tampering), arbitrary code runs on the promote runner. The gitleaks step runs before `PROMOTE_TOKEN` is placed in env, but the malicious code runs in the same job as the later fast-forward + deploy-hook steps and could plant a credential helper / hijack PATH to capture `PROMOTE_TOKEN`/`FE_PROD_DEPLOY_HOOK`/`BE_PROD_DEPLOY_HOOK`. `promote.yml` also has no harden-runner egress restriction.
+
+**Evidence**
+
+```yaml
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --source . --no-git --redact --verbose --config .gitleaks.toml
+```
+
+**Adversarial verification**
+
+Verbatim at promote.yml:42-43. Internal inconsistency confirmed (`--require-hashes` line 65; SHA-pinned checkout@11bd719 / setup-node@49933ea / setup-python@a26af69). No `dismissed.md` match. Timing observation correct (PROMOTE_TOKEN only in env at the fast-forward step, lines 72-73). Severity low: exploitation requires a compromised gitleaks release/account or a break of GitHub's TLS/CDN (high bar; version tag pinned) — a defense-in-depth/supply-chain gap, not a directly exploitable app vuln.
+
+**Recommendation**
+
+Verify the tarball against a pinned sha256 before extraction (`echo '<sha256>  gitleaks.tar.gz' | sha256sum -c`), or use a SHA-pinned gitleaks GitHub Action; consider adding harden-runner to `promote.yml`.
+
+---
+
+<a id="sec-062"></a>
+
+## SEC-062 — New SEO router applies no rate limiting; `POST /seo/translate` lets an authed client amplify paid DeepL work with no throttle
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Rate limiting / cost abuse |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/seo.py:247-251` (also `POST /seo/jobs`, seo.py:145-152) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-24 |
+
+**Description**
+
+The entire new `seo.py` router imports neither `limiter` nor `pg_rate_limit` and no endpoint carries a `@limiter.limit` decorator or a `_public_read_limit` dependency — unlike booking.py, forms.py, and workspace.py. `translate_seo` fans out to `_translate_seo_for_project`, which for every default-locale row of the chosen kind and every target locale calls `seo_translate.translate_seo_prose` → `DeepLProvider.translate` against the metered `api.deepl.com`. Agent-translated rows (`updated_by='agent-translation'`) are re-translated on every invocation (only human-edited rows are skipped), so repeated calls re-bill the same characters with no idempotency. An authenticated client scoped to their own project can loop the endpoint with zero server-side limit, driving unbounded DeepL character consumption / operator quota exhaustion.
+
+**Evidence**
+
+```python
+@router.post("/projects/{project_slug}/seo/translate")
+async def translate_seo(project_slug: str, body: SeoTranslateIn, request: Request) -> dict:
+    user = await user_via_bearer_or_session(request)
+    project = require_project_access(project_slug, user)
+    return _translate_seo_for_project(project, body.kind)
+```
+
+**Adversarial verification**
+
+Router genuinely has zero rate limiting (no limiter/pg_rate_limit import at seo.py:9-29; no per-route decorator; no compensating global middleware — main.py enforcement is per-route only). Call chain to paid `api.deepl.com` confirmed; re-translation of agent rows re-consumes quota. Asymmetry vs booking.py `_public_read_limit` (120/60s) confirmed. No `dismissed.md` match. Severity lowered medium→low: requires an authenticated, authorized project user; no cross-tenant IDOR or data exposure; impact is financial cost / quota exhaustion contingent on `TRANSLATION_PROVIDER=deepl` (default `null` = zero cost). Shared-quota cross-tenant availability angle keeps it above info.
+
+**Recommendation**
+
+Add a shared Postgres rate limit to the SEO mutating endpoints, mirroring booking (`pg_rate_limit.enforce(f"seo_translate:{project['id']}", …)` inside `translate_seo`/`enqueue_job`, or a router-level dependency), and cap per-call fan-out.
+
+---
+
+<a id="sec-063"></a>
+
+## SEC-063 — Unauthenticated public SEO read endpoints have no rate limit
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Rate limiting / DoS |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/seo.py:168-181` (`/seo/public/meta`, `/seo/public/articles`) |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: low) |
+| **First seen** | 2026-09-24 |
+
+**Description**
+
+`public_meta` and `public_articles` are unauthenticated site-consumer endpoints (consumed by every generated client site's `generateMetadata`/`/blog`) with no auth dependency and no rate limit, each performing a service-role Postgres lookup. The equivalent unauthenticated booking reads all use `dependencies=[Depends(_public_read_limit)]` (booking.py:330-357, 120 req/60s/IP); these SEO reads omit it, and no global limiter middleware compensates. An attacker can issue unbounded GETs, each a service-role DB round-trip, enabling cheap DB-load abuse against the shared backend.
+
+**Evidence**
+
+```python
+@router.get("/projects/{project_slug}/seo/public/meta")
+async def public_meta(project_slug: str, route: str, locale: str) -> dict:
+    pid = _project_id_by_slug(project_slug)
+    if not pid:
+        return {}
+    return seo_repo.published_meta(pid, route, locale) or {}
+```
+
+**Adversarial verification**
+
+Confirmed: public_meta (168-173) and public_articles (176-181) declare neither auth nor rate-limit dependency; `limiter.py` sets no `default_limits`; main.py includes the router with no rate-limit middleware. Booking asymmetry confirmed. `dismissed.md` D-01/D-03/D-14 concern XFF-spoofing of pre-existing limiters, not the total absence here — not a known false positive. Impact is availability/cost under sustained abuse, mitigated by the Vercel edge and cheap lookups; no confidentiality/integrity impact → low.
+
+**Recommendation**
+
+Attach the same shared Postgres per-IP read limiter used by booking's `_public_read_limit` to `/seo/public/meta` and `/seo/public/articles`.
 
 ---

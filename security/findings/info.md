@@ -2,7 +2,7 @@
 
 _Best-practice notes and accepted-by-design observations._
 
-**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-07.
+**10** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-09-24.
 
 ---
 
@@ -13,7 +13,7 @@ _Best-practice notes and accepted-by-design observations._
 | | |
 |---|---|
 | **Severity** | info |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-09-24 review; commit `b6ca3bb`) |
 | **Category** | Type-confusion / defensive coding |
 | **Dimension** | admin-priv |
 | **Location** | `backend/auth_service/routers/deps.py:60-75,86-91; backend/auth_service/services/admin_keys.py:135-140` |
@@ -55,6 +55,8 @@ This is a correctness/robustness defect, not an authZ bypass. It fails CLOSED (5
 
 Normalize verify_admin_api_key to return a UserOut (or have admin_user_via_bearer_or_sid wrap the dict in UserOut) so every downstream authZ check sees a single, consistent principal type with .id/.is_admin attributes.
 
+**2026-09-24 reconciliation — ✅ fixed (commit `b6ca3bb`).** `deps.py:67` now returns `UserOut(id=user["id"], email=user["email"], is_admin=user.get("is_admin", False))` on the bearer path (instead of the raw dict), so both admin auth paths yield the same `UserOut` type the rest of the codebase assumes. Regression test `tests/test_admin_auth_dep.py:23-47` (`test_bearer_valid_returns_userout`) asserts `isinstance(user, UserOut)` and that `require_project_access` performs attribute access without `AttributeError`.
+
 ---
 
 <a id="sec-047"></a>
@@ -64,7 +66,7 @@ Normalize verify_admin_api_key to return a UserOut (or have admin_user_via_beare
 | | |
 |---|---|
 | **Severity** | info |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-09-24 review; commit `90f576a`) |
 | **Category** | session-management |
 | **Dimension** | authn-session |
 | **Location** | `backend/auth_service/routers/auth.py:117-125` |
@@ -96,6 +98,8 @@ I read the cited code and it matches the evidence exactly. In backend/auth_servi
 **Recommendation**
 
 Optional: preserve the user's original remember_me preference when re-minting the post-password-change session. No security change.
+
+**2026-09-24 reconciliation — ✅ fixed (commit `90f576a`).** On password change the handler now calls `await revoke_all_for_user(user.id)` then mints a replacement session with `create_session(fresh_user, remember_me=False, …)` + `_set_session_cookie(response, raw_sid, remember_me=False)` (auth.py:145-153). Because `remember_me=False`, the new cookie uses `DEFAULT_DAYS=30` instead of the 60-day remember-me lifetime, and all prior long-lived sessions are revoked — exactly the rotation this finding requested.
 
 ---
 
@@ -197,7 +201,7 @@ Re-validate the resolved final URL's host against _MAPS_HOST_SUFFIXES before ret
 | | |
 |---|---|
 | **Severity** | info |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-09-24 review; commit `4bddb7f`) |
 | **Category** | Security headers / defense-in-depth |
 | **Dimension** | secrets-config |
 | **Location** | `backend/auth_service/core/security_headers.py:9,13-30` |
@@ -229,6 +233,8 @@ All factual claims verified against the cited code. security_headers.py:9 contai
 **Recommendation**
 
 Optionally add a minimal `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` to SecurityHeadersMiddleware so the protection is not solely dependent on the deployment edge config (defense-in-depth). No action required while the app remains exclusively on Vercel.
+
+**2026-09-24 reconciliation — ✅ fixed (commit `4bddb7f`).** `backend/vercel.json` now emits a strict CSP at the Vercel edge for `/(.*)`: `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` (plus COOP/CORP). Backend responses are no longer CSP-less. `core/security_headers.py` still omits CSP by design (its docstring: "Content-Security-Policy is intentionally out of scope for v1"), but the edge now provides it, closing the finding. If the backend ever moves off Vercel, re-open and add the header in middleware.
 
 ---
 

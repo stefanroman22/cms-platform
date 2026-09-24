@@ -5,22 +5,32 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-07** (remediation in progress)
+## Status snapshot — last full review **2026-09-24** (weekly; remediation in progress)
 
 | Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **10** | **31** | **10** | **56** | 14 |
+| **1** | **4** | **12** | **36** | **10** | **63** | 14 |
 
-**2 in-progress** (`SEC-001`, `SEC-002` — partially remediated 2026-06-07), 54 open. See the
-remediation note in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+**36 fixed** (all critical + all high closed), **1 accepted-risk** (SEC-054), **1 needs-decision**
+(SEC-039), **25 open** (7 new this review, **none critical/high**). See the review note in
+[`FINDINGS.md`](./FINDINGS.md) and the dated entry in [`review-log.md`](./review-log.md).
 
-### Remediation progress
-- **`SEC-001` (critical) + `SEC-002` (high) + `SEC-056` (high)** — *in-progress, code-complete, pending one CI validation run.* Closed in code: cross-tenant `SOLVER_GITHUB_TOKEN` theft and the `node -e` RCE; added prompt fencing, input hardening, pre-push secret-scan, and credential teardown; and **egress isolation** (`step-security/harden-runner`, SHA-pinned, `block` mode) so an injected agent can't exfiltrate the Claude OAuth token. **Action needed:** one `workflow_dispatch` run of the Solver with `egress_policy=audit` to confirm the egress allowlist is complete — then all three flip to `fixed`.
+### Posture (2026-09-24)
+No critical or high findings are open — the sole critical (`SEC-001`) and all four highs
+(`SEC-002/003/004/056`) remain fixed, and this week's 12-dimension review found **no new critical
+or high**. The residual risk is concentrated in the **agentic/automation layer** (missing
+data/instruction separation + machine-checked diff gates) and in **new surfaces shipped without the
+hardening discipline the rest of the backend already adopted** (SEO rate-limiting, booking-email
+escaping). ⚠️ Supabase & Vercel MCP were **unavailable** this run — live RLS/GRANT/advisor and
+Vercel posture were **not** verified (carry-forward list in `review-log.md`).
 
-### The next things to fix
-1. **Validate the egress allowlist** — run the Solver workflow once via `workflow_dispatch` with `egress_policy=audit`, check StepSecurity's reported destinations, add any missing legit host, then rely on `block`. Closes SEC-001/SEC-002/SEC-056.
-2. **`SEC-004` (high)** — **anon/authenticated can EXECUTE the `SECURITY DEFINER` `claim_*_solver_issue` RPCs** (unauthenticated cross-tenant issue disclosure + pipeline DoS via the public Supabase anon key). Pure `REVOKE`, no schema change.
-3. **`SEC-003` (high)** — Booking owner can create a booking against **another tenant's `resource_id`** (cross-tenant calendar DoS via the global GiST exclusion constraint).
+### The next things to fix (2026-09-24)
+1. **`SEC-061` (medium)** — nonce-fence the untrusted scraped HTML fed to the **SEO-GEO Optimizer** prompts and add a content/diff gate before its **autonomous publish** to live client sites (mirror the Solver's `claim_issue.py` fix).
+2. **`SEC-006` (medium)** — re-instate a machine-checked diff/content gate + a diff-showing Slack approval before prod promote; the new CMS-Connector **branch-protection strip** (`github.py:62`) has removed the last defense-in-depth layer behind the blind ✅.
+3. **`SEC-058` (medium)** — fix the SEC-045 regression: use `safe_hex()` for `accent` in `booking_email._cta_block` (or validate `accent_color` on write).
+4. **`SEC-062`/`SEC-063` (low)** — add the shared Postgres rate limiter to the new SEO router (translate + public reads).
+5. **`SEC-059`/`SEC-060`/`SEC-024` (low)** — pin the Solver Claude CLI + gitleaks download by hash; SHA-pin the two remaining `solver-agent.yml` actions.
+6. **`SEC-025` (low)** — re-introduce `.github/dependabot.yml` (or equivalent) — it currently covers nothing.
 
 ## How to read this folder
 
