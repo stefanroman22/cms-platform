@@ -14,6 +14,25 @@ This table is the **source of truth for status**. Detail for each finding lives 
 > 2026-06-09). Remediation order: SEC-058 → SEC-059 → SEC-057 → SEC-029 → SEC-060 → SEC-006 → SEC-066 → SEC-063.
 > See [`review-log.md`](./review-log.md).
 
+> **⚠ Saturday Solver 2026-09-26 — ID-collision + reconciliation notice (needs a human to de-dupe the trackers).**
+> This dev tracker (2026-06-20 review) and the unmerged `origin/security/weekly-review-2026-09-24` branch use
+> **the same `SEC-057…` numbers for different findings**, and several *fix commits* used yet a third labelling
+> (e.g. the booking-write-limit fix landed as "SEC-057" in PR #69's title but is **SEC-058** here; the accent-XSS
+> fix landed as "SEC-059" in PR #61's title but is **SEC-057** here; and this run's `/forms/contact` fix — dev
+> **SEC-059** — merged as PR #80, reusing an ID that PR #61's title also used). **IDs are unreliable; trust the
+> file location + concrete vuln.** A human should collapse the two trackers into one numbering scheme.
+> This run reconciled by verifying against the actual dev code:
+> **`SEC-057` (accent XSS in `_cta_block`) → fixed** (commit `d18d7f2`/PR #61); **`SEC-058` (booking write-path
+> rate limit) → fixed** (commit `a982d97`/PR #69); **`SEC-059` (`/forms/contact` rate limit) → fixed** (PR #80,
+> this run). Still `open`: **SEC-005** (admin issue-status is cross-project *by design* — needs a scoping/token
+> redesign, not a surgical patch) and **SEC-006** (Solver auto-commit needs a machine-checked diff gate) — both
+> architecturally significant, left for a human. **Untracked here:** the `weekly-review-2026-09-24` branch reports
+> a **medium "SEO-GEO Optimizer indirect-prompt-injection → autonomous publish"** finding
+> (`agents/SEO-GEO Optimizer/prompts.py` + `phases/`) that postdates this tracker's 2026-06-20 review and is NOT
+> a row here. It is a real open medium: the fix (nonce-fence scraped HTML as data, mirroring the Solver, + a
+> pre-publish diff gate) is a prompt/design change on an autonomous-publish path with no unit-testable seam, so it
+> is **deferred to a human**, not auto-fixed.
+
 > **Remediation 2026-06-07 — `SEC-001` (critical) + `SEC-002` + `SEC-056` (high): FIXED.** The full
 > Solver hardening shipped (commits `fix(security): SEC-001` + `SEC-056`) and the egress allowlist was
 > validated by a `workflow_dispatch` `egress_policy=audit` run (clean). Closed: cross-tenant
@@ -102,8 +121,8 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-053](findings/info.md#sec-053) | info | SECURITY DEFINER claim functions have mutable search_path (function_search_path_mutable) | `migrations/2026_06_08_security_anon_surface_hardening.sql` | supabase-db | ✅ fixed |
 | [SEC-054](findings/info.md#sec-054) | info | Tenant-table RLS owner policies are inert because the app does not use Supabase Auth JWTs (auth.uid() always NULL) | `backend/migrations/2026_05_09_tenant_tables_rls.sql` | supabase-db | accepted-risk |
 | [SEC-055](findings/info.md#sec-055) | info | Widget posts resize messages with wildcard target origin | `frontend/src/app/(widget)/w/[slug]/page.tsx:18-19` | xss-html | open |
-| [SEC-057](findings/medium.md#sec-057) | medium | Tenant accent color injected unsanitized into booking confirmation email style attribute (`_cta_block` missed the SEC-045 sink) | `backend/auth_service/services/booking_email.py:51,70` | xss-html | open |
-| [SEC-058](findings/medium.md#sec-058) | medium | Unauthenticated booking create/cancel/reschedule write paths use only the in-memory slowapi limiter (per-instance reset) → email/booking-spam amplification | `backend/auth_service/routers/booking.py:462-463,691-692,753-754,989-990` | ratelimit-dos | open |
+| [SEC-057](findings/medium.md#sec-057) | medium | Tenant accent color injected unsanitized into booking confirmation email style attribute (`_cta_block` missed the SEC-045 sink) | `backend/auth_service/services/booking_email.py:51,70` | xss-html | ✅ fixed (commit `d18d7f2`, PR #61 — `_cta_block` now `safe_hex(accent, …)` before both style sinks; verified 2026-09-26) |
+| [SEC-058](findings/medium.md#sec-058) | medium | Unauthenticated booking create/cancel/reschedule write paths use only the in-memory slowapi limiter (per-instance reset) → email/booking-spam amplification | `backend/auth_service/routers/booking.py:462-463,691-692,753-754,989-990` | ratelimit-dos | ✅ fixed (commit `a982d97`, PR #69 — `_public_write_limit` shared Postgres cap on create/manage-cancel/reschedule/legacy-create; verified 2026-09-26) |
 | [SEC-059](findings/medium.md#sec-059) | medium | Marketing `/forms/contact` endpoint protected only by in-memory slowapi limiter → cross-instance Resend email-spam amplification | `backend/auth_service/routers/forms.py:282-345` | ratelimit-dos | ✅ fixed (PR `security/fix-SEC-059-2026-09-26` — shared Postgres per-IP limit added to `submit_contact`, mirroring `submit_form`/SEC-010) |
 | [SEC-060](findings/low.md#sec-060) | low | Python `str.format()` injection: tenant-controlled booking email copy override used as the format string | `backend/auth_service/services/booking_i18n.py:86-95` | injection | open |
 | [SEC-061](findings/info.md#sec-061) | info | Admin Bearer brute-force limiter is process-local (per serverless instance); threat-model comment miscites a 192-bit (actually 128-bit) secret | `backend/auth_service/core/bearer_limiter.py:6-10,23-61` | ratelimit-dos | open |
