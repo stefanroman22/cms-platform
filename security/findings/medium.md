@@ -512,10 +512,18 @@ HTML-escape both key and value before interpolation, mirroring the rest of the c
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (commit `d18d7f2`, PR #61; verified on dev 2026-09-26) |
 | **Category** | XSS / HTML injection (email) |
 | **Dimension** | xss-html |
 | **Location** | `backend/auth_service/services/booking_email.py:51,70` |
+
+> **Reconciliation 2026-09-26 (status only).** Verified fixed on dev: `_cta_block` now reassigns
+> `accent = email_layout.safe_hex(accent, "#18181b")` at the top (booking_email.py:47) before **both**
+> style sinks (the add-to-calendar border and the Join background), so a non-hex accent can never reach
+> a `style` attribute. No residual raw-`accent` interpolation remains in `booking_email.py`. Fixed by
+> PR #61 (`commit d18d7f2`) — whose own title used the label "SEC-059" for this accent finding, one of
+> several cross-tracker ID collisions (see the FINDINGS.md collision note). The tracker row was left
+> `open` by that PR; corrected here.
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed |
 | **First seen** | 2026-06-20 |
@@ -553,11 +561,18 @@ Resolve accent through the existing allowlist once at the top of _cta_block (acc
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (commit `a982d97`, PR #69; verified on dev 2026-09-26) |
 | **Category** | Rate limiting / DoS |
 | **Dimension** | ratelimit-dos |
 | **Location** | `backend/auth_service/routers/booking.py:462-463, 691-692, 753-754, 989-990; backend/auth_service/core/limiter.py:21` |
 | **Reviewer confidence** | high |
+
+> **Reconciliation 2026-09-26 (status only).** Verified fixed on dev: `_public_write_limit`
+> (booking.py:351) enforces a shared Postgres per-IP cap and is now called on every unauthenticated
+> booking write path — `create_booking` (:493), `manage_cancel` (:723), `manage_reschedule` (:786),
+> and `legacy_create` (:1023) — layered on the per-process slowapi decorators, so the cap holds across
+> warm serverless instances. Fixed by PR #69 (`commit a982d97`, titled "SEC-057" — another cross-tracker
+> ID collision). Tracker row corrected here.
 | **Verifier verdict** | confirmed |
 | **First seen** | 2026-06-20 |
 
