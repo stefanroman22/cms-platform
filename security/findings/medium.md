@@ -595,13 +595,32 @@ Add pg_rate_limit.enforce on the booking write paths exactly as done for forms.p
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-09-26, PR `security/fix-SEC-059-2026-09-26`) |
 | **Category** | Rate limiting / DoS |
 | **Dimension** | ratelimit-dos |
 | **Location** | `backend/auth_service/routers/forms.py:282-345; backend/auth_service/core/limiter.py:21` |
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed |
 | **First seen** | 2026-06-20 |
+
+**Remediation (2026-09-26).** `submit_contact` now calls
+`pg_rate_limit.enforce(f"forms:contact:{client_ip(request)}", limit=5, window_seconds=600, …)`
+— the same shared Postgres fixed-window limit `submit_form` uses (SEC-010) — placed after the
+honeypot + input validation so silently-dropped bots and malformed requests never burn a
+legitimate visitor's per-IP allowance. This makes the 5/10-min cap hold **across warm serverless
+instances** (the in-memory slowapi cap alone reset per invocation → effectively N×5). Tests:
+`test_contact_uses_shared_cross_instance_limit`, `test_contact_429_when_shared_limit_exceeded`,
+`test_contact_honeypot_does_not_consume_shared_limit` added to `tests/test_contact_form.py`; full
+backend suite green (583 passed).
+
+**Residual risk (not addressed here — needs a product decision).** `client_ip` keys off the
+leftmost `X-Forwarded-For`, so a caller rotating a spoofed leftmost IP still gets a fresh per-IP
+bucket — an identical limitation on every IP-keyed limit in the codebase (incl. `submit_form`).
+The finding's *optional* "global per-recipient bucket" would cap total contact mail regardless of
+source IP, but because all contact mail goes to one hard-coded recipient it would let an attacker
+deny the contact form to **every** visitor by exhausting the global bucket (an availability
+trade-off). A CAPTCHA / proof-of-work on the unauthenticated marketing form is the more robust
+mitigation. Both are deferred to a human.
 
 **Description**
 
