@@ -61,7 +61,11 @@ format flip.
   free-form Markdown by convention.
 - Do NOT: store any attribute other than `a[href]`; add colour, font or size marks to the allow-list
   or the editor; render CMS-produced HTML on a client site with `dangerouslySetInnerHTML` — always
-  go through the client kit's `<RichText>`; run the legacy plain/Markdown-to-HTML conversion
-  anywhere outside the one-time migration; flip a project's `rich_text_version` to `1` before its
-  site has shipped the client kit; or let a non-admin save change `_schema`/`_formats` — those are
-  structural metadata, always preserved on a non-admin save.
+  go through the client kit's `<RichText>`; run legacy **inline** conversion anywhere outside the
+  one-time migration — an `inline` value is always parsed as an HTML fragment everywhere else (save
+  path, dashboard, client kit), which is what prevents double-escaping a canonical value like
+  `Tom &amp; Jerry` that happens to contain no tags; flip a project's `rich_text_version` to `1`
+  before its site has shipped the client kit; or let a non-admin save change `_schema`/`_formats` —
+  those are structural metadata, always preserved on a non-admin save. (A tag-free **rich** value is
+  still legacy Markdown-lite and is converted routinely — save path, dashboard, client kit — not
+  only during migration.)
