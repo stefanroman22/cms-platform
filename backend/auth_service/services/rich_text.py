@@ -24,6 +24,7 @@ RICH_TAGS = INLINE_TAGS | BLOCK_TAGS
 MAX_LENGTH: dict[str, int] = {"inline": 2_000, "rich": 50_000}
 MAX_LIST_DEPTH = 4
 MAX_HREF_LENGTH = 2_048
+MAX_NESTING = 32
 
 _SYNONYMS = {
     "b": "strong",
@@ -146,6 +147,15 @@ class _Builder(HTMLParser):
             return
         if tag not in RICH_TAGS:
             return
+        # The outermost open element, when it is itself a block container, is exempt
+        # from the depth budget: canonicalisation always wraps loose top-level inline
+        # content in exactly one such container (e.g. <p>), so counting it here would
+        # make canonicalize() non-idempotent (a value re-parsed after that wrapper was
+        # added would get one less level of budget than the same content had before
+        # the wrapper existed). Nesting inside a *nested* block container still counts.
+        exempt = 1 if len(self._stack) > 1 and self._stack[1].tag in BLOCK_TAGS else 0
+        if len(self._stack) - 1 - exempt >= MAX_NESTING:
+            return  # depth cap reached: unwrap like an unknown element
         href = None
         if tag == "a":
             href = next((v for k, v in attrs if k.lower() == "href"), None)
@@ -248,26 +258,32 @@ def _inline(nodes: list, in_link: bool = False) -> list:
 
 def _tidy(nodes: list) -> list:
     res: list = []
+    buf: list[str] = []
+
+    def flush() -> None:
+        if not buf:
+            return
+        s = _WS_RE.sub(" ", "".join(buf))
+        buf.clear()
+        last = res[-1] if res else None
+        if isinstance(last, _Node) and last.tag == "br":
+            s = s.lstrip(" ")
+        if s:
+            res.append(s)
+
     for n in nodes:
         if isinstance(n, str):
-            s = n
-            last = res[-1] if res else None
-            if isinstance(last, _Node) and last.tag == "br":
-                s = s.lstrip(" ")
-            if not s:
-                continue
-            if isinstance(last, str):
-                res[-1] = _WS_RE.sub(" ", last + s)
-                continue
-            res.append(s)
-        else:
-            if n.tag == "br" and res and isinstance(res[-1], str):
-                t = res[-1].rstrip(" ")
-                if t:
-                    res[-1] = t
-                else:
-                    res.pop()
-            res.append(n)
+            buf.append(n)
+            continue
+        flush()
+        if n.tag == "br" and res and isinstance(res[-1], str):
+            t = res[-1].rstrip(" ")
+            if t:
+                res[-1] = t
+            else:
+                res.pop()
+        res.append(n)
+    flush()
     return res
 
 
@@ -426,6 +442,8 @@ def canonicalize(
         return value
     if not value.strip():
         return ""
+    if enforce_limit and len(value) > 4 * MAX_LENGTH[fmt]:
+        raise RichTextTooLong(len(value), MAX_LENGTH[fmt])
     if not is_html(value) and (legacy or fmt == "rich"):
         from .rich_text_legacy import legacy_to_html
 

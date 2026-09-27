@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -97,3 +98,30 @@ def test_plain_text_strips_markup_and_decodes():
     assert plain_text("<p>a</p><ul><li><p>b</p></li></ul>", "rich", keep_line_breaks=True) == "a\nb"
     assert plain_text("", "rich") == ""
     assert plain_text("raw <b>", "plain") == "raw <b>"
+
+
+def test_deeply_nested_marks_do_not_recurse_without_bound():
+    big = "<strong>" * 5000 + "x" + "</strong>" * 5000
+    canonicalize(big, "rich", enforce_limit=False)
+
+
+def test_deeply_nested_blockquotes_do_not_recurse_without_bound():
+    big = "<blockquote>" * 5000 + "x" + "</blockquote>" * 5000
+    canonicalize(big, "rich", enforce_limit=False)
+
+
+def test_many_adjacent_unwrapped_links_are_not_quadratic():
+    # No href -> safe_href denies it -> the <a> unwraps to plain text, merging
+    # thousands of adjacent text fragments in _tidy. This must stay linear.
+    big = "<a>x</a>" * 40_000  # ~320 KB
+    start = time.perf_counter()
+    canonicalize(big, "rich", enforce_limit=False)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 1.0
+
+
+def test_raw_input_cap_rejects_before_parsing():
+    with pytest.raises(RichTextTooLong) as exc:
+        canonicalize("a" * (4 * MAX_LENGTH["inline"] + 1), "inline")
+    assert exc.value.limit == MAX_LENGTH["inline"]
+    assert exc.value.length == 4 * MAX_LENGTH["inline"] + 1
