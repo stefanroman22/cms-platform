@@ -44,10 +44,23 @@ def test_plain_format_is_untouched():
         ("5 * 3", False),
         ("<abbr>x</abbr>", False),
         ("Tom &amp; Jerry", False),
+        # Fix round 1 finding: is_html must keep the exact original truth
+        # value (a naive, quote-unaware "does some > follow a recognised
+        # open-tag prefix" check) computed in linear time — NOT run
+        # _guard_unterminated first, which would hide a real tag sitting
+        # after a quote-swallowed tag-open like this one.
+        ('x<y "a <b>bold</b>', True),
     ],
 )
 def test_is_html(value, expected):
     assert is_html(value) is expected
+
+
+def test_is_html_unterminated_comment_with_pathological_tail_is_not_quadratic():
+    start = time.perf_counter()
+    is_html("<!--" + "<b" * 50_000)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
 
 
 @pytest.mark.parametrize(
@@ -138,6 +151,45 @@ def test_unterminated_tag_open_is_not_quadratic(raw):
     # canonicalize and plain_text well under the budget. 5s (not 1-2s) because
     # the quadratic regressions this guards against took 10-90s, so 5s still
     # catches them without flaking under load.
+    start = time.perf_counter()
+    canonicalize(raw, "rich", enforce_limit=False)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+    start = time.perf_counter()
+    plain_text(raw, "rich")
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("<!--" + "<b" * 50_000, id="unterminated-comment-then-b-repeat"),
+        pytest.param("<!x" + "<b" * 50_000, id="unterminated-bang-decl-then-b-repeat"),
+        pytest.param("<?x" + "<b" * 50_000, id="unterminated-pi-then-b-repeat"),
+        pytest.param("<script>" + "<b" * 50_000, id="unterminated-script-then-b-repeat"),
+        pytest.param("<style>" + "<b" * 50_000, id="unterminated-style-then-b-repeat"),
+        pytest.param("<p>x</p><!--" + "<b" * 50_000, id="real-tag-then-unterminated-comment"),
+        pytest.param("<!-->" + "<b" * 50_000, id="stray-gt-does-not-close-comment"),
+    ],
+)
+def test_unterminated_comment_decl_and_raw_text_are_not_quadratic(raw):
+    # Fix round 1 finding: _guard_unterminated originally left an unterminated
+    # comment / <! / <? / script-style raw-text construct's *dangling tail*
+    # in `value` unchanged (only `i` was advanced to `n`, ending the scan
+    # loop without truncating what it returns) — so a pathological run tucked
+    # inside one of these constructs (e.g. "<!--" + "<b" * 50000) still
+    # reached html.parser's own rescanning fallback and _HTML_OPEN_RE
+    # untouched, reopening the same O(n^2) DoS this guard exists to close.
+    # The kit never emits anything for these once they can't find their
+    # terminator, so the guard now truncates the same way (see its
+    # docstring), and canonicalize/plain_text/is_html must all stay linear.
+    start = time.perf_counter()
+    is_html(raw)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
     start = time.perf_counter()
     canonicalize(raw, "rich", enforce_limit=False)
     elapsed = time.perf_counter() - start

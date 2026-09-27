@@ -59,8 +59,8 @@ _DROP_WITH_CONTENT = frozenset(
         "picture",
     }
 )
-_HTML_RE = re.compile(
-    r"<(?:p|br|strong|em|u|s|a|ul|ol|li|h[1-6]|blockquote|hr|b|i|div|span)\b[^>]*>", re.I
+_HTML_OPEN_RE = re.compile(
+    r"<(?:p|br|strong|em|u|s|a|ul|ol|li|h[1-6]|blockquote|hr|b|i|div|span)\b", re.I
 )
 _WS_RE = re.compile(r"[ \t\r\n\f]+")
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -101,21 +101,25 @@ def _guard_unterminated(value: str) -> str:
     identically): finds the first `<` that opens a tag (an ASCII letter, or
     `/` + ASCII letter, follows it) with no closing `>` outside quotes
     anywhere in the rest of the input, and re-encodes that `<` and
-    everything after it as literal text.
+    everything after it as literal text. An unterminated comment / `<!` /
+    `<?` construct, or a script/style open tag with no closing tag, is
+    truncated away entirely (the kit emits nothing for any of these once
+    they can't find their terminator, so there is nothing to re-encode —
+    just drop the dangling tail so nothing downstream ever re-scans it).
 
     stdlib html.parser rescans from every unterminated `<` (check_for_whole_
     start_tag re-derives the tag boundary from `i` on each call, and its
     fallback on failure advances `i` by only one `<` at a time), and
-    `_HTML_RE` below backtracks the same way on the same inputs (its
-    `[^>]*` greedily eats the rest of the string looking for a `>` that
-    never comes, then gives back one char at a time from every candidate
-    `<` position) — both making inputs like `"<b" * 50000` (~10-90s) or
-    `"<a a" * 25000` quadratic: a serverless-function DoS reachable by any
-    authenticated editor via the save endpoint, within the 200 KB raw-input
-    cap. This walk visits every position at most once (O(n)) and never
-    rescans, so it neutralises the pathological tail before either ever
-    sees it. When every tag-open in `value` is properly terminated, `value`
-    is returned unchanged."""
+    `is_html`'s tag-prefix regex has the same shape of problem if fed a
+    string that still contains one of these dangling constructs — both
+    making inputs like `"<b" * 50000` (~10-90s), `"<a a" * 25000`, or any of
+    the above prefixed onto such a run, quadratic: a serverless-function DoS
+    reachable by any authenticated editor via the save endpoint, within the
+    200 KB raw-input cap. This walk visits every position at most once
+    (O(n)) and never rescans, so it neutralises the pathological tail before
+    either ever sees it. When every tag-open and every comment/decl/raw-text
+    construct in `value` is properly terminated, `value` is returned
+    unchanged."""
     n = len(value)
     lower = value.lower()
     i = 0
@@ -125,12 +129,22 @@ def _guard_unterminated(value: str) -> str:
             return value
         if value.startswith("<!--", lt):
             end = value.find("-->", lt + 4)
-            i = n if end == -1 else end + 3
+            if end == -1:
+                # No closing "-->" anywhere: the kit drops the comment and
+                # everything after it (it never emits text for it), so
+                # truncate here instead of leaving the rest of the input
+                # (which may itself be a pathological run) for HTMLParser or
+                # is_html to rescan.
+                return value[:lt]
+            i = end + 3
             continue
         c1 = value[lt + 1] if lt + 1 < n else ""
         if c1 == "!" or c1 == "?":
             end = value.find(">", lt)
-            i = n if end == -1 else end + 1
+            if end == -1:
+                # Same reasoning as the unterminated-comment case above.
+                return value[:lt]
+            i = end + 1
             continue
         c2 = value[lt + 2] if lt + 2 < n else ""
         is_tag_start = c1 in _ASCII_LETTERS or (c1 == "/" and c2 in _ASCII_LETTERS)
@@ -170,28 +184,38 @@ def _guard_unterminated(value: str) -> str:
         i = tag_end + 1
         if not is_close and tag in _RAW_TEXT and not self_closing:
             end_tag = lower.find(f"</{tag}", i)
-            if end_tag == -1:
-                i = n
-            else:
-                gt = value.find(">", end_tag)
-                i = n if gt == -1 else gt + 1
+            gt = value.find(">", end_tag) if end_tag != -1 else -1
+            if end_tag == -1 or gt == -1:
+                # No closing tag (or its own `>` never arrives): the kit
+                # never emits text for raw-text content regardless, so keep
+                # the open tag itself (it contributes nothing either way)
+                # and drop everything after it — same reasoning as the
+                # comment/decl case: don't leave a possibly-pathological
+                # tail for anything downstream to rescan.
+                return value[:i]
+            i = gt + 1
     return value
 
 
 def is_html(value: str) -> bool:
     """True when `value` contains at least one recognised HTML tag.
 
-    Runs `_HTML_RE` over the `_guard_unterminated`-neutralised value rather
-    than the raw value: `_HTML_RE`'s own `[^>]*>` backtracks catastrophically
-    on the same unterminated-tag-open inputs the guard exists for (see its
-    docstring). The guard is a no-op (returns its input unchanged) whenever
-    every tag-open in `value` is already terminated — the common case — so
-    this never changes the answer there. For the pathological inputs the
-    guard does rewrite, any value it flips from a naive regex "match" (into
-    what turns out to be unterminated markup) to `False` still round-trips
-    to the same canonical output via the legacy-content path, since neither
-    path finds real markup in a value that has none."""
-    return bool(_HTML_RE.search(_guard_unterminated(value)))
+    Originally `<(?:p|br|...)\\b[^>]*>` (re.I) searched over the raw value.
+    That `[^>]*>` tail always succeeds from a match of the opening `<tag\\b`
+    part iff *some* `>` occurs anywhere later in the string — the run of
+    non-`>` characters just stretches to reach it, whatever it is — so the
+    original True/False answer is exactly "does some recognised open-tag
+    prefix start before the *last* `>` in the whole string". Checking it
+    that way is O(n) and gives the identical answer for every input,
+    including the ones the old regex got right only by backtracking
+    catastrophically: `_HTML_OPEN_RE` has no unbounded/nested quantifiers (a
+    small fixed alternation plus a word boundary), so a plain `.search()`
+    over it can't blow up the way `[^>]*` does on an unterminated tag-open
+    run like `"<b" * 50000`."""
+    gt = value.rfind(">")
+    if gt == -1:
+        return False
+    return _HTML_OPEN_RE.search(value, 0, gt) is not None
 
 
 def safe_href(raw: str | None) -> str | None:
