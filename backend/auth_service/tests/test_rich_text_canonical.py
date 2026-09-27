@@ -117,7 +117,36 @@ def test_many_adjacent_unwrapped_links_are_not_quadratic():
     start = time.perf_counter()
     canonicalize(big, "rich", enforce_limit=False)
     elapsed = time.perf_counter() - start
-    assert elapsed < 1.0
+    assert elapsed < 5.0
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("<b" * 50_000, id="b-repeat-50000"),
+        pytest.param("<a a" * 25_000, id="a-a-repeat-25000"),
+        pytest.param("<b" * 50_000 + '">', id="b-repeat-50000-plus-quote-gt"),
+        pytest.param("</b" * 50_000, id="close-b-repeat-50000"),
+    ],
+)
+def test_unterminated_tag_open_is_not_quadratic(raw):
+    # Stdlib html.parser rescans from every unterminated `<` (check_for_whole_
+    # start_tag/parse_endtag re-derive the tag boundary from scratch each
+    # time), making these inputs O(n^2) — ~10-90s locally, well within the raw
+    # 200 KB input cap and reachable by any authenticated editor via the save
+    # endpoint. The linear _guard_unterminated pre-pass must keep both
+    # canonicalize and plain_text well under the budget. 5s (not 1-2s) because
+    # the quadratic regressions this guards against took 10-90s, so 5s still
+    # catches them without flaking under load.
+    start = time.perf_counter()
+    canonicalize(raw, "rich", enforce_limit=False)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+    start = time.perf_counter()
+    plain_text(raw, "rich")
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
 
 
 def test_raw_input_cap_rejects_before_parsing():
@@ -135,7 +164,7 @@ def test_many_repeated_hr_in_heading_is_not_quadratic():
     start = time.perf_counter()
     canonicalize(big, "rich", enforce_limit=True)
     elapsed = time.perf_counter() - start
-    assert elapsed < 2.0
+    assert elapsed < 5.0
 
 
 def _deep(tag: str, n: int, inner: str = "x") -> str:

@@ -64,6 +64,9 @@ _HTML_RE = re.compile(
 )
 _WS_RE = re.compile(r"[ \t\r\n\f]+")
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+_ASCII_LETTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+_RAW_TEXT = frozenset({"script", "style"})
+_TAG_NAME_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9:-]*")
 
 
 class RichTextTooLong(ValueError):
@@ -75,9 +78,120 @@ class RichTextTooLong(ValueError):
         self.limit = limit
 
 
+def _escape_tail_for_reparse(tail: str) -> str:
+    """Re-encode an unterminated tag-open (and everything after it) so
+    HTMLParser treats it as one literal text run instead of repeatedly
+    rescanning an incomplete tag construct.
+
+    Only `<` and `>` are escaped; any `&...;` already in the tail (e.g.
+    `&amp;`) is left untouched so HTMLParser's own entity decoding — which
+    already runs on every ordinary text node via convert_charrefs and is
+    the thing client-kit/rich-text/src/parse.ts's decodeEntities is kept in
+    parity with — decodes it exactly as it would for any other text node.
+    Escaping `<`/`>` guarantees no raw `<` remains in the tail, so
+    HTMLParser's fast path (`rawdata.find('<', i)`) hands the whole
+    remainder to a single `handle_data` call instead of re-deriving the tag
+    boundary from `i` on every subsequent `<`."""
+    return tail.replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _guard_unterminated(value: str) -> str:
+    """Linear pre-pass mirroring client-kit/rich-text/src/parse.ts's tag
+    tokenizer loop (comments / `<!` / `<?` / script-style raw-text skipped
+    identically): finds the first `<` that opens a tag (an ASCII letter, or
+    `/` + ASCII letter, follows it) with no closing `>` outside quotes
+    anywhere in the rest of the input, and re-encodes that `<` and
+    everything after it as literal text.
+
+    stdlib html.parser rescans from every unterminated `<` (check_for_whole_
+    start_tag re-derives the tag boundary from `i` on each call, and its
+    fallback on failure advances `i` by only one `<` at a time), and
+    `_HTML_RE` below backtracks the same way on the same inputs (its
+    `[^>]*` greedily eats the rest of the string looking for a `>` that
+    never comes, then gives back one char at a time from every candidate
+    `<` position) — both making inputs like `"<b" * 50000` (~10-90s) or
+    `"<a a" * 25000` quadratic: a serverless-function DoS reachable by any
+    authenticated editor via the save endpoint, within the 200 KB raw-input
+    cap. This walk visits every position at most once (O(n)) and never
+    rescans, so it neutralises the pathological tail before either ever
+    sees it. When every tag-open in `value` is properly terminated, `value`
+    is returned unchanged."""
+    n = len(value)
+    lower = value.lower()
+    i = 0
+    while i < n:
+        lt = value.find("<", i)
+        if lt == -1:
+            return value
+        if value.startswith("<!--", lt):
+            end = value.find("-->", lt + 4)
+            i = n if end == -1 else end + 3
+            continue
+        c1 = value[lt + 1] if lt + 1 < n else ""
+        if c1 == "!" or c1 == "?":
+            end = value.find(">", lt)
+            i = n if end == -1 else end + 1
+            continue
+        c2 = value[lt + 2] if lt + 2 < n else ""
+        is_tag_start = c1 in _ASCII_LETTERS or (c1 == "/" and c2 in _ASCII_LETTERS)
+        if not is_tag_start:
+            i = lt + 1
+            continue
+
+        # Scan forward once, char by char, tracking quote state, to find the
+        # first `>` outside quotes — that's the tag's end. No backtracking,
+        # so this is O(remaining input) for this one `<`, not repeated per
+        # `<` the way html.parser's own fallback (and _HTML_RE) are.
+        j = lt + 1
+        quote = ""
+        tag_end = -1
+        while j < n:
+            ch = value[j]
+            if quote:
+                if ch == quote:
+                    quote = ""
+            elif ch == '"' or ch == "'":
+                quote = ch
+            elif ch == ">":
+                tag_end = j
+                break
+            j += 1
+        if tag_end == -1:
+            # No terminating `>` anywhere in the rest of the input (or an
+            # unclosed quote swallowed it): this `<` and everything after it
+            # is literal text. Rewrite it and stop — never rescans the same
+            # span again.
+            return value[:lt] + _escape_tail_for_reparse(value[lt:])
+
+        is_close = c1 == "/"
+        name_match = _TAG_NAME_RE.match(value, lt + 2 if is_close else lt + 1)
+        tag = name_match.group().lower() if name_match else ""
+        self_closing = value[tag_end - 1] == "/"
+        i = tag_end + 1
+        if not is_close and tag in _RAW_TEXT and not self_closing:
+            end_tag = lower.find(f"</{tag}", i)
+            if end_tag == -1:
+                i = n
+            else:
+                gt = value.find(">", end_tag)
+                i = n if gt == -1 else gt + 1
+    return value
+
+
 def is_html(value: str) -> bool:
-    """True when `value` contains at least one recognised HTML tag."""
-    return bool(_HTML_RE.search(value))
+    """True when `value` contains at least one recognised HTML tag.
+
+    Runs `_HTML_RE` over the `_guard_unterminated`-neutralised value rather
+    than the raw value: `_HTML_RE`'s own `[^>]*>` backtracks catastrophically
+    on the same unterminated-tag-open inputs the guard exists for (see its
+    docstring). The guard is a no-op (returns its input unchanged) whenever
+    every tag-open in `value` is already terminated — the common case — so
+    this never changes the answer there. For the pathological inputs the
+    guard does rewrite, any value it flips from a naive regex "match" (into
+    what turns out to be unterminated markup) to `False` still round-trips
+    to the same canonical output via the legacy-content path, since neither
+    path finds real markup in a value that has none."""
+    return bool(_HTML_RE.search(_guard_unterminated(value)))
 
 
 def safe_href(raw: str | None) -> str | None:
@@ -196,7 +310,7 @@ class _Builder(HTMLParser):
 
 def _parse(value: str) -> _Node:
     b = _Builder()
-    b.feed(value)
+    b.feed(_guard_unterminated(value))
     b.close()
     return b.root
 
