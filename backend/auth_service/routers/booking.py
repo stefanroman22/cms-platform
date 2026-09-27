@@ -933,6 +933,7 @@ async def send_reminders(request: Request) -> JSONResponse:
                     brand=brand,
                     locale=locale,
                     copy=cfg.email_copy,
+                    offset_min=offset_min,
                 )
                 booking_repo.record_notification(
                     tenant_id=cfg.tenant_id,

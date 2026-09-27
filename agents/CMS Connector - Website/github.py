@@ -65,9 +65,10 @@ def ensure_branch_unprotected(token: str, github_repo: str, branch: str) -> None
     A protected, PR-only production branch is incompatible with the S1.5
     fast-forward promotion: such a branch can only advance via PR-merge
     commits, which permanently diverge it from `cms-preview` and wedge every
-    deploy ("cannot fast-forward ... diverged"). The CMS Slack approval is the
-    real production gate, so we strip GitHub protection here the same way
-    `vercel.disable_deployment_protection` strips Vercel's. A branch with no
+    deploy ("cannot fast-forward ... diverged"). The operator's manual
+    promotion is the real production gate, so we strip GitHub protection here
+    the same way `vercel.disable_deployment_protection` strips Vercel's. A
+    branch with no
     protection returns 404 ("Branch not protected") — already the desired state.
     """
     try:

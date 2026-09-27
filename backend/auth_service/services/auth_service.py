@@ -37,6 +37,9 @@ def hash_password(plain: str) -> str:
 
 
 async def authenticate_user(email: str, password: str) -> dict | None:
+    # Accounts store lowercased emails (create_client lowercases on write) but
+    # Postgres `=` is case-sensitive — normalize here so every caller matches.
+    email = email.strip().lower()
     sb = get_supabase_admin()
     # maybe_single() returns None on 0 rows (vs single() which raises PGRST116
     # → 500). Wrong email must yield 401, not 500.

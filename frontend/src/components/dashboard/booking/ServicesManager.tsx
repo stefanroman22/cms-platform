@@ -15,7 +15,7 @@ interface Props {
 }
 
 /**
- * Services list + add/edit drawer — mirrors AutoFixSection (list+trigger)
+ * Services list + add/edit drawer — list+trigger layout
  * and LeadDetailDrawer (drawer) patterns.
  */
 export function ServicesManager({ projectSlug }: Props) {

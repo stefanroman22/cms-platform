@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 
 from ..core import pg_rate_limit
 from ..core.limiter import limiter
@@ -32,7 +33,9 @@ from ..models.schemas import (
 )
 from ..services.auth_service import hash_password
 from ..services.content_locale import pick_locale_entry
+from ..services.password_changed_email import send_password_changed_email
 from ..services.segments import segments_of, src_hash
+from ..services.sessions import revoke_all_for_user
 from ..services.supabase_client import get_supabase_admin
 from ..services.test_data import is_test_email, is_test_slug
 from ..services.welcome_email import send_welcome_email
@@ -997,9 +1000,15 @@ async def retranslate_service(project_slug: str, service_key: str, request: Requ
 # ── Admin client management ──────────────────────────────────────────────────
 
 
+# Clients hand-type these from an email: exclude glyphs that misread
+# (l/I/1, O/0) and characters HTML email clients mangle (&).
+_PASSWORD_ALPHABET = "".join(
+    c for c in string.ascii_letters + string.digits + "!@#$%^*" if c not in "lI1O0"
+)
+
+
 def _generate_password(length: int = 16) -> str:
-    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-    return "".join(secrets.choice(alphabet) for _ in range(length))
+    return "".join(secrets.choice(_PASSWORD_ALPHABET) for _ in range(length))
 
 
 @router.get("/admin/clients/lookup", response_model=CreateClientOut)
@@ -1080,6 +1089,49 @@ async def create_client(body: CreateClientRequest, request: Request):
         email=email,
         full_name=body.full_name,
         created=True,
+        generated_password=password,
+    )
+
+
+@router.post("/admin/clients/{email}/reset-password", response_model=CreateClientOut)
+@limiter.limit("3/minute")
+async def admin_reset_client_password(email: str, request: Request):
+    """Generate a fresh password for an existing client, hash it onto
+    public.users, and revoke every live session. The password is returned
+    exactly once — the admin shares it with the client out-of-band. The client
+    gets a "your password was changed" notice by email (no password in it)."""
+    await admin_user_via_bearer_or_sid(request)
+
+    sb = get_supabase_admin()
+    existing = (
+        sb.table("users")
+        .select("id, email, full_name")
+        .eq("email", email.lower().strip())
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    u = existing.data[0]
+    password = _generate_password()
+    sb.table("users").update({"password_hash": hash_password(password)}).eq("id", u["id"]).execute()
+    # Old-credential sessions die with the old password.
+    await revoke_all_for_user(u["id"])
+    # Heads-up to the account owner. Never carries the password (the admin
+    # relays it out-of-band); best-effort, the reset has already happened.
+    try:
+        await run_in_threadpool(
+            send_password_changed_email, to_email=u["email"], reason="admin_reset"
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("password-changed email failed after admin reset")
+
+    return CreateClientOut(
+        id=u["id"],
+        email=u["email"],
+        full_name=u.get("full_name"),
+        created=False,
         generated_password=password,
     )
 

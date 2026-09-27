@@ -246,7 +246,7 @@ def test_admin_patch_project_rejects_non_http_url(client, auth_as, admin_user):
 
 def test_admin_patch_project_persists_production_branch(mock_supabase, client, auth_as, admin_user):
     """Connector calls this endpoint to record the repo's production branch
-    so Solver agent can reset cms-preview to the right ref."""
+    so publish/connector flows can reset cms-preview to the right ref."""
     auth_as(admin_user)
     mock_supabase.execute.return_value = MagicMock(data=[{"slug": "demo"}])
 
@@ -275,7 +275,7 @@ def test_admin_patch_project_accepts_master_branch(mock_supabase, client, auth_a
 @pytest.mark.usefixtures("mock_supabase")
 def test_admin_patch_project_rejects_invalid_production_branch(client, auth_as, admin_user):
     """Git ref-name allowlist blocks shell metacharacters — defense in
-    depth since Solver agent passes this value to subprocess git calls."""
+    depth since the value flows into subprocess git calls."""
     auth_as(admin_user)
     res = client.patch(
         "/admin/projects/demo",

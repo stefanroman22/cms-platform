@@ -15,7 +15,9 @@ Thumbs.db
 .idea/
 
 # ── Tooling / Planning artifacts ───────────────────────────────
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 .mcp.json
 # Original-setup planning docs were archived to docs/archive/ in the
 # dev-experience-hardening pass; they are committed there for historical
@@ -35,8 +37,6 @@ backend/keys/
 # ── Transient agent / tooling artifacts (not source) ───────────
 .playwright-mcp/
 .superpowers/
-scraper.rar
-scraper/.geocode_cache.json
 # Prod data backup snapshots (contain live manage tokens — never commit)
 backend/migrations/_backup_bookings_*.json
 
@@ -82,14 +82,6 @@ scripts/__pycache__/
 scripts/**/__pycache__/
 scripts/**/*.pyc
 
-# Scraper — Python
-scraper/.venv/
-scraper/**/__pycache__/
-scraper/**/*.pyc
-scraper/.pytest_cache/
-scraper/.mypy_cache/
-scraper/.ruff_cache/
-scraper/src/*.egg-info/
 backend/db.sqlite3
 backend/staticfiles/
 backend/mediafiles/

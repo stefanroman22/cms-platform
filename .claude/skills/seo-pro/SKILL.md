@@ -62,7 +62,6 @@ into raw HTML.
 ```ts
 // src/lib/head.ts
 import { SITE_URL, SUPPORTED_LOCALES } from "@/lib/config";
-import { getStoredMeta } from "@/lib/seo-meta";
 
 export interface HeadData {
   title: string;
@@ -73,11 +72,10 @@ export interface HeadData {
 }
 
 export function buildHead(route: string, locale: string): HeadData {
-  const stored = getStoredMeta(route, locale); // build-time fetch result (never throws)
   const path = route === "home" ? "" : `/${route}`;
   return {
-    title: stored?.title ?? `<Business> — ${route}`,
-    description: stored?.description ?? "",
+    title: `<Business> — ${route}`,
+    description: "",
     canonical: `${SITE_URL}/${locale}${path}`,
     ogImage: `${SITE_URL}/og/${locale}/${route}.png`,
     // Coded tags are generated LOCALLY — not fetched
@@ -95,48 +93,6 @@ Key rules:
 - `canonical`, `hreflang`, `og:locale`, and JSON-LD `inLanguage` are **generated locally per
   locale** in `lib/head.ts`, not fetched from the backend.
 - The viewport is a plain `<meta name="viewport">` — no framework export, no special API.
-
-## `src/lib/seo-meta.ts` — build-time stored-meta fetch
-
-Fetches `GET {backend}/projects/{slug}/seo/public/meta?route=<route>&locale=<locale>` at **build
-time only** (no ISR, no request-time fetch for crawlers). The endpoint applies the
-**per-field default-locale fallback** server-side, so the site never merges locales itself.
-
-```ts
-// src/lib/seo-meta.ts
-const META_CACHE = new Map<string, StoredMeta | null>();
-
-export function getStoredMeta(route: string, locale: string): StoredMeta | null {
-  const key = `${route}:${locale}`;
-  if (META_CACHE.has(key)) return META_CACHE.get(key)!;
-  // Populated by preFetchAllMeta() called once at build entry
-  return null;
-}
-
-// Call preFetchAllMeta once at build entry — it MUST run INSIDE the SSG build process
-// (call it from the vite-react-ssg entry/setup in `src/main.tsx` so `lib/head.ts` reads
-// the same in-process cache during pre-render). Running it from a separate `tsx` prebuild
-// process would populate an isolated in-process Map that the SSG renderer never sees (empty
-// cache → all getStoredMeta() calls return null). Alternative: persist the prefetched meta
-// to a JSON file that `lib/seo-meta.ts` imports at build time instead of using the Map.
-export async function preFetchAllMeta(slug: string, locales: string[], routes: string[]) {
-  await Promise.all(
-    locales.flatMap((locale) =>
-      routes.map(async (route) => {
-        try {
-          const res = await fetch(
-            `${process.env.VITE_CMS_ENDPOINT}/projects/${slug}/seo/public/meta?route=${route}&locale=${locale}`
-          );
-          if (!res.ok) return;
-          META_CACHE.set(`${route}:${locale}`, await res.json());
-        } catch {
-          // never throw — fall back to build-time output
-        }
-      })
-    )
-  );
-}
-```
 
 ## `src/seo/sitemap.gen.ts` — prebuild → `public/sitemap.xml`
 
@@ -315,19 +271,22 @@ export default function HomePage({ locale }: { locale: string }) {
 
 Validate every JSON-LD block at https://validator.schema.org/ before declaring done.
 
-### GEO note (schema + stored SEO)
+### GEO note (schema)
 
 Treat schema as a Google rich-result + structured signal, **NOT** an AI-citation multiplier
-(LLMs tokenize JSON-LD as text). When the CMS has stored SEO for a route
-(`GET /projects/{slug}/seo/public/meta?route=&locale=`), `lib/seo-meta.ts` **prefers it**
-(title / description / OG / JSON-LD), with a build-time fallback (never throw — fall back to
-the build-time output on any error). Per-field default-locale fallback is applied by the
-**endpoint**, so the site never merges locales itself. The **SEO/GEO Optimizer agent owns that
-stored SEO** (it writes `seo_page_meta`); this skill is the build-time technical floor.
+(LLMs tokenize JSON-LD as text). This skill is the build-time technical floor for SEO.
 
-**Forbidden claims:** never assert the 11 research-refuted SEO/GEO claims (see
-`agents/SEO-GEO Optimizer/prompts.py` `FORBIDDEN_CLAIMS`): no FAQ-3.2×, answer-first-67%,
-llms.txt-as-signal, GBP-32%, NAP-74%, review-click-multipliers, etc.
+**Forbidden claims** — these failed adversarial verification; never state them as fact or use
+them to justify a recommendation:
+- FAQPage schema makes a page 3.2x more likely to appear in AI Overviews.
+- Answer-first opening paragraphs are cited 67% more often by AI engines.
+- 92.36% of AI-Overview citations come from domains in the top-10 organic results.
+- llms.txt is an effective or low-downside ranking/citation signal (treat as speculative only).
+- Google Business Profile signals are ~32% of local-pack weight (on-page 19% / reviews 16% / citations 7%).
+- 100% complete Google Business Profiles get ~7x more clicks; 50+ reviews win 4.4x more clicks.
+- NAP inconsistency across 3+ sources excludes a business from AI answers 74% of the time.
+- Filling all 10 Google Business Profile category slots directly improves ranking.
+- AI agencies inherently price SEO higher than traditional agencies.
 
 ## `SITE_URL` constant
 

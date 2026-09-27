@@ -7,8 +7,8 @@
 **Inputs:** approved manifest from Phase 3, GitHub repo from Phase 1, `CMS_API_TOKEN`, `VERCEL_TOKEN`, Resend env vars on backend Vercel project.
 
 > Sub-guidelines for this phase derive from the backend code in [`backend/`](../../../backend/). Read the backend before extending Phase 4. Specifically:
-> - `backend/main.py` and `backend/auth_service/routers/projects.py` — CMS admin endpoints used to create services.
-> - `backend/forms/` — how form submissions reach Resend; informs `email_config` wiring.
+> - `backend/auth_service/routers/workspace.py` (services: `POST /projects/{slug}/services`) and `backend/auth_service/routers/projects.py` (admin project/client endpoints).
+> - `backend/auth_service/routers/forms.py` — how form submissions reach Resend; informs `email_config` wiring.
 > - The existing `_provision()` and `_vercel_setup()` functions in [`scan.py`](../scan.py) are the reference implementations.
 
 ## Sub-steps (canonical order)
@@ -167,80 +167,6 @@ non-text data (images, hours, contact, brand) from **static constants in
    `/images/uploads/*` (committed to the client `public/`) or absolute URLs. If a
    future upload host differs from the site's `next.config` `images.remotePatterns`,
    `next/image` will reject it — add the host (or a loader) when wiring galleries.
-
-### 4.1.7 — SEO-area wiring (consume the SEO/GEO Optimizer's public endpoints)
-
-The **SEO/GEO Optimizer** agent owns the `seo_*` tables and writes per-route SEO meta
-(`seo_page_meta`) + articles (`seo_articles`) autonomously. Generated sites must CONSUME its
-public read endpoints so that stored SEO reaches the live site. (See
-[AGENTS.md → SEO/GEO area contract](../AGENTS.md).)
-
-**Hard rule:** NEVER provision the `seo_*` tables as content services and NEVER clobber them —
-this phase only WIRES consumption of the public read endpoints.
-
-1. **Backend base env.** The SEO endpoints live on the same backend as content; reuse the
-   existing backend base (the `{prefix}CMS_ENDPOINT` base / the bare backend base already set
-   for content + booking). No new secret is needed — `GET /projects/{slug}/seo/public/{meta,articles}`
-   is public (ETag/ISR).
-
-**Next.js sites:**
-
-2. **Generate `lib/seo-meta.ts`** (mirrors `lib/cms-content.ts`: ISR + never-throw fallback).
-   It exports a fetch helper that calls
-   `GET {backend}/projects/{slug}/seo/public/meta?route=<route>&locale=<active-locale>` (the
-   **active** next-intl locale) with `next: { revalidate: 60 }`, and on any non-ok/error
-   returns `null` so the caller falls back to the build-time `seo-pro` output. It NEVER throws.
-   **The per-field default-locale fallback is now SERVER-SIDE** — the public endpoint fills any
-   missing/untranslated locale field from the project's default-locale row, so the helper
-   fetches **one** active-locale response and **never merges locales itself** (it never sees an
-   empty translated field).
-
-3. **Wire `generateMetadata` to prefer stored meta + generate coded tags itself per locale.**
-   Each page's `generateMetadata` calls the helper for the active locale; when it returns
-   stored prose (`title`/`description`/`og` text + JSON-LD data), PREFER it over build-time;
-   otherwise keep the build-time `seo-pro` output. The **coded tags are generated LOCALLY per
-   active locale** — `canonical`, `hreflang` (`alternates.languages`), `og:locale`, and JSON-LD
-   `inLanguage` are language-invariant **codes**, NOT fetched; the site emits them itself per
-   locale. **SSR every locale** (each locale's content lands in the raw HTML, not just the
-   default — AI/Google bots don't run JS).
-
-4. **`/blog` only when articles exist — ACTIVE locale, server-side fallback (Next.js).** Provision/wire
-   the `/blog` index + `/blog/[slug]` (fetching
-   `GET {backend}/projects/{slug}/seo/public/articles?locale=<active-locale>` + `/{articleSlug}`,
-   ISR + fallback) and set `projects.seo_blog_route` (e.g. `/blog`) ONLY once the SEO agent has
-   created articles — typically when the SEO agent drives this via a `site-change-spec`
-   `cms_wiring` block (the Website Builder incremental mode adds the route). An untranslated
-   article transparently shows default-locale prose because the endpoint applies the per-field
-   default fallback **server-side** — the site does not merge. Do not scaffold an empty `/blog`
-   on a normal connector run.
-
-**Vite + React 19 SPA sites:**
-
-2. **Generate `src/lib/seo-meta.ts`** (build-time SSG snapshot + optional client TanStack refetch;
-   never throws). It exports a fetch helper that calls
-   `GET {backend}/projects/{slug}/seo/public/meta?route=<route>&locale=<locale>` at **build time**
-   for the SSG snapshot; optionally also as a SEPARATE client TanStack Query for freshness (its
-   own query — NOT the build-time in-process meta cache, which is build-process-only). On any
-   non-ok/error returns `null` so the caller falls back to the build-time `seo-pro` output. It
-   NEVER throws. The per-field default-locale fallback is SERVER-SIDE (same as Next): the endpoint
-   fills any missing/untranslated field, the helper never merges locales itself.
-
-3. **No `generateMetadata` — use `src/lib/head.ts` with React 19 hoisted tags.** There is no
-   `generateMetadata` in Vite SPAs. Instead, `src/lib/head.ts` emits React 19 hoisted
-   `<title>`, `<meta>`, and `<link>` tags. When `src/lib/seo-meta.ts` returns stored prose
-   (`title`/`description`/`og` text + JSON-LD data), PREFER it over build-time; otherwise keep
-   the build-time `seo-pro` output. The **coded tags are generated LOCALLY per active locale**
-   — `canonical`, `hreflang`, `og:locale`, and JSON-LD `inLanguage` are emitted by `src/lib/head.ts`
-   per locale without fetching. The endpoint applies per-field default-locale fallback server-side
-   so the site never merges locale fields itself.
-
-4. **`/blog` + `/blog/:slug` — pre-rendered from build-time article slugs (Vite).** Pre-render
-   the `/blog` index + `/blog/:slug` from build-time article slugs fetched via
-   `GET {backend}/projects/{slug}/seo/public/articles?locale=<locale>`; add a client TanStack
-   refetch for freshness. Set `projects.seo_blog_route` (e.g. `/blog`) ONLY once the SEO agent
-   has created articles. An untranslated article transparently shows default-locale prose because
-   the endpoint applies the per-field default fallback server-side. Do not scaffold an empty
-   `/blog` on a normal connector run.
 
 ### 4.2 — Booking provisioning (only if `booking.detected` in manifest)
 

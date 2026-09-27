@@ -204,8 +204,8 @@
       "seoTip": "Optimized for search engines and AI answer engines so you get found.",
       "humanReview": "Personal human review",
       "humanReviewTip": "Every major release is reviewed by a human, not just shipped by a machine.",
-      "cms": "CMS connector & agentic issue solver",
-      "cmsTip": "Change content across your app anytime, and an AI agent auto-detects and fixes issues."
+      "cms": "CMS connector",
+      "cmsTip": "Change content across your app anytime from your own dashboard."
     },
     "project": {
       "presentation": {
@@ -247,12 +247,7 @@
         "info": "Ongoing improvements & support.",
         "priceMonthly": "€99/month",
         "priceYearly": "€990/year",
-        "features": [
-          "Everything in Care",
-          "Agentic issue solver",
-          "Priority support",
-          "Quarterly strategy meeting"
-        ],
+        "features": ["Everything in Care", "Priority support", "Quarterly strategy meeting"],
         "cta": "Choose Growth"
       },
       "scale": {

@@ -100,6 +100,59 @@ def test_login_default_sets_30_day_max_age(client, auth_deps):
     assert "Max-Age=2592000" in set_cookie
 
 
+def test_login_normalizes_email_case_and_whitespace(client, auth_deps):
+    """A phone auto-capitalizing the address (or a copy-paste with spaces) must
+    still log in: LoginRequest lowercases + strips the email before it reaches
+    authenticate_user. Regression for the 2026-08 client lockout."""
+    res = client.post(
+        "/auth/login",
+        json={"email": "  ADMIN@Example.COM  ", "password": "correct-password"},
+    )
+    assert res.status_code == 200
+    assert "sid=raw-sid-12345" in res.headers.get("set-cookie", "")
+
+
+def test_login_strips_password_whitespace(client, auth_deps):
+    """Trailing whitespace from copy-pasting the password out of an HTML email
+    must not fail the login."""
+    res = client.post(
+        "/auth/login",
+        json={"email": "admin@example.com", "password": "  correct-password\n"},
+    )
+    assert res.status_code == 200
+
+
+def test_authenticate_user_normalizes_email(monkeypatch):
+    """Service-level defense: authenticate_user lowercases + strips the email in
+    its own SELECT, so non-router callers get the same behaviour."""
+    import asyncio
+
+    from auth_service.services import auth_service as svc
+
+    sb = MagicMock()
+    for m in ("table", "select", "eq", "maybe_single"):
+        getattr(sb, m).return_value = sb
+    sb.execute.return_value = MagicMock(data=None)
+    monkeypatch.setattr(svc, "get_supabase_admin", lambda: sb)
+
+    asyncio.run(svc.authenticate_user("  MiXed@Case.COM  ", "pw"))
+    email_eq = sb.eq.call_args_list[0]
+    assert email_eq.args == ("email", "mixed@case.com")
+
+
+def test_generated_password_alphabet_has_no_ambiguous_chars():
+    """Generated passwords are hand-typed by clients from an email: exclude
+    glyphs that misread (l/I/1, O/0) and characters that HTML email clients
+    mangle (& < > \" ')."""
+    from auth_service.routers.workspace import _PASSWORD_ALPHABET, _generate_password
+
+    forbidden = set("lI1O0&<>\"'")
+    assert not (set(_PASSWORD_ALPHABET) & forbidden)
+    pw = _generate_password()
+    assert len(pw) == 16
+    assert not (set(pw) & forbidden)
+
+
 def test_login_locked_account_returns_429(client, auth_deps, monkeypatch):
     """SEC-011: once the per-account failure threshold is crossed, login is refused."""
     monkeypatch.setattr("auth_service.core.pg_rate_limit.over_limit", lambda *a, **k: True)
@@ -173,3 +226,65 @@ def test_change_password_wrong_current_returns_400(client, auth_deps):
         json={"current_password": "wrong", "new_password": "NewStrongPass123"},
     )
     assert res.status_code == 400
+
+
+@pytest.fixture
+def fresh_limiter():
+    """/auth/change-password is limited to 3/minute; the notice tests below
+    would otherwise trip it after the earlier change-password tests."""
+    from auth_service.core.limiter import limiter
+
+    limiter.reset()
+    yield
+    limiter.reset()
+
+
+def test_change_password_sends_security_notice(
+    client, auth_deps, mock_supabase, monkeypatch, fresh_limiter
+):
+    sent = []
+    monkeypatch.setattr(
+        "auth_service.routers.auth.send_password_changed_email",
+        lambda **kw: sent.append(kw),
+    )
+    mock_supabase.execute.return_value = MagicMock(data=_sample_user_row())
+    client.cookies.set("sid", "raw-sid-12345")
+    res = client.post(
+        "/auth/change-password",
+        json={"current_password": "correct-password", "new_password": "NewStrongPass123"},
+    )
+    assert res.status_code == 204
+    assert sent == [{"to_email": "admin@example.com", "reason": "self_service"}]
+
+
+def test_change_password_succeeds_when_notice_fails(
+    client, auth_deps, mock_supabase, monkeypatch, fresh_limiter
+):
+    def boom(**_kw):
+        raise RuntimeError("Resend 500")
+
+    monkeypatch.setattr("auth_service.routers.auth.send_password_changed_email", boom)
+    mock_supabase.execute.return_value = MagicMock(data=_sample_user_row())
+    client.cookies.set("sid", "raw-sid-12345")
+    res = client.post(
+        "/auth/change-password",
+        json={"current_password": "correct-password", "new_password": "NewStrongPass123"},
+    )
+    assert res.status_code == 204
+
+
+def test_change_password_wrong_current_sends_no_notice(
+    client, auth_deps, monkeypatch, fresh_limiter
+):
+    sent = []
+    monkeypatch.setattr(
+        "auth_service.routers.auth.send_password_changed_email",
+        lambda **kw: sent.append(kw),
+    )
+    client.cookies.set("sid", "raw-sid-12345")
+    res = client.post(
+        "/auth/change-password",
+        json={"current_password": "wrong", "new_password": "NewStrongPass123"},
+    )
+    assert res.status_code == 400
+    assert sent == []

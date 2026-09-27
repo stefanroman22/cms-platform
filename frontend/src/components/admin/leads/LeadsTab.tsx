@@ -4,10 +4,9 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { LeadsDashboard } from "./LeadsDashboard";
-import { ScraperControl } from "./ScraperControl";
 import { ConversionsTab } from "./ConversionsTab";
 
-type Section = "dashboard" | "scraper" | "conversions";
+type Section = "dashboard" | "conversions";
 
 export function LeadsTab() {
   const [section, setSection] = useState<Section>("dashboard");
@@ -15,10 +14,10 @@ export function LeadsTab() {
     <div className="p-4 md:p-8">
       <PageHeader
         title="Leads"
-        description="Browse scraped businesses without websites and trigger new scrape jobs."
+        description="Browse businesses without websites and track conversions."
       />
       <div className="mt-6 flex gap-2">
-        {(["dashboard", "scraper", "conversions"] as Section[]).map((s) => (
+        {(["dashboard", "conversions"] as Section[]).map((s) => (
           <button
             key={s}
             type="button"
@@ -30,7 +29,7 @@ export function LeadsTab() {
                 : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700",
             ].join(" ")}
           >
-            {s === "dashboard" ? "Dashboard" : s === "scraper" ? "Scraper" : "Conversions"}
+            {s === "dashboard" ? "Dashboard" : "Conversions"}
           </button>
         ))}
       </div>
@@ -43,13 +42,7 @@ export function LeadsTab() {
           transition={{ duration: 0.22, ease: "easeOut" }}
           className="mt-6"
         >
-          {section === "dashboard" ? (
-            <LeadsDashboard />
-          ) : section === "scraper" ? (
-            <ScraperControl />
-          ) : (
-            <ConversionsTab />
-          )}
+          {section === "dashboard" ? <LeadsDashboard /> : <ConversionsTab />}
         </motion.div>
       </AnimatePresence>
     </div>

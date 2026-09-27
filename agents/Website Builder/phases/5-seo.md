@@ -22,11 +22,8 @@
   route, cropped to 1200×630).
 - Set real `SITE_URL` in `src/lib/config.ts` — ask for the domain if unknown; **never leave
   `https://example.com`**.
-- Stored-meta: `lib/seo-meta.ts` fetches `GET {backend}/projects/{slug}/seo/public/meta?route=&locale=<locale>`
-  at **build time** (no ISR, no request-time fetch). Prefers stored prose (title/description/OG),
-  falls back to build-time output on any error, **never throws**. Coded tags (`canonical`,
-  `hreflang`, `og:locale`, JSON-LD `inLanguage`) are generated **locally per locale** in
-  `lib/head.ts` — not fetched.
+- Coded tags (`canonical`, `hreflang`, `og:locale`, JSON-LD `inLanguage`) are generated
+  **locally per locale** in `lib/head.ts`.
 - Pre-render every locale (raw-HTML content per locale): `vite-react-ssg` iterates every locale
   × route entry and emits a static HTML file with localized content + head tags in the raw
   markup. This is the SEO guarantee — crawlers see content without JavaScript.

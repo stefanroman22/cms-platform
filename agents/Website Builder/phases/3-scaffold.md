@@ -29,7 +29,7 @@
   `replaceChild`. Add `suppressHydrationWarning` on `<html>`.
 - Create the canonical `src/` folder structure from `vite-react-scaffolding` (`main.tsx`,
   `routes.tsx`, `i18n/`, `pages/`, `components/sections/`, `components/RouteLoader.tsx`,
-  `lib/{cms-content,cms-site,seo-meta,query,store,head}.ts`,
+  `lib/{cms-content,cms-site,query,store,head}.ts`,
   `seo/{sitemap,robots,og}.gen.ts`).
 - Copy the design's mock images to `public/images/<section>/<filename>`.
 - Copy `agents/Website Builder/learnings-template/*` into the new project's `.learnings/`.

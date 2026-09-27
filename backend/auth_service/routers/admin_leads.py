@@ -1,5 +1,5 @@
 """Admin-only CRUD over public.leads. Reads are paginated + filterable.
-Writes are limited to pipeline-status and scraped-data fields (LeadUpdate)."""
+Writes are limited to pipeline-status and business-data fields (LeadUpdate)."""
 
 from __future__ import annotations
 
@@ -99,9 +99,8 @@ async def list_leads(
 
 @router.post("", response_model=LeadOut, status_code=status.HTTP_201_CREATED)
 async def create_lead(body: LeadCreate, request: Request) -> LeadOut:
-    """Manually create a lead from the admin dashboard. Leads are otherwise
-    100% scraper-sourced; a manual insert sets primary_source='manual' and a
-    generated external_id so it never collides with scraper dedup."""
+    """Manually create a lead from the admin dashboard. A manual insert sets
+    primary_source='manual' and a generated external_id as a stable unique key."""
     await admin_user_via_bearer_or_sid(request)
     sb = get_supabase_admin()
 
@@ -113,7 +112,7 @@ async def create_lead(body: LeadCreate, request: Request) -> LeadOut:
 
     row["primary_source"] = "manual"
     row["external_id"] = f"manual:{uuid4()}"
-    # name_normalized is NOT NULL; mirror the scraper's lower+collapse-whitespace.
+    # name_normalized is NOT NULL; lower + collapse whitespace.
     row["name_normalized"] = re.sub(r"\s+", " ", body.business_name.lower()).strip()
 
     res = sb.table("leads").insert(row).execute()

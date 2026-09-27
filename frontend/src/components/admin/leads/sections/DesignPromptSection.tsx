@@ -122,7 +122,7 @@ function DesignPromptPreview({ html }: { html: string }) {
             ref={contentRef}
             className="prose prose-sm prose-zinc dark:prose-invert max-w-none"
             // SEC-018/SEC-043: design_prompt is model-generated HTML derived from
-            // untrusted scraped lead data, and the agent writeback bypasses the
+            // untrusted lead data, and the agent writeback bypasses the
             // backend bleach sanitizer. Sanitize on render so any write path is
             // safe in the admin dashboard (strips <script>, event handlers, etc.).
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}

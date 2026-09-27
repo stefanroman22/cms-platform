@@ -1,6 +1,8 @@
-"""Shared branded email chrome — the zinc-900 header + footer used by the
-issue-resolved, booking confirmation, and reminder emails. Inline styles only
-(mail clients strip <style>).
+"""Shared branded email chrome — the zinc-900 header + footer used by every
+transactional email (booking confirmation / reminder / manage, client welcome,
+password changed). Inline styles only (mail clients strip <style>). New emails
+compose ``shell(header + accent_rule + <blocks> + footer)`` from the helpers
+below; don't hand-roll a standalone template.
 
 New in P4: optional Brand dataclass. All new params default to DEFAULT_BRAND
 (Roman Technologies), so the issue-resolved and any other existing callers that
@@ -128,10 +130,102 @@ def footer(*, brand: Brand = DEFAULT_BRAND) -> str:
 </td></tr>"""
 
 
-def shell(inner: str) -> str:
+# ---- body building blocks -------------------------------------------------
+#
+# Every argument named ``*_html`` must already be safe markup: escape untrusted
+# text with ``html.escape`` (or ``booking_i18n.tt``) before passing it in. URLs
+# and colours are sanitised here, so callers can pass them raw.
+
+
+def heading(text_html: str, *, color: str = "#18181b") -> str:
+    color = safe_hex(color, "#18181b")
+    return (
+        '<tr><td style="padding:32px 32px 4px">'
+        f'<h1 style="margin:0;font-size:23px;font-weight:600;letter-spacing:-0.01em;'
+        f'line-height:1.3;color:{color}">{text_html}</h1></td></tr>'
+    )
+
+
+def paragraph(text_html: str, *, color: str = "#52525b", size: int = 15) -> str:
+    color = safe_hex(color, "#52525b")
+    return (
+        f'<tr><td style="padding:12px 32px 0"><p style="margin:0;font-size:{int(size)}px;'
+        f'line-height:1.6;color:{color}">{text_html}</p></td></tr>'
+    )
+
+
+def detail_box(rows: list[tuple[str, str]]) -> str:
+    """Grey key/value card. ``rows`` = [(label_html, value_html), ...]."""
+    if not rows:
+        return ""
+    last = len(rows) - 1
+    body = "".join(
+        f'<p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;'
+        f'text-transform:uppercase;color:#71717a">{label}</p>'
+        f'<p style="margin:0 0 {0 if i == last else 14}px;font-size:15px;line-height:1.5;'
+        f'color:#18181b">{value}</p>'
+        for i, (label, value) in enumerate(rows)
+    )
+    return (
+        '<tr><td style="padding:20px 32px 4px"><table width="100%" cellpadding="0" cellspacing="0" '
+        'style="background:#fafafa;border:1px solid #ececee;border-radius:10px">'
+        f'<tr><td style="padding:18px 22px">{body}</td></tr></table></td></tr>'
+    )
+
+
+def button(
+    url: str,
+    label_html: str,
+    *,
+    accent: str = DEFAULT_BRAND.accent,
+    text_color: str = "#ffffff",
+    outline: bool = False,
+) -> str:
+    """A centred call-to-action. Returns "" when ``url`` is not http(s)."""
+    safe = safe_url(url)
+    if not safe:
+        return ""
+    accent = _safe_accent(accent)
+    text_color = safe_hex(text_color, "#ffffff")
+    bg = "#ffffff" if outline else accent
+    return (
+        '<tr><td style="padding:24px 32px 4px" align="center">'
+        f'<a href="{html.escape(safe, quote=True)}" style="display:inline-block;background:{bg};'
+        f"border:1px solid {accent};color:{text_color};text-decoration:none;font-size:14px;"
+        f'font-weight:600;padding:13px 28px;border-radius:9px">{label_html}</a></td></tr>'
+    )
+
+
+def callout(text_html: str) -> str:
+    """A quiet bordered note for secondary-but-important information."""
+    return (
+        '<tr><td style="padding:24px 32px 0"><table width="100%" cellpadding="0" cellspacing="0" '
+        'style="border-left:3px solid #d4d4d8"><tr><td style="padding:2px 0 2px 14px">'
+        f'<p style="margin:0;font-size:13px;line-height:1.6;color:#71717a">{text_html}</p>'
+        "</td></tr></table></td></tr>"
+    )
+
+
+def spacer(px: int = 32) -> str:
+    """Vertical breathing room, e.g. between the last block and the footer rule."""
+    return (
+        f'<tr><td style="height:{int(px)}px;line-height:{int(px)}px;font-size:0">&nbsp;</td></tr>'
+    )
+
+
+def _preheader(text: str) -> str:
+    """Hidden inbox-preview line (the grey snippet next to the subject)."""
+    return (
+        '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">'
+        f"{html.escape(text)}</div>"
+    )
+
+
+def shell(inner: str, *, preheader: str = "") -> str:
+    pre = _preheader(preheader) if preheader else ""
     return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#27272a">
+<body style="margin:0;padding:0;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#27272a">{pre}
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;padding:44px 20px"><tr><td align="center">
     <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border:1px solid #ececee;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(24,24,27,0.06)">
       {inner}

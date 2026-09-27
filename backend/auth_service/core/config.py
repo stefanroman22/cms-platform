@@ -8,7 +8,7 @@ SESSION_COOKIE_NAME: str = "sid"
 
 # Three deploy tiers. Anything else is rejected at startup so a typo
 # (`prod`, `PRODUCTION`, ``) cannot silently flow through the production
-# code path. See docs/ENVIRONMENTS.md for tier semantics.
+# code path. See docs/decisions/0009-environment-tiers-and-config.md for tier semantics.
 Environment = Literal["development", "preview", "production"]
 
 
@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str = ""
     RESEND_FROM_EMAIL: str = "noreply@roman-technologies.dev"
     RESEND_FROM_NAME: str = "Roman Technologies CMS"
+    # Reply-To + "contact us" address on client account emails (welcome,
+    # password changed). Replies to noreply@ would otherwise go nowhere.
+    SUPPORT_EMAIL: str = "stefanromanpers@gmail.com"
 
     # Booking widget — hours below are interpreted in BOOKING_TIMEZONE (CET).
     BOOKING_TIMEZONE: str = "Europe/Berlin"
@@ -56,24 +59,6 @@ class Settings(BaseSettings):
     BOOKING_MAX_RESCHEDULES: int = 2
     # Base URL for building /manage/{token} links (defaults to the public base).
     BOOKING_MANAGE_BASE_URL: str = ""
-
-    # Slack — S1 outbound + S1.5 inbound
-    SLACK_BOT_TOKEN: str = ""
-    SLACK_ISSUES_CHANNEL_ID: str = ""
-    SLACK_SIGNING_SECRET: str = ""
-    SLACK_APPROVER_USER_ID: str = ""
-    SLACK_BOT_USER_ID: str = ""
-    CMS_DASHBOARD_URL: str = "https://roman-technologies.dev"
-
-    # GitHub PAT for production-promote fast-forward (S1.5)
-    GITHUB_TOKEN: str = ""
-
-    # GitHub PAT for triggering Solver Agent workflow via repository_dispatch
-    # when a client submits an issue. Scoped narrowly to actions:write on
-    # the cms-platform repo (fine-grained PAT). Failures degrade silently —
-    # the hourly cron picks up issues whose dispatch did not fire.
-    SOLVER_DISPATCH_TOKEN: str = ""
-    SOLVER_DISPATCH_REPO: str = "stefanroman22/cms-platform"
 
     @property
     def cors_origins(self) -> list[str]:

@@ -58,6 +58,19 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=256)
     remember_me: bool = False
 
+    # Normalize before validation: phones auto-capitalize the address and
+    # copy-paste from HTML email drags whitespace along — neither should fail
+    # a login (2026-08 client lockout regression).
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, v: object) -> object:
+        return v.strip().lower() if isinstance(v, str) else v
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def strip_password(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -74,6 +87,13 @@ class UserOut(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=256)
     new_password: str = Field(min_length=8, max_length=256)
+
+    # Keep stored passwords strip-consistent with the login path, which strips
+    # whitespace before verifying.
+    @field_validator("current_password", "new_password", mode="before")
+    @classmethod
+    def strip_passwords(cls, v: object) -> object:
+        return v.strip() if isinstance(v, str) else v
 
 
 class ChangeNameRequest(BaseModel):
@@ -276,83 +296,6 @@ class CreateClientOut(BaseModel):
     generated_password: str | None = None  # only set when created=True
 
 
-# ── Issues ───────────────────────────────────────────────────────────────────
-
-
-class IssueCreateRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=200)
-    description: str = Field(min_length=1, max_length=10_000)
-    priority: str = "Medium"
-
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def strip_control_chars(cls, v: object) -> object:
-        # Defense-in-depth (SEC-001): issue title/description are untrusted client
-        # input that flows into the Solver agent's prompt, server logs, and Slack
-        # notifications. Strip C0 control characters (keeping tab/newline/CR) so
-        # the text cannot smuggle terminal-escape sequences or NUL bytes through
-        # those sinks. Runs in "before" mode so the length bounds above still
-        # apply to the cleaned value (an all-control-char field becomes empty and
-        # fails min_length).
-        if not isinstance(v, str):
-            return v
-        return "".join(ch for ch in v if ch in ("\t", "\n", "\r") or ord(ch) >= 0x20)
-
-    @field_validator("priority")
-    @classmethod
-    def validate_priority(cls, v: str) -> str:
-        if v not in ("High", "Medium", "Low"):
-            raise ValueError("priority must be High, Medium, or Low")
-        return v
-
-
-class IssueOut(BaseModel):
-    id: str
-    project_id: str
-    title: str
-    description: str
-    priority: str
-    status: str
-    created_by: str | None
-    created_by_email: str | None
-    created_at: str
-
-
-class IssueUpdateRequest(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=200)
-    description: str | None = Field(default=None, min_length=1, max_length=10_000)
-    priority: str | None = None
-
-    @field_validator("priority")
-    @classmethod
-    def validate_priority(cls, v: str | None) -> str | None:
-        if v is not None and v not in ("High", "Medium", "Low"):
-            raise ValueError("priority must be High, Medium, or Low")
-        return v
-
-
-class IssueStatusRequest(BaseModel):
-    status: str
-
-    @field_validator("status")
-    @classmethod
-    def validate_status(cls, v: str) -> str:
-        if v not in ("pending", "in_progress", "done"):
-            raise ValueError("status must be pending, in_progress, or done")
-        return v
-
-
-class AgentEventRequest(BaseModel):
-    """Solver agent → backend event notification.
-
-    Each kind maps to a Slack thread reply under the original "New Issue"
-    message (or a top-level post if slack_created_ts is NULL on the issue).
-    """
-
-    kind: Literal["rejected", "no_diff", "agent_crashed", "backend_error"]
-    reason: str = Field(..., min_length=1, max_length=500)
-
-
 # ── Preview / Publish ────────────────────────────────────────────────────────
 
 
@@ -375,8 +318,8 @@ class RotateTokenResponse(BaseModel):
 class AdminProjectPatchIn(BaseModel):
     github_repo: str | None = Field(default=None, max_length=200)
     # Production branch (`main` for new repos per Option A guideline,
-    # `master` tolerated for legacy repos). Persisted so the Solver
-    # Agent's clone+reset path knows which ref to base cms-preview on.
+    # `master` tolerated for legacy repos). Persisted so publish/connector
+    # flows know which ref to base cms-preview on.
     # Allowlist excludes shell metacharacters — defense in depth since
     # the value flows into subprocess git calls.
     production_branch: str | None = Field(default=None, min_length=1, max_length=80)
@@ -486,7 +429,7 @@ class WelcomeEmailIn(BaseModel):
         return checked
 
 
-# ───────── Lead scraper (added 2026-05-17) ─────────
+# ───────── Leads ─────────
 
 LeadType = Literal["website", "automation", "both"]
 WebPresence = Literal["none", "social_only", "has_website", "unknown"]
@@ -509,34 +452,11 @@ AiWorkflowStatus = Literal[
 LeadStatus = Literal["not_sent", "sent", "accepted", "refused"]
 LeadContactType = Literal["not_contacted", "phone", "mail", "in_person"]
 PaymentStatus = Literal["not_applicable", "not_paid", "paid"]
-ScrapeJobStatus = Literal["pending", "running", "done", "failed", "cancelled"]
-
-
-class ScrapeFilters(BaseModel):
-    min_rating: float | None = None
-    max_rating: float | None = None
-    min_reviews: int | None = 5
-    max_reviews: int | None = None
-    web_presence: list[WebPresence] = Field(default_factory=lambda: ["none", "social_only"])
-
-
-class ScrapeParams(BaseModel):
-    category: str = "businesses"
-    country: str = "NL"
-    cities: list[str] = Field(default_factory=list)
-    areas: list[str] = Field(default_factory=list)
-    max_results_per_area: int = 20
-    language: str = "en"
-    lead_type: LeadType = "website"
-    with_reviews: bool = True
-    review_limit: int = 10
-    filters: ScrapeFilters = Field(default_factory=ScrapeFilters)
 
 
 class LeadOut(BaseModel):
     id: str
     external_id: str
-    scrape_job_id: str | None = None
     primary_source: str
     source_url: str | None = None
     lead_type: LeadType
@@ -576,14 +496,14 @@ class LeadOut(BaseModel):
     closed_amount: float | None = None
     closed_at: str | None = None
     notes: str | None = None
+    call_count: int = 0
     languages: list[str] = Field(default_factory=list)
     created_at: str
     updated_at: str
 
 
 class LeadUpdate(BaseModel):
-    """Only pipeline-status + scraped-data fields are editable from the admin tab.
-    Everything else is owned by the scraper or the future AI agent."""
+    """Only pipeline-status + business-data fields are editable from the admin tab."""
 
     # pipeline (existing)
     website_build_status: WebsiteBuildStatus | None = None
@@ -593,6 +513,8 @@ class LeadUpdate(BaseModel):
     payment_status: PaymentStatus | None = None
     notes: str | None = None
     closed_amount: float | None = None
+    # times the business has been called (0-3) — leads-dashboard dropdown
+    call_count: int | None = Field(None, ge=0, le=3)
 
     # location
     address: str | None = None
@@ -718,24 +640,6 @@ class LeadCreate(BaseModel):
         if len(cleaned) > 50:
             raise ValueError("too many languages (max 50)")
         return cleaned
-
-
-class ScrapeJobOut(BaseModel):
-    id: str
-    created_at: str
-    status: ScrapeJobStatus
-    params: ScrapeParams
-    started_at: str | None = None
-    finished_at: str | None = None
-    results_found: int | None = None
-    results_inserted: int | None = None
-    results_skipped: int | None = None
-    error: str | None = None
-    triggered_by: str
-
-
-class ScrapeJobCreate(BaseModel):
-    params: ScrapeParams
 
 
 class ConversionTimePoint(BaseModel):

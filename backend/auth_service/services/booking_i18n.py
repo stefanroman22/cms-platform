@@ -18,7 +18,7 @@ STRINGS: dict[str, dict[str, str]] = {
         # --- subjects (match original booking email subjects exactly) ---
         "confirm_subject": "Your booking is confirmed",
         "host_new_subject": "New booking — {name}",
-        "reminder_subject": "Reminder: your upcoming appointment",
+        "reminder_subject": "Reminder: your appointment with {business}",
         "cancel_subject": "Your booking has been cancelled",
         "host_cancel_subject": "Cancelled — booking with {name}",
         "reschedule_subject": "Your booking has been rescheduled",
@@ -32,7 +32,16 @@ STRINGS: dict[str, dict[str, str]] = {
         # --- body copy ---
         "confirmed_heading": "You're booked, {name}.",
         "confirmed_subtext": "Your booking is confirmed.",
-        "reminder_heading": "Your appointment is in about an hour, {name}.",
+        "reminder_heading": "See you soon, {name}.",
+        # Reminder lead line; {relative} is one of the rel_* phrases below, picked
+        # from the reminder offset (a 24h reminder must not say "in an hour").
+        "reminder_lead": "Your appointment is {relative}. Here are the details.",
+        "rel_minutes": "in about {n} minutes",
+        "rel_hour": "in about an hour",
+        "rel_hours": "in about {n} hours",
+        "rel_tomorrow": "tomorrow",
+        "rel_days": "in {n} days",
+        "rel_soon": "coming up soon",
         "cancel_client_heading": "Your booking has been cancelled, {name}.",
         "cancel_host_heading": "A booking was cancelled",
         "reschedule_client_heading": "Your booking has been moved, {name}.",
@@ -135,4 +144,5 @@ EDITABLE_EMAIL_FIELDS: list[dict[str, object]] = [
     {"key": "reminder_subject", "label": "Subject", "group": "reminder", "color": False},
     {"key": "header_reminder", "label": "Header subtitle", "group": "reminder", "color": True},
     {"key": "reminder_heading", "label": "Heading", "group": "reminder", "color": True},
+    {"key": "reminder_lead", "label": "Lead line", "group": "reminder", "color": True},
 ]

@@ -773,8 +773,12 @@ async def email_preview(project_slug: str, body: EmailPreviewIn, request: Reques
             when_label=_SAMPLE["when_label"],
             note=_SAMPLE["note"],
             meeting_url="https://meet.example/demo",
+            start_utc=start,
+            end_utc=end,
+            business_name=brand.business_name,
             brand=brand,
             copy=copy,
+            offset_min=60,
         )
     else:
         raise HTTPException(status_code=422, detail="Unknown case")

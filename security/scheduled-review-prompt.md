@@ -35,8 +35,8 @@ independent skeptical agent before it is recorded. Prioritize, in order:
       Supabase service-role key (RLS bypassed; authZ is in app code).
    2. **Authentication** for users/clients (sessions, cookies, tokens).
    3. **Admin privilege** gating.
-   4. **Public endpoints & tokens** (booking, forms, manage links, Slack webhook, embeddable widget).
-   5. **XSS / HTML-email injection**, **SSRF** (scraper + connector agent), **injection**, **CI workflows**, **agents**, **Supabase DB**, **deps**, **rate-limiting**.
+   4. **Public endpoints & tokens** (booking, forms, manage links, content draft tokens, embeddable widget).
+   5. **XSS / HTML-email injection**, **SSRF** (connector agent, calendar, DeepL), **injection**, **CI workflows**, **agents**, **Supabase DB**, **deps**, **rate-limiting**.
 
 **3. Reconcile with the tracker** — for every finding currently `open`/`in-progress` in `FINDINGS.md`,
 re-read the cited code and decide: still present (keep), or fixed (mark `fixed` + cite the commit). Do

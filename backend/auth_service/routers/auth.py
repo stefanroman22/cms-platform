@@ -1,6 +1,8 @@
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
+from starlette.concurrency import run_in_threadpool
 
 from ..core import pg_rate_limit
 from ..core.config import settings
@@ -13,6 +15,7 @@ from ..models.schemas import (
     UserOut,
 )
 from ..services.auth_service import authenticate_user, change_user_password
+from ..services.password_changed_email import send_password_changed_email
 from ..services.sessions import (
     DEFAULT_DAYS,
     REMEMBER_ME_DAYS,
@@ -23,6 +26,7 @@ from ..services.sessions import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+log = logging.getLogger(__name__)
 
 SESSION_COOKIE = "sid"
 
@@ -151,6 +155,14 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
     user_agent, ip = _client_meta(request)
     raw_sid, _ = await create_session(fresh_user, remember_me=False, user_agent=user_agent, ip=ip)
     _set_session_cookie(response, raw_sid, remember_me=False)
+    # Security notice to the account owner (no password in it). Best-effort:
+    # the change already succeeded, so a mail failure must not fail the request.
+    try:
+        await run_in_threadpool(
+            send_password_changed_email, to_email=user.email, reason="self_service"
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("password-changed email failed after self-service change")
 
 
 @router.patch("/profile", status_code=status.HTTP_200_OK)

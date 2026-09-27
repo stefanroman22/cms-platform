@@ -79,21 +79,13 @@ export const LEAD_CONTACT_TYPE_LABEL = {
   in_person: "In person",
 } as const;
 
-export const SCRAPE_JOB_STATUS_BADGE_CN = {
-  pending: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
-  running: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  done: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  failed: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  cancelled: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500",
-} as const;
-
-export const SCRAPE_JOB_STATUS_LABEL = {
-  pending: "Pending",
-  running: "Running",
-  done: "Done",
-  failed: "Failed",
-  cancelled: "Cancelled",
-} as const;
+// Times the business has been called (0-3). Editable via the leads drawer dropdown.
+export const CALL_COUNT_LABEL: Record<number, string> = {
+  0: "Not called",
+  1: "Called once",
+  2: "Called twice",
+  3: "Called 3 times",
+};
 
 // Type aliases derived from the labels — keep in sync with backend Pydantic Literal types.
 export type LeadType = keyof typeof LEAD_TYPE_LABEL;
@@ -103,4 +95,3 @@ export type PaymentStatus = keyof typeof PAYMENT_STATUS_LABEL;
 export type WebsiteBuildStatus = keyof typeof WEBSITE_BUILD_STATUS_LABEL;
 export type AiWorkflowStatus = keyof typeof AI_WORKFLOW_STATUS_LABEL;
 export type LeadContactType = keyof typeof LEAD_CONTACT_TYPE_LABEL;
-export type ScrapeJobStatus = keyof typeof SCRAPE_JOB_STATUS_BADGE_CN;

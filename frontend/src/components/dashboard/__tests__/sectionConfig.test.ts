@@ -11,7 +11,6 @@ describe("sectionConfig", () => {
     expect(PROJECT_SECTIONS.map((s) => s.key)).toEqual([
       "dashboard",
       "cms",
-      "autofix",
       "bookings",
       "seo",
       "settings",
@@ -23,18 +22,12 @@ describe("sectionConfig", () => {
   });
 
   it("hides admin-only sections from non-admins", () => {
-    // Without the booking cap, non-admins see dashboard/cms/autofix + the always-visible "seo" teaser
-    expect(visibleSections(false).map((s) => s.key)).toEqual([
-      "dashboard",
-      "cms",
-      "autofix",
-      "seo",
-    ]);
+    // Without the booking cap, non-admins see dashboard/cms + the always-visible "seo" teaser
+    expect(visibleSections(false).map((s) => s.key)).toEqual(["dashboard", "cms", "seo"]);
     // Admins always see all sections including bookings and settings
     expect(visibleSections(true).map((s) => s.key)).toEqual([
       "dashboard",
       "cms",
-      "autofix",
       "bookings",
       "seo",
       "settings",
@@ -42,9 +35,12 @@ describe("sectionConfig", () => {
   });
 
   it("shows bookings to non-admins when bookingEnabled cap is true", () => {
-    expect(
-      visibleSections(false, { bookingEnabled: true, seoEnabled: false }).map((s) => s.key)
-    ).toEqual(["dashboard", "cms", "autofix", "bookings", "seo"]);
+    expect(visibleSections(false, { bookingEnabled: true }).map((s) => s.key)).toEqual([
+      "dashboard",
+      "cms",
+      "bookings",
+      "seo",
+    ]);
   });
 
   it("validates views against admin visibility", () => {
@@ -52,9 +48,7 @@ describe("sectionConfig", () => {
     expect(isAccessibleView("settings", false)).toBe(false);
     expect(isAccessibleView("settings", true)).toBe(true);
     expect(isAccessibleView("bookings", false)).toBe(false);
-    expect(isAccessibleView("bookings", false, { bookingEnabled: true, seoEnabled: false })).toBe(
-      true
-    );
+    expect(isAccessibleView("bookings", false, { bookingEnabled: true })).toBe(true);
     expect(isAccessibleView("bookings", true)).toBe(true);
     expect(isAccessibleView("bogus", true)).toBe(false);
     expect(isAccessibleView(null, true)).toBe(false);

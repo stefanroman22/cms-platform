@@ -60,6 +60,8 @@ test-frontend: ## Run the frontend vitest suite
 lint: ## Lint everything (ruff + black --check + frontend lint + format:check + typecheck)
 	$(PY_BIN)/python -m ruff check .
 	$(PY_BIN)/python -m black --check .
+	# Guardrail L2: requirements*.txt pins must match their hashed .lock files.
+	$(PY_BIN)/python scripts/check_requirements_lock.py
 	cd frontend && npm run lint && npm run format:check && npm run typecheck
 
 .PHONY: format
@@ -69,5 +71,9 @@ format: ## Auto-format everything (ruff --fix, black, prettier)
 	cd frontend && npm run format
 
 # ── CI emulation (run before push) ───────────────────────────────────────
+.PHONY: docs-check
+docs-check: ## Fail if agent-facing docs reference missing paths, make targets or npm scripts
+	$(PY_BIN)/python scripts/docs_check.py
+
 .PHONY: ci
-ci: lint test ## Run the same checks as GitHub Actions
+ci: lint test docs-check ## Run the same checks as GitHub Actions

@@ -17,9 +17,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `booking.py` — **public** create/availability (unauth surface)
 - [ ] `booking_admin.py` — tenant-scoped admin of bookings/services/hours
 - [ ] `forms.py` — **public** form submission → HTML email build (XSS sink)
-- [ ] `issues.py` — issue create/list, solver dispatch trigger
-- [ ] `slack_events.py` — **public** webhook (HMAC signature must hold)
-- [ ] `admin_leads.py` / `admin_conversions.py` / `admin_scrape_jobs.py` — admin-only gating
+- [ ] `admin_leads.py` / `admin_conversions.py` — admin-only gating
 
 ### Services (`services/`)
 - [ ] `supabase_client.py` — service-role usage, query builder, anon fallback
@@ -29,7 +27,6 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `content_locale.py` · `segments.py` · `translation/` (provider, deepl, null, protect, sync) — outbound DeepL, untrusted content handling
 - [ ] `html_sanitizer.py` — and **whether the email builders actually call it**
 - [ ] `email_layout.py` · `*_email.py` — HTML email template injection
-- [ ] `slack_*` (signature, events_dedup, notify, handler) · `solver_dispatch.py` · `github_merge.py` — webhook auth, token scope
 - [ ] `test_data.py` · `e2e_email_guard.py` — test-only paths not reachable in prod
 
 ### Core (`core/`)
@@ -42,8 +39,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 ### Migrations (`backend/migrations/*.sql`)
 - [ ] RLS enabled + policy correctness on every PostgREST-exposed table
 - [ ] `tenant_rls_status` SECURITY DEFINER view
-- [ ] `claim_next_solver_issue` / `claim_specific_solver_issue` RPC GRANTs (anon/authenticated)
-- [ ] `slack_processed_events` RLS state
+- [ ] Leftovers of removed features still in the DB until `2026_08_26_drop_removed_feature_tables.sql` is applied: `claim_*_solver_issue` RPC GRANTs, `slack_processed_events` / `project_issues` / `scrape_jobs` RLS state
 - [ ] Function `search_path` pinning
 - [ ] `2026_06_14_seo_geo.sql` — the `seo_*` tables: prefer an explicit `REVOKE ALL … FROM anon, authenticated` over relying only on the RLS toggle (SEC-067); check for any SECURITY DEFINER SEO routines + pinned `search_path`
 
@@ -51,28 +47,22 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `app/layout.tsx` — `dangerouslySetInnerHTML` (JSON-LD?) sink
 - [ ] `components/admin/leads/sections/DesignPromptSection.tsx` — `dangerouslySetInnerHTML` sink
 - [ ] `app/embed.js/` + `app/(widget)/` — the embeddable booking widget (cross-origin, postMessage, injected into client pages)
-- [ ] `app/(marketing)/manage/` — public booking manage page (token in URL)
-- [ ] `components/admin/leads/**` — admin rendering of scraped/lead data (stored XSS)
+- [ ] `app/[locale]/(marketing)/manage/` — public booking manage page (token in URL)
+- [ ] `components/admin/leads/**` — admin rendering of lead data (stored XSS)
 - [ ] auth/session cookie usage, API base URL, any token in localStorage
 - [ ] `next.config.ts` — headers, redirects, image domains, CSP
 
 ## Workflows (`.github/workflows/`)
-- [ ] `solver-agent.yml` — **prompt injection via issue body**, token write scope, untrusted code execution
-- [ ] `auto-merge-dev-to-master.yml` — required checks/reviews before reaching master→prod
-- [ ] `dependabot-auto-merge.yml` — auto-merge gates
-- [ ] `e2e.yml` · `ci.yml` · `post-deploy-smoke.yml` · `scraper-ci.yml` · `codeql.yml` — secret exposure, `pull_request_target`, `${{ }}` injection
+- [ ] `promote.yml` — the only path to production: gate order, `PROMOTE_TOKEN` scope, deploy-hook secrets
+- [ ] `codeql.yml` — secret exposure, `${{ }}` injection
+
+## Agent guardrails (`.claude/`)
+- [ ] `settings.json` + `hooks/guard.mjs` — PreToolUse hooks that block pushes to `main`, `--no-verify` and prod deploys, and ask before prod SQL/migrations: can a command shape bypass them?
 
 ## Agents (`agents/`)
 - [ ] `CMS Connector - Website/` — imports **client websites** to GitHub; URL/repo validation, prompt injection, output path traversal
-- [ ] `Solver - Issues/` — acts on issue content; auto-commit/push/merge based on attacker-influenceable text
 - [ ] `Design Prompt creator/` · `Website Builder/` — untrusted input → prompts → privileged actions
 - [ ] GitHub token scope across all agents
-
-## Scraper (`scraper/src/scraper/`)
-- [ ] `google_maps.py` · `urls.py` · `geo.py` · `pipeline.py` · `cli.py` — SSRF, URL validation, fan-out limits
-- [ ] output file writes (path traversal), geocode cache (`.geocode_cache.json`) deserialization
-- [ ] `tools/` — region builder
-- [ ] downstream trust: is scraped data sanitized before backend/connector consume it?
 
 ## Infra / MCP-checked state (each review)
 - [ ] Supabase security advisors (`get_advisors` type=security)

@@ -18,9 +18,11 @@ If the email is missing, halt this phase. Do not invent emails. Do not skip the 
   - Write it to any file under `/tmp/`, `agents/`, or the project repo.
   - Echo it back into chat after the initial create response.
   - Pass it as a CLI flag (process listings leak args).
-  After the welcome email is sent (Phase 6.4), the password reaches the
-  client via Resend; the operator no longer needs it. Treat it as
-  one-shot.
+  The welcome email does NOT contain the password. Share
+  `generated_password` with the client through a direct channel (phone,
+  WhatsApp, or a password manager share). If it is ever lost, generate a
+  fresh one via `POST {CMS_API_URL}/admin/clients/{email}/reset-password`.
+  Treat it as one-shot.
 - **Temp files** — if a step writes scratch state to `/tmp/`, use `tempfile.NamedTemporaryFile(mode="w", delete=False)` with `os.fchmod(fp.fileno(), 0o600)` and explicitly `os.unlink()` in the cleanup step (6.5). Never use predictable paths like `/tmp/cms-provision-state.json` — race-prone on multi-tenant boxes.
 
 ## Steps
@@ -33,7 +35,7 @@ Wait for the user to reply with the actual client's email. Validate it's a well-
 
 Call `POST /admin/clients` with `{"email": "<client>", "full_name": "<optional>"}`.
 - If the response has `created: true`, capture `generated_password` — this is the **one and only chance** to read it. Never log it to disk.
-- If `created: false`, the account already existed; re-issue a password reset via `POST /auth/admin/reset-password` (or surface a clear message asking the user to send a manual reset link if no admin reset endpoint exists).
+- If `created: false`, the account already existed; issue a fresh password via `POST {CMS_API_URL}/admin/clients/{email}/reset-password` (returns `generated_password` once, revokes the user's live sessions, and emails the client a "your password was changed" notice that does not contain the password) and share it with the client through a direct channel.
 
 ### 6.3 — Transfer project ownership
 

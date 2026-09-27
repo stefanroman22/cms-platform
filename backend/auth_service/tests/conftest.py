@@ -1,3 +1,17 @@
+import os
+
+# Guardrail T1: unit tests must never reach the one shared (production) Supabase DB,
+# Resend, Google Calendar or Vercel. Set before any app import: env vars beat backend/.env,
+# so an un-mocked call fails fast or is skipped instead of touching prod.
+os.environ["SUPABASE_URL"] = "http://127.0.0.1:9"
+os.environ["SUPABASE_ANON_KEY"] = "test-anon-key"
+os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key"
+os.environ["SUPABASE_DB_URL"] = ""
+os.environ["RESEND_API_KEY"] = "re_test_guardrail"
+os.environ["GOOGLE_REFRESH_TOKEN"] = ""
+os.environ["GOOGLE_CLIENT_SECRET"] = ""
+os.environ["VERCEL_TOKEN"] = ""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +27,18 @@ def _force_null_translation_provider(monkeypatch):
     Tests that exercise DeepLProvider construct it explicitly with an api_key arg."""
     monkeypatch.setenv("TRANSLATION_PROVIDER", "null")
     monkeypatch.delenv("DEEPL_API_KEY", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_password_changed_email(monkeypatch):
+    """Hermetic email: the password-changed notice fires from /auth/change-password
+    and the admin reset route, so any test hitting those would otherwise POST to
+    Resend with the dev's real RESEND_API_KEY. Tests that exercise the send path
+    patch ``send_via_resend`` themselves."""
+    monkeypatch.setattr(
+        "auth_service.services.password_changed_email.send_via_resend",
+        lambda **_kw: {"id": "test-noop"},
+    )
 
 
 @pytest.fixture
@@ -57,10 +83,8 @@ def mock_supabase():
         "auth_service.routers.workspace.get_supabase_admin",
         "auth_service.routers.projects.get_supabase_admin",
         "auth_service.routers.publish.get_supabase_admin",  # created in Task 7
-        "auth_service.routers.issues.get_supabase_admin",  # S1 — Slack notifications
         "auth_service.routers.admin_leads.get_supabase_admin",  # C2 — leads admin router
-        "auth_service.routers.admin_scrape_jobs.get_supabase_admin",  # C3 — scrape-jobs admin router
-        "auth_service.routers.deps.get_supabase_admin",  # S1.5 Task 8 — widened SELECT regression
+        "auth_service.routers.deps.get_supabase_admin",
         "auth_service.services.sessions.get_supabase_admin",
         # auth.change_password does `from ..services.supabase_client import get_supabase_admin`
         # inline — patch the source so the late import sees the mock.
@@ -149,21 +173,7 @@ def auth_as(monkeypatch):
 
         try:
             monkeypatch.setattr(
-                "auth_service.routers.issues.admin_user_via_bearer_or_sid",
-                fake_admin_user,
-            )
-        except (AttributeError, ModuleNotFoundError, ImportError):
-            pass
-        try:
-            monkeypatch.setattr(
                 "auth_service.routers.admin_leads.admin_user_via_bearer_or_sid",
-                fake_admin_user,
-            )
-        except (AttributeError, ModuleNotFoundError, ImportError):
-            pass
-        try:
-            monkeypatch.setattr(
-                "auth_service.routers.admin_scrape_jobs.admin_user_via_bearer_or_sid",
                 fake_admin_user,
             )
         except (AttributeError, ModuleNotFoundError, ImportError):

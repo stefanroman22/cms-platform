@@ -800,10 +800,11 @@ def _vercel_setup(
     click.echo("  ✓ Vercel deployment protection disabled (public preview/production)")
 
     # Strip GitHub branch protection on the production branch. A protected,
-    # PR-only branch is incompatible with the S1.5 fast-forward promotion: it can
-    # only advance via PR-merge commits, which diverge it from cms-preview and
-    # wedge every deploy ("cannot fast-forward ... diverged"). The Slack approval
-    # is the real production gate. Idempotent — unprotected branches are a no-op.
+    # PR-only branch is incompatible with fast-forward promotion: it can only
+    # advance via PR-merge commits, which diverge it from cms-preview and wedge
+    # every deploy ("cannot fast-forward ... diverged"). The operator's manual
+    # promotion is the real production gate. Idempotent — unprotected branches
+    # are a no-op.
     github.ensure_branch_unprotected(github_token, github_repo, prod_branch)
     click.echo(f"  ✓ GitHub branch protection cleared on {prod_branch} (fast-forward promotion)")
 

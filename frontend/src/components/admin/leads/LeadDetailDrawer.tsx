@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ExternalLink, Loader2, Save, Trash2, X } from "lucide-react";
 import {
   AI_WORKFLOW_STATUS_LABEL,
+  CALL_COUNT_LABEL,
   LEAD_CONTACT_TYPE_LABEL,
   LEAD_STATUS_LABEL,
   PAYMENT_STATUS_LABEL,
@@ -98,6 +99,7 @@ function DrawerBody({
   );
   const [leadContactType, setLeadContactType] = useState<LeadContactType>(lead.lead_contact_type);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(lead.payment_status);
+  const [callCount, setCallCount] = useState<number>(lead.call_count ?? 0);
   const [notes, setNotes] = useState(lead.notes ?? "");
   const [closedAmount, setClosedAmount] = useState<string>(
     lead.closed_amount != null ? String(lead.closed_amount) : ""
@@ -119,6 +121,7 @@ function DrawerBody({
     setAiWorkflowStatus(lead.ai_workflow_status);
     setLeadContactType(lead.lead_contact_type);
     setPaymentStatus(lead.payment_status);
+    setCallCount(lead.call_count ?? 0);
     setNotes(lead.notes ?? "");
     setClosedAmount(lead.closed_amount != null ? String(lead.closed_amount) : "");
     setError(null);
@@ -135,6 +138,7 @@ function DrawerBody({
     if (aiWorkflowStatus !== lead.ai_workflow_status) body.ai_workflow_status = aiWorkflowStatus;
     if (leadContactType !== lead.lead_contact_type) body.lead_contact_type = leadContactType;
     if (paymentStatus !== lead.payment_status) body.payment_status = paymentStatus;
+    if (callCount !== (lead.call_count ?? 0)) body.call_count = callCount;
     if (notes !== (lead.notes ?? "")) body.notes = notes;
 
     const serverAmount = lead.closed_amount != null ? String(lead.closed_amount) : "";
@@ -345,6 +349,21 @@ function DrawerBody({
             options={PAYMENT_STATUS_LABEL}
             onChange={setPaymentStatus}
           />
+          <div>
+            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+              Times called
+            </label>
+            <AnimatedSelect
+              value={String(callCount)}
+              onChange={(v) => setCallCount(Number(v))}
+              ariaLabel="Times called"
+              initialChevron="up"
+              options={[0, 1, 2, 3].map((n) => ({
+                value: String(n),
+                label: CALL_COUNT_LABEL[n],
+              }))}
+            />
+          </div>
           <div>
             <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
               Notes

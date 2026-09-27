@@ -106,3 +106,82 @@ def test_reminder_html_no_add_to_calendar_without_times():
     """Back-compat: no datetimes → no calendar button (and no crash)."""
     html_body = render_html(name="Jane", when_label="t", note=None, meeting_url="")
     assert "Add to Google Calendar" not in html_body
+
+
+# ---- 2026-09 rewrite: offset-aware lead line, subject, text part ----
+
+
+def test_relative_phrase_matches_offset():
+    from auth_service.services.booking_reminder_email import relative_phrase
+
+    assert relative_phrase(60) == "in about an hour"
+    assert relative_phrase(1440) == "tomorrow"
+    assert relative_phrase(120) == "in about 2 hours"
+    assert relative_phrase(30) == "in about 30 minutes"
+    assert relative_phrase(2880) == "in 2 days"
+    assert relative_phrase(None) == "coming up soon"
+
+
+def test_24h_reminder_does_not_claim_an_hour():
+    html_body = render_html(
+        name="Jane", when_label="Tue · 10:00", note=None, meeting_url="", offset_min=1440
+    )
+    assert "tomorrow" in html_body
+    assert "about an hour" not in html_body
+
+
+def test_1h_reminder_lead():
+    html_body = render_html(
+        name="Jane", when_label="Tue · 10:00", note=None, meeting_url="", offset_min=60
+    )
+    assert "See you soon, Jane." in html_body
+    assert "Your appointment is in about an hour." in html_body
+
+
+def test_empty_note_row_is_omitted_and_business_shown():
+    html_body = render_html(
+        name="Jane", when_label="t", note="  ", meeting_url="", business_name="Samir Kapsalon"
+    )
+    assert "Your note" not in html_body
+    assert "Samir Kapsalon" in html_body
+
+
+def test_tenant_lead_override_is_escaped_and_formatted():
+    html_body = render_html(
+        name="Jane",
+        when_label="t",
+        note=None,
+        meeting_url="",
+        offset_min=60,
+        copy={"reminder_lead": "<b>Heads up</b>: {relative}!"},
+    )
+    assert "<b>Heads up" not in html_body
+    assert "&lt;b&gt;Heads up&lt;/b&gt;: in about an hour!" in html_body
+
+
+def test_unsafe_meeting_url_dropped():
+    html_body = render_html(
+        name="Jane", when_label="t", note=None, meeting_url="javascript:alert(1)"
+    )
+    assert "javascript:" not in html_body
+    assert "Join the meeting" not in html_body
+
+
+def test_send_subject_names_business_and_has_text_part(monkeypatch):
+    from auth_service.services import booking_reminder_email as bre
+
+    calls = []
+    monkeypatch.setattr(bre, "send_via_resend", lambda **kw: calls.append(kw) or {"id": "r"})
+    bre.send(
+        to_email="jane@example.com",
+        name="Jane",
+        when_label="Tue · 10:00",
+        note="bring the brief",
+        meeting_url="",
+        business_name="Samir Kapsalon",
+        offset_min=1440,
+    )
+    (kw,) = calls
+    assert kw["subject"] == "Reminder: your appointment with Samir Kapsalon"
+    assert "Your appointment is tomorrow." in kw["text_body"]
+    assert "Your note: bring the brief" in kw["text_body"]

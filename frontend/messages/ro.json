@@ -237,8 +237,8 @@
       "seoTip": "Optimizat pentru motoarele de căutare și motoarele de răspuns bazate pe inteligență artificială, pentru ca utilizatorii să vă găsească.",
       "humanReview": "Evaluare umană individuală",
       "humanReviewTip": "Fiecare versiune majoră este verificată de o persoană, nu este lansată pur și simplu de o mașină.",
-      "cms": "Conector CMS și instrument de rezolvare a problemelor legate de agenți",
-      "cmsTip": "Puteți modifica conținutul din aplicația dvs. oricând, iar un agent bazat pe inteligență artificială detectează automat și remediază problemele."
+      "cms": "Conector CMS",
+      "cmsTip": "Puteți modifica oricând conținutul aplicației dvs. din propriul dashboard."
     },
     "project": {
       "presentation": {
@@ -286,7 +286,6 @@
         "priceYearly": "990 € pe an",
         "features": [
           "Totul despre îngrijire",
-          "Sistem de rezolvare a problemelor bazat pe agenți",
           "Asistență prioritară",
           "Ședința trimestrială de strategie"
         ],

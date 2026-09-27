@@ -11,7 +11,7 @@ describe("SectionRail", () => {
     );
     expect(screen.getByRole("tab", { name: /Dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /CMS/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /Auto-Fix/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Bookings/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Settings/i })).toBeInTheDocument();
   });
 
@@ -37,8 +37,8 @@ describe("SectionRail", () => {
     render(
       <SectionRail sections={visibleSections(true)} activeView="dashboard" onSelect={onSelect} />
     );
-    await user.click(screen.getByRole("tab", { name: /Auto-Fix/i }));
-    expect(onSelect).toHaveBeenCalledWith("autofix");
+    await user.click(screen.getByRole("tab", { name: /Bookings/i }));
+    expect(onSelect).toHaveBeenCalledWith("bookings");
   });
 
   it("moves selection with arrow keys", async () => {

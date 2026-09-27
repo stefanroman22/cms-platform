@@ -8,7 +8,6 @@ import { SectionRail } from "@/components/dashboard/SectionRail";
 import { SectionPanel } from "@/components/dashboard/SectionPanel";
 import { DashboardSection } from "@/components/dashboard/DashboardSection";
 import { CmsSection } from "@/components/dashboard/CmsSection";
-import { AutoFixSection } from "@/components/dashboard/AutoFixSection";
 import { ProjectSettingsSection } from "@/components/dashboard/ProjectSettingsSection";
 import { BookingsSection } from "@/components/dashboard/booking/BookingsSection";
 import { SeoSection } from "@/components/dashboard/seo/SeoSection";
@@ -16,7 +15,6 @@ import { visibleSections, type SectionKey } from "@/components/dashboard/section
 import { useProjectView } from "@/components/dashboard/hooks/useProjectView";
 import { setLastProjectSlug } from "@/lib/lastProject";
 import { getSettings as getBookingSettings } from "@/components/dashboard/booking/api";
-import { getOverview as getSeoOverview } from "@/components/dashboard/seo/api";
 
 interface ProjectInfo {
   name: string;
@@ -60,14 +58,8 @@ export default function ProjectWorkspacePage({
     () => getBookingSettings(projectSlug),
     { ttl: 60 * 1000 }
   );
-  const { data: seoOverview } = useQuery(
-    `seo-overview:${projectSlug}`,
-    () => getSeoOverview(projectSlug),
-    { ttl: 60 * 1000 }
-  );
   const caps = {
     bookingEnabled: !!bookingSettings?.enabled,
-    seoEnabled: !!seoOverview?.enabled,
   };
 
   const { activeView, setView } = useProjectView(isAdmin, caps);
@@ -127,17 +119,10 @@ export default function ProjectWorkspacePage({
               onEditorDirtyChange={handleEditorDirtyChange}
             />
           )}
-          {activeView === "autofix" && (
-            <AutoFixSection
-              projectSlug={projectSlug}
-              isAdmin={isAdmin}
-              currentUserId={user?.id ?? null}
-            />
-          )}
           {activeView === "bookings" && (
             <BookingsSection projectSlug={projectSlug} isAdmin={isAdmin} />
           )}
-          {activeView === "seo" && <SeoSection projectSlug={projectSlug} isAdmin={isAdmin} />}
+          {activeView === "seo" && <SeoSection />}
           {activeView === "settings" && isAdmin && (
             <ProjectSettingsSection projectSlug={projectSlug} />
           )}

@@ -53,7 +53,6 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
       config.ts                  # SITE_URL, SUPPORTED_LOCALES, DEFAULT_LOCALE
       cms-content.ts             # build-time + client merge of CMS payload over messages
       cms-site.ts                # resolveSite() — UNCHANGED contract
-      seo-meta.ts                # build-time fetch of stored seo_page_meta (no ISR)
       query.ts                   # QueryClient + localStorage persister
       store.ts                   # Zustand stores (persist): locale, booking, ui
       head.ts                    # per-route×locale head builder (React 19 hoisted tags)

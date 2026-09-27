@@ -237,8 +237,8 @@
       "seoTip": "Geoptimaliseerd voor zoekmachines en AI-antwoordengines, zodat je goed gevonden wordt.",
       "humanReview": "Persoonlijke beoordeling door een mens",
       "humanReviewTip": "Elke grote release wordt door een mens gecontroleerd en niet zomaar door een machine uitgebracht.",
-      "cms": "CMS-connector & oplossing voor agentgerelateerde problemen",
-      "cmsTip": "Je kunt de inhoud in je app op elk moment aanpassen, en een AI-agent spoort problemen automatisch op en lost ze op."
+      "cms": "CMS-connector",
+      "cmsTip": "Pas de inhoud van je app op elk moment aan vanuit je eigen dashboard."
     },
     "project": {
       "presentation": {
@@ -286,7 +286,6 @@
         "priceYearly": "990 euro per jaar",
         "features": [
           "Alles op het gebied van zorg",
-          "Proactieve probleemoplosser",
           "Prioritaire ondersteuning",
           "Driemaandelijkse strategievergadering"
         ],

@@ -21,7 +21,7 @@ Both are documented below. The presets in `/goal` section translate cleanly to `
 
 **Prerequisite:** Claude Code v2.1.139+. `claude --version` to check. Upgrade: `npm install -g @anthropic-ai/claude-code@latest`.
 
-After the website-builder agent has scaffolded the project and started building, issue:
+After the Website Builder agent has scaffolded the project and started building, issue:
 
 ```
 /goal <paste a condition string below>
@@ -97,7 +97,7 @@ The plugin intercepts Claude's exit attempts and re-feeds the same prompt until 
 ### Basic invocation
 
 ```
-/ralph-loop "Use the website-builder agent. Fetch <design-url>, read its README,
+/ralph-loop "Run the Website Builder agent (agents/Website Builder/AGENTS.md). Fetch <design-url>, read its README,
 and implement the design in a new sibling folder under
 C:\Users\stefa\.gemini\antigravity\scratch\.
 
@@ -126,9 +126,9 @@ Output <promise>SITE_COMPLETE</promise> only when ALL conditions are verified."
 cat <<'EOF' > overnight.ps1
 cd "C:\Users\stefa\.gemini\antigravity\scratch\CMS - websites"
 
-claude -p "/ralph-loop 'Use the website-builder agent to build the site at <url-1> with locales en+nl. Output <promise>SITE_1_DONE</promise> when verified.' --completion-promise 'SITE_1_DONE' --max-iterations 30"
+claude -p "/ralph-loop 'Run the Website Builder agent (agents/Website Builder/AGENTS.md) to build the site at <url-1> with locales en+nl. Output <promise>SITE_1_DONE</promise> when verified.' --completion-promise 'SITE_1_DONE' --max-iterations 30"
 
-claude -p "/ralph-loop 'Use the website-builder agent to build the site at <url-2> with locales en+nl+fr. Output <promise>SITE_2_DONE</promise> when verified.' --completion-promise 'SITE_2_DONE' --max-iterations 30"
+claude -p "/ralph-loop 'Run the Website Builder agent (agents/Website Builder/AGENTS.md) to build the site at <url-2> with locales en+nl+fr. Output <promise>SITE_2_DONE</promise> when verified.' --completion-promise 'SITE_2_DONE' --max-iterations 30"
 EOF
 
 ./overnight.ps1

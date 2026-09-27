@@ -86,8 +86,8 @@ These hard rules are **also enforced** in `prompts.py` SYSTEM_PROMPT. Keep both 
 
 Two branches per client repo:
 
-- **`<production_branch>`** — `main` for new repos (GitHub's default since 2020). Legacy repos with `master` are tolerated; we do not auto-rename. Solver Agent reads the resolved name from `projects.production_branch` so its clone+reset path is branch-agnostic.
-- **`cms-preview`** — long-lived dev branch, solver-only. Auto-created from `<production_branch>` in Phase 4 (`github.create_branch`) if missing.
+- **`<production_branch>`** — `main` for new repos (GitHub's default since 2020). Legacy repos with `master` are tolerated; we do not auto-rename. The resolved name is stored in `projects.production_branch`.
+- **`cms-preview`** — long-lived preview branch; its Vercel preview (reading drafts) is what the dashboard's "See Preview" opens. Auto-created from `<production_branch>` in Phase 4 (`github.create_branch`) if missing. It is not updated automatically afterwards; refresh it with `git push origin <production_branch>:cms-preview`.
 
 Policy:
 
@@ -95,7 +95,7 @@ Policy:
 - **Legacy repos** (`default_branch == "master"`): accept it. Do not propose renaming inside this agent — branch renames break external PRs, CI badges, and downstream service hooks.
 - **Resolution order** in [`scan.py`](./scan.py) `_vercel_setup`: Vercel `productionBranch` first, then GitHub `default_branch`. This lets the operator override per-project via Vercel without changing the GitHub repo itself.
 
-Solver Agent reads `production_branch` from the `projects` table on every run. Phase 4 of this agent writes it. If the value is `NULL` after a Connector run, the Solver run fails at clone time — verify the Phase 4 PATCH log line `✓ Saved Vercel metadata to CMS project row (prod branch: <branch>)`.
+Phase 4 of this agent writes `production_branch` to the `projects` row; promoting `cms-preview` to production is a manual fast-forward to that branch (`git push origin cms-preview:<production_branch>`). If the value is `NULL` after a Connector run, check the Phase 4 PATCH log line `✓ Saved Vercel metadata to CMS project row (prod branch: <branch>)`.
 
 ## Generated client website contracts
 
@@ -154,56 +154,6 @@ For multilingual sites (manifest `locales` has >1 entry):
 - Legacy `GET {base}/content/{slug}` (no locale segment) still returns default-locale content and must remain supported for back-compat (single-locale sites and CMS preview thumbnails).
 
 **Vite + React 19 sites (react-i18next):** the active locale comes from `i18n.language` (react-i18next) and the URL `/:locale` segment — NOT the next-intl server context. The per-locale `GET {base}/content/{slug}/{locale}` fetch + flat `Record<string,string>` contract is otherwise **UNCHANGED**. Supported locales and the default locale are declared in `src/lib/config.ts` (`SUPPORTED_LOCALES`, `DEFAULT_LOCALE`); seed messages live at `src/i18n/messages/<locale>.json`. Keep the Next.js / next-intl wording above for legacy sites.
-
-### SEO/GEO area contract
-
-The **SEO/GEO Optimizer** agent (the 4th pipeline agent) owns a dedicated set of `seo_*`
-Supabase tables (`seo_page_meta`, `seo_articles`, and the run/audit/plan/change tables). It
-writes them autonomously; client + admin edit them via the dashboard "SEO & GEO" section. For
-the agent's published SEO to reach the live site, generated sites must **CONSUME** its public
-read endpoints. This contract is binding for all generated client websites:
-
-- **`generateMetadata` prefers stored SEO meta — fetch the ACTIVE locale.** Generated sites
-  fetch `GET {backend}/projects/{slug}/seo/public/meta?route=<route>&locale=<active-locale>`
-  (the active next-intl locale) and PREFER the stored `title`/`description`/`og` text when
-  present, falling back to the build-time `seo-pro` output. **The per-field default-locale
-  fallback is now SERVER-SIDE** — the public endpoint fills any missing/untranslated locale
-  field from the project's default-locale row, so the site **never merges locales itself**
-  and never sees an empty translated field. **Never throw** — fall back on any error; ISR ~60s.
-- **`generateMetadata` generates the CODED tags itself, per locale.** `canonical`, `hreflang`
-  (`alternates.languages`), `og:locale`, and JSON-LD `inLanguage` are **language-invariant
-  codes**, NOT fetched prose — the site generates them locally per active locale (the stored
-  meta supplies only the prose: title/description/OG text + JSON-LD data). SSR every locale
-  (raw-HTML content per locale, not just the default).
-- **`/blog` from stored articles — ACTIVE locale, server-side fallback.** When the project
-  has `seo_blog_route` set, the site has a `/blog` index + `/blog/[slug]` that fetch
-  `GET {backend}/projects/{slug}/seo/public/articles?locale=<active-locale>` (+ `/{articleSlug}`),
-  ISR + fallback. An untranslated article transparently shows default-locale prose because
-  the endpoint applies the per-field default fallback server-side — the site does not merge.
-- **Hard rule — NEVER provision or clobber the `seo_*` tables.** The `seo_*` Supabase tables
-  are the SEO/GEO Optimizer agent's area. The Connector **NEVER provisions them as normal
-  content services** and **NEVER clobbers them**. It **only WIRES** the site to consume the
-  public read endpoints above (`seo/public/meta`, `seo/public/articles`). When a SEO-agent
-  `site-change-spec` carries a `cms_wiring` block, consume that — do not treat `seo_*` as
-  content services.
-
-**Vite + React 19 sites:** a Vite SPA has **no `generateMetadata`**. Instead it:
-- (a) **Bakes stored SEO into the SSG snapshot at build time** — `src/lib/seo-meta.ts` fetches
-  `GET {backend}/projects/{slug}/seo/public/meta?route=<route>&locale=<locale>` at build time
-  (snapshot), preferring stored prose over build-time `seo-pro` output, **never throws**. No ISR.
-- (b) **Refetches `seo/public/meta` + `seo/public/articles` client-side via TanStack Query** (a
-  separate client query — NOT the build-time in-process snapshot cache) for freshness and
-  preview-deploy currency (`staleTime` short; `cache:'no-store'` when `VITE_CMS_PREVIEW_TOKEN`
-  is present).
-- (c) **Generates coded tags locally per locale** in `src/lib/head.ts` (React 19 hoisted
-  `<title>/<meta>/<link>`) — `canonical`, `hreflang`, `og:locale`, JSON-LD `inLanguage` are
-  language-invariant codes generated by the site, not fetched prose. `/blog` + `/blog/:slug` are
-  pre-rendered from build-time article slugs (`GET …/seo/public/articles?locale=<locale>`) +
-  client TanStack refetch for freshness. Set `projects.seo_blog_route` exactly as for Next sites.
-
-The same read endpoints are used (`seo/public/meta`, `seo/public/articles`); no ISR. The
-**"NEVER provision or clobber `seo_*`"** hard rule above applies identically to Vite sites.
-Keep the Next.js `generateMetadata`/ISR branch above for legacy sites.
 
 ## Glossary
 

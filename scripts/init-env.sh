@@ -25,4 +25,4 @@ copy_or_skip frontend/.env.example     frontend/.env.local
 printf '\n  Edit the placeholders before running `make dev`:\n'
 printf '    • backend/.env     — SUPABASE_*, RESEND_*, ENVIRONMENT=development\n'
 printf '    • frontend/.env.local — FASTAPI_URL=http://localhost:8001\n\n'
-printf '  See docs/ENVIRONMENTS.md for the full env-var contract.\n\n'
+printf '  See backend/auth_service/core/config.py (and docs/decisions/0009) for the env-var contract.\n\n'

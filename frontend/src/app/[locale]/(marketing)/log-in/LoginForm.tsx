@@ -55,7 +55,9 @@ export function LoginForm() {
     setError("");
 
     try {
-      await login({ email, password, remember_me: rememberMe });
+      // Trim what phones and HTML-email copy-paste drag along; the backend
+      // normalizes too, this just keeps the client honest.
+      await login({ email: email.trim(), password: password.trim(), remember_me: rememberMe });
       setLoggedIn(true);
       window.name = "cms-login";
       window.open("/dashboard", DASHBOARD_WINDOW_NAME);
@@ -115,6 +117,9 @@ export function LoginForm() {
                 name="email"
                 type="text"
                 autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -189,11 +194,9 @@ export function LoginForm() {
             </label>
           </div>
 
-          <div className="text-sm">
-            <a href="#" className="font-medium text-white transition-colors hover:text-zinc-300">
-              {t("forgotPassword")}
-            </a>
-          </div>
+          {/* "Forgot password?" intentionally removed: resets are admin-driven
+              (POST /admin/clients/{email}/reset-password) — the old link was a
+              dead href="#". */}
         </div>
 
         <div>

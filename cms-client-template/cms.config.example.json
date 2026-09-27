@@ -1,5 +1,0 @@
-{
-  "_comment": "Alternative to cms.config.ts — used by sync-cms-types.mjs when the TypeScript file cannot be parsed.",
-  "projectSlug": "your-project-slug",
-  "endpoint": "https://cms-backend-roman.vercel.app/content"
-}

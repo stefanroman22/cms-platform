@@ -27,8 +27,8 @@ These are verified and should be re-confirmed (not re-derived) each review:
   admins are elevated. The booking module is multi-tenant (tenant = project).
 - **Two FastAPI apps / CORS**: the main app (`allow_credentials=True`, methods `*`, configured origins)
   and a separate public **forms** sub-app (`allow_origins=["*"]`, credentials-less, POST/OPTIONS).
-- **Vercel projects**: `cms-backend-roman` (backend) and `roman-technologies` (frontend). Slack/GitHub/
-  Supabase env vars belong on `cms-backend-roman`, not the frontend project.
+- **Vercel projects**: `cms-backend-roman` (backend) and `roman-technologies` (frontend). Every variable the
+  backend reads belongs on `cms-backend-roman`, not the frontend project.
 
 ## 2. Dimensions (parallel scan axes)
 
@@ -40,14 +40,14 @@ every finding before it is recorded. The 14 dimensions:
 | 1 | **AuthZ / IDOR / tenant ownership** | Does every endpoint check the caller owns the project/resource? (highest priority — service-role model) |
 | 2 | **AuthN / sessions / cookies / JWT** | Can auth be bypassed, fixed, or replayed? Are cookies HttpOnly/Secure/SameSite? |
 | 3 | **Admin privilege gating** | Is every admin route actually gated? Constant-time key compare? |
-| 4 | **Public endpoints & token security** | Are booking/forms/manage-link/Slack tokens unguessable, scoped, expiring, signature-verified? |
+| 4 | **Public endpoints & token security** | Are booking/forms/manage-link/draft-preview tokens unguessable, scoped, expiring, signature-verified? |
 | 5 | **XSS / HTML / email-template injection** | Does untrusted input reach HTML/JS unescaped (emails, `dangerouslySetInnerHTML`, widget)? |
 | 6 | **Injection (SQL/command/template)** | PostgREST filter injection, raw SQL, subprocess/shell from user/model input? |
-| 7 | **SSRF / outbound requests** | Are server-fetched URLs (scraper, connector, calendar, DeepL) host/scheme-validated? |
+| 7 | **SSRF / outbound requests** | Are server-fetched URLs (connector, calendar, DeepL, Vercel API) host/scheme-validated? |
 | 8 | **Secrets / config / CORS / logging** | Hardcoded secrets, secrets in logs/errors, over-broad CORS, weak headers? |
-| 9 | **CI/CD workflows** | `pull_request_target` + untrusted checkout, `${{ }}` shell injection, auto-merge gates, token scope? |
-| 10 | **AI agents** | Prompt injection from client sites / issue bodies driving privileged file/git/API actions? |
-| 11 | **Scraper** | Path traversal, unsafe deserialization, resource exhaustion, trusted-by-backend scraped data? |
+| 9 | **CI/CD workflows** | `pull_request_target` + untrusted checkout, `${{ }}` shell injection, the `promote.yml` gate, token scope? |
+| 10 | **AI agents** | Prompt injection from client sites / design exports / lead data driving privileged file/git/API actions? |
+| 11 | **Agent guardrails** | Can the `.claude/hooks/guard.mjs` PreToolUse hooks be bypassed (push to `main`, `--no-verify`, prod SQL/migrations without a prompt)? Do committed `.claude/` files grant excessive permissions? |
 | 12 | **Supabase DB (RLS/RPC/definer)** | Public tables w/o RLS, security-definer views, anon-executable RPCs, function search_path? |
 | 13 | **Dependencies / supply chain** | Vulnerable/unpinned deps, lockfile hashes, postinstall risk? |
 | 14 | **Rate limiting / DoS** | Unauth endpoints without limits (booking/email spam, login brute force), serverless limiter resets? |

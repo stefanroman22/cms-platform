@@ -7,7 +7,6 @@ import type {
   LeadStatus,
   LeadType,
   PaymentStatus,
-  ScrapeJobStatus,
   WebPresence,
   WebsiteBuildStatus,
 } from "@/lib/leadEnums";
@@ -15,7 +14,6 @@ import type {
 export interface Lead {
   id: string;
   external_id: string;
-  scrape_job_id: string | null;
   primary_source: string;
   source_url: string | null;
   lead_type: LeadType;
@@ -57,6 +55,7 @@ export interface Lead {
   closed_amount: number | null;
   closed_at: string | null;
   notes: string | null;
+  call_count: number;
   languages: string[];
   created_at: string;
   updated_at: string;
@@ -130,43 +129,6 @@ export const EMPTY_FILTERS: LeadFiltersState = {
   max_reviews: "",
   search: "",
 };
-
-// Scrape jobs — mirror backend Pydantic models.
-
-export interface ScrapeFilters {
-  min_rating: number | null;
-  max_rating: number | null;
-  min_reviews: number | null;
-  max_reviews: number | null;
-  web_presence: WebPresence[];
-}
-
-export interface ScrapeParams {
-  category: string;
-  country: string;
-  cities: string[];
-  areas: string[];
-  max_results_per_area: number;
-  language: string;
-  lead_type: LeadType;
-  with_reviews: boolean;
-  review_limit: number;
-  filters: ScrapeFilters;
-}
-
-export interface ScrapeJob {
-  id: string;
-  created_at: string;
-  status: ScrapeJobStatus;
-  params: ScrapeParams;
-  started_at: string | null;
-  finished_at: string | null;
-  results_found: number | null;
-  results_inserted: number | null;
-  results_skipped: number | null;
-  error: string | null;
-  triggered_by: string;
-}
 
 export interface ConversionTimePoint {
   month: string;

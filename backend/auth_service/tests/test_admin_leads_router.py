@@ -335,6 +335,22 @@ def test_delete_lead_not_found_returns_404(mock_supabase, client, auth_as, admin
     assert "not found" in resp.json()["detail"].lower()
 
 
+def test_patch_call_count(mock_supabase, client, auth_as, admin_user):
+    """call_count flows through the generic PATCH path as a plain column."""
+    auth_as(admin_user)
+    mock_supabase.execute.return_value = MagicMock(data=[_lead_row(call_count=2)])
+    resp = client.patch("/admin/leads/lead-1", json={"call_count": 2})
+    assert resp.status_code == 200
+    assert resp.json()["call_count"] == 2
+
+
+def test_patch_call_count_out_of_range_returns_422(client, auth_as, admin_user):
+    """The dropdown only offers 0-3; values outside that fail validation."""
+    auth_as(admin_user)
+    resp = client.patch("/admin/leads/lead-1", json={"call_count": 5})
+    assert resp.status_code == 422
+
+
 def test_patch_about_attributes_merges_into_extra(mock_supabase, client, auth_as, admin_user):
     """about_attributes is a virtual field: the router fetches the current
     row's extra, replaces extra.attributes with the new map, and writes the

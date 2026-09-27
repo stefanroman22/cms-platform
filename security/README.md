@@ -48,8 +48,9 @@ so the next review starts from here, not from scratch.
 ## Scope reviewed
 Frontend (Next.js 16, incl. the embeddable booking widget) · Backend (FastAPI: 15 routers, 30+ services,
 core auth/session/limiter) · 26 SQL migrations + live Supabase RLS/RPC/advisor state
-(`xeluydwpgiddbamysgyu`) · 8 GitHub Actions workflows · 4 AI agents (CMS Connector, Solver, Design
-Prompt, Website Builder) · the lead scraper · dependencies/supply-chain · Vercel deployment posture.
+(`xeluydwpgiddbamysgyu`) · 2 GitHub Actions workflows (promote, CodeQL) · 3 AI agents (CMS Connector,
+Design Prompt, Website Builder) · dependencies/supply-chain · Vercel deployment posture. (The Solver
+agent + solver workflow and the lead scraper were removed 2026-08-26.)
 
 ---
 

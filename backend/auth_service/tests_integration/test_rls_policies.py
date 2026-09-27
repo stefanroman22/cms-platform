@@ -19,7 +19,6 @@ TENANT_TABLES = [
     "sessions",
     "projects",
     "content_entries",
-    "project_issues",
     "project_requests",
 ]
 

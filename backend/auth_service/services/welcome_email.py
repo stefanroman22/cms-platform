@@ -1,29 +1,52 @@
-"""Welcome email template + Resend POST helper.
+"""Client onboarding ("welcome") email.
 
-Source of truth for the HTML that lands in a new client's inbox after
-the CMS Connector agent finishes provisioning. Lives next to the code
-that sends it (was previously in agents/CMS Connector - Website/phases/
-6-confirmation.md).
+Sent by ``POST /admin/clients/{email}/welcome`` once the CMS Connector agent has
+provisioned a client's account and project. It tells the client their site is
+connected, how to sign in, and the one rule that trips everyone up (edits only
+go live after Publish). It never contains the password: that is shared with the
+client out-of-band, and the email says so.
+
+Built on the shared branded chrome in ``email_layout`` (Roman Technologies
+brand), like every other transactional email.
 """
 
 from __future__ import annotations
 
 import html
-import json
-import urllib.error
-import urllib.request
 
 from ..core.config import settings
+from . import email_layout
+from .email_layout import DEFAULT_BRAND
+from .email_send import send_via_resend
+
+LOGIN_URL = "https://roman-technologies.dev/log-in"
 
 
 def _safe_url(value: str, fallback: str = "https://roman-technologies.dev") -> str:
-    """Returns `value` if it is an http(s) URL; otherwise the fallback.
-    Closes the BE-006 angle: a CMS field containing `javascript:alert()` or
-    a `data:` URL renders as an inert link rather than executable bait."""
+    """``value`` if it is an http(s) URL, else ``fallback`` (BE-006: a
+    ``javascript:`` or ``data:`` URL renders as an inert link)."""
+    return email_layout.safe_url(value, fallback)
+
+
+def _safe_login_url(value: str) -> str:
+    """Login links must stay on the canonical dashboard domain. Deployment
+    URLs (*.vercel.app) sit behind Vercel SSO and dead-end clients on a
+    'Check your email' code screen they can never pass — the exact trap a
+    client hit in 2026-08. Anything off-domain falls back to the canonical
+    log-in page."""
     v = (value or "").strip()
-    if v.startswith("http://") or v.startswith("https://"):
+    if v.startswith("https://roman-technologies.dev/") or v == "https://roman-technologies.dev":
         return v
-    return fallback
+    return LOGIN_URL
+
+
+def _first_name(full_name: str | None) -> str:
+    parts = (full_name or "").split()
+    return parts[0] if parts else ""
+
+
+def _display_url(url: str) -> str:
+    return url.removeprefix("https://").removeprefix("http://").rstrip("/")
 
 
 def render_welcome_html(
@@ -31,26 +54,76 @@ def render_welcome_html(
     full_name: str,
     project_name: str,
     website_url: str,
-    login_url: str,
+    login_url: str = LOGIN_URL,
+    to_email: str = "",
 ) -> str:
-    """Renders the welcome HTML. Inline styles only — most email clients
-    strip <style>. Plain HTML, no JS, no remote fonts.
-
-    All caller-controlled fields are HTML-escaped (BE-006); URL fields
-    additionally checked for http(s) scheme via `_safe_url`."""
-    greeting = html.escape(full_name) if full_name else "there"
+    """Welcome HTML. Every caller-controlled field is HTML-escaped (BE-006);
+    ``website_url`` must be http(s) and ``login_url`` must be on the canonical
+    domain (see ``_safe_login_url``)."""
+    first = html.escape(_first_name(full_name))
     project = html.escape(project_name)
     website = _safe_url(website_url)
-    website_text = html.escape(website)
-    login = _safe_url(login_url, fallback="https://roman-technologies.dev/log-in")
-    return f"""<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;color:#1f2937;line-height:1.6;max-width:560px;margin:0 auto;padding:24px">
-<h1 style="font-size:20px;margin:0 0 16px">Welcome to Roman Technologies CMS</h1>
-<p>Hi {greeting},</p>
-<p>Your project <strong>{project}</strong> is live on <a href="{website}" style="color:#0369a1">{website_text}</a> and ready for content edits.</p>
-<p style="margin:24px 0"><a href="{login}" style="background:#111827;color:white;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block">Open the CMS dashboard →</a></p>
-<p>You can sign in with the email address this message was sent to. Use the password your developer shared with you, then change it from the Account Settings page.</p>
-<p style="font-size:13px;color:#6b7280;margin-top:32px">Roman Technologies — stefanromanpers@gmail.com</p>
-</body></html>"""
+    website_esc = html.escape(website, quote=True)
+    website_text = html.escape(_display_url(website))
+    login = _safe_login_url(login_url)
+    support = html.escape(settings.SUPPORT_EMAIL)
+
+    greeting = f"Welcome aboard, {first}." if first else "Welcome aboard."
+    account_rows = [
+        (
+            "Website",
+            f'<a href="{website_esc}" style="color:#18181b;text-decoration:underline">'
+            f"{website_text}</a>",
+        ),
+        ("Sign in with", html.escape(to_email) if to_email else "This email address"),
+        ("Password", "Sent to you separately. We never put passwords in email."),
+    ]
+    steps = (
+        "<strong>1.</strong> Sign in and change your password under <em>Account Settings</em>.<br>"
+        "<strong>2.</strong> Open <em>CMS</em>, pick a section and edit the text or images.<br>"
+        "<strong>3.</strong> Click <em>Publish Changes</em>. Your site only changes after you publish, "
+        "so you can draft freely."
+    )
+    inner = (
+        email_layout.header("Your client dashboard", brand=DEFAULT_BRAND)
+        + email_layout.accent_rule(brand=DEFAULT_BRAND)
+        + email_layout.heading(greeting)
+        + email_layout.paragraph(
+            f"<strong>{project}</strong> is now connected to your own dashboard. "
+            "From there you can update your website yourself, without waiting on a developer."
+        )
+        + email_layout.detail_box(account_rows)
+        + email_layout.button(login, "Open your dashboard &rarr;")
+        + email_layout.paragraph("<strong>Getting started</strong>", color="#18181b", size=14)
+        + email_layout.paragraph(steps, size=14)
+        + email_layout.callout(
+            "Stuck, or want something changed that the dashboard can't do? "
+            f"Reply to this email or write to {support}."
+        )
+        + email_layout.spacer()
+        + email_layout.footer(brand=DEFAULT_BRAND)
+    )
+    return email_layout.shell(
+        inner, preheader=f"{project_name} is connected. Here's how to sign in and publish."
+    )
+
+
+def render_welcome_text(
+    *, full_name: str, project_name: str, website_url: str, login_url: str = LOGIN_URL
+) -> str:
+    first = _first_name(full_name)
+    return (
+        f"Welcome aboard{', ' + first if first else ''}.\n\n"
+        f"{project_name} is now connected to your own dashboard.\n\n"
+        f"Website: {_safe_url(website_url)}\n"
+        f"Dashboard: {_safe_login_url(login_url)}\n"
+        "Sign in with this email address. Your password is sent to you separately.\n\n"
+        "Getting started:\n"
+        "1. Sign in and change your password under Account Settings.\n"
+        "2. Open CMS, pick a section and edit the text or images.\n"
+        "3. Click Publish Changes. Your site only changes after you publish.\n\n"
+        f"Questions? Reply to this email or write to {settings.SUPPORT_EMAIL}.\n"
+    )
 
 
 def send_welcome_email(
@@ -59,45 +132,31 @@ def send_welcome_email(
     full_name: str | None,
     project_name: str,
     website_url: str,
-    login_url: str = "https://roman-technologies.dev/log-in",
+    login_url: str = LOGIN_URL,
 ) -> dict:
-    """POSTs to api.resend.com/emails. Returns parsed JSON on 200,
-    raises RuntimeError with status + body on any other status."""
+    """Send the welcome email. Returns Resend's JSON; raises RuntimeError on
+    a missing key or a non-2xx response."""
     # TEST-002 — preview-tier short-circuit on E2E marker.
     from .e2e_email_guard import short_circuit_response, should_short_circuit
 
     if should_short_circuit(to_email, full_name or "", project_name, website_url):
         return short_circuit_response(f"welcome:{to_email}")
 
-    if not settings.RESEND_API_KEY:
-        raise RuntimeError("RESEND_API_KEY not configured on this backend")
-
-    body = {
-        "from": f"{settings.RESEND_FROM_NAME} <{settings.RESEND_FROM_EMAIL}>",
-        "to": to_email,
-        "subject": f"Your {project_name} CMS is ready",
-        "html": render_welcome_html(
+    return send_via_resend(
+        to_email=to_email,
+        subject=f"Your {project_name} dashboard is ready",
+        html_body=render_welcome_html(
+            full_name=full_name or "",
+            project_name=project_name,
+            website_url=website_url,
+            login_url=login_url,
+            to_email=to_email,
+        ),
+        text_body=render_welcome_text(
             full_name=full_name or "",
             project_name=project_name,
             website_url=website_url,
             login_url=login_url,
         ),
-    }
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=json.dumps(body).encode(),
-        headers={
-            "Authorization": f"Bearer {settings.RESEND_API_KEY}",
-            "Content-Type": "application/json",
-            # api.resend.com sits behind Cloudflare, which 403s
-            # User-Agent-less requests with error code 1010. Setting a
-            # real-looking UA is the documented workaround.
-            "User-Agent": "roman-technologies-cms-backend/1.0",
-        },
-        method="POST",
+        reply_to=settings.SUPPORT_EMAIL or None,
     )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode() or "{}")
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Resend {e.code}: {e.read().decode()}") from e

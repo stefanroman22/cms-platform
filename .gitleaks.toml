@@ -86,9 +86,8 @@ paths = [
   '''(^|/)tests_integration/''',
   '''(^|/)docs/''',
   '''(.*/)?\.env\.example$''',
-  '''docs/SECURITY\.md''',
-  '''docs/ENVIRONMENTS\.md''',
-  '''docs/superpowers/specs/.+-security-audit\.md''',
+  # Security runbook: rotation log holds redacted key prefixes.
+  '''security/RUNBOOK\.md''',
   '''.*\.gitleaks\.toml''',
   # Tests use sentinel keys that don't authenticate.
   '''backend/auth_service/tests/test_admin_keys\.py''',

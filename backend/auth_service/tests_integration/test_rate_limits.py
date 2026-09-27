@@ -24,7 +24,7 @@ import pytest
 #
 # These tests do still pass against the local FastAPI TestClient (which
 # does not strip / rewrite XFF). For the deployed backend, BE-002 is
-# verified by the live probe documented in docs/SECURITY.md.
+# verified by a live probe against the deployed backend (audit finding BE-002).
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.deployed_state,
