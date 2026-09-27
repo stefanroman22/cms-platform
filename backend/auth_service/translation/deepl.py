@@ -1,6 +1,7 @@
 """DeepL translation provider. Uses the Free API endpoint when the key ends in
-':fx', else Pro. Masks ICU placeholders (protect/restore) and batches all texts
-into one request. Network via stdlib urllib (consistent with publish.py)."""
+':fx', else Pro. Masks ICU placeholders (protect/restore) and batches texts
+into requests of at most 100 KiB. Network via stdlib urllib (consistent with
+publish.py)."""
 
 from __future__ import annotations
 
@@ -14,6 +15,11 @@ from .provider import TextFormat
 
 # Bare EN/PT are deprecated as DeepL *targets*; map to a regional variant.
 _TARGET_OVERRIDE = {"en": "EN-GB", "pt": "PT-PT"}
+
+# DeepL request-body budget: split masked texts into consecutive groups that each
+# stay at or below this many bytes, so one giant rich-text leaf never blows up a
+# single request. A single oversize text still forms its own (over-budget) group.
+_MAX_REQUEST_BYTES = 100 * 1024
 
 
 def _deepl_code(locale: str, *, is_target: bool) -> str:
@@ -50,6 +56,12 @@ class DeepLProvider:
             masked.append(m)
             token_maps.append(tokens)
 
+        translated: list[str] = []
+        for group in _group_by_size(masked):
+            translated.extend(self._post(group, source=source, target=target, fmt=fmt))
+        return [restore(t, tokens) for t, tokens in zip(translated, token_maps, strict=True)]
+
+    def _post(self, masked: list[str], *, source: str, target: str, fmt: TextFormat) -> list[str]:
         payload: dict[str, object] = {
             "text": masked,
             "target_lang": _deepl_code(target, is_target=True),
@@ -60,7 +72,7 @@ class DeepLProvider:
 
         req = urllib.request.Request(
             self.url,
-            data=json.dumps(payload).encode(),
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             headers={
                 "Authorization": f"DeepL-Auth-Key {self.api_key}",
                 "Content-Type": "application/json",
@@ -77,8 +89,27 @@ class DeepLProvider:
             raise RuntimeError(f"DeepL network error: {exc.reason}") from exc
 
         translations = [tr["text"] for tr in result.get("translations", [])]
-        if len(translations) != len(texts):
+        if len(translations) != len(masked):
             raise RuntimeError(
-                f"DeepL returned {len(translations)} translations for {len(texts)} inputs"
+                f"DeepL returned {len(translations)} translations for {len(masked)} inputs"
             )
-        return [restore(t, tokens) for t, tokens in zip(translations, token_maps, strict=False)]
+        return translations
+
+
+def _group_by_size(texts: list[str]) -> list[list[str]]:
+    """Split `texts` into consecutive groups whose JSON-encoded size stays at or
+    below `_MAX_REQUEST_BYTES`. A single oversize text still forms its own group."""
+    groups: list[list[str]] = []
+    current: list[str] = []
+    current_size = 0
+    for text in texts:
+        size = len(json.dumps(text, ensure_ascii=False).encode("utf-8")) + 1
+        if current and current_size + size > _MAX_REQUEST_BYTES:
+            groups.append(current)
+            current = []
+            current_size = 0
+        current.append(text)
+        current_size += size
+    if current:
+        groups.append(current)
+    return groups

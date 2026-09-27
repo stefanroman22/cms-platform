@@ -382,6 +382,7 @@ async def save_service(
                         provider,
                         default_locale,
                         target,
+                        rich_text_version=version,
                     )
                     _upsert(target, new_content, new_meta)
                 except Exception:  # noqa: BLE001 — resilience: never fail the save
@@ -961,7 +962,15 @@ async def set_project_locales(project_slug: str, body: ProjectLocalesIn, request
                     continue
                 try:
                     new_content, new_meta = sync_locale_draft(
-                        stype, default_content, {}, None, {}, provider, new_default, target
+                        stype,
+                        default_content,
+                        {},
+                        None,
+                        {},
+                        provider,
+                        new_default,
+                        target,
+                        rich_text_version=int(project.get("rich_text_version") or 0),
                     )
                     sb.table("content_entries").upsert(
                         {
@@ -1028,7 +1037,15 @@ async def retranslate_service(project_slug: str, service_key: str, request: Requ
 
     # Reset overrides (target_meta={}) and re-translate everything fresh from default.
     new_content, new_meta = sync_locale_draft(
-        stype, default_content, {}, None, {}, get_provider(), default_locale, locale
+        stype,
+        default_content,
+        {},
+        None,
+        {},
+        get_provider(),
+        default_locale,
+        locale,
+        rich_text_version=int(project.get("rich_text_version") or 0),
     )
     sb.table("content_entries").upsert(
         {

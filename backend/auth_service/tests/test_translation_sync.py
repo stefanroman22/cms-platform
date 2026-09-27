@@ -116,3 +116,65 @@ def test_manual_override_without_target_value_falls_back_to_source():
     assert content["title"] == "Hi"  # falls back to source text (documented bootstrap behavior)
     assert prov.items == []  # manual → never translated
     assert meta == {"title": {"src_hash": "abc1230000000000"}}
+
+
+class _HtmlSoupProvider:
+    """Returns translations with junk markup, like a misbehaving engine."""
+
+    name = "soup"
+
+    def __init__(self):
+        self.calls = []
+
+    def translate(self, texts, *, source, target, fmt="text"):
+        self.calls.append(fmt)
+        return [
+            (
+                t.replace("<strong>", '<strong style="color:red"><span>').replace(
+                    "</strong>", "</span></strong>"
+                )
+                + "<script>x</script>"
+                if fmt == "html"
+                else t.upper()
+            )
+            for t in texts
+        ]
+
+
+def test_v1_translates_rich_leaves_as_html_and_recanonicalises():
+    p = _HtmlSoupProvider()
+    new, meta = sync_locale_draft(
+        "text_block",
+        {"title": "A &amp; <strong>B</strong>", "body": "<p>x</p>"},
+        None,
+        None,
+        None,
+        p,
+        "en",
+        "de",
+        rich_text_version=1,
+    )
+    assert p.calls == ["html"]
+    assert new["title"] == "A &amp; <strong>B</strong>"
+    assert new["body"] == "<p>x</p>"
+
+
+def test_v0_behaviour_unchanged():
+    p = _UpperProvider()
+    new, _ = sync_locale_draft(
+        "text_block", {"title": "a", "body": "b"}, None, None, None, p, "en", "de"
+    )
+    assert new == {"title": "A", "body": "B"}
+
+
+def test_v1_overlong_translation_is_kept_not_raised():
+    class Longer:
+        name = "long"
+
+        def translate(self, texts, *, source, target, fmt="text"):
+            return [t + ("x" * 3000) for t in texts]
+
+    new, _ = sync_locale_draft(
+        "text_block", {"title": "t"}, None, None, None, Longer(), "en", "de", rich_text_version=1
+    )
+    assert len(new["title"]) > 2000
