@@ -63,6 +63,11 @@ frontend/*.tsbuildinfo
 frontend/next-env.d.ts
 
 # ─────────────────────────────────────────────────────────────
+# Client kit — vendored rich-text library (ADR-0010)
+# ─────────────────────────────────────────────────────────────
+client-kit/rich-text/node_modules/
+
+# ─────────────────────────────────────────────────────────────
 # Backend — Python / Django
 # ─────────────────────────────────────────────────────────────
 backend/venv/
