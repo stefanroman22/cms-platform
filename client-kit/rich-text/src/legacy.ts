@@ -13,22 +13,28 @@ const NOT_S = `^${PY_WS}`;
 const WS = /[ \t\r\n\f]+/g;
 const W = "0-9A-Za-z\\u00C0-\\u024F";
 const LINK_RE = new RegExp(`\\[([^\\]\\n]+)\\]\\(([^)${S}]+)\\)`, "g");
+// `s` (dotAll): Python's `.` matches any char except `\n` (incl. U+2028/U+2029
+// LINE/PARAGRAPH SEPARATOR); JS's `.` without `s` also excludes U+2028/U+2029
+// (they're JS line terminators too). Every input to these regexes is already
+// a single line (split on "\n" upstream, in `rich()`/`inlineMd()`), so `.`
+// only ever needs to exclude "\n" itself here — `s` makes it behave exactly
+// like Python's `.` for that already-single-line input. Fix round 1 finding.
 const BOLD_RE = new RegExp(
-  `\\*\\*(?=[${NOT_S}])(.+?)(?<=[${NOT_S}])\\*\\*|__(?=[${NOT_S}])(.+?)(?<=[${NOT_S}])__`, "g");
-const STRIKE_RE = new RegExp(`~~(?=[${NOT_S}])(.+?)(?<=[${NOT_S}])~~`, "g");
+  `\\*\\*(?=[${NOT_S}])(.+?)(?<=[${NOT_S}])\\*\\*|__(?=[${NOT_S}])(.+?)(?<=[${NOT_S}])__`, "gs");
+const STRIKE_RE = new RegExp(`~~(?=[${NOT_S}])(.+?)(?<=[${NOT_S}])~~`, "gs");
 const EM_RE = new RegExp(
   `(?<![${W}*])\\*(?=[${NOT_S}])(.+?)(?<=[${NOT_S}])\\*(?![${W}*])|(?<![${W}_])_(?=[${NOT_S}])(.+?)(?<=[${NOT_S}])_(?![${W}_])`,
-  "g");
+  "gs");
 // The placeholder index is wrapped in U+E000/U+E001 (private-use sentinels) so
 // it can never collide with an ordinary digit run elsewhere in the text (e.g.
 // "5 * 3 * 2 = 30"); legacyToHtml() strips any pre-existing U+E000/U+E001 from
 // raw input up front for the same reason (carry rule 7).
 const PH_RE = /(\d+)/g;
-const HEADING_RE = new RegExp(`^(#{1,6})[${S}]+(.*)$`);
+const HEADING_RE = new RegExp(`^(#{1,6})[${S}]+(.*)$`, "s");
 const HR_RE = /^(?:-{3,}|\*{3,}|_{3,})$/;
-const UL_RE = new RegExp(`^[-*+][${S}]+(.+)$`);
-const OL_RE = new RegExp(`^\\d{1,9}[.)][${S}]+(.+)$`);
-const QUOTE_RE = new RegExp(`^>[${S}]?(.*)$`);
+const UL_RE = new RegExp(`^[-*+][${S}]+(.+)$`, "s");
+const OL_RE = new RegExp(`^\\d{1,9}[.)][${S}]+(.+)$`, "s");
+const QUOTE_RE = new RegExp(`^>[${S}]?(.*)$`, "s");
 const BLANK_SPLIT_RE = /\n[ \t]*\n/;
 
 const clean = (line: string) => pyStrip(line.replace(WS, " "));

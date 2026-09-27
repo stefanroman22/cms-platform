@@ -24,6 +24,32 @@ describe("legacyToHtml edge cases (verified against backend legacy_to_html)", ()
   it("U+FEFF (JS-only whitespace, not Python whitespace) is ordinary bold content, not a boundary", () => {
     // Python's \S (content boundary for **bold**) includes U+FEFF since Python's \s excludes it;
     // JS's native \s would incorrectly treat U+FEFF as whitespace and break the match.
-    expect(legacyToHtml("**﻿bold﻿**", "rich")).toBe("<p><strong>﻿bold﻿</strong></p>");
+    const bom = String.fromCharCode(0xfeff);
+    expect(legacyToHtml(`**${bom}bold${bom}**`, "rich")).toBe(`<p><strong>${bom}bold${bom}</strong></p>`);
+  });
+
+  // Fix round 1 finding: JS `.` (without the `s`/dotAll flag) excludes the
+  // LINE SEPARATOR and PARAGRAPH SEPARATOR code points, but Python's `.`
+  // matches them (Python only excludes the newline). Since `clean()` only
+  // splits raw text on the newline character, a line can still contain one
+  // of these separators reaching BOLD/STRIKE/EM/HEADING/UL/OL/QUOTE_RE's
+  // `.`-based capture groups. Without the `s` flag, these regexes fail to
+  // match at all on such a line, so e.g. a heading marker followed by text
+  // containing that separator fell through to being treated as an ordinary
+  // paragraph instead of a heading. Built via fromCodePoint (not a literal
+  // escape) so the separator can't be mistaken for an ordinary line break by
+  // anything re-splitting this source file on line terminators. All four
+  // cases also appear as vectors in the shared fixture.
+  const LINE_SEP = String.fromCodePoint(0x2028);
+  const PARA_SEP = String.fromCodePoint(0x2029);
+  it("a line-separator code point inside heading/bold/quote/list text does not break the match (matches backend)", () => {
+    expect(legacyToHtml(`## A${LINE_SEP}B`, "rich")).toBe(`<h2>A${LINE_SEP}B</h2>`);
+    expect(legacyToHtml(`**a${LINE_SEP}b**`, "rich")).toBe(`<p><strong>a${LINE_SEP}b</strong></p>`);
+    expect(legacyToHtml(`>x${LINE_SEP}y`, "rich")).toBe(`<blockquote><p>x${LINE_SEP}y</p></blockquote>`);
+    expect(legacyToHtml(`- a${LINE_SEP}b`, "rich")).toBe(`<ul><li><p>a${LINE_SEP}b</p></li></ul>`);
+  });
+  it("a paragraph-separator code point behaves the same way as the line separator for the same regexes", () => {
+    expect(legacyToHtml(`## A${PARA_SEP}B`, "rich")).toBe(`<h2>A${PARA_SEP}B</h2>`);
+    expect(legacyToHtml(`*a${PARA_SEP}b*`, "rich")).toBe(`<p><em>a${PARA_SEP}b</em></p>`);
   });
 });

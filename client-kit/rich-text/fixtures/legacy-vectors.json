@@ -25,5 +25,9 @@
   {"name": "inline newlines", "fmt": "inline", "input": "Line one\nLine two\n\nLine four", "expected": "Line one<br>Line two<br><br>Line four"},
   {"name": "inline no markdown", "fmt": "inline", "input": "**not bold** *nor this*", "expected": "**not bold** *nor this*"},
   {"name": "inline trims blank edges", "fmt": "inline", "input": "\n  padded  \n\n", "expected": "padded"},
-  {"name": "inline blank", "fmt": "inline", "input": " \n ", "expected": ""}
+  {"name": "inline blank", "fmt": "inline", "input": " \n ", "expected": ""},
+  {"name": "heading text spans a U+2028 line separator", "fmt": "rich", "input": "## A\u2028B", "expected": "<h2>A\u2028B</h2>"},
+  {"name": "bold text spans a U+2028 line separator", "fmt": "rich", "input": "**a\u2028b**", "expected": "<p><strong>a\u2028b</strong></p>"},
+  {"name": "quote text spans a U+2028 line separator", "fmt": "rich", "input": ">x\u2028y", "expected": "<blockquote><p>x\u2028y</p></blockquote>"},
+  {"name": "list item text spans a U+2028 line separator", "fmt": "rich", "input": "- a\u2028b", "expected": "<ul><li><p>a\u2028b</p></li></ul>"}
 ]
