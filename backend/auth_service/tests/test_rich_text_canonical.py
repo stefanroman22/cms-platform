@@ -125,3 +125,56 @@ def test_raw_input_cap_rejects_before_parsing():
         canonicalize("a" * (4 * MAX_LENGTH["inline"] + 1), "inline")
     assert exc.value.limit == MAX_LENGTH["inline"]
     assert exc.value.length == 4 * MAX_LENGTH["inline"] + 1
+
+
+def test_many_repeated_hr_in_heading_is_not_quadratic():
+    # Every <hr> re-evaluates the block-inside-inline branch of _inline; before
+    # the fix this rescanned the whole accumulator (_has_content/_ends_with_br)
+    # on every iteration.
+    big = "<h2>" + "<hr> " * 39_990  # ~200 KB, under the raw-input cap
+    start = time.perf_counter()
+    canonicalize(big, "rich", enforce_limit=True)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 2.0
+
+
+def _deep(tag: str, n: int, inner: str = "x") -> str:
+    return f"<{tag}>" * n + inner + f"</{tag}>" * n
+
+
+def _nested_lists(depth: int, marks: str) -> str:
+    html = marks
+    for _ in range(depth):
+        html = f"<ul><li>{html}</li></ul>"
+    return html
+
+
+_CONTAINERS = {
+    "p": "<p>{marks}</p>",
+    "blockquote": "<blockquote>{marks}</blockquote>",
+    "ul_li": "<ul><li>{marks}</li></ul>",
+    "bare_li": "<li>{marks}</li>",
+    "ol_li_blockquote": "<ol><li><blockquote>{marks}</blockquote></li></ol>",
+    "h2": "<h2>{marks}</h2>",
+    "loose_root": "{marks}",
+}
+
+
+@pytest.mark.parametrize("mark_tag", ["strong", "em"])
+@pytest.mark.parametrize("container", list(_CONTAINERS))
+@pytest.mark.parametrize("fmt", ["rich", "inline"])
+def test_deep_marks_idempotent_in_every_container_shape(fmt, container, mark_tag):
+    html = _CONTAINERS[container].format(marks=_deep(mark_tag, 40))
+    once = canonicalize(html, fmt)
+    twice = canonicalize(once, fmt)
+    assert once == twice
+
+
+@pytest.mark.parametrize("mark_tag", ["strong", "em"])
+@pytest.mark.parametrize("list_depth", [1, 2, 3, 4])
+@pytest.mark.parametrize("fmt", ["rich", "inline"])
+def test_deep_marks_idempotent_in_nested_lists_without_p(fmt, list_depth, mark_tag):
+    html = _nested_lists(list_depth, _deep(mark_tag, 40))
+    once = canonicalize(html, fmt)
+    twice = canonicalize(once, fmt)
+    assert once == twice

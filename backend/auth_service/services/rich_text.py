@@ -24,7 +24,8 @@ RICH_TAGS = INLINE_TAGS | BLOCK_TAGS
 MAX_LENGTH: dict[str, int] = {"inline": 2_000, "rich": 50_000}
 MAX_LIST_DEPTH = 4
 MAX_HREF_LENGTH = 2_048
-MAX_NESTING = 32
+MAX_PARSE_DEPTH = 256
+MAX_MARK_DEPTH = 32
 
 _SYNONYMS = {
     "b": "strong",
@@ -147,14 +148,12 @@ class _Builder(HTMLParser):
             return
         if tag not in RICH_TAGS:
             return
-        # The outermost open element, when it is itself a block container, is exempt
-        # from the depth budget: canonicalisation always wraps loose top-level inline
-        # content in exactly one such container (e.g. <p>), so counting it here would
-        # make canonicalize() non-idempotent (a value re-parsed after that wrapper was
-        # added would get one less level of budget than the same content had before
-        # the wrapper existed). Nesting inside a *nested* block container still counts.
-        exempt = 1 if len(self._stack) > 1 and self._stack[1].tag in BLOCK_TAGS else 0
-        if len(self._stack) - 1 - exempt >= MAX_NESTING:
+        # Flat parse-tree depth safety net (no exemptions): only exists to keep the
+        # recursive semantic transform below (_inline/_blocks) within Python's
+        # recursion limit for any input, regardless of tag mix. The much smaller,
+        # semantically meaningful cap on canonical output is MAX_MARK_DEPTH, applied
+        # separately inside _inline.
+        if len(self._stack) - 1 >= MAX_PARSE_DEPTH:
             return  # depth cap reached: unwrap like an unknown element
         href = None
         if tag == "a":
@@ -225,34 +224,71 @@ def _ends_with_br(nodes: list) -> bool:
     return False
 
 
-def _inline(nodes: list, in_link: bool = False) -> list:
+def _inline(nodes: list, in_link: bool = False, mark_depth: int = 0) -> list:
+    """`mark_depth` counts the strong/em/u/s/a elements enclosing the current
+    position (independent of any block wrapper): beyond MAX_MARK_DEPTH, a
+    mark/link is unwrapped rather than nested further (its children are
+    processed at the same depth). This is deliberately decoupled from block
+    structure (p/li/ul/blockquote) so that re-parsing a canonical value never
+    sees a different mark budget than the first parse did — the property
+    canonicalize's idempotence test relies on."""
     out: list = []
+    # Running state mirroring _has_content(out)/_ends_with_br(out), updated as
+    # items are pushed, so the block-inside-inline branch below never rescans
+    # the whole (potentially large) accumulator.
+    has_content = False
+    ends_with_br = False
+
+    def push(item: _Node | str) -> None:
+        nonlocal has_content, ends_with_br
+        out.append(item)
+        if isinstance(item, str):
+            if item.strip():
+                has_content = True
+                ends_with_br = False
+            # whitespace-only strings leave has_content/ends_with_br unchanged,
+            # matching _has_content/_ends_with_br's skip-trailing-whitespace rule
+        else:
+            if item.tag != "br":
+                has_content = True
+            ends_with_br = item.tag == "br"
+
     for n in nodes:
         if isinstance(n, str):
-            out.append(_WS_RE.sub(" ", n))
+            push(_WS_RE.sub(" ", n))
             continue
         tag = n.tag
         if tag == "br":
-            out.append(_br())
+            push(_br())
         elif tag in MARK_TAGS:
-            kids = _inline(n.children, in_link)
+            if mark_depth >= MAX_MARK_DEPTH:
+                for item in _inline(n.children, in_link, mark_depth):
+                    push(item)
+                continue
+            kids = _inline(n.children, in_link, mark_depth + 1)
             if _has_content(kids):
-                out.append(_Node(tag, children=kids))
+                push(_Node(tag, children=kids))
         elif tag == "a":
-            kids = _inline(n.children, True)
+            if mark_depth >= MAX_MARK_DEPTH:
+                for item in _inline(n.children, True, mark_depth):
+                    push(item)
+                continue
+            kids = _inline(n.children, True, mark_depth + 1)
             href = None if in_link else safe_href(n.href)
             if href and _has_content(kids):
-                out.append(_Node("a", href, kids))
+                push(_Node("a", href, kids))
             else:
-                out.extend(kids)
+                for item in kids:
+                    push(item)
         else:  # a block element inside an inline context: flatten, separated by <br>
-            kids = [] if tag == "hr" else _inline(n.children, in_link)
+            kids = [] if tag == "hr" else _inline(n.children, in_link, mark_depth)
             if tag == "hr" or _has_content(kids):
-                if _has_content(out) and not _ends_with_br(out):
-                    out.append(_br())
-                out.extend(kids)
-                if not _ends_with_br(out):
-                    out.append(_br())
+                if has_content and not ends_with_br:
+                    push(_br())
+                for item in kids:
+                    push(item)
+                if not ends_with_br:
+                    push(_br())
     return out
 
 
