@@ -39,6 +39,8 @@ backend/keys/
 .superpowers/
 # Prod data backup snapshots (contain live manage tokens — never commit)
 backend/migrations/_backup_bookings_*.json
+# rich-text migration SQL + backups (contain client content)
+backend/scripts/.rich-text-work/
 
 # ─────────────────────────────────────────────────────────────
 # Frontend — Next.js
