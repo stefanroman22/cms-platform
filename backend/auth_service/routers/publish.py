@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import secrets
 import urllib.error
@@ -8,9 +9,11 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ..models.schemas import ProjectStatusOut, PublishResponse, RotateTokenResponse
+from ..services.storage_gc import prune_unreferenced_uploads
 from ..services.supabase_client import get_supabase_admin
 from .deps import admin_user_via_bearer_or_sid, require_project_access, require_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["publish"])
 
 
@@ -60,6 +63,15 @@ async def publish_project(project_slug: str, request: Request):
     # Bump project timestamp (always — even on zero-publish, this is a no-op
     # from the user's perspective but records the publish action).
     sb.table("projects").update({"last_published_at": now}).eq("id", project["id"]).execute()
+
+    # After a publish draft == published, so every file the content still uses is in the drafts.
+    # Best-effort: a storage error must never fail the publish.
+    try:
+        prune_unreferenced_uploads(
+            sb, project_slug, [e.get("draft_content") for e in (entries_result.data or [])]
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("storage gc failed for %s", project_slug, exc_info=True)
 
     return {"published_count": len(to_publish), "last_published_at": now}
 

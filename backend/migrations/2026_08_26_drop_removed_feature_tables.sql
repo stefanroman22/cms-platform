@@ -1,4 +1,4 @@
--- STATUS: NOT APPLIED (tables still present, checked 2026-09-25). Update this line when applied.
+-- STATUS: APPLIED 2026-09-27 (Supabase MCP apply_migration; row data exported first).
 --
 -- 2026-08-26: drop DB objects orphaned by the feature removals of this date:
 --   * auto-fix / Solver Agent + Slack integration (project_issues,

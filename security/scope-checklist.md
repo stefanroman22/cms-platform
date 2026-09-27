@@ -39,9 +39,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 ### Migrations (`backend/migrations/*.sql`)
 - [ ] RLS enabled + policy correctness on every PostgREST-exposed table
 - [ ] `tenant_rls_status` SECURITY DEFINER view
-- [ ] Leftovers of removed features still in the DB until `2026_08_26_drop_removed_feature_tables.sql` is applied: `claim_*_solver_issue` RPC GRANTs, `slack_processed_events` / `project_issues` / `scrape_jobs` RLS state
 - [ ] Function `search_path` pinning
-- [ ] `2026_06_14_seo_geo.sql` — the `seo_*` tables: prefer an explicit `REVOKE ALL … FROM anon, authenticated` over relying only on the RLS toggle (SEC-067); check for any SECURITY DEFINER SEO routines + pinned `search_path`
 
 ## Frontend — Next.js (`frontend/src/`)
 - [ ] `app/layout.tsx` — `dangerouslySetInnerHTML` (JSON-LD?) sink
