@@ -294,3 +294,27 @@ def test_locale_content_exposes_rich_text_version(mock_supabase, client):
 
     assert res.status_code == 200
     assert res.json()["rich_text_version"] == 1
+
+
+def test_types_endpoint_declares_rich_html_aliases_and_text_block_leaf_typing(
+    mock_supabase, client
+):
+    mock_supabase.execute.side_effect = [
+        MagicMock(data={"id": "p1", "slug": "demo", "name": "Demo", "is_active": True}),
+        MagicMock(
+            data=[
+                {"service_key": "hero", "service_type_slug": "text_block", "label": "Hero"},
+            ]
+        ),
+    ]
+
+    res = client.get("/content/demo/types")
+
+    assert res.status_code == 200
+    body = res.text
+    assert "export type InlineHtml = string;" in body
+    assert "export type RichHtml = string;" in body
+    assert (
+        'hero: { _type: "text_block"; _label: string; title?: InlineHtml; body?: RichHtml };'
+        in body
+    )
