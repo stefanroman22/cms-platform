@@ -97,11 +97,16 @@ The backend is the only writer (ADR-0002), so it defines canonical form:
 
 ### 4.4 Legacy conversion (plain / Markdown → HTML)
 
-Used by the save path (a value arriving without any allow-listed tag in an inline/rich leaf) and by the migration script. Detection: a value is HTML iff it matches `<(p|br|strong|em|u|s|a|ul|ol|li|h[1-6]|blockquote|hr|b|i|div|span)\b[^>]*>` (case-insensitive). Otherwise it is legacy text:
-- HTML-escape `& < > "`.
-- **Markdown-lite** subset (exactly what the existing convention used): `**x**`/`__x__`→strong, `*x*`/`_x_`→em (word-boundary aware), `~~x~~`→s, `[text](url)`→a (href rules of 4.3), `## `/`### `/`#### ` (and `# `→h2) at line start → headings (rich only), `- `/`* ` and `1. ` line runs → ul/ol (rich only), `> ` → blockquote (rich only), `---` line → hr (rich only).
-- Rich: blank line(s) separate paragraphs; a single `\n` inside a paragraph → `<br>` (matches the `remark-breaks` behaviour sites use today). Inline: `\n` → `<br>`.
-- Result is then canonicalised.
+Detection: a value "is HTML" iff it matches `<(p|br|strong|em|u|s|a|ul|ol|li|h[1-6]|blockquote|hr|b|i|div|span)\b[^>]*>` (case-insensitive).
+
+**Critical rule (prevents double-escaping):** a canonical `inline` value often contains no tags at all (`Tom &amp; Jerry`), so it is indistinguishable from legacy plain text. Therefore:
+- `inline` values are **always parsed as HTML fragments** — in the save path, the dashboard and the client kit. Legacy inline conversion runs **only inside the one-time migration** of a version-0 project (the version gate makes it run exactly once per project).
+- `rich` values without any tag are legacy (canonical rich always starts with a block tag), so the save path, dashboard and kit convert them.
+
+Legacy conversion:
+- **Rich** (Markdown-lite, exactly the existing convention): HTML-escape `& < >` (and ` `→`&nbsp;`); `**x**`/`__x__`→strong, `*x*`/`_x_`→em (word-boundary aware with an explicit `[0-9A-Za-zÀ-ɏ]` word class so Python and JS agree), `~~x~~`→s, `[text](url)`→a (href rules of 4.3); `#`/`##`→h2, `###`→h3, `####`+→h4 at line start; `- `/`* `/`+ ` and `1. `/`1) ` line runs → ul/ol (flat); a non-marker line right after a list item continues that item with `<br>`; `> ` line runs → one blockquote paragraph; `---`/`***`/`___` → hr. Blank line(s) separate blocks; a single `\n` inside a paragraph → `<br>` (matches the `remark-breaks` behaviour sites use today). Lines are trimmed and internal whitespace runs collapsed.
+- **Inline** (migration only): no Markdown (inline sources were plain strings, where `*` is literal); trim leading/trailing blank lines, escape each line, join lines with `<br>`.
+- The converter emits canonical HTML directly (`canonicalize(legacy_to_html(x)) == legacy_to_html(x)`, tested).
 
 A shared JSON file of test vectors (`client-kit/rich-text/fixtures/legacy-vectors.json`) is asserted by **both** the Python converter and the TypeScript client-kit fallback, so the two stay identical.
 
@@ -134,16 +139,16 @@ A shared JSON file of test vectors (`client-kit/rich-text/fixtures/legacy-vector
 New folder `src/components/dashboard/rich-text/`:
 - `extensions.ts` — TipTap extension sets per mode. Rich: StarterKit (heading levels 2–4; `code`, `codeBlock` disabled; Link `openOnClick:false, autolink:true, linkOnPaste:true, protocols` restricted; Underline on). Inline: custom `Document` with `content: 'paragraph'` + Bold/Italic/Underline/Strike/Link/HardBreak/History; Enter → `setHardBreak()`.
 - `serialize.ts` — `toStored(editor, mode)`: rich → `getHTML()` with all-empty doc → `""`; inline → unwrap the single `<p>`, `""` when empty. `fromStored(value, mode)`: legacy (non-HTML) values go through the same legacy conversion as the backend (TS port shared with the client kit, tested with the same vectors) so an unmigrated value opens correctly.
-- `RichTextEditor.tsx` — props `{ value, onChange, mode: 'inline'|'rich', label, placeholder?, maxLength, disabled?, id }`. Controlled-on-mount; `onChange` debounced to one call per transaction. Character counter (plain-text length vs limit) shown at ≥80 %, blocking colour at >100 % with save disabled via the field error mechanism.
+- `RichTextEditor.tsx` — props `{ value, onChange, mode: 'inline'|'rich', label, placeholder?, maxLength, disabled?, id }`. Controlled-on-mount; `onChange` called once per transaction. Character counter measures the **stored HTML length** (what the backend limits), shown at ≥80 % of the limit and turning red above 100 % with the text "Too long — the save will be rejected".
 - `Toolbar.tsx` — `role="toolbar"`, roving tabindex, `aria-pressed`, tooltips with shortcuts. Rich: Undo, Redo │ Block style select (Paragraph, Heading 2/3/4) │ Bold, Italic, Underline, Strike │ Bullet list, Numbered list, Quote, Divider │ Link, Remove link │ Clear formatting. Inline: Bold, Italic, Underline, Strike │ Link, Remove link │ Clear formatting. Sticky inside long fields.
-- `LinkPopover.tsx` — anchored popover (no `window.prompt`): URL input, validation (http/https/mailto/tel/`/path`/`#anchor`; bare `example.com` → `https://example.com`), Enter applies, Esc cancels, edit/remove existing link, disabled when selection is empty and not inside a link.
-- Paste: `transformPastedHTML` strips `style`/`class`/`font`/`span`; schema drops everything else (colours from Word/Google Docs vanish). Plain-text paste keeps line breaks.
+- `LinkPopover.tsx` — anchored popover (no `window.prompt`): URL input, validation (http/https/mailto/tel/`/path`/`#anchor`; bare `example.com` → `https://example.com`; bare email → `mailto:`; phone → `tel:`), Enter applies, Esc cancels, edit/remove existing link. With an empty selection outside a link it inserts the URL itself as linked text.
+- Paste (rich): rely on the TipTap schema. No Color/TextStyle/FontFamily/Highlight extensions are loaded, so colours, fonts, sizes and highlights from Word/Google Docs vanish, while style-based bold/italic (Google Docs `<span style="font-weight:700">`) is still recognised by the Bold/Italic parse rules. Paste (inline): `transformPastedHTML` converts the clipboard HTML to canonical inline HTML via the vendored kit (blocks become `<br>`), because an inline document can hold only one paragraph. Plain-text paste keeps line breaks.
 - Styling: `prose prose-sm prose-zinc dark:prose-invert` content area, zinc dashboard tokens, visible focus ring, min heights (inline 1 line, rich 8 lines), resize by content.
 - `ContentField.tsx` — dispatcher `{ format, value, onChange, … }` → `PlainInput` (existing input styling, `type` from repeater `url`) or `RichTextEditor`.
 
 Editor integrations (only when `rich_text_version ≥ 1`; version 0 keeps today's inputs untouched):
 - `TextBlockEditor` → title `inline`, body `rich`.
-- `RepeaterEditor` → `FieldInput` routes `string`→plain, `inline`→inline, `richtext`→rich, `url`, `tags` unchanged; stable React keys from item `_id` (fallback index) so editors don't remount/lose cursor on reorder.
+- `RepeaterEditor` → `FieldInput` routes `string`→plain, `inline`→inline, `richtext`→rich, `url`, `tags` unchanged. Items get **stable React keys that travel with the item** (the item's `_id`, else a client-generated key held in state next to the item — never the array index), because TipTap editors own their state: with index keys, "move up/down" or "remove" would leave the formatted text in place while the data moves.
 - `KeyValueEditor` → value field uses `_formats[key]`; admins see a small format select per entry (Plain / Inline / Rich) that writes `_formats`; renaming a key moves its `_formats` entry; deleting drops it.
 - `ImageEditor`, `FileDownloadEditor` unchanged (plain).
 - Remove the "Markdown supported" hints when version ≥ 1.
@@ -158,7 +163,8 @@ Editor integrations (only when `rich_text_version ≥ 1`; version 0 keeps today'
 Zero runtime dependencies beyond React ≥18; framework-agnostic (Next App Router server + client components, Vite SPA, vite-react-ssg); deterministic output on server and client (no hydration mismatch).
 
 - `src/parse.ts` — small tokenizer for the allow-list. Recognises only allow-listed tags (plus synonyms of 4.3); every other `<…>` sequence is text. Decodes `&amp; &lt; &gt; &quot; &#39; &apos; &nbsp;` and numeric entities; leaves unknown entities literal. Produces a node tree `{ type: 'text' | tag, children, href? }`. Enforces href rules of 4.3 (defence in depth even though the backend already sanitised). Never uses `dangerouslySetInnerHTML`, `DOMParser` or `innerHTML`.
-- `src/legacy.ts` — TS port of the legacy converter (same vectors as Python) used when a value has no HTML tags, so un-migrated projects and plain strings still render.
+- `src/normalize.ts` + `src/serialize.ts` — a TS port of the backend canonical transform (§4.3), so the kit renders exactly the structure the backend would store (no `<p>` inside `<p>` → no hydration errors, even for legacy or tampered data). Pinned to the backend by a second shared fixture, `fixtures/canonical-vectors.json`, asserted by both the Python `canonicalize` tests and the kit tests.
+- `src/legacy.ts` — TS port of the legacy converter (same vectors as Python). Applied only to `rich` values without tags (§4.4 critical rule); `inline` values are always parsed as HTML fragments.
 - `src/RichText.tsx` — `<RichText value format="rich"|"inline" as? className? headingOffset? linkTarget?: 'auto'|'self'|'blank' renderLink? components? />`. Renders semantic elements inside a wrapper with class `cms-rich` (+ `cms-rich--inline`, default `as` = `div` for rich, `span` for inline). `headingOffset` shifts h2..h4 (e.g. +1 inside cards) clamped to h6. Links: `auto` → external http(s) opens in a new tab with `rel="noopener noreferrer"`; internal paths render via `renderLink` when provided (Next `Link`, React Router `Link`). Empty value → renders nothing (`null`).
 - `src/plainText.ts` — `plainText(value)`: tags stripped, entities decoded, `<br>`/block boundaries → single spaces (or `\n` with `{ keepLineBreaks: true }`), whitespace collapsed. For meta tags, JSON-LD, alt/aria, React keys, search, `tel:`/`mailto:` building, `Number()`.
 - `src/splitRichWords.ts` — `splitRichWords(value)` → array of word tokens `{ key, node }` preserving marks (a bold word stays bold), for per-word animations (George's hero, Akris `FadeInText`). `RichWords` helper component with a render prop.
@@ -176,7 +182,7 @@ Zero runtime dependencies beyond React ≥18; framework-agnostic (Next App Route
   | `--cms-rich-rule` | divider colour | `currentColor` (40 % opacity) |
   | `--cms-rich-gap` / `--cms-rich-list-indent` | block spacing, list indent | `0.75em` / `1.4em` |
 
-  Empty paragraphs keep one line of height. All selectors are `:where(.cms-rich …)` (zero specificity) so a site's own utility classes always win.
+  Empty paragraphs keep one line of height. Selectors are `.cms-rich <element>` (specificity 0,1,1), unlayered: this beats Tailwind preflight in v3 (unlayered, 0,0,1) and v4 (`@layer base`), which would otherwise strip list bullets and margins. The kit sets **no properties on the wrapper element itself**, so utility classes a site puts on `<RichText className=…>` always apply. Inner-element styling is changed through the variables (the contract), not by competing selectors.
 - **Theme contract.** Each site defines the variables in its theme: on `:root` (light), on its dark-theme selector, and on every inverted/coloured surface (`.section-dark`, hero, footer…). Because they are CSS custom properties, the nearest surface wins automatically — this is the "colour handler": bold on a dark hero can be the accent colour while bold in a light card is the ink colour. Rule for choosing values: accent colours are used only when they reach WCAG AA (4.5:1) against that surface; otherwise the variable stays text-coloured and weight carries the emphasis.
 - `scripts/sync-rich-text-kit.mjs <target-dir>` — copies `src/` into a site (e.g. `src/lib/cms-rich-text/`) with a header comment `// Vendored from CMS client-kit/rich-text vX.Y.Z — do not edit; re-sync instead.` and writes `VERSION`.
 - `README.md` — install for Next (server/client), Vite, Tailwind v3/v4/plain CSS, samir-style next-intl (`t.raw` rule), theme recipe, field-usage rules (display → `<RichText>`, non-display → `plainText()`, per-word animation → `splitRichWords`).
@@ -189,10 +195,10 @@ Zero runtime dependencies beyond React ≥18; framework-agnostic (Next App Route
 - `config.json` (per project, written during that site's migration after auditing its render sites): `{ "repeaters": { "<service_key>": { "<field_key>": "inline"|"richtext"|"string" } }, "key_values": { "<service_key>": { "<entry_key>": "plain"|"inline"|"rich" } } }`. Unlisted fields keep their current type/format (`string`/`plain`).
 - For every service and **every locale row**: update `_schema` / `_formats` per config; convert all inline/rich leaves in `draft_content` **and** `published_content` (legacy → canonical HTML); leave plain leaves byte-identical.
 - Recompute `translation_meta[path].src_hash` for manual overrides in non-default locales from the converted default-locale source, so manual translations don't all turn "stale".
-- Optimistic concurrency: update each row with `where id = … and updated_at = <read value>`; conflicts are reported and retried once.
-- Dry run (default) prints a per-leaf before/after diff and counts; `--apply` first writes a full JSON backup of every touched row to `backend/scripts/.rich-text-backups/<slug>-<timestamp>.json` (gitignored, contains client content) then applies, then sets `projects.rich_text_version = 1`.
-- `--restore <backup.json>` restores the rows and sets the version back to 0.
-- Idempotent: re-running on a migrated project is a no-op.
+- **Atomic.** The pure planner lives in `auth_service/services/rich_text_migration.py`; the CLI reads via the backend Supabase client and, with `--emit-sql`, writes **one `DO $$ … $$` block** that updates every row (`… where id = X and updated_at = Y; if not found then raise exception …`) and flips `projects.rich_text_version = 1` in the same transaction. It is applied with the Supabase MCP `execute_sql` (or `scripts/apply_supabase_migration.py`). Any concurrent edit aborts the whole block and nothing changes; re-run the planner and apply again. This matters because re-converting an already-migrated inline value would double-escape it — so a project is never left half-migrated.
+- Dry run (default) prints a per-leaf before/after diff and counts. `--emit-sql` also writes a full JSON backup of every touched row. Both files go to `backend/scripts/.rich-text-work/` (gitignored — they contain client content).
+- `--restore <backup.json> --emit-sql` writes an atomic block restoring those rows and setting the version back to 0.
+- Idempotent: the planner refuses to plan a project whose `rich_text_version` is already 1 (prints "already migrated", exit 0).
 
 ## 9. Client-site rollout (per site, strictly in this order)
 
@@ -200,10 +206,9 @@ Zero runtime dependencies beyond React ≥18; framework-agnostic (Next App Route
 2. Audit every CMS render site (list from the exploration report) and wire: display prose → `<RichText>`; non-display uses → `plainText()`; per-word animations → `splitRichWords`; titles used as keys → `plainText()`.
 3. Write the project's `formats` config: which repeater `string` fields and key_value entries are prose (→ inline/rich) vs machine values (stay plain).
 4. Build + lint; Playwright check locally against **legacy** data (version 0) — the site must render identically to production before the data changes.
-5. Push to the site's preview branch (`cms-preview`), verify the preview deploy.
-6. Run the migration dry run, review, `--apply` (flips the project to version 1).
-7. Verify preview + local with migrated data: formatted text renders with theme colours in light/dark, all locales, meta/JSON-LD plain, links/tel/mailto intact, no console/hydration errors, per-word animations intact.
-8. Push the same commit to the site's production branch (`main`; `master` for Laurian) and verify production.
+5. Push to the site's preview branch (`cms-preview`), verify the preview deploy; then push the same commit to the production branch (`main`; `master` for Laurian) and verify production still renders identically. Safe because the kit renders legacy values exactly as before — production never runs code that can't render the data.
+6. Run the migration dry run, review the diff, emit the atomic SQL and apply it (flips the project to version 1).
+7. Verify local, preview and production with migrated data: formatted text renders with theme colours in light/dark, all locales, meta/JSON-LD plain, links/tel/mailto intact, no console/hydration errors, per-word animations intact. Then make a real formatted edit through the backend (bold + link + list), publish, verify, and restore.
 
 Site-specific notes:
 - **it-global-services**: replace `RichBody`; hero tagline accent split and Header/Footer/MobileMenu brand wordmark via `splitRichWords`/`plainText`; metadata via `plainText`; `contactFields.ts` keeps plain values.
