@@ -40,7 +40,12 @@ def _cta_block(
     given — even for in-person businesses with no meeting link), plus, ONLY when
     the tenant has a meeting URL, the explicit meeting link + a 'Join the call'
     button. So an in-person booking still gets its add-to-calendar button."""
-    link_color = email_layout.safe_hex(accent, "#18181b")
+    # SEC-059: the tenant accent is unvalidated on write (SettingsPatch.accent_color/
+    # primary_color are free `str | None`). Allowlist it to a hex literal ONCE here so
+    # every button `style` below (the add-to-calendar border at line ~51 and the Join
+    # background at line ~70) is safe — mirrors header()/accent_rule() in email_layout.
+    accent = email_layout.safe_hex(accent, "#18181b")
+    link_color = accent
     join_color = copy_color(copy, "join_cta", "#ffffff")
     add_btn = ""
     if add_to_cal_url:

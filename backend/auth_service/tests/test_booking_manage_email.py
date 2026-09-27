@@ -118,3 +118,42 @@ def test_reschedule_client_per_field_colours_and_safe():
     )
     assert "color:#123abc" in h  # heading colour applied
     assert "<script>" not in h  # unsafe manage_cta colour dropped (SEC-045)
+
+
+def test_reschedule_client_rejects_unsafe_accent_in_join_button():
+    """SEC-060: a malicious tenant accent must not break out of the Join button
+    `style` attribute in _button (the raw _brand.accent was passed through)."""
+    evil = '#000"><img src=x onerror=alert(1)><a x="'
+    brand = Brand(
+        business_name="Acme",
+        logo_url="https://acme.example/logo.png",
+        accent=evil,
+        canonical_url="https://acme.example",
+    )
+    h = render_reschedule_client(
+        name="Jo",
+        new_when="Fri 12 Jun · 14:00 (CET)",
+        meeting_url="https://meet.example/x",  # non-empty → Join button (_button) is emitted
+        manage_url="https://site/manage/tok",
+        new_start=datetime(2026, 6, 12, 12, 0, tzinfo=UTC),
+        new_end=datetime(2026, 6, 12, 12, 45, tzinfo=UTC),
+        brand=brand,
+    )
+    assert "onerror" not in h  # breakout payload never injected
+    assert 'background:#000"' not in h  # accent could not close the style attribute
+    assert "<img src=x" not in h
+    assert "background:#18181b" in h  # accent fell back to the safe default hex
+
+
+def test_reschedule_client_valid_accent_applied_in_join_button():
+    """A legitimate hex accent is preserved on the Join button (no over-sanitisation)."""
+    h = render_reschedule_client(
+        name="Jo",
+        new_when="Fri 12 Jun · 14:00 (CET)",
+        meeting_url="https://meet.example/x",
+        manage_url="https://site/manage/tok",
+        new_start=datetime(2026, 6, 12, 12, 0, tzinfo=UTC),
+        new_end=datetime(2026, 6, 12, 12, 45, tzinfo=UTC),
+        brand=TENANT_BRAND,  # accent="#ff0000"
+    )
+    assert "background:#ff0000" in h  # Join button keeps the tenant accent

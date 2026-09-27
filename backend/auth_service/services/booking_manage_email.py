@@ -43,6 +43,11 @@ def _button(*, url: str, label: str, accent: str = "#18181b", label_color: str =
     safe = email_layout.safe_url(url)
     if not safe:
         return ""
+    # SEC-060: the tenant accent (booking_settings.accent_color/primary_color) is
+    # unvalidated on write, and render_reschedule_client passes the RAW _brand.accent
+    # here. Allowlist it to a hex literal so it can never break out of the button
+    # `style` attribute — mirrors header()/accent_rule() and the sibling addcal button.
+    accent = email_layout.safe_hex(accent, "#18181b")
     return (
         '<tr><td style="padding:20px 32px 8px" align="center">'
         f'<a href="{html.escape(safe)}" style="display:inline-block;background:{accent};color:{label_color};'

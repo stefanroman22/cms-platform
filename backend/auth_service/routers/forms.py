@@ -297,6 +297,19 @@ async def submit_contact(request: Request, body: ContactRequest) -> JSONResponse
             detail="Invalid contact submission",
         )
 
+    # SEC-059: the slowapi decorator above lives in per-Vercel-instance process
+    # memory, so across warm serverless instances it becomes N×limit and a bot can
+    # amplify Resend email-spam. Add the shared (cross-instance) Postgres limit — same
+    # 5/10min budget, same client-IP key — mirroring submit_form (SEC-010). Placed
+    # after the honeypot + validation so silently-dropped/invalid requests never burn
+    # a legitimate visitor's per-IP allowance.
+    pg_rate_limit.enforce(
+        f"forms:contact:{client_ip(request)}",
+        limit=5,
+        window_seconds=600,
+        detail="Too many submissions. Please try again later.",
+    )
+
     fields = {
         "Name": name,
         "Email": email,

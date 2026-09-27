@@ -265,3 +265,36 @@ def test_visitor_email_rejects_unsafe_colour(monkeypatch):
     html = render_visitor_html(booking=BOOKING, meeting_url="", copy=copy)
     assert "<script>" not in html
     assert "alert(1)" not in html
+
+
+def test_visitor_email_rejects_unsafe_accent_in_buttons():
+    """SEC-059: a malicious tenant accent must not break out of the button `style`
+    attributes (add-to-calendar border + Join background), not just the header."""
+    evil = '#000"><a href="https://evil.example/verify">Confirm</a><a x="'
+    brand = Brand(
+        business_name="Acme",
+        logo_url="https://a/l.png",
+        accent=evil,
+        canonical_url="https://a",
+    )
+    # meeting_url set → the Join button (raw accent at line ~70) is emitted; the
+    # add-to-calendar button (raw accent border at line ~51) is always emitted.
+    html = render_visitor_html(booking=BOOKING, meeting_url="https://m/x", brand=brand)
+    assert "evil.example" not in html  # breakout anchor never injected
+    assert 'border:1px solid #000"' not in html  # accent could not close the attribute
+    assert 'background:#000"' not in html
+    # The accent falls back to the safe default hex and stays inside the style attr.
+    assert "background:#18181b" in html
+
+
+def test_visitor_email_valid_accent_still_applied_in_buttons():
+    """A legitimate hex accent is preserved on the buttons (no over-sanitisation)."""
+    brand = Brand(
+        business_name="Acme",
+        logo_url="https://a/l.png",
+        accent="#ff0000",
+        canonical_url="https://a",
+    )
+    html = render_visitor_html(booking=BOOKING, meeting_url="https://m/x", brand=brand)
+    assert "background:#ff0000" in html  # Join button keeps the tenant accent
+    assert "border:1px solid #ff0000" in html  # add-to-calendar border keeps it too

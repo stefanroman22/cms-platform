@@ -512,10 +512,18 @@ HTML-escape both key and value before interpolation, mirroring the rest of the c
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (commit `d18d7f2`, PR #61; verified on dev 2026-09-26) |
 | **Category** | XSS / HTML injection (email) |
 | **Dimension** | xss-html |
 | **Location** | `backend/auth_service/services/booking_email.py:51,70` |
+
+> **Reconciliation 2026-09-26 (status only).** Verified fixed on dev: `_cta_block` now reassigns
+> `accent = email_layout.safe_hex(accent, "#18181b")` at the top (booking_email.py:47) before **both**
+> style sinks (the add-to-calendar border and the Join background), so a non-hex accent can never reach
+> a `style` attribute. No residual raw-`accent` interpolation remains in `booking_email.py`. Fixed by
+> PR #61 (`commit d18d7f2`) — whose own title used the label "SEC-059" for this accent finding, one of
+> several cross-tracker ID collisions (see the FINDINGS.md collision note). The tracker row was left
+> `open` by that PR; corrected here.
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed |
 | **First seen** | 2026-06-20 |
@@ -553,11 +561,18 @@ Resolve accent through the existing allowlist once at the top of _cta_block (acc
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (commit `a982d97`, PR #69; verified on dev 2026-09-26) |
 | **Category** | Rate limiting / DoS |
 | **Dimension** | ratelimit-dos |
 | **Location** | `backend/auth_service/routers/booking.py:462-463, 691-692, 753-754, 989-990; backend/auth_service/core/limiter.py:21` |
 | **Reviewer confidence** | high |
+
+> **Reconciliation 2026-09-26 (status only).** Verified fixed on dev: `_public_write_limit`
+> (booking.py:351) enforces a shared Postgres per-IP cap and is now called on every unauthenticated
+> booking write path — `create_booking` (:493), `manage_cancel` (:723), `manage_reschedule` (:786),
+> and `legacy_create` (:1023) — layered on the per-process slowapi decorators, so the cap holds across
+> warm serverless instances. Fixed by PR #69 (`commit a982d97`, titled "SEC-057" — another cross-tracker
+> ID collision). Tracker row corrected here.
 | **Verifier verdict** | confirmed |
 | **First seen** | 2026-06-20 |
 
@@ -595,13 +610,32 @@ Add pg_rate_limit.enforce on the booking write paths exactly as done for forms.p
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-09-26, PR `security/fix-SEC-059-2026-09-26`) |
 | **Category** | Rate limiting / DoS |
 | **Dimension** | ratelimit-dos |
 | **Location** | `backend/auth_service/routers/forms.py:282-345; backend/auth_service/core/limiter.py:21` |
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed |
 | **First seen** | 2026-06-20 |
+
+**Remediation (2026-09-26).** `submit_contact` now calls
+`pg_rate_limit.enforce(f"forms:contact:{client_ip(request)}", limit=5, window_seconds=600, …)`
+— the same shared Postgres fixed-window limit `submit_form` uses (SEC-010) — placed after the
+honeypot + input validation so silently-dropped bots and malformed requests never burn a
+legitimate visitor's per-IP allowance. This makes the 5/10-min cap hold **across warm serverless
+instances** (the in-memory slowapi cap alone reset per invocation → effectively N×5). Tests:
+`test_contact_uses_shared_cross_instance_limit`, `test_contact_429_when_shared_limit_exceeded`,
+`test_contact_honeypot_does_not_consume_shared_limit` added to `tests/test_contact_form.py`; full
+backend suite green (583 passed).
+
+**Residual risk (not addressed here — needs a product decision).** `client_ip` keys off the
+leftmost `X-Forwarded-For`, so a caller rotating a spoofed leftmost IP still gets a fresh per-IP
+bucket — an identical limitation on every IP-keyed limit in the codebase (incl. `submit_form`).
+The finding's *optional* "global per-recipient bucket" would cap total contact mail regardless of
+source IP, but because all contact mail goes to one hard-coded recipient it would let an attacker
+deny the contact form to **every** visitor by exhausting the global bucket (an availability
+trade-off). A CAPTCHA / proof-of-work on the unauthenticated marketing form is the more robust
+mitigation. Both are deferred to a human.
 
 **Description**
 
@@ -627,5 +661,46 @@ Verifier confirmed submit_contact has only the in-memory slowapi cap (pg_rate_li
 **Recommendation**
 
 Mirror submit_form: add pg_rate_limit.enforce(f'contact:{client_ip(request)}', limit=5, window_seconds=600, ...) plus a global per-recipient bucket (all contact mail goes to one address) so the cap holds across serverless instances. Optionally add a CAPTCHA/proof-of-work to the unauthenticated marketing form.
+
+---
+
+<a id="sec-058-2026-09-17"></a>
+
+## SEC-058 (2026-09-17 review) — Legacy unauth booking `/availability` & `/slots` lack the per-IP limit every other public read has; `/availability` range is unbounded
+
+> **⚠ ID note:** This is finding **SEC-058 from the 2026-09-17 weekly review**, which collides with
+> this tracker's own `SEC-058` (unauth booking write-path in-memory limiter, 2026-06-20 review). Kept
+> under the 2026-09-17 ID because that is the review this fix was sourced from.
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | ✅ fixed (2026-09-19) |
+| **Category** | Rate limiting / DoS |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/booking.py` (legacy `/availability` :966, `/slots` :988; `_availability_for_range` :239) |
+
+**Description**
+
+Every slug-scoped public booking read carries `dependencies=[Depends(_public_read_limit)]` (120/min/IP
+via the shared Postgres limiter). The two legacy shims `GET /booking/availability` and
+`GET /booking/slots` (tenant hardcoded to `roman-technologies-website`) omitted it, so they were
+unauthenticated with no rate limit. `legacy_availability` also passed the caller's `from`/`to` straight
+into `_availability_for_range`, whose loop iterates day-by-day with no span cap — a single request with a
+multi-millennium range (e.g. `from=2000-01-01&to=3000-01-01`) forced ~365k+ per-day slot computations.
+
+**Fix (2026-09-19)**
+
+(1) Added `dependencies=[Depends(_public_read_limit)]` to both legacy routes, matching the slug-scoped
+reads. (2) Added a span guard at the top of `_availability_for_range` (shared by the legacy and
+slug-scoped `/{slug}/availability` paths): reject with 422 when `(d1 - d0).days` exceeds the service's
+`max_advance_days` (fallback 366). Days beyond the booking horizon never yield slots, so the clamp is
+lossless for real widget use while removing the CPU-amplification primitive.
+
+**Regression tested**
+
+`tests/test_booking_legacy_ratelimit.py` (4 tests: 429 on both legacy endpoints when over cap; 422 on an
+unbounded span with `load_eligible_resources` never called; 200 on a normal 7-day range). Full backend
+suite: 580 passed, 5 skipped.
 
 ---
