@@ -57,10 +57,11 @@ def apply_structure_rules(
         stored_schema = _first(stored, "_schema", list)
         incoming = content.get("_schema")
         has_incoming = isinstance(incoming, list) and bool(incoming)
-        if (not is_admin or not has_incoming) and stored_schema is not None:
-            return {**content, "_schema": stored_schema}
-        if is_admin and has_incoming:
-            _validate_schema(incoming)
+        if not is_admin or not has_incoming:
+            if stored_schema is not None:
+                return {**content, "_schema": stored_schema}
+            return {k: v for k, v in content.items() if k != "_schema"}
+        _validate_schema(incoming)
         return content
     if service_type == "key_value":
         stored_formats = _first(stored, "_formats", dict)

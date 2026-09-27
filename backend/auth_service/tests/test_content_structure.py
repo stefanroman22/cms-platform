@@ -34,6 +34,23 @@ def test_missing_schema_is_grafted_for_everyone():
         assert out["_schema"] == STORED_SCHEMA
 
 
+def test_client_cannot_inject_repeater_schema_when_none_stored():
+    out = apply_structure_rules(
+        "repeater",
+        {"_schema": NEW_SCHEMA, "items": []},
+        is_admin=False,
+        stored=(None, None, None, None),
+    )
+    assert "_schema" not in out
+
+
+def test_client_no_incoming_no_stored_schema_unchanged():
+    content = {"items": []}
+    out = apply_structure_rules("repeater", content, is_admin=False, stored=())
+    assert out == content
+    assert "_schema" not in out
+
+
 def test_admin_invalid_repeater_type_rejected():
     with pytest.raises(StructureError):
         apply_structure_rules(
