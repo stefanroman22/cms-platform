@@ -9,7 +9,7 @@ client-kit/rich-text/fixtures/canonical-vectors.json. Pure — no I/O."""
 from __future__ import annotations
 
 import re
-from html.parser import HTMLParser
+from html import unescape
 from typing import Literal
 
 Format = Literal["plain", "inline", "rich"]
@@ -66,7 +66,13 @@ _WS_RE = re.compile(r"[ \t\r\n\f]+")
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 _ASCII_LETTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 _RAW_TEXT = frozenset({"script", "style"})
-_TAG_NAME_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9:-]*")
+# Mirrors client-kit/rich-text/src/parse.ts's TAG_RE exactly (sticky `y` flag
+# there ~= matching with Python's pos/endpos here): group 1 is the `/` of a
+# close tag, group 2 the tag name, group 3 the raw attrs text, group 4 a
+# trailing `/` for a self-closing tag.
+_TAG_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9:-]*)((?:[^>\"']|\"[^\"]*\"|'[^']*')*?)(/?)>")
+# Mirrors parse.ts's HREF_RE exactly.
+_HREF_RE = re.compile(r"(?:^|\s)href\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s\"'=<>`]+))", re.I)
 
 
 class RichTextTooLong(ValueError):
@@ -76,179 +82,6 @@ class RichTextTooLong(ValueError):
         super().__init__(f"{length} > {limit}")
         self.length = length
         self.limit = limit
-
-
-def _escape_tail_for_reparse(tail: str) -> str:
-    """Re-encode an unterminated tag-open (and everything after it) so
-    HTMLParser treats it as one literal text run instead of repeatedly
-    rescanning an incomplete tag construct.
-
-    Only `<` and `>` are escaped; any `&...;` already in the tail (e.g.
-    `&amp;`) is left untouched so HTMLParser's own entity decoding — which
-    already runs on every ordinary text node via convert_charrefs and is
-    the thing client-kit/rich-text/src/parse.ts's decodeEntities is kept in
-    parity with — decodes it exactly as it would for any other text node.
-    Escaping `<`/`>` guarantees no raw `<` remains in the tail, so
-    HTMLParser's fast path (`rawdata.find('<', i)`) hands the whole
-    remainder to a single `handle_data` call instead of re-deriving the tag
-    boundary from `i` on every subsequent `<`."""
-    return tail.replace("<", "&lt;").replace(">", "&gt;")
-
-
-def _guard_unterminated(value: str) -> str:
-    """Linear pre-pass mirroring client-kit/rich-text/src/parse.ts's tag
-    tokenizer loop char-for-char, so HTMLParser and `is_html` only ever see
-    what the kit itself would treat as real markup or text.
-
-    Two things happen here, both because the kit's tokenizer never hands a
-    comment / `<!` / `<?` construct to anything else, and never hands an
-    unterminated tag-open to anything else either — it decides their fate
-    itself, inline, in this one pass:
-
-    1. Every comment (`<!--...-->`), and every other `<!...>` / `<?...>`
-       construct (declarations, processing instructions, and anything HTML5
-       would call a "marked section" like `<![CDATA[...]]>` or a bogus
-       comment like `<![x>`) — TERMINATED or not — is removed from the
-       output entirely. The kit finds the end of a comment by searching for
-       a literal `-->`, and the end of any other `<!`/`<?` construct by
-       searching for the *first* bare `>` (no quote-tracking, no nested
-       `]]>` awareness — a `<![CDATA[<script>...` construct ends at the `>`
-       of that `<script>`, same as the kit), and in both cases emits no text
-       for what it found either way. Left in the string for stdlib
-       html.parser instead, these constructs are not simply inert: `<![` +
-       an unrecognised keyword raises `AssertionError` inside
-       `_markupbase.parse_marked_section` (an unhandled 500 on save), and
-       many repeats of a `<![...]>`-shaped run is itself near-quadratic in
-       `_markupbase`'s own marked-section scanning. Splicing them out here
-       means HTMLParser never parses a marked section at all, closing both
-       the crash and the slowdown, and makes the backend match the kit's
-       (much simpler) "first bare `>` ends it" rule instead of trying to
-       out-implement `_markupbase`.
-    2. A `<` that opens a tag (an ASCII letter, or `/` + ASCII letter,
-       follows it) with no closing `>` outside quotes anywhere in the rest
-       of the input has that `<` and everything after it re-encoded as
-       literal text. A script/style open tag with no closing tag keeps just
-       the open tag and drops everything after it. Both are truncations,
-       not removals — the kit does emit content for these (see
-       `_escape_tail_for_reparse`), it just never finds a `>` to end them
-       properly.
-
-    stdlib html.parser rescans from every unterminated `<` (check_for_whole_
-    start_tag re-derives the tag boundary from `i` on each call, and its
-    fallback on failure advances `i` by only one `<` at a time), and
-    `is_html`'s tag-prefix regex has the same shape of problem if fed a
-    string that still contains a dangling construct — both making inputs
-    like `"<b" * 50000` (~10-90s), `"<a a" * 25000`, or any of the above
-    prefixed onto such a run, quadratic: a serverless-function DoS reachable
-    by any authenticated editor via the save endpoint, within the 200 KB
-    raw-input cap. This walk visits every position at most once (O(n)) and
-    never rescans. When every tag-open in `value` is already terminated and
-    `value` contains no comment/`<!`/`<?` construct at all, `value` is
-    returned unchanged (verbatim, not just equal — no piece is copied)."""
-    n = len(value)
-    lower = value.lower()
-    i = 0
-    # `pieces` accumulates the parts of `value` that survive (kept spans
-    # between removed comments/decls/PIs); `copy_from` is the start of the
-    # next not-yet-flushed span. Left empty/0 for the overwhelmingly common
-    # case of no comment/decl/PI in `value`, so that case returns `value`
-    # itself with no copying at all.
-    pieces: list[str] = []
-    copy_from = 0
-
-    def truncate_at(pos: int) -> str:
-        if not pieces:
-            return value[:pos]
-        pieces.append(value[copy_from:pos])
-        return "".join(pieces)
-
-    while i < n:
-        lt = value.find("<", i)
-        if lt == -1:
-            return value if not pieces else "".join(pieces) + value[copy_from:]
-        if value.startswith("<!--", lt):
-            end = value.find("-->", lt + 4)
-            if end == -1:
-                # No closing "-->" anywhere: the kit drops the comment and
-                # everything after it (it never emits text for it), so
-                # truncate here instead of leaving the rest of the input
-                # (which may itself be a pathological run) for HTMLParser or
-                # is_html to rescan.
-                return truncate_at(lt)
-            # Terminated: splice the whole comment out (see point 1 above)
-            # and keep scanning from right after it.
-            pieces.append(value[copy_from:lt])
-            copy_from = end + 3
-            i = copy_from
-            continue
-        c1 = value[lt + 1] if lt + 1 < n else ""
-        if c1 == "!" or c1 == "?":
-            end = value.find(">", lt)
-            if end == -1:
-                # Same reasoning as the unterminated-comment case above.
-                return truncate_at(lt)
-            # Terminated: splice the whole `<!...>`/`<?...>` construct out
-            # (see point 1 above), ending at the first bare `>` exactly like
-            # the kit — not at any `]]>` or other marked-section-specific
-            # terminator — and keep scanning from right after it.
-            pieces.append(value[copy_from:lt])
-            copy_from = end + 1
-            i = copy_from
-            continue
-        c2 = value[lt + 2] if lt + 2 < n else ""
-        is_tag_start = c1 in _ASCII_LETTERS or (c1 == "/" and c2 in _ASCII_LETTERS)
-        if not is_tag_start:
-            i = lt + 1
-            continue
-
-        # Scan forward once, char by char, tracking quote state, to find the
-        # first `>` outside quotes — that's the tag's end. No backtracking,
-        # so this is O(remaining input) for this one `<`, not repeated per
-        # `<` the way html.parser's own fallback (and _HTML_OPEN_RE) are.
-        j = lt + 1
-        quote = ""
-        tag_end = -1
-        while j < n:
-            ch = value[j]
-            if quote:
-                if ch == quote:
-                    quote = ""
-            elif ch == '"' or ch == "'":
-                quote = ch
-            elif ch == ">":
-                tag_end = j
-                break
-            j += 1
-        if tag_end == -1:
-            # No terminating `>` anywhere in the rest of the input (or an
-            # unclosed quote swallowed it): this `<` and everything after it
-            # is literal text. Rewrite it and stop — never rescans the same
-            # span again.
-            tail = _escape_tail_for_reparse(value[lt:])
-            if not pieces:
-                return value[:lt] + tail
-            pieces.append(value[copy_from:lt])
-            pieces.append(tail)
-            return "".join(pieces)
-
-        is_close = c1 == "/"
-        name_match = _TAG_NAME_RE.match(value, lt + 2 if is_close else lt + 1)
-        tag = name_match.group().lower() if name_match else ""
-        self_closing = value[tag_end - 1] == "/"
-        i = tag_end + 1
-        if not is_close and tag in _RAW_TEXT and not self_closing:
-            end_tag = lower.find(f"</{tag}", i)
-            gt = value.find(">", end_tag) if end_tag != -1 else -1
-            if end_tag == -1 or gt == -1:
-                # No closing tag (or its own `>` never arrives): the kit
-                # never emits text for raw-text content regardless, so keep
-                # the open tag itself (it contributes nothing either way)
-                # and drop everything after it — same reasoning as the
-                # comment/decl case: don't leave a possibly-pathological
-                # tail for anything downstream to rescan.
-                return truncate_at(i)
-            i = gt + 1
-    return value if not pieces else "".join(pieces) + value[copy_from:]
 
 
 def is_html(value: str) -> bool:
@@ -315,82 +148,192 @@ def _br() -> _Node:
     return _Node("br")
 
 
-class _Builder(HTMLParser):
-    """Tag-soup tolerant builder that keeps only allow-listed elements.
+def _parse(value: str) -> _Node:  # one function by design, see below
+    """Tag-soup tolerant tokenizer + tree builder: a direct, line-for-line
+    port of client-kit/rich-text/src/parse.ts's `parse()`, not a wrapper
+    around stdlib `html.parser`. Three rounds of trying to make html.parser
+    behave (a linear guard pre-pass to neutralise unterminated tags, then to
+    also neutralise comments/declarations/marked sections it can crash or go
+    near-quadratic on) kept surfacing new html.parser-only pathologies —
+    patching around a general-purpose HTML5 parser's own edge cases wasn't
+    converging. The kit already has an exact, linear, tag-soup-tolerant
+    tokenizer purpose-built for this exact allow-listed tag set; this is
+    that same algorithm, so there is exactly one specification for what
+    "the canonical parse of this input" means, not two that have to be kept
+    in sync by construction of very different control flow. Everything
+    below one function for the same reason parse.ts is one function: `text`/
+    `open_tag`/`close_tag` and the tokenizer loop all close over the same
+    `stack`/`skip` parse state, which is the state a single html.parser
+    instance held as attributes before.
 
-    Unknown elements are unwrapped (their text flows into the parent);
-    _DROP_WITH_CONTENT elements vanish with everything inside them."""
+    Kept identical to parse.ts: the RICH_TAGS allow-list, `_SYNONYMS`,
+    `_DROP_WITH_CONTENT` skip-counting, `_RAW_TEXT` (script/style) raw-text
+    skipping, `MAX_PARSE_DEPTH` (br/hr always appended before any depth
+    check; any other tag beyond the cap is unwrapped like an unknown
+    element), and end-tag pop-to-nearest-matching-ancestor. Comments,
+    `<!...>`/`<?...>` constructs (including anything HTML5 would call a
+    "marked section", e.g. `<![CDATA[...]]>`) and unterminated tag-opens are
+    handled by the same scan loop as ordinary tags — there is no separate
+    guard pre-pass or removal step, because nothing here is ever handed to
+    a general-purpose parser that could misinterpret it: text runs, once
+    identified as text, are appended straight to the tree.
 
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.root = _Node("#root")
-        self._stack: list[_Node] = [self.root]
-        self._skip = 0
+    Deliberate difference from parse.ts, per an explicit controller ruling:
+    entities (in text runs and in `href` values) are decoded with Python's
+    `html.unescape` (the full HTML5 named-entity table) rather than a port
+    of the kit's small `decodeEntities` (amp/lt/gt/quot/apos/nbsp only) —
+    better fidelity for DeepL-translated output. Canonical output only ever
+    re-escapes `&amp; &lt; &gt; &nbsp; &quot;` (see `escape_text`/
+    `escape_attr`), so this cannot change what a *stored* canonical value
+    looks like for anything already expressible in those five escapes;
+    it only affects entities outside that set on *raw, not-yet-canonical*
+    input (e.g. `&copy;` decodes to `©` here but is left as literal text by
+    the kit) — an accepted, already-logged minor, not new to this port."""
+    root = _Node("#root")
+    stack: list[_Node] = [root]
+    lower = value.lower()
+    n = len(value)
+    skip = 0
+    i = 0
 
-    def handle_starttag(self, tag, attrs):
-        tag = tag.lower()
-        if tag in _DROP_WITH_CONTENT:
-            self._skip += 1
+    def text(t: str) -> None:
+        nonlocal skip
+        if skip or not t:
             return
-        if self._skip:
+        kids = stack[-1].children
+        if kids and isinstance(kids[-1], str):
+            kids[-1] = kids[-1] + t
+        else:
+            kids.append(t)
+
+    def open_tag(raw: str, attrs: str) -> None:
+        nonlocal skip
+        if raw in _DROP_WITH_CONTENT:
+            skip += 1
             return
-        tag = _SYNONYMS.get(tag, tag)
+        if skip:
+            return
+        tag = _SYNONYMS.get(raw, raw)
         if tag in ("br", "hr"):
-            self._stack[-1].children.append(_Node(tag))
+            stack[-1].children.append(_Node(tag))
             return
         if tag not in RICH_TAGS:
             return
-        # Flat parse-tree depth safety net (no exemptions): only exists to keep the
-        # recursive semantic transform below (_inline/_blocks) within Python's
-        # recursion limit for any input, regardless of tag mix. The much smaller,
-        # semantically meaningful cap on canonical output is MAX_MARK_DEPTH, applied
-        # separately inside _inline.
-        if len(self._stack) - 1 >= MAX_PARSE_DEPTH:
+        # Flat parse-tree depth safety net (no exemptions): only exists to keep
+        # the recursive semantic transform below (_inline/_blocks) within
+        # Python's recursion limit for any input, regardless of tag mix. The
+        # much smaller, semantically meaningful cap on canonical output is
+        # MAX_MARK_DEPTH, applied separately inside _inline.
+        if len(stack) - 1 >= MAX_PARSE_DEPTH:
             return  # depth cap reached: unwrap like an unknown element
         href = None
         if tag == "a":
-            href = next((v for k, v in attrs if k.lower() == "href"), None)
+            m = _HREF_RE.search(attrs)
+            if m:
+                raw_href = m.group(1)
+                if raw_href is None:
+                    raw_href = m.group(2)
+                if raw_href is None:
+                    raw_href = m.group(3)
+                href = unescape(raw_href if raw_href is not None else "")
         node = _Node(tag, href)
-        self._stack[-1].children.append(node)
-        self._stack.append(node)
+        stack[-1].children.append(node)
+        stack.append(node)
 
-    def handle_startendtag(self, tag, attrs):
-        if tag.lower() in _DROP_WITH_CONTENT:
+    def close_tag(raw: str) -> None:
+        nonlocal skip
+        if raw in _DROP_WITH_CONTENT:
+            if skip:
+                skip -= 1
             return
-        self.handle_starttag(tag, attrs)
-        self.handle_endtag(tag)
-
-    def handle_endtag(self, tag):
-        tag = tag.lower()
-        if tag in _DROP_WITH_CONTENT:
-            if self._skip:
-                self._skip -= 1
+        if skip:
             return
-        if self._skip:
-            return
-        tag = _SYNONYMS.get(tag, tag)
+        tag = _SYNONYMS.get(raw, raw)
         if tag not in RICH_TAGS or tag in ("br", "hr"):
             return
-        for i in range(len(self._stack) - 1, 0, -1):
-            if self._stack[i].tag == tag:
-                del self._stack[i:]
+        for k in range(len(stack) - 1, 0, -1):
+            if stack[k].tag == tag:
+                del stack[k:]
                 return
 
-    def handle_data(self, data):
-        if self._skip or not data:
-            return
-        kids = self._stack[-1].children
-        if kids and isinstance(kids[-1], str):
-            kids[-1] += data
-        else:
-            kids.append(data)
+    while i < n:
+        lt = value.find("<", i)
+        if lt == -1:
+            text(unescape(value[i:]))
+            break
+        if lt > i:
+            text(unescape(value[i:lt]))
+        if value.startswith("<!--", lt):
+            end = value.find("-->", lt + 4)
+            i = n if end == -1 else end + 3
+            continue
+        c1 = value[lt + 1] if lt + 1 < n else ""
+        if c1 == "!" or c1 == "?":
+            end = value.find(">", lt)
+            i = n if end == -1 else end + 1
+            continue
 
+        # A `<` only begins a tag when followed by an ASCII letter (open tag)
+        # or `/` + ASCII letter (close tag); anything else is literal text.
+        c2 = value[lt + 2] if lt + 2 < n else ""
+        is_tag_start = c1 in _ASCII_LETTERS or (c1 == "/" and c2 in _ASCII_LETTERS)
+        if not is_tag_start:
+            text("<")
+            i = lt + 1
+            continue
 
-def _parse(value: str) -> _Node:
-    b = _Builder()
-    b.feed(_guard_unterminated(value))
-    b.close()
-    return b.root
+        # Scan forward once, char by char, tracking quote state, to find the
+        # first `>` outside quotes — that's the tag's end. No backtracking,
+        # so this is O(remaining input) for this one `<`, not repeated per
+        # `<`.
+        j = lt + 1
+        quote = ""
+        tag_end = -1
+        while j < n:
+            ch = value[j]
+            if quote:
+                if ch == quote:
+                    quote = ""
+            elif ch == '"' or ch == "'":
+                quote = ch
+            elif ch == ">":
+                tag_end = j
+                break
+            j += 1
+        if tag_end == -1:
+            # No terminating `>` anywhere in the rest of the input (or an
+            # unclosed quote swallowed it): this `<` and everything after it
+            # is literal text. Emit it and stop — never rescans the same
+            # span again.
+            text(unescape(value[lt:]))
+            break
+
+        m = _TAG_RE.match(value, lt, tag_end + 1)
+        if not m:
+            text(unescape(value[lt : tag_end + 1]))
+            i = tag_end + 1
+            continue
+        i = tag_end + 1
+        tag = m.group(2).lower()
+        self_closing = m.group(4) == "/"
+        if m.group(1) == "/":
+            close_tag(tag)
+            continue
+        if tag in _RAW_TEXT and not self_closing:
+            end_tag = lower.find(f"</{tag}", i)
+            if end_tag == -1:
+                i = n
+            else:
+                gt = value.find(">", end_tag)
+                i = n if gt == -1 else gt + 1
+            continue
+        if self_closing:
+            if tag not in _DROP_WITH_CONTENT:
+                open_tag(tag, m.group(3))
+                close_tag(tag)
+            continue
+        open_tag(tag, m.group(3))
+    return root
 
 
 # ── Canonical transform (mirrored 1:1 by client-kit/rich-text/src/normalize.ts) ──

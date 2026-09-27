@@ -46,9 +46,9 @@ def test_plain_format_is_untouched():
         ("Tom &amp; Jerry", False),
         # Fix round 1 finding: is_html must keep the exact original truth
         # value (a naive, quote-unaware "does some > follow a recognised
-        # open-tag prefix" check) computed in linear time — NOT run
-        # _guard_unterminated first, which would hide a real tag sitting
-        # after a quote-swallowed tag-open like this one.
+        # open-tag prefix" check) computed in linear time — not something
+        # parse-aware that would hide a real tag sitting after a
+        # quote-swallowed tag-open like this one.
         ('x<y "a <b>bold</b>', True),
     ],
 )
@@ -143,13 +143,15 @@ def test_many_adjacent_unwrapped_links_are_not_quadratic():
     ],
 )
 def test_unterminated_tag_open_is_not_quadratic(raw):
-    # Stdlib html.parser rescans from every unterminated `<` (check_for_whole_
-    # start_tag/parse_endtag re-derive the tag boundary from scratch each
-    # time), making these inputs O(n^2) — ~10-90s locally, well within the raw
-    # 200 KB input cap and reachable by any authenticated editor via the save
-    # endpoint. The linear _guard_unterminated pre-pass must keep both
-    # canonicalize and plain_text well under the budget. 5s (not 1-2s) because
-    # the quadratic regressions this guards against took 10-90s, so 5s still
+    # Originally (fix round 1): stdlib html.parser rescans from every
+    # unterminated `<` (check_for_whole_start_tag/parse_endtag re-derive the
+    # tag boundary from scratch each time), making these inputs O(n^2) —
+    # ~10-90s locally, well within the raw 200 KB input cap and reachable by
+    # any authenticated editor via the save endpoint. Fix round 3 replaced
+    # html.parser entirely with a direct linear port of the kit's tokenizer
+    # (rich_text._parse), which visits every position once by construction —
+    # kept as a regression guard. 5s (not 1-2s) because the quadratic
+    # regressions this originally guarded against took 10-90s, so 5s still
     # catches them without flaking under load.
     start = time.perf_counter()
     canonicalize(raw, "rich", enforce_limit=False)
@@ -175,16 +177,15 @@ def test_unterminated_tag_open_is_not_quadratic(raw):
     ],
 )
 def test_unterminated_comment_decl_and_raw_text_are_not_quadratic(raw):
-    # Fix round 1 finding: _guard_unterminated originally left an unterminated
-    # comment / <! / <? / script-style raw-text construct's *dangling tail*
-    # in `value` unchanged (only `i` was advanced to `n`, ending the scan
-    # loop without truncating what it returns) — so a pathological run tucked
-    # inside one of these constructs (e.g. "<!--" + "<b" * 50000) still
-    # reached html.parser's own rescanning fallback and _HTML_OPEN_RE
-    # untouched, reopening the same O(n^2) DoS this guard exists to close.
-    # The kit never emits anything for these once they can't find their
-    # terminator, so the guard now truncates the same way (see its
-    # docstring), and canonicalize/plain_text/is_html must all stay linear.
+    # Fix round 1 finding, kept as a regression guard after fix round 3
+    # replaced html.parser with rich_text._parse (a direct port of the
+    # kit's tokenizer): a pathological run tucked inside an unterminated
+    # comment / <! / <? / script-style raw-text construct (e.g. "<!--" +
+    # "<b" * 50000) must not blow up canonicalize/plain_text/is_html. The
+    # kit never emits anything for a construct that can't find its
+    # terminator, and _parse's single scan loop visits every position once
+    # by construction, so this stays linear structurally, not by a
+    # special-cased guard.
     start = time.perf_counter()
     is_html(raw)
     elapsed = time.perf_counter() - start
@@ -202,23 +203,26 @@ def test_unterminated_comment_decl_and_raw_text_are_not_quadratic(raw):
 
 
 def test_marked_section_does_not_crash():
-    # Fix round 2 finding A: a *terminated* `<![` + unknown keyword (an HTML5
-    # "marked section", e.g. `<![CDATA[...]]>` or a bogus one like `<![x>`)
-    # used to be left in the guarded string for stdlib html.parser to parse
-    # itself, and `_markupbase.parse_marked_section` raises AssertionError on
-    # an unrecognised keyword — an unhandled 500 on save, reachable by any
-    # authenticated editor. The guard now splices every `<!...>`/`<?...>`
-    # construct out (see _guard_unterminated's docstring), so html.parser
-    # never sees one at all.
+    # Fix round 2 finding A, kept as a regression guard: a *terminated*
+    # `<![` + unknown keyword (an HTML5 "marked section", e.g.
+    # `<![CDATA[...]]>` or a bogus one like `<![x>`) used to be left for
+    # stdlib html.parser to parse itself, and `_markupbase.parse_marked_
+    # section` raises AssertionError on an unrecognised keyword — an
+    # unhandled 500 on save, reachable by any authenticated editor. Fix
+    # round 3 replaced html.parser entirely with rich_text._parse (a direct
+    # port of the kit's tokenizer, which has no concept of "marked
+    # sections" at all — a `<!` construct just ends at the first bare `>`,
+    # same as the kit), so there is no `_markupbase` call left to crash.
     assert canonicalize("<p>x</p><![x>", "rich") == "<p>x</p>"
     # `<![if !IE]>x<![endif]>` contains no tag name is_html recognises (its
     # curated list is p/br/strong/.../span — "if"/"endif" aren't in it, and
-    # weren't before this fix either), so canonicalize() routes it through
-    # the pre-existing, unrelated legacy-content converter rather than
-    # _guard_unterminated/_parse; it therefore does not byte-match the kit's
-    # bare parse() output here (a pre-existing gap, not something this fix
-    # changes — see the fix-round-2 report). The one property this fix does
-    # guarantee for it is what's actually being tested: no crash.
+    # weren't before any of these fixes either), so canonicalize() routes it
+    # through the pre-existing, unrelated legacy-content converter rather
+    # than _parse; it therefore does not byte-match the kit's bare parse()
+    # output here (a pre-existing gap, not something any of these fixes
+    # changes or is meant to close — see the fix-round-2/3 reports). The one
+    # property being tested here is what these fixes do guarantee: no
+    # crash.
     canonicalize("<![if !IE]>x<![endif]>", "rich")
 
 
@@ -233,14 +237,13 @@ def test_marked_section_does_not_crash():
     ],
 )
 def test_marked_section_repeat_is_not_quadratic(raw):
-    # Fix round 2 finding B: html.parser's own `_markupbase` marked-section
-    # scanning is near-quadratic on many `<![...]>`-shaped constructs in a
-    # row (~2.8-5.1s for ~220 KB, growing faster than linearly, near/over
-    # budget on a serverless function) even when none of them individually
-    # crash. Splicing every terminated `<!...>` construct out of the guarded
-    # string (fix for finding A) means html.parser never parses a marked
-    # section at all, so this is linear for the same reason A no longer
-    # crashes.
+    # Fix round 2 finding B, kept as a regression guard: html.parser's own
+    # `_markupbase` marked-section scanning was near-quadratic on many
+    # `<![...]>`-shaped constructs in a row (~2.8-5.1s for ~220 KB, growing
+    # faster than linearly, near/over budget on a serverless function) even
+    # when none of them individually crashed. Fix round 3 removed
+    # html.parser (and `_markupbase`) from this file entirely, so there is
+    # nothing left to go near-quadratic here.
     start = time.perf_counter()
     is_html(raw)
     elapsed = time.perf_counter() - start
@@ -253,6 +256,59 @@ def test_marked_section_repeat_is_not_quadratic(raw):
 
     start = time.perf_counter()
     plain_text(raw, "rich")
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("<p>x</p>" + "<<?>b" * 40_000, id="pi-join-repeat-40000"),
+        pytest.param("<<!>b" * 40_000, id="bang-join-repeat-40000"),
+        pytest.param("<<!---->b" * 20_000, id="comment-join-repeat-20000"),
+    ],
+)
+def test_splicing_adjacent_constructs_is_not_quadratic(raw):
+    # Fix round 3 finding B: fix round 2's approach — leave a *terminated*
+    # comment/decl/PI's surrounding text in place and splice only the
+    # construct itself out of the returned string — joins the text before
+    # and after the splice. For a single splice that's harmless, but for
+    # thousands of them in a row (e.g. "<<?>b" * 40000, where each "<?>"
+    # splice joins the "<" before it to the "b" after it) it reopens the
+    # same shape of O(n^2) DoS fix round 1 closed: `_HTML_OPEN_RE`/is_html
+    # and canonicalize/plain_text end up re-scanning ever-growing joined
+    # text. Fix round 3's rewrite (rich_text._parse, a direct port of the
+    # kit's tokenizer) never splices at all — it decides what each
+    # character contributes to the output during one linear pass, the same
+    # way the kit does, so no join can ever happen.
+    start = time.perf_counter()
+    is_html(raw)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+    start = time.perf_counter()
+    canonicalize(raw, "rich", enforce_limit=False)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+    start = time.perf_counter()
+    plain_text(raw, "rich")
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+
+def test_splicing_adjacent_constructs_near_raw_input_cap_is_not_quadratic():
+    # Fix round 3 finding B: the same payload shape as
+    # test_splicing_adjacent_constructs_is_not_quadratic, sized to land just
+    # under the raw-input cap (4 * MAX_LENGTH["rich"] = 200_000 chars) so
+    # RichTextTooLong is raised only *after* canonicalize has already fully
+    # parsed and serialized the value (enforce_limit checks the *output*
+    # length against MAX_LENGTH, after parsing) — the slow path, if it were
+    # still quadratic, would still have to run to completion first.
+    raw = "<p>x</p>" + "<<?>b" * 39_990
+    start = time.perf_counter()
+    with pytest.raises(RichTextTooLong):
+        canonicalize(raw, "rich", enforce_limit=True)
     elapsed = time.perf_counter() - start
     assert elapsed < 5.0
 

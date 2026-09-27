@@ -66,5 +66,11 @@
   {"name": "comment spliced, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a<!-- c -->b", "expected": "<p>x</p><p>ab</p>"},
   {"name": "doctype spliced, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a<!DOCTYPE html>b", "expected": "<p>x</p><p>ab</p>"},
   {"name": "php pi spliced, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a<?php x ?>b", "expected": "<p>x</p><p>ab</p>"},
-  {"name": "cdata spliced, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a<![CDATA[x]]>b", "expected": "<p>x</p><p>ab</p>"}
+  {"name": "cdata spliced, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a<![CDATA[x]]>b", "expected": "<p>x</p><p>ab</p>"},
+  {"name": "no joining across comment: real bold tag stays text (rich)", "fmt": "rich", "input": "<p>x</p><<!---->b>bold</b>", "expected": "<p>x</p><p>&lt;b&gt;bold</p>"},
+  {"name": "no joining across decl: no real link created (rich)", "fmt": "rich", "input": "<p>x</p><<!x>a href=\"https://e.com\" onclick=\"x\">l</a>", "expected": "<p>x</p><p>&lt;a href=\"https://e.com\" onclick=\"x\"&gt;l</p>"},
+  {"name": "no joining across pi/comment: no script/style raw text (rich)", "fmt": "rich", "input": "<p>x</p><<?x>script>alert(1)<<!---->/script>", "expected": "<p>x</p><p>&lt;script&gt;alert(1)&lt;/script&gt;</p>"},
+  {"name": "no joining across comment: no dropped img tag (rich)", "fmt": "rich", "input": "<p>x</p><<!---->img src=x onerror=1>", "expected": "<p>x</p><p>&lt;img src=x onerror=1&gt;</p>"},
+  {"name": "no joining across comment: no new entity from two halves (rich)", "fmt": "rich", "input": "<p>x</p>&<!---->lt;b&<!---->gt;", "expected": "<p>x</p><p>&amp;lt;b&amp;gt;</p>"},
+  {"name": "no joining across comment: no new entity from two halves 2 (rich)", "fmt": "rich", "input": "<p>x</p>&l<!---->t;", "expected": "<p>x</p><p>&amp;lt;</p>"}
 ]
