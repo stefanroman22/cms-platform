@@ -201,6 +201,62 @@ def test_unterminated_comment_decl_and_raw_text_are_not_quadratic(raw):
     assert elapsed < 5.0
 
 
+def test_marked_section_does_not_crash():
+    # Fix round 2 finding A: a *terminated* `<![` + unknown keyword (an HTML5
+    # "marked section", e.g. `<![CDATA[...]]>` or a bogus one like `<![x>`)
+    # used to be left in the guarded string for stdlib html.parser to parse
+    # itself, and `_markupbase.parse_marked_section` raises AssertionError on
+    # an unrecognised keyword — an unhandled 500 on save, reachable by any
+    # authenticated editor. The guard now splices every `<!...>`/`<?...>`
+    # construct out (see _guard_unterminated's docstring), so html.parser
+    # never sees one at all.
+    assert canonicalize("<p>x</p><![x>", "rich") == "<p>x</p>"
+    # `<![if !IE]>x<![endif]>` contains no tag name is_html recognises (its
+    # curated list is p/br/strong/.../span — "if"/"endif" aren't in it, and
+    # weren't before this fix either), so canonicalize() routes it through
+    # the pre-existing, unrelated legacy-content converter rather than
+    # _guard_unterminated/_parse; it therefore does not byte-match the kit's
+    # bare parse() output here (a pre-existing gap, not something this fix
+    # changes — see the fix-round-2 report). The one property this fix does
+    # guarantee for it is what's actually being tested: no crash.
+    canonicalize("<![if !IE]>x<![endif]>", "rich")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("<p>x</p>" + "<![CDATA[x>" * 20_000, id="cdata-repeat"),
+        pytest.param(
+            "<p>x</p>" + "<![CDATA[x>" * 20_000 + "<script>", id="cdata-repeat-then-script"
+        ),
+        pytest.param("<p>x</p>" + "<![CDATA[x>" * 20_000 + "<!--", id="cdata-repeat-then-comment"),
+    ],
+)
+def test_marked_section_repeat_is_not_quadratic(raw):
+    # Fix round 2 finding B: html.parser's own `_markupbase` marked-section
+    # scanning is near-quadratic on many `<![...]>`-shaped constructs in a
+    # row (~2.8-5.1s for ~220 KB, growing faster than linearly, near/over
+    # budget on a serverless function) even when none of them individually
+    # crash. Splicing every terminated `<!...>` construct out of the guarded
+    # string (fix for finding A) means html.parser never parses a marked
+    # section at all, so this is linear for the same reason A no longer
+    # crashes.
+    start = time.perf_counter()
+    is_html(raw)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+    start = time.perf_counter()
+    canonicalize(raw, "rich", enforce_limit=False)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+    start = time.perf_counter()
+    plain_text(raw, "rich")
+    elapsed = time.perf_counter() - start
+    assert elapsed < 5.0
+
+
 def test_raw_input_cap_rejects_before_parsing():
     with pytest.raises(RichTextTooLong) as exc:
         canonicalize("a" * (4 * MAX_LENGTH["inline"] + 1), "inline")

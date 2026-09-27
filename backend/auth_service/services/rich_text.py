@@ -97,36 +97,75 @@ def _escape_tail_for_reparse(tail: str) -> str:
 
 def _guard_unterminated(value: str) -> str:
     """Linear pre-pass mirroring client-kit/rich-text/src/parse.ts's tag
-    tokenizer loop (comments / `<!` / `<?` / script-style raw-text skipped
-    identically): finds the first `<` that opens a tag (an ASCII letter, or
-    `/` + ASCII letter, follows it) with no closing `>` outside quotes
-    anywhere in the rest of the input, and re-encodes that `<` and
-    everything after it as literal text. An unterminated comment / `<!` /
-    `<?` construct, or a script/style open tag with no closing tag, is
-    truncated away entirely (the kit emits nothing for any of these once
-    they can't find their terminator, so there is nothing to re-encode —
-    just drop the dangling tail so nothing downstream ever re-scans it).
+    tokenizer loop char-for-char, so HTMLParser and `is_html` only ever see
+    what the kit itself would treat as real markup or text.
+
+    Two things happen here, both because the kit's tokenizer never hands a
+    comment / `<!` / `<?` construct to anything else, and never hands an
+    unterminated tag-open to anything else either — it decides their fate
+    itself, inline, in this one pass:
+
+    1. Every comment (`<!--...-->`), and every other `<!...>` / `<?...>`
+       construct (declarations, processing instructions, and anything HTML5
+       would call a "marked section" like `<![CDATA[...]]>` or a bogus
+       comment like `<![x>`) — TERMINATED or not — is removed from the
+       output entirely. The kit finds the end of a comment by searching for
+       a literal `-->`, and the end of any other `<!`/`<?` construct by
+       searching for the *first* bare `>` (no quote-tracking, no nested
+       `]]>` awareness — a `<![CDATA[<script>...` construct ends at the `>`
+       of that `<script>`, same as the kit), and in both cases emits no text
+       for what it found either way. Left in the string for stdlib
+       html.parser instead, these constructs are not simply inert: `<![` +
+       an unrecognised keyword raises `AssertionError` inside
+       `_markupbase.parse_marked_section` (an unhandled 500 on save), and
+       many repeats of a `<![...]>`-shaped run is itself near-quadratic in
+       `_markupbase`'s own marked-section scanning. Splicing them out here
+       means HTMLParser never parses a marked section at all, closing both
+       the crash and the slowdown, and makes the backend match the kit's
+       (much simpler) "first bare `>` ends it" rule instead of trying to
+       out-implement `_markupbase`.
+    2. A `<` that opens a tag (an ASCII letter, or `/` + ASCII letter,
+       follows it) with no closing `>` outside quotes anywhere in the rest
+       of the input has that `<` and everything after it re-encoded as
+       literal text. A script/style open tag with no closing tag keeps just
+       the open tag and drops everything after it. Both are truncations,
+       not removals — the kit does emit content for these (see
+       `_escape_tail_for_reparse`), it just never finds a `>` to end them
+       properly.
 
     stdlib html.parser rescans from every unterminated `<` (check_for_whole_
     start_tag re-derives the tag boundary from `i` on each call, and its
     fallback on failure advances `i` by only one `<` at a time), and
     `is_html`'s tag-prefix regex has the same shape of problem if fed a
-    string that still contains one of these dangling constructs — both
-    making inputs like `"<b" * 50000` (~10-90s), `"<a a" * 25000`, or any of
-    the above prefixed onto such a run, quadratic: a serverless-function DoS
-    reachable by any authenticated editor via the save endpoint, within the
-    200 KB raw-input cap. This walk visits every position at most once
-    (O(n)) and never rescans, so it neutralises the pathological tail before
-    either ever sees it. When every tag-open and every comment/decl/raw-text
-    construct in `value` is properly terminated, `value` is returned
-    unchanged."""
+    string that still contains a dangling construct — both making inputs
+    like `"<b" * 50000` (~10-90s), `"<a a" * 25000`, or any of the above
+    prefixed onto such a run, quadratic: a serverless-function DoS reachable
+    by any authenticated editor via the save endpoint, within the 200 KB
+    raw-input cap. This walk visits every position at most once (O(n)) and
+    never rescans. When every tag-open in `value` is already terminated and
+    `value` contains no comment/`<!`/`<?` construct at all, `value` is
+    returned unchanged (verbatim, not just equal — no piece is copied)."""
     n = len(value)
     lower = value.lower()
     i = 0
+    # `pieces` accumulates the parts of `value` that survive (kept spans
+    # between removed comments/decls/PIs); `copy_from` is the start of the
+    # next not-yet-flushed span. Left empty/0 for the overwhelmingly common
+    # case of no comment/decl/PI in `value`, so that case returns `value`
+    # itself with no copying at all.
+    pieces: list[str] = []
+    copy_from = 0
+
+    def truncate_at(pos: int) -> str:
+        if not pieces:
+            return value[:pos]
+        pieces.append(value[copy_from:pos])
+        return "".join(pieces)
+
     while i < n:
         lt = value.find("<", i)
         if lt == -1:
-            return value
+            return value if not pieces else "".join(pieces) + value[copy_from:]
         if value.startswith("<!--", lt):
             end = value.find("-->", lt + 4)
             if end == -1:
@@ -135,16 +174,26 @@ def _guard_unterminated(value: str) -> str:
                 # truncate here instead of leaving the rest of the input
                 # (which may itself be a pathological run) for HTMLParser or
                 # is_html to rescan.
-                return value[:lt]
-            i = end + 3
+                return truncate_at(lt)
+            # Terminated: splice the whole comment out (see point 1 above)
+            # and keep scanning from right after it.
+            pieces.append(value[copy_from:lt])
+            copy_from = end + 3
+            i = copy_from
             continue
         c1 = value[lt + 1] if lt + 1 < n else ""
         if c1 == "!" or c1 == "?":
             end = value.find(">", lt)
             if end == -1:
                 # Same reasoning as the unterminated-comment case above.
-                return value[:lt]
-            i = end + 1
+                return truncate_at(lt)
+            # Terminated: splice the whole `<!...>`/`<?...>` construct out
+            # (see point 1 above), ending at the first bare `>` exactly like
+            # the kit — not at any `]]>` or other marked-section-specific
+            # terminator — and keep scanning from right after it.
+            pieces.append(value[copy_from:lt])
+            copy_from = end + 1
+            i = copy_from
             continue
         c2 = value[lt + 2] if lt + 2 < n else ""
         is_tag_start = c1 in _ASCII_LETTERS or (c1 == "/" and c2 in _ASCII_LETTERS)
@@ -155,7 +204,7 @@ def _guard_unterminated(value: str) -> str:
         # Scan forward once, char by char, tracking quote state, to find the
         # first `>` outside quotes — that's the tag's end. No backtracking,
         # so this is O(remaining input) for this one `<`, not repeated per
-        # `<` the way html.parser's own fallback (and _HTML_RE) are.
+        # `<` the way html.parser's own fallback (and _HTML_OPEN_RE) are.
         j = lt + 1
         quote = ""
         tag_end = -1
@@ -175,7 +224,12 @@ def _guard_unterminated(value: str) -> str:
             # unclosed quote swallowed it): this `<` and everything after it
             # is literal text. Rewrite it and stop — never rescans the same
             # span again.
-            return value[:lt] + _escape_tail_for_reparse(value[lt:])
+            tail = _escape_tail_for_reparse(value[lt:])
+            if not pieces:
+                return value[:lt] + tail
+            pieces.append(value[copy_from:lt])
+            pieces.append(tail)
+            return "".join(pieces)
 
         is_close = c1 == "/"
         name_match = _TAG_NAME_RE.match(value, lt + 2 if is_close else lt + 1)
@@ -192,9 +246,9 @@ def _guard_unterminated(value: str) -> str:
                 # and drop everything after it — same reasoning as the
                 # comment/decl case: don't leave a possibly-pathological
                 # tail for anything downstream to rescan.
-                return value[:i]
+                return truncate_at(i)
             i = gt + 1
-    return value
+    return value if not pieces else "".join(pieces) + value[copy_from:]
 
 
 def is_html(value: str) -> bool:

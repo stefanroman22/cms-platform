@@ -59,5 +59,12 @@
   {"name": "unterminated comment with a stray gt inside is dropped (rich)", "fmt": "rich", "input": "<!-->x<b>y</b>", "expected": ""},
   {"name": "unterminated script truncates, real tag present (rich)", "fmt": "rich", "input": "<p>x</p>a<script>y", "expected": "<p>x</p><p>a</p>"},
   {"name": "bare unterminated tag-open, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a <b", "expected": "<p>x</p><p>a &lt;b</p>"},
-  {"name": "repeated unterminated tag-opens, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p><b<b<b<b<bx", "expected": "<p>x</p><p>&lt;b&lt;b&lt;b&lt;b&lt;bx</p>"}
+  {"name": "repeated unterminated tag-opens, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p><b<b<b<b<bx", "expected": "<p>x</p><p>&lt;b&lt;b&lt;b&lt;b&lt;bx</p>"},
+  {"name": "marked section bogus keyword truncates (rich)", "fmt": "rich", "input": "<p>x</p><![x>", "expected": "<p>x</p>"},
+  {"name": "marked section bogus keyword with trailing text (rich)", "fmt": "rich", "input": "<p>x</p><![x>y", "expected": "<p>x</p><p>y</p>"},
+  {"name": "cdata with embedded script/SCRIPT parity (rich)", "fmt": "rich", "input": "-<![CDATA[<script><SCRIPT>z]]><b>w</b>", "expected": "<p>-</p>"},
+  {"name": "comment spliced, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a<!-- c -->b", "expected": "<p>x</p><p>ab</p>"},
+  {"name": "doctype spliced, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a<!DOCTYPE html>b", "expected": "<p>x</p><p>ab</p>"},
+  {"name": "php pi spliced, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a<?php x ?>b", "expected": "<p>x</p><p>ab</p>"},
+  {"name": "cdata spliced, real tag prefix (rich)", "fmt": "rich", "input": "<p>x</p>a<![CDATA[x]]>b", "expected": "<p>x</p><p>ab</p>"}
 ]
