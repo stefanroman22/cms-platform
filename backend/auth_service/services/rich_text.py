@@ -529,3 +529,100 @@ def plain_text(value: str, fmt: Format = "inline", *, keep_line_breaks: bool = F
                 kept.append(ln)
         return "\n".join(kept).strip()
     return re.sub(r"\s+", " ", text).strip()
+
+
+# ── Field formats (spec §4.2) ────────────────────────────────────────────────
+
+_REPEATER_TYPE_FORMAT: dict[str | None, str] = {
+    "string": "plain",
+    "inline": "inline",
+    "richtext": "rich",
+    "url": "plain",
+    "tags": "plain",
+}
+_FIXED_FORMATS: dict[str, dict[str, str]] = {
+    "text_block": {"title": "inline", "body": "rich"},
+    "image": {"alt": "plain"},
+    "floor_plan": {"alt": "plain"},
+    "file_download": {"filename": "plain"},
+}
+
+
+class RichTextFieldError(ValueError):
+    """A leaf exceeded its format's length limit; carries the leaf path."""
+
+    def __init__(self, path: str, length: int, limit: int) -> None:
+        super().__init__(f"Field {path} is too long ({length} > {limit} characters)")
+        self.path = path
+        self.length = length
+        self.limit = limit
+
+
+def _kv_formats(content: dict) -> dict[str, str]:
+    raw = content.get("_formats") if isinstance(content, dict) else None
+    if not isinstance(raw, dict):
+        return {}
+    return {k: v for k, v in raw.items() if isinstance(k, str) and v in FORMATS}
+
+
+def format_of(service_type: str, path: str, content: dict) -> Format:
+    """Format of one leaf path as produced by segments.segments_of."""
+    fixed = _FIXED_FORMATS.get(service_type)
+    if fixed is not None:
+        return fixed.get(path, "plain")  # type: ignore[return-value]
+    if service_type == "key_value" and path.startswith("entries."):
+        return _kv_formats(content).get(path[len("entries.") :], "plain")  # type: ignore[return-value]
+    if service_type == "repeater" and path.startswith("items."):
+        from .segments import repeater_schema
+
+        parts = path.split(".")
+        if len(parts) != 3:  # tags leaves: items.<id>.<key>.<j>
+            return "plain"
+        return _REPEATER_TYPE_FORMAT.get(repeater_schema(content).get(parts[2]), "plain")  # type: ignore[return-value]
+    return "plain"
+
+
+def field_formats(service_type: str, content: dict) -> dict[str, str]:
+    """Per-field (not per-item) formats for the dashboard (spec §5.7)."""
+    fixed = _FIXED_FORMATS.get(service_type)
+    if fixed is not None:
+        return dict(fixed)
+    if service_type == "repeater":
+        from .segments import repeater_schema
+
+        return {
+            key: _REPEATER_TYPE_FORMAT.get(ftype, "plain")
+            for key, ftype in repeater_schema(content if isinstance(content, dict) else {}).items()
+        }
+    if service_type == "key_value":
+        content = content if isinstance(content, dict) else {}
+        fmts = _kv_formats(content)
+        entries = content.get("entries")
+        keys = list(entries.keys()) if isinstance(entries, dict) else []
+        out = {k: fmts.get(k, "plain") for k in keys}
+        out.update({k: v for k, v in fmts.items() if k not in out})
+        out["*"] = "plain"
+        return out
+    return {}
+
+
+def normalize_content(
+    service_type: str, content: dict, *, legacy: bool = False, enforce_limit: bool = True
+) -> dict:
+    """Return a copy of `content` with every inline/rich leaf canonicalised."""
+    import copy
+
+    from .segments import apply_segments, segments_of
+
+    if not isinstance(content, dict):
+        return content
+    values: dict[str, str] = {}
+    for path, value in segments_of(service_type, content).items():
+        fmt = format_of(service_type, path, content)
+        if fmt == "plain":
+            continue
+        try:
+            values[path] = canonicalize(value, fmt, legacy=legacy, enforce_limit=enforce_limit)
+        except RichTextTooLong as exc:
+            raise RichTextFieldError(path, exc.length, exc.limit) from exc
+    return apply_segments(copy.deepcopy(content), service_type, values)
