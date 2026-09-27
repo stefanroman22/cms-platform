@@ -19,6 +19,8 @@
   {"name": "nbsp becomes space", "fmt": "rich", "input": "a b", "expected": "<p>a b</p>"},
   {"name": "crlf", "fmt": "rich", "input": "a\r\nb\r\n\r\nc", "expected": "<p>a<br>b</p><p>c</p>"},
   {"name": "blank rich", "fmt": "rich", "input": "   \n  ", "expected": ""},
+  {"name": "private-use sentinels are stripped", "fmt": "rich", "input": "a 0 b", "expected": "<p>a 0 b</p>"},
+  {"name": "sentinels next to a real link", "fmt": "rich", "input": "[x](https://a.ro) 0", "expected": "<p><a href=\"https://a.ro\">x</a> 0</p>"},
   {"name": "inline escapes", "fmt": "inline", "input": "Soluții IT & Cloud <3", "expected": "Soluții IT &amp; Cloud &lt;3"},
   {"name": "inline newlines", "fmt": "inline", "input": "Line one\nLine two\n\nLine four", "expected": "Line one<br>Line two<br><br>Line four"},
   {"name": "inline no markdown", "fmt": "inline", "input": "**not bold** *nor this*", "expected": "**not bold** *nor this*"},

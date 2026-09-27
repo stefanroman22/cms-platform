@@ -127,6 +127,13 @@ def legacy_to_html(text: str, fmt: str) -> str:
     if not isinstance(text, str):
         return ""
     t = text.replace("\r\n", "\n").replace("\r", "\n").replace(" ", " ")
+    # Strip the private-use sentinels _inline_md() uses internally to protect
+    # already-built <a> tags from the bold/italic/strike passes. Without this,
+    # raw input containing these unassigned PUA code points could collide with
+    # a real placeholder (IndexError on a bare sentinel, or a real link's HTML
+    # silently duplicated onto unrelated text) once _PH_RE.sub runs over the
+    # whole string.
+    t = t.replace("", "").replace("", "")
     if not t.strip():
         return ""
     return _rich(t) if fmt == "rich" else _inline(t)

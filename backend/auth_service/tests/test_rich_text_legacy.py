@@ -34,3 +34,13 @@ def test_canonicalize_without_legacy_treats_inline_as_html():
 
 def test_tag_free_rich_is_always_legacy():
     assert canonicalize("**x**", "rich") == "<p><strong>x</strong></p>"
+
+
+def test_legacy_to_html_never_raises_on_pua_sentinels():
+    # Raw input containing the internal link-placeholder sentinels (U+E000/U+E001,
+    # unassigned private-use code points) must not crash or corrupt output: no
+    # real link exists, so a naive final substitution would IndexError on an
+    # empty links list.
+    sentinel = "0"
+    assert legacy_to_html(sentinel, "inline") == "0"
+    assert legacy_to_html(sentinel, "rich") == "<p>0</p>"
