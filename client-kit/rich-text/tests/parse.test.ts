@@ -45,4 +45,16 @@ describe("safeHref", () => {
 describe("isHtml", () => {
   it.each([["<p>x</p>", true], ["<BR/>", true], ["a < b", false], ["<abbr>", false], ["Tom &amp; Jerry", false]])(
     "%s", (v, e) => expect(isHtml(v as string)).toBe(e));
+
+  // Task 9 / carry rule 8: isHtml must be linear and match the backend's is_html
+  // exactly, including on the quote-swallowed-tag-open case the backend's own
+  // regression test pins (a naive, non-backtracking "does a recognised open-tag
+  // prefix start before the string's last `>`" check, not a real parse).
+  it('matches backend is_html on a quote-swallowed tag-open', () => expect(isHtml('x<y "a <b>bold</b>')).toBe(true));
+
+  it("completes in well under a second on an unterminated comment with a pathological tail", () => {
+    const start = performance.now();
+    isHtml("<!--" + "<b".repeat(50_000));
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
 });
