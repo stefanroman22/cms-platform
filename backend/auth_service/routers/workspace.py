@@ -33,7 +33,9 @@ from ..models.schemas import (
 )
 from ..services.auth_service import hash_password
 from ..services.content_locale import pick_locale_entry
+from ..services.content_structure import VALID_REPEATER_TYPES, StructureError, apply_structure_rules
 from ..services.password_changed_email import send_password_changed_email
+from ..services.rich_text import RichTextFieldError, field_formats, normalize_content
 from ..services.segments import segments_of, src_hash
 from ..services.sessions import revoke_all_for_user
 from ..services.supabase_client import get_supabase_admin
@@ -210,6 +212,11 @@ async def get_service(
     flat["translation_status"] = _translation_status(
         result.data["service_type_slug"], result.data.get("content_entries"), loc, default_locale
     )
+    flat["rich_text_version"] = int(project.get("rich_text_version") or 0)
+    flat["can_edit_structure"] = bool(getattr(user, "is_admin", False))
+    flat["field_formats"] = field_formats(
+        result.data["service_type_slug"], flat.get("content") or {}
+    )
     return flat
 
 
@@ -303,23 +310,38 @@ async def save_service(
     )
     by_locale = {r["locale"]: r for r in (rows.data or [])}
 
-    # A repeater's `_schema` is structural, not editable content. A payload that
-    # omits it (the connector's items-only seed PUT, or any client that
-    # round-trips only `items`) must not wipe it — re-graft the canonical schema
-    # from the stored default locale (where create seeded it) or target locale.
-    # Applied to the source `content_in` so the translation source, override
-    # diff, and every per-locale upsert all carry it.
-    content_in = body.content
-    if service_type == "repeater":
-        d = by_locale.get(default_locale) or {}
-        t = by_locale.get(loc) or {}
-        content_in = _grafted_repeater_content(
+    # Structural metadata (`_schema` for repeaters, `_formats` for key_value) is
+    # never editable by a non-admin save; an admin/seed payload that omits it
+    # keeps the stored value instead of wiping it (the connector's items-only
+    # seed PUT). Applied to the source `content_in` so the translation source,
+    # override diff, and every per-locale upsert all carry it. When the
+    # project is rich-text-enabled, every inline/rich leaf is canonicalised
+    # (sanitised + limit-checked) before it is ever persisted or translated.
+    version = int(project.get("rich_text_version") or 0)
+    d = by_locale.get(default_locale) or {}
+    t = by_locale.get(loc) or {}
+    try:
+        content_in = apply_structure_rules(
+            service_type,
             body.content,
-            d.get("draft_content"),
-            d.get("published_content"),
-            t.get("draft_content"),
-            t.get("published_content"),
+            is_admin=bool(getattr(user, "is_admin", False)),
+            stored=(
+                d.get("draft_content"),
+                d.get("published_content"),
+                t.get("draft_content"),
+                t.get("published_content"),
+            ),
         )
+        if version >= 1:
+            content_in = normalize_content(service_type, content_in)
+    except StructureError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    except RichTextFieldError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
     # Closure: captures svc_id, now, user, and seed from the enclosing scope.
     def _upsert(target_locale: str, content: dict, meta: dict | None) -> None:
@@ -502,7 +524,7 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="item_schema is required when creating a repeater service",
             )
-        valid_field_types = {"string", "richtext", "url", "tags"}
+        valid_field_types = VALID_REPEATER_TYPES
         for field in body.item_schema:
             if field.type not in valid_field_types:
                 raise HTTPException(
@@ -540,6 +562,31 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
                     "locale": default_locale,
                     "published_content": {"_schema": schema_payload, "items": []},
                     "draft_content": {"_schema": schema_payload, "items": []},
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "updated_by": user.id,
+                }
+            ).execute()
+
+    # For key_value with declared per-entry formats: seed the content_entries
+    # row with `_formats` so the format admins chose at create time (structural
+    # metadata) is never left implicit.
+    if body.service_type_slug == "key_value" and body.formats:
+        svc_result = (
+            sb.table("project_services")
+            .select("id")
+            .eq("project_id", project["id"])
+            .eq("service_key", body.service_key)
+            .single()
+            .execute()
+        )
+        if svc_result.data:
+            default_locale = project.get("default_locale") or "en"
+            sb.table("content_entries").insert(
+                {
+                    "project_service_id": svc_result.data["id"],
+                    "locale": default_locale,
+                    "published_content": {"entries": {}, "_formats": body.formats},
+                    "draft_content": {"entries": {}, "_formats": body.formats},
                     "updated_at": datetime.now(UTC).isoformat(),
                     "updated_by": user.id,
                 }
