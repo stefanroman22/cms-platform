@@ -31,7 +31,9 @@ def _resolve_project(project_slug: str) -> dict:
     sb = get_supabase_admin()
     result = (
         sb.table("projects")
-        .select("id, name, slug, is_active, preview_token, default_locale, locales")
+        .select(
+            "id, name, slug, is_active, preview_token, default_locale, locales, rich_text_version"
+        )
         .eq("slug", project_slug)
         .eq("is_active", True)
         .maybe_single()
@@ -170,6 +172,7 @@ async def get_project_content(project_slug: str, request: Request):
 
     payload = {
         "project_slug": project["slug"],
+        "rich_text_version": int(project.get("rich_text_version") or 0),
         "project_name": project["name"],
         "last_updated": last_updated,
         "content": content_map,
@@ -257,6 +260,7 @@ async def get_project_draft_content(project_slug: str, request: Request):
 
     payload = {
         "project_slug": project["slug"],
+        "rich_text_version": int(project.get("rich_text_version") or 0),
         "project_name": project["name"],
         "last_updated": last_updated,
         "content": content_map,
@@ -293,6 +297,8 @@ async def get_project_types(project_slug: str):
         f'  project_slug: "{project_slug}";',
         "  project_name: string;",
         "  last_updated: string | null;",
+        "  rich_text_version: number;",
+        "  // inline/rich fields are sanitised HTML strings — render with the CMS rich-text kit (ADR-0010)",
         "  content: {",
     ]
 
@@ -341,6 +347,7 @@ async def get_project_content_locale(project_slug: str, locale: str, request: Re
 
     payload = {
         "project_slug": project["slug"],
+        "rich_text_version": int(project.get("rich_text_version") or 0),
         "project_name": project["name"],
         "locale": locale,
         "last_updated": last_updated,
@@ -379,6 +386,7 @@ async def get_project_draft_content_locale(project_slug: str, locale: str, reque
 
     payload = {
         "project_slug": project["slug"],
+        "rich_text_version": int(project.get("rich_text_version") or 0),
         "project_name": project["name"],
         "locale": locale,
         "last_updated": last_updated,
