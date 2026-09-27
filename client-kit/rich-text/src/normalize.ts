@@ -1,6 +1,7 @@
 // src/normalize.ts — 1:1 port of the canonical transform in backend services/rich_text.py.
 import { BLOCK_TAGS, HEADING_TAGS, INLINE_TAGS, MARK_TAGS, type RichElement, type RichNode } from "./parse";
 import { safeHref } from "./href";
+import { pyStrip } from "./whitespace";
 
 export const MAX_LIST_DEPTH = 4;
 // Counts strong/em/u/s/a elements enclosing the current position (independent
@@ -16,7 +17,7 @@ const br = (): RichElement => ({ tag: "br", children: [] });
 const el = (tag: string, children: RichNode[] = []): RichElement => ({ tag, children });
 
 export function hasContent(nodes: RichNode[]): boolean {
-  return nodes.some((n) => (typeof n === "string" ? n.trim() !== "" : n.tag !== "br"));
+  return nodes.some((n) => (typeof n === "string" ? pyStrip(n) !== "" : n.tag !== "br"));
 }
 // Mirrors backend _ends_with_br. Not called from inline() below — that uses
 // the running `endsWithBr` flag instead (see the comment there) — kept to
@@ -25,7 +26,7 @@ function endsWithBr(nodes: RichNode[]): boolean {
   for (let k = nodes.length - 1; k >= 0; k--) {
     const n = nodes[k];
     if (typeof n === "string") {
-      if (n.trim() === "") continue;
+      if (pyStrip(n) === "") continue;
       return false;
     }
     return n.tag === "br";
@@ -43,7 +44,7 @@ function inline(nodes: RichNode[], inLink = false, markDepth = 0): RichNode[] {
   const push = (item: RichNode) => {
     out.push(item);
     if (typeof item === "string") {
-      if (item.trim() !== "") {
+      if (pyStrip(item) !== "") {
         hasContentFlag = true;
         endsWithBrFlag = false;
       }
@@ -113,7 +114,7 @@ function tidy(nodes: RichNode[]): RichNode[] {
   flush();
   return res;
 }
-const dropEdge = (n: RichNode) => (typeof n === "string" ? n.trim() === "" : n.tag === "br");
+const dropEdge = (n: RichNode) => (typeof n === "string" ? pyStrip(n) === "" : n.tag === "br");
 function trimEdges(nodes: RichNode[]): RichNode[] {
   const res = tidy(nodes);
   while (res.length && dropEdge(res[0])) res.shift();
@@ -184,7 +185,7 @@ const liHasContent = (item: RichElement) =>
 function list(node: RichElement, depth: number): RichElement[] {
   let items: RichElement[] = [];
   for (const c of node.children) {
-    if (typeof c === "string") { if (c.trim()) items.push(li([c], depth)); continue; }
+    if (typeof c === "string") { if (pyStrip(c)) items.push(li([c], depth)); continue; }
     if (c.tag === "li") items.push(li(c.children, depth));
     else if ((c.tag === "ul" || c.tag === "ol") && items.length) items[items.length - 1].children.push(...list(c, depth + 1));
     else items.push(li([c], depth));

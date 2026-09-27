@@ -28,6 +28,7 @@ const DROP_WITH_CONTENT = new Set([
 const RAW_TEXT = new Set(["script", "style"]);
 const TAG_RE = /<(\/?)([a-zA-Z][a-zA-Z0-9:-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/y;
 const HREF_RE = /(?:^|\s)href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i;
+const LETTER_RE = /[a-zA-Z]/;
 // nbsp decodes to U+00A0 (a real non-breaking space), not a regular space —
 // mirrors Python's html.parser/html.unescape, and matches escapeText in
 // serialize.ts which only re-escapes U+00A0 back to &nbsp;.
@@ -93,10 +94,48 @@ export function parse(html: string): RichElement {
     if (lt > i) text(decodeEntities(html.slice(i, lt)));
     if (html.startsWith("<!--", lt)) { const end = html.indexOf("-->", lt + 4); i = end === -1 ? n : end + 3; continue; }
     if (html[lt + 1] === "!" || html[lt + 1] === "?") { const end = html.indexOf(">", lt); i = end === -1 ? n : end + 1; continue; }
-    TAG_RE.lastIndex = lt;
-    const m = TAG_RE.exec(html);
-    if (!m) { text("<"); i = lt + 1; continue; }
-    i = TAG_RE.lastIndex;
+
+    // A `<` only begins a tag when followed by an ASCII letter (open tag) or
+    // `/` + ASCII letter (close tag); anything else is literal text. This
+    // O(1) check avoids ever invoking the tag regex on a `<` that can't
+    // possibly start a tag (e.g. "a < b").
+    const c1 = html[lt + 1];
+    const isTagStart =
+      (c1 !== undefined && LETTER_RE.test(c1)) ||
+      (c1 === "/" && html[lt + 2] !== undefined && LETTER_RE.test(html[lt + 2]));
+    if (!isTagStart) { text("<"); i = lt + 1; continue; }
+
+    // Scan forward once, char by char, tracking quote state, to find the
+    // first `>` outside quotes — that's the tag's end. No backtracking, so
+    // this is O(remaining input) for this one `<`, not repeated per `<`.
+    let j = lt + 1;
+    let quote = "";
+    let tagEnd = -1;
+    while (j < n) {
+      const ch = html[j];
+      if (quote) {
+        if (ch === quote) quote = "";
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+      } else if (ch === ">") {
+        tagEnd = j;
+        break;
+      }
+      j++;
+    }
+    if (tagEnd === -1) {
+      // No terminating `>` anywhere in the rest of the input (or an unclosed
+      // quote swallowed it): this `<` and everything after it is literal
+      // text. Emit it and stop — never rescans the same span again.
+      text(decodeEntities(html.slice(lt)));
+      break;
+    }
+
+    const tagText = html.slice(lt, tagEnd + 1);
+    TAG_RE.lastIndex = 0;
+    const m = TAG_RE.exec(tagText);
+    if (!m) { text(decodeEntities(tagText)); i = tagEnd + 1; continue; }
+    i = tagEnd + 1;
     const tag = m[2].toLowerCase();
     const selfClosing = m[4] === "/";
     if (m[1] === "/") { close(tag); continue; }
