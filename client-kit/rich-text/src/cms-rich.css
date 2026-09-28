@@ -1,12 +1,20 @@
 /* CMS rich text base styles (ADR-0010). Theme ONLY through the --cms-rich-* variables:
    define them on :root, on your dark-theme selector and on every inverted surface.
-   Selectors are ".cms-rich <el>" (0,1,1) so Tailwind preflight (v3/v4) can't strip bullets;
-   no rule targets the wrapper itself, so classes you pass to <RichText> always apply. */
-.cms-rich > * + *,
+   Selectors are ".cms-rich <el>" (specificity (0,1,1)); the universal spacing rules below
+   are (0,1,0). Both still beat Tailwind preflight (v3/v4), which is unlayered at (0,0,1),
+   so bullets/margins survive; no rule targets the wrapper itself, so classes you pass to
+   <RichText> always apply. */
+.cms-rich:not(.cms-rich--inline) > * + *,
 .cms-rich li > * + * { margin-top: var(--cms-rich-gap, 0.75em); }
 .cms-rich p, .cms-rich ul, .cms-rich ol, .cms-rich blockquote,
 .cms-rich h2, .cms-rich h3, .cms-rich h4, .cms-rich h5, .cms-rich h6, .cms-rich hr { margin-bottom: 0; }
 .cms-rich > :first-child { margin-top: 0; }
+/* Plain-CSS sites keep UA default margins: normalize always wraps li/blockquote content in
+   <p> (or <ul>/<ol>), so their first child needs the same top-margin reset the top-level
+   :first-child rule above gives .cms-rich's own children — otherwise the browser's default
+   p/blockquote margin-top (collapsing through li) adds unwanted space Tailwind preflight
+   would have removed, but plain CSS won't. */
+.cms-rich li > :first-child, .cms-rich blockquote > :first-child { margin-top: 0; }
 .cms-rich p:empty::before { content: "\200b"; }
 .cms-rich strong { color: var(--cms-rich-strong, inherit); font-weight: var(--cms-rich-strong-weight, 700); }
 .cms-rich em { color: var(--cms-rich-em, inherit); font-style: italic; }
@@ -35,6 +43,8 @@
 .cms-rich li + li { margin-top: 0.35em; }
 .cms-rich li::marker { color: var(--cms-rich-marker, currentColor); }
 .cms-rich blockquote {
+  margin-left: 0;
+  margin-right: 0;
   border-left: 3px solid var(--cms-rich-quote-border, currentColor);
   padding-left: 1em;
   color: var(--cms-rich-quote-text, inherit);
