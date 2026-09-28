@@ -65,7 +65,7 @@ the `VERSION` file tells you (and CI's `--check` mode) whether a site is behind.
 
 `<RichText>` props: `value`, `format` (`"inline" \| "rich"`, default `"rich"`), `as` (element/component,
 default `div` for rich / `span` for inline), `className`, `id`, `headingOffset` (shifts `h2`–`h4` up by
-N levels, clamped to `h6` — use `1` for prose rendered inside a card so it doesn't outrank the page's
+N levels, clamped to `h1`–`h6` — use `1` for prose rendered inside a card so it doesn't outrank the page's
 own `h1`/`h2`), `links` (`false` renders anchors as `<span class="cms-rich-link">` instead of `<a>` —
 use this whenever the rich text sits inside an element that is itself a link or button, since nested
 `<a>` is invalid HTML), `linkTarget` (`"auto" | "self" | "blank"`, default `"auto"` — external
