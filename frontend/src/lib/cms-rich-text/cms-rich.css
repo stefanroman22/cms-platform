@@ -1,0 +1,54 @@
+/* Vendored from CMS client-kit/rich-text v1.0.0 — do not edit; re-sync instead. */
+/* CMS rich text base styles (ADR-0010). Theme ONLY through the --cms-rich-* variables:
+   define them on :root, on your dark-theme selector and on every inverted surface.
+   Selectors are ".cms-rich <el>" (specificity (0,1,1)); the universal spacing rules below
+   are (0,1,0). Both still beat Tailwind preflight (v3/v4), which is unlayered at (0,0,1),
+   so bullets/margins survive; no rule targets the wrapper itself, so classes you pass to
+   <RichText> always apply. */
+.cms-rich:not(.cms-rich--inline) > * + *,
+.cms-rich li > * + * { margin-top: var(--cms-rich-gap, 0.75em); }
+.cms-rich p, .cms-rich ul, .cms-rich ol, .cms-rich blockquote,
+.cms-rich h2, .cms-rich h3, .cms-rich h4, .cms-rich h5, .cms-rich h6, .cms-rich hr { margin-bottom: 0; }
+.cms-rich > :first-child { margin-top: 0; }
+/* Plain-CSS sites keep UA default margins: normalize always wraps li/blockquote content in
+   <p> (or <ul>/<ol>), so their first child needs the same top-margin reset the top-level
+   :first-child rule above gives .cms-rich's own children — otherwise the browser's default
+   p/blockquote margin-top (collapsing through li) adds unwanted space Tailwind preflight
+   would have removed, but plain CSS won't. */
+.cms-rich li > :first-child, .cms-rich blockquote > :first-child { margin-top: 0; }
+.cms-rich p:empty::before { content: "\200b"; }
+.cms-rich strong { color: var(--cms-rich-strong, inherit); font-weight: var(--cms-rich-strong-weight, 700); }
+.cms-rich em { color: var(--cms-rich-em, inherit); font-style: italic; }
+.cms-rich u { text-decoration-line: underline; text-decoration-color: var(--cms-rich-underline, currentColor); text-underline-offset: 0.15em; }
+.cms-rich s { text-decoration-line: line-through; }
+.cms-rich a, .cms-rich .cms-rich-link {
+  color: var(--cms-rich-link, currentColor);
+  text-decoration: var(--cms-rich-link-decoration, underline);
+  text-underline-offset: 0.18em;
+}
+.cms-rich a:hover { color: var(--cms-rich-link-hover, var(--cms-rich-link, currentColor)); }
+.cms-rich a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 2px; }
+.cms-rich h2, .cms-rich h3, .cms-rich h4, .cms-rich h5, .cms-rich h6 {
+  color: var(--cms-rich-heading, inherit);
+  font-family: var(--cms-rich-heading-font, inherit);
+  font-weight: var(--cms-rich-heading-weight, 700);
+  line-height: 1.25;
+}
+.cms-rich h2 { font-size: 1.35em; }
+.cms-rich h3 { font-size: 1.2em; }
+.cms-rich h4, .cms-rich h5, .cms-rich h6 { font-size: 1.05em; }
+.cms-rich ul, .cms-rich ol { padding-left: var(--cms-rich-list-indent, 1.4em); }
+.cms-rich ul { list-style: disc; }
+.cms-rich ul ul { list-style: circle; }
+.cms-rich ol { list-style: decimal; }
+.cms-rich li + li { margin-top: 0.35em; }
+.cms-rich li::marker { color: var(--cms-rich-marker, currentColor); }
+.cms-rich blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  border-left: 3px solid var(--cms-rich-quote-border, currentColor);
+  padding-left: 1em;
+  color: var(--cms-rich-quote-text, inherit);
+  font-style: italic;
+}
+.cms-rich hr { border: 0; border-top: 1px solid var(--cms-rich-rule, currentColor); opacity: 0.4; }
