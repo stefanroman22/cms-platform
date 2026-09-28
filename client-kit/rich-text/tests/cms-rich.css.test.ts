@@ -1,3 +1,9 @@
+// @ts-nocheck — this project has no @types/node (it's a browser-facing kit;
+// tsconfig's lib is ES2022+DOM only), but this file needs node:fs/node:path/
+// process to read the stylesheet as text. Scoped to this file alone rather
+// than adding @types/node as a real dependency or touching the shared
+// tsconfig for every other file under tests/ (same convention as
+// _generate-fuzz-vectors.test.ts).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
