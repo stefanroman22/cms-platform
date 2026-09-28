@@ -13,15 +13,29 @@ export function LinkPopover({ editor, onClose }: { editor: Editor; onClose: () =
   const boxRef = useRef<HTMLDivElement>(null);
   const id = useId();
 
+  // The parent (Toolbar) re-renders on every keystroke's editor-state read and
+  // passes a fresh `onClose` arrow each time; keeping it in a ref (updated
+  // every render, not just on change) means the outside-click listener below
+  // never needs to be torn down and re-added mid-typing.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  // Mount-only: focusing/selecting on every render (e.g. because `onClose`'s
+  // identity changed) would blow away whatever the user had already typed.
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
+  }, []);
+
+  useEffect(() => {
     const onDown = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) onClose();
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) onCloseRef.current();
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [onClose]);
+  }, []);
 
   function apply() {
     const href = normalizeLinkInput(value);
@@ -59,6 +73,13 @@ export function LinkPopover({ editor, onClose }: { editor: Editor; onClose: () =
       aria-label="Edit link"
       className="absolute left-1.5 top-full z-20 mt-1 w-80 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
       onKeyDown={(e) => {
+        // Never let the toolbar's roving-tabindex handler (role="toolbar",
+        // an ancestor) see arrow keys typed/pressed in here — it would hijack
+        // focus away from this popover's own input/buttons.
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          e.stopPropagation();
+          return;
+        }
         if (e.key === "Escape") {
           e.preventDefault();
           onClose();

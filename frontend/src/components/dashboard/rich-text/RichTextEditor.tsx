@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import { Fragment, Slice, type ResolvedPos } from "@tiptap/pm/model";
 import { normalizeInline, parse, serialize } from "@/lib/cms-rich-text";
 import { inlineExtensions, richExtensions } from "./extensions";
 import { fromStored, toStored, type RichMode } from "./serialize";
@@ -24,6 +25,26 @@ export interface RichTextEditorProps {
 
 /** Inline paste: an inline document holds one paragraph, so flatten blocks to <br>. */
 const inlinePaste = (html: string) => `<p>${serialize(normalizeInline(parse(html).children))}</p>`;
+
+/**
+ * Inline mode plain-text paste: the document allows exactly one paragraph, so
+ * ProseMirror's default multi-<p> fallback (one block per line) silently
+ * drops every line after the first — there's nowhere for the extra
+ * paragraphs to go. Instead, return a single flat inline slice with every
+ * line joined by a hard break (a blank line — two consecutive "\n" — yields
+ * two consecutive breaks), so it merges straight into the current paragraph.
+ */
+function inlineClipboardTextParser(text: string, $context: ResolvedPos) {
+  const schema = $context.parent.type.schema;
+  const marks = $context.marks();
+  const nodes = text
+    .split(/\r\n?|\n/)
+    .flatMap((part, i) => [
+      ...(i > 0 ? [schema.nodes.hardBreak.create()] : []),
+      ...(part ? [schema.text(part, marks)] : []),
+    ]);
+  return new Slice(Fragment.from(nodes), 0, 0);
+}
 
 export function RichTextEditor({
   value,
@@ -59,6 +80,7 @@ export function RichTextEditor({
         }`,
       },
       transformPastedHTML: mode === "inline" ? inlinePaste : undefined,
+      clipboardTextParser: mode === "inline" ? inlineClipboardTextParser : undefined,
       handleKeyDown: (_view, event) => {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
           event.preventDefault();
@@ -79,7 +101,10 @@ export function RichTextEditor({
     if (editor) onReady?.(editor);
   }, [editor, onReady]);
   useEffect(() => {
-    editor?.setEditable(!disabled);
+    // `false` = don't emit an "update" event: setEditable would otherwise fire
+    // onChange with the (canonicalized) current content on mount and on every
+    // disabled toggle, with no user edit — breaking dirty-tracking callers.
+    editor?.setEditable(!disabled, false);
   }, [editor, disabled]);
 
   const limit = RICH_LIMITS[mode];
@@ -99,7 +124,7 @@ export function RichTextEditor({
           className={`px-3 pb-1.5 text-right text-[11px] ${over ? "text-red-600 dark:text-red-400" : "text-zinc-400"}`}
         >
           {length.toLocaleString()} / {limit.toLocaleString()} characters incl. formatting
-          {over && " — too long, the save will be rejected"}
+          {over && " — Too long — the save will be rejected"}
         </p>
       )}
     </div>

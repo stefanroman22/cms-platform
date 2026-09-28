@@ -14,6 +14,21 @@ describe("toStored", () => {
   ])("%s (%s)", (html, mode, expected) =>
     expect(toStored(html, mode as "inline" | "rich")).toBe(expected)
   );
+
+  it("canonicalizes: only href survives on a pasted <a> (target/rel/class/title stripped)", () => {
+    expect(
+      toStored(
+        '<p><a href="https://x.ro" target="_blank" rel="noopener" class="c" title="t">x</a></p>',
+        "rich"
+      )
+    ).toBe('<p><a href="https://x.ro">x</a></p>');
+  });
+
+  it("canonicalizes inline mode the same way", () => {
+    expect(
+      toStored('<p><a href="https://x.ro" target="_blank" rel="noopener">x</a></p>', "inline")
+    ).toBe('<a href="https://x.ro">x</a>');
+  });
 });
 
 describe("fromStored", () => {
