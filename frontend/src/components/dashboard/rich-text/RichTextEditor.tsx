@@ -124,7 +124,7 @@ export function RichTextEditor({
           className={`px-3 pb-1.5 text-right text-[11px] ${over ? "text-red-600 dark:text-red-400" : "text-zinc-400"}`}
         >
           {length.toLocaleString()} / {limit.toLocaleString()} characters incl. formatting
-          {over && " — Too long — the save will be rejected"}
+          {over && ". Too long — the save will be rejected"}
         </p>
       )}
     </div>

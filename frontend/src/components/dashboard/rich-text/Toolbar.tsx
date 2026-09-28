@@ -102,6 +102,8 @@ export function Toolbar({
     Array.from(
       barRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), select") ?? []
     );
+  const disabledItems = () =>
+    Array.from(barRef.current?.querySelectorAll<HTMLElement>("button:disabled") ?? []);
 
   // Real roving tabindex: exactly one control is in the page's Tab order at a
   // time (the last-focused one, or the first by default); Tab enters/leaves
@@ -110,6 +112,16 @@ export function Toolbar({
   // Undo when the history is empty) never leaves the toolbar with zero
   // tabbable controls.
   useEffect(() => {
+    // A disabled control keeps the browser's native default tabIndex (0)
+    // until something explicitly sets it — it's excluded from `items()`
+    // below, so the roving loop never touches it while disabled. Force it to
+    // -1 now, so that if it later becomes enabled (e.g. Undo once there's
+    // history), it doesn't join `items()` still carrying that stale 0 and
+    // get mistaken for "the" current stop ahead of whatever the user
+    // actually last focused.
+    disabledItems().forEach((el) => {
+      el.tabIndex = -1;
+    });
     const els = items();
     if (!els.length) return;
     const current = els.find((el) => el.tabIndex === 0) ?? els[0];
@@ -140,14 +152,23 @@ export function Toolbar({
   };
 
   return (
-    <div className="relative">
+    // `sticky` (not `relative`) is the positioning context here: sticky is
+    // itself a positioned element, so it still anchors the popover's
+    // `absolute`, exactly like `relative` did — but unlike a plain `relative`
+    // wrapper sized to the toolbar's own height, `sticky` needs room to move
+    // within a taller ancestor to actually stick, and that ancestor is this
+    // div's parent, the full (tall) editor container. Putting `sticky` on an
+    // inner div whose own parent was only as tall as the toolbar (the
+    // previous structure) gave it nowhere to travel, so it scrolled away
+    // instead of staying pinned in a long field.
+    <div className="sticky top-0 z-10 rounded-t-lg border-b border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
       <div
         ref={barRef}
         role="toolbar"
         aria-label="Formatting"
         onKeyDown={onKeyDown}
         onFocus={onFocus}
-        className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 rounded-t-lg border-b border-zinc-200 bg-white px-1.5 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+        className="flex flex-wrap items-center gap-0.5 px-1.5 py-1"
       >
         <Btn
           label="Undo"

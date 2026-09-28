@@ -284,6 +284,45 @@ describe("RichTextEditor", () => {
     expect(controls.filter((el) => el !== bold && el.tabIndex === 0)).toHaveLength(0);
   });
 
+  it("does not lose the remembered Tab stop when a previously-disabled control becomes enabled", async () => {
+    const { editor } = await setup({ value: "<p>word</p>" });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    const bold = screen.getByRole("button", { name: "Bold" });
+    bold.focus();
+    expect(bold.tabIndex).toBe(0);
+
+    // An edit: enables Undo, which was disabled (and so excluded from the
+    // roving list, keeping the browser's native default tabIndex) until now.
+    // Bold — not Undo — must remain the one Tab-reachable control.
+    act(() => {
+      editor.commands.toggleBold();
+    });
+
+    const toolbar = screen.getByRole("toolbar");
+    const enabledControls = within(toolbar)
+      .getAllByRole("button")
+      .concat(within(toolbar).queryAllByRole("combobox"))
+      .filter((el) => !el.hasAttribute("disabled"));
+    expect(enabledControls.filter((el) => el.tabIndex === 0)).toEqual([bold]);
+  });
+
+  it("toolbar's sticky wrapper sits directly in the tall editor container (has room to stick)", async () => {
+    const { editor } = await setup({ value: "<p>x</p>" });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    const toolbar = screen.getByRole("toolbar");
+    const stickyWrapper = toolbar.parentElement;
+    expect(stickyWrapper).not.toBeNull();
+    expect(stickyWrapper!.className).toMatch(/\bsticky\b/);
+    // Its own parent must be the whole (tall) editor container — the one
+    // that also holds EditorContent below it — not a wrapper sized to the
+    // toolbar alone, which would give `sticky` nowhere to travel.
+    expect(stickyWrapper!.parentElement).toHaveAttribute("data-mode", "rich");
+  });
+
   it("arrow keys inside the open link popover stay inside it (not hijacked by the toolbar)", async () => {
     const { editor } = await setup({ value: "<p>site</p>" });
     act(() => {
