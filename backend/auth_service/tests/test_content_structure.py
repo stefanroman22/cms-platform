@@ -105,3 +105,13 @@ def test_admin_formats_validated_and_pruned_to_entries():
 def test_other_types_untouched():
     c = {"title": "x"}
     assert apply_structure_rules("text_block", c, is_admin=False, stored=()) is c
+
+
+def test_empty_draft_formats_is_authoritative_over_published():
+    out = apply_structure_rules(
+        "key_value",
+        {"entries": {"bio": "x"}},
+        is_admin=False,
+        stored=({"_formats": {}}, {"_formats": {"bio": "rich"}}),
+    )
+    assert out["_formats"] == {}
