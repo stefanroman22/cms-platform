@@ -1,10 +1,17 @@
 import type { ComponentType } from "react";
+import type { FieldFormat } from "@/components/dashboard/rich-text/ContentField";
 
 export interface EditorProps {
   initialContent: Record<string, unknown>;
   onChange: (content: Record<string, unknown>) => void;
   /** Phase 16: upload a file and receive its public URL. */
   onUpload?: (file: File) => Promise<string>;
+  /** Project has rich text enabled (rich_text_version >= 1). */
+  richText?: boolean;
+  /** Per-field formats from the service detail (spec section 5.7). */
+  fieldFormats?: Record<string, FieldFormat>;
+  /** Caller is an admin and may change field formats. */
+  canEditStructure?: boolean;
 }
 
 // Dynamically import to keep each editor's bundle separate

@@ -8,6 +8,7 @@ import { useQuery } from "@/hooks/useQuery";
 import { ServiceIcon } from "@/components/dashboard/ServiceIcon";
 import { EDITOR_MAP } from "@/components/dashboard/editors";
 import { LocaleTabs } from "@/components/dashboard/LocaleTabs";
+import type { FieldFormat } from "@/components/dashboard/rich-text/ContentField";
 import {
   dashboardSectionCardCn,
   dashboardErrorBannerCn,
@@ -28,6 +29,9 @@ interface ServiceDetail {
   default_locale?: string;
   locales?: string[];
   translation_status?: Record<string, string> | null;
+  rich_text_version?: number;
+  field_formats?: Record<string, FieldFormat>;
+  can_edit_structure?: boolean;
 }
 
 function fetchServiceDetail(
@@ -361,9 +365,13 @@ export function ServiceEditor({
               transition={{ duration: reduce ? 0.12 : 0.2, ease: [0.2, 0, 0, 1] }}
             >
               <EditorComponent
+                key={service.last_updated ?? ""}
                 initialContent={service.content}
                 onChange={handleChange}
                 onUpload={handleUpload}
+                richText={(service.rich_text_version ?? 0) >= 1}
+                fieldFormats={service.field_formats ?? {}}
+                canEditStructure={!!service.can_edit_structure}
               />
             </motion.div>
           </AnimatePresence>
