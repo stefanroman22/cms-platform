@@ -16,15 +16,27 @@ test.describe("CMS edit + save persistence", () => {
     await page.goto("/dashboard/e2e-test-project/e2e_text");
 
     const stamp = `E2E ${Date.now()}`;
-    // TextBlockEditor's <label>Title</label> is not associated to the input
-    // via htmlFor, so getByLabel("Title") finds nothing. Match by placeholder.
-    const titleField = page.getByPlaceholder("Enter section title…");
-    await titleField.fill(stamp);
+    // Rich-text projects (rich_text_version 1, ADR-0010) edit the title in a
+    // TipTap contenteditable (role=textbox, aria-label "Title"); legacy projects
+    // keep the plain <input>, matched by placeholder.
+    const richTitle = page.getByRole("textbox", { name: "Title" });
+    const isRich = (await richTitle.count()) > 0;
+    if (isRich) {
+      await richTitle.click();
+      await page.keyboard.press("Control+A");
+      await page.keyboard.type(stamp);
+    } else {
+      await page.getByPlaceholder("Enter section title…").fill(stamp);
+    }
 
     await page.getByRole("button", { name: /^Save$/ }).click();
     await expect(page.getByText(/Changes saved successfully/i)).toBeVisible();
 
     await page.reload();
-    await expect(page.getByPlaceholder("Enter section title…")).toHaveValue(stamp);
+    if (isRich) {
+      await expect(page.getByRole("textbox", { name: "Title" })).toHaveText(stamp);
+    } else {
+      await expect(page.getByPlaceholder("Enter section title…")).toHaveValue(stamp);
+    }
   });
 });
