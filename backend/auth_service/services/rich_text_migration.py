@@ -79,14 +79,19 @@ def unknown_config_refs(services: list[dict], cfg: MigrationConfig) -> list[str]
 
 
 def _entries_dict(entries: object) -> dict:
+    """Mirror of routers/content.py::_normalise_published's key_value flattening."""
     if isinstance(entries, dict):
         return entries
     if isinstance(entries, list):
-        return {
-            e["key"]: e.get("value", "")
-            for e in entries
-            if isinstance(e, dict) and isinstance(e.get("key"), str) and e["key"].strip()
-        }
+        flattened: dict = {}
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            key = item.get("key")
+            if not isinstance(key, str) or not key.strip():
+                continue
+            flattened[key.strip()] = item.get("value")
+        return flattened
     return {}
 
 
@@ -101,9 +106,9 @@ def _restructure(stype: str, key: str, content: object, cfg: MigrationConfig) ->
             for f in c["_schema"]
         ]
     if stype == "key_value":
-        if "entries" in c:
-            c["entries"] = _entries_dict(c["entries"])
         if key in cfg.key_values:
+            if "entries" in c:
+                c["entries"] = _entries_dict(c["entries"])
             c["_formats"] = {**(c.get("_formats") or {}), **cfg.key_values[key]}
     return c
 
@@ -193,8 +198,10 @@ def _check_id(value: str) -> str:
 
 
 def _lit(obj: object, tag: str) -> str:
+    if obj is None:
+        return "null"
     s = json.dumps(obj, ensure_ascii=False)
-    if f"${tag}$" in s:
+    if f"${tag}$" in s or f"$mig_{tag}$" in s or f"$rst_{tag}$" in s:
         raise ValueError("dollar-quote collision; re-run")
     return f"${tag}${s}${tag}$::jsonb"
 
@@ -252,8 +259,12 @@ def restore_sql(project_id: str, rows: list[dict]) -> str:
             f"translation_meta = {_lit(r.get('translation_meta') or {}, tag)}, updated_at = now() "
             f"where id = '{rid}';"
         )
+        lines.append(
+            f"  if not found then raise exception 'rich-text restore: row {rid} not found'; end if;"
+        )
     lines += [
         f"  update projects set rich_text_version = 0, updated_at = now() where id = '{pid}';",
+        "  if not found then raise exception 'rich-text restore: project not found'; end if;",
         "end",
         f"$rst_{tag}$;",
     ]

@@ -20,7 +20,14 @@ sys.path.insert(0, str(BACKEND))
 WORK = BACKEND / "scripts" / ".rich-text-work"
 
 
+def _configure_streams() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def main() -> int:
+    _configure_streams()
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
