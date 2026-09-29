@@ -14,6 +14,9 @@ BACKEND_VENV ?= backend/venv
 # Auto-detect Windows Scripts/ vs Unix bin/.
 PY_BIN := $(shell test -d "$(BACKEND_VENV)/Scripts" && echo "$(BACKEND_VENV)/Scripts" || echo "$(BACKEND_VENV)/bin")
 
+KIT_DIR := client-kit/rich-text
+KIT_DASHBOARD_DIR := frontend/src/lib/cms-rich-text
+
 # ── Help ─────────────────────────────────────────────────────────────────
 .PHONY: help
 help: ## Show this help
@@ -26,6 +29,7 @@ install: ## Install all dependencies (backend, agent, frontend, pre-commit)
 	$(PY_BIN)/pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 	$(PY_BIN)/pip install -r "agents/CMS Connector - Website/requirements.txt" -r "agents/CMS Connector - Website/requirements-dev.txt"
 	cd frontend && npm ci
+	cd $(KIT_DIR) && npm ci
 	$(PY) -m pip install --user pre-commit==4.0.1
 	pre-commit install
 
@@ -41,7 +45,7 @@ dev: ## Print the two terminal commands to run for backend + frontend dev server
 	@echo "  Terminal 2:  cd frontend && npm run dev"
 
 .PHONY: test
-test: test-backend test-agent test-frontend ## Run every test suite
+test: test-backend test-agent test-frontend test-kit ## Run every test suite
 
 .PHONY: test-backend
 test-backend: ## Run the backend pytest suite
@@ -54,6 +58,18 @@ test-agent: ## Run the CMS Connector agent test suite
 .PHONY: test-frontend
 test-frontend: ## Run the frontend vitest suite
 	cd frontend && npm test
+
+.PHONY: test-kit
+test-kit: ## Run the rich-text client kit tests
+	cd $(KIT_DIR) && npm test && npx tsc --noEmit
+
+.PHONY: kit-sync
+kit-sync: ## Vendor the rich-text kit into the dashboard
+	node $(KIT_DIR)/scripts/sync-rich-text-kit.mjs $(KIT_DASHBOARD_DIR)
+
+.PHONY: kit-sync-check
+kit-sync-check: ## Fail if the dashboard's vendored kit is out of date
+	node $(KIT_DIR)/scripts/sync-rich-text-kit.mjs $(KIT_DASHBOARD_DIR) --check
 
 # ── Lint + format ────────────────────────────────────────────────────────
 .PHONY: lint
@@ -76,4 +92,4 @@ docs-check: ## Fail if agent-facing docs reference missing paths, make targets o
 	$(PY_BIN)/python scripts/docs_check.py
 
 .PHONY: ci
-ci: lint test docs-check ## Run the same checks as GitHub Actions
+ci: lint test kit-sync-check docs-check ## Run the same checks as GitHub Actions

@@ -14,16 +14,19 @@ from __future__ import annotations
 import hashlib
 
 # Repeater field types whose values are translatable text.
-_TRANSLATABLE_FIELD_TYPES = {"string", "richtext", "tags"}
+_TRANSLATABLE_FIELD_TYPES = {"string", "inline", "richtext", "tags"}
 
 
-def _repeater_schema(content: dict) -> dict[str, str | None]:
+def repeater_schema(content: dict) -> dict[str, str | None]:
     """Map of {field key: field type} from a repeater content blob's _schema."""
     return {
         field["key"]: field.get("type")
         for field in (content.get("_schema") or [])
         if isinstance(field, dict) and "key" in field
     }
+
+
+_repeater_schema = repeater_schema  # backwards-compatible alias
 
 
 def src_hash(text: str) -> str:
@@ -68,7 +71,7 @@ def segments_of(service_type: str, content: dict) -> dict[str, str]:
                     out[f"entries.{key}"] = val
 
     elif service_type == "repeater":
-        schema = _repeater_schema(content)
+        schema = repeater_schema(content)
         for idx, item in enumerate(content.get("items") or []):
             if not isinstance(item, dict):
                 continue
@@ -119,7 +122,7 @@ def apply_segments(content: dict, service_type: str, values: dict[str, str]) -> 
                     entries[key] = values[path]
 
     elif service_type == "repeater":
-        schema = _repeater_schema(content)
+        schema = repeater_schema(content)
         for idx, item in enumerate(content.get("items") or []):
             if not isinstance(item, dict):
                 continue
@@ -140,7 +143,24 @@ def apply_segments(content: dict, service_type: str, values: dict[str, str]) -> 
     return content
 
 
-def formats_of(service_type: str, content: dict) -> dict[str, str]:
+def formats_of(service_type: str, content: dict, rich_text_version: int = 0) -> dict[str, str]:
+    """Return {leaf_path: fmt} mirroring segments_of's paths.
+
+    Version ≥ 1 (ADR-0010): inline/rich leaves are "html", everything else "text".
+    Version 0: the pre-rich-text behaviour (richtext leaves "markdown")."""
+    if rich_text_version >= 1:
+        from .rich_text import format_of
+
+        return {
+            path: (
+                "html" if format_of(service_type, path, content) in ("inline", "rich") else "text"
+            )
+            for path in segments_of(service_type, content)
+        }
+    return _legacy_formats_of(service_type, content)
+
+
+def _legacy_formats_of(service_type: str, content: dict) -> dict[str, str]:
     """Return {leaf_path: fmt} mirroring segments_of's paths, where fmt is
     'markdown' for richtext leaves (text_block.body, repeater richtext fields)
     and 'text' otherwise. Lets the translator know what markup to preserve."""
@@ -170,7 +190,7 @@ def formats_of(service_type: str, content: dict) -> dict[str, str]:
                     fmts[f"entries.{key}"] = "text"
 
     elif service_type == "repeater":
-        schema = _repeater_schema(content)
+        schema = repeater_schema(content)
         for idx, item in enumerate(content.get("items") or []):
             if not isinstance(item, dict):
                 continue

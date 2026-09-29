@@ -1,0 +1,19 @@
+{
+  "name": "@cms/rich-text-kit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Vendored rich-text renderer for CMS client sites (ADR-0010). Zero runtime deps besides React.",
+  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit" },
+  "peerDependencies": { "react": ">=18" },
+  "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^25.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.4"
+  }
+}

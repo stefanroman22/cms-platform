@@ -134,6 +134,14 @@ body {
   }
 }
 
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: rgb(161 161 170);
+}
+
 .animate-fade-down {
   animation: fadeDown 0.4s ease-out both;
 }

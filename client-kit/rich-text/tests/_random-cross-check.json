@@ -1,0 +1,242 @@
+[
+  {
+    "name": "random-0-inline",
+    "fmt": "inline",
+    "input": "<p><u><u><3</u></u></p>",
+    "expected": "<u><u>&lt;3</u></u>"
+  },
+  {
+    "name": "random-0-rich",
+    "fmt": "rich",
+    "input": "<p><u><u><3</u></u></p>",
+    "expected": "<p><u><u>&lt;3</u></u></p>"
+  },
+  {
+    "name": "random-1-inline",
+    "fmt": "inline",
+    "input": "x&y<h2><strong>  spaced  </strong></h2>",
+    "expected": "x&amp;y<br><strong> spaced </strong>"
+  },
+  {
+    "name": "random-1-rich",
+    "fmt": "rich",
+    "input": "x&y<h2><strong>  spaced  </strong></h2>",
+    "expected": "<p>x&amp;y</p><h2><strong> spaced </strong></h2>"
+  },
+  {
+    "name": "random-2-inline",
+    "fmt": "inline",
+    "input": "<strong><s>text</s></strong>",
+    "expected": "<strong><s>text</s></strong>"
+  },
+  {
+    "name": "random-2-rich",
+    "fmt": "rich",
+    "input": "<strong><s>text</s></strong>",
+    "expected": "<p><strong><s>text</s></strong></p>"
+  },
+  {
+    "name": "random-3-inline",
+    "fmt": "inline",
+    "input": "<em><em>hello</em></em><strong><s>hello</s></strong><s><strong>rich</strong></s>",
+    "expected": "<em><em>hello</em></em><strong><s>hello</s></strong><s><strong>rich</strong></s>"
+  },
+  {
+    "name": "random-3-rich",
+    "fmt": "rich",
+    "input": "<em><em>hello</em></em><strong><s>hello</s></strong><s><strong>rich</strong></s>",
+    "expected": "<p><em><em>hello</em></em><strong><s>hello</s></strong><s><strong>rich</strong></s></p>"
+  },
+  {
+    "name": "random-4-inline",
+    "fmt": "inline",
+    "input": "<ul><li><em><strong>  spaced  </strong></em></li><li><h2><blockquote><strong><s><3</s></strong></blockquote></h2></li><li><blockquote><h2><a href=\"javascript:x\"><s>x&y</s></a></h2></blockquote></li></ul>",
+    "expected": "<em><strong> spaced </strong></em><br><strong><s>&lt;3</s></strong><br><s>x&amp;y</s>"
+  },
+  {
+    "name": "random-4-rich",
+    "fmt": "rich",
+    "input": "<ul><li><em><strong>  spaced  </strong></em></li><li><h2><blockquote><strong><s><3</s></strong></blockquote></h2></li><li><blockquote><h2><a href=\"javascript:x\"><s>x&y</s></a></h2></blockquote></li></ul>",
+    "expected": "<ul><li><p><em><strong> spaced </strong></em></p></li><li><p><strong><s>&lt;3</s></strong></p></li></ul>"
+  },
+  {
+    "name": "random-5-inline",
+    "fmt": "inline",
+    "input": "<blockquote>hello</blockquote>",
+    "expected": "hello"
+  },
+  {
+    "name": "random-5-rich",
+    "fmt": "rich",
+    "input": "<blockquote>hello</blockquote>",
+    "expected": "<blockquote><p>hello</p></blockquote>"
+  },
+  {
+    "name": "random-6-inline",
+    "fmt": "inline",
+    "input": "<a href=\"#a\"><s><a href=\"/p\">a b</a></s></a><blockquote>x&y</blockquote>",
+    "expected": "<a href=\"#a\"><s>a b</s></a><br>x&amp;y"
+  },
+  {
+    "name": "random-6-rich",
+    "fmt": "rich",
+    "input": "<a href=\"#a\"><s><a href=\"/p\">a b</a></s></a><blockquote>x&y</blockquote>",
+    "expected": "<p><a href=\"#a\"><s>a b</s></a></p><blockquote><p>x&amp;y</p></blockquote>"
+  },
+  {
+    "name": "random-7-inline",
+    "fmt": "inline",
+    "input": "<a href=\"/p\"><em><em>  spaced  </em></em></a><u><em><em>hello</em></em></u>",
+    "expected": "<a href=\"/p\"><em><em> spaced </em></em></a><u><em><em>hello</em></em></u>"
+  },
+  {
+    "name": "random-7-rich",
+    "fmt": "rich",
+    "input": "<a href=\"/p\"><em><em>  spaced  </em></em></a><u><em><em>hello</em></em></u>",
+    "expected": "<p><a href=\"/p\"><em><em> spaced </em></em></a><u><em><em>hello</em></em></u></p>"
+  },
+  {
+    "name": "random-8-inline",
+    "fmt": "inline",
+    "input": "<u><s>world</s></u>",
+    "expected": "<u><s>world</s></u>"
+  },
+  {
+    "name": "random-8-rich",
+    "fmt": "rich",
+    "input": "<u><s>world</s></u>",
+    "expected": "<p><u><s>world</s></u></p>"
+  },
+  {
+    "name": "random-9-inline",
+    "fmt": "inline",
+    "input": "<h2><em><em><s>  spaced  </s></em></em></h2><a href=\"https://x.ro\"><em>  spaced  </em></a>",
+    "expected": "<em><em><s> spaced </s></em></em><br><a href=\"https://x.ro\"><em> spaced </em></a>"
+  },
+  {
+    "name": "random-9-rich",
+    "fmt": "rich",
+    "input": "<h2><em><em><s>  spaced  </s></em></em></h2><a href=\"https://x.ro\"><em>  spaced  </em></a>",
+    "expected": "<h2><em><em><s> spaced </s></em></em></h2><p><a href=\"https://x.ro\"><em> spaced </em></a></p>"
+  },
+  {
+    "name": "random-10-inline",
+    "fmt": "inline",
+    "input": "<strong>hello</strong><strong>CMS</strong>",
+    "expected": "<strong>hello</strong><strong>CMS</strong>"
+  },
+  {
+    "name": "random-10-rich",
+    "fmt": "rich",
+    "input": "<strong>hello</strong><strong>CMS</strong>",
+    "expected": "<p><strong>hello</strong><strong>CMS</strong></p>"
+  },
+  {
+    "name": "random-11-inline",
+    "fmt": "inline",
+    "input": "CMS<h2><blockquote><h2><em><u>text</u></em></h2></blockquote></h2><blockquote><s><u>hello</u></s></blockquote>",
+    "expected": "CMS<br><em><u>text</u></em><br><s><u>hello</u></s>"
+  },
+  {
+    "name": "random-11-rich",
+    "fmt": "rich",
+    "input": "CMS<h2><blockquote><h2><em><u>text</u></em></h2></blockquote></h2><blockquote><s><u>hello</u></s></blockquote>",
+    "expected": "<p>CMS</p><h2><em><u>text</u></em></h2><blockquote><p><s><u>hello</u></s></p></blockquote>"
+  },
+  {
+    "name": "random-12-inline",
+    "fmt": "inline",
+    "input": "<h2><u>hello</u></h2>",
+    "expected": "<u>hello</u>"
+  },
+  {
+    "name": "random-12-rich",
+    "fmt": "rich",
+    "input": "<h2><u>hello</u></h2>",
+    "expected": "<h2><u>hello</u></h2>"
+  },
+  {
+    "name": "random-13-inline",
+    "fmt": "inline",
+    "input": "<em><3</em>texthello",
+    "expected": "<em>&lt;3</em>texthello"
+  },
+  {
+    "name": "random-13-rich",
+    "fmt": "rich",
+    "input": "<em><3</em>texthello",
+    "expected": "<p><em>&lt;3</em>texthello</p>"
+  },
+  {
+    "name": "random-14-inline",
+    "fmt": "inline",
+    "input": "<em>x&y</em><a href=\"//evil.com\">rich</a><p><blockquote>a b</blockquote></p>",
+    "expected": "<em>x&amp;y</em>rich<br>a b"
+  },
+  {
+    "name": "random-14-rich",
+    "fmt": "rich",
+    "input": "<em>x&y</em><a href=\"//evil.com\">rich</a><p><blockquote>a b</blockquote></p>",
+    "expected": "<p><em>x&amp;y</em>rich</p><blockquote><p>a b</p></blockquote>"
+  },
+  {
+    "name": "random-15-inline",
+    "fmt": "inline",
+    "input": "<h2><s>CMS</s></h2>",
+    "expected": "<s>CMS</s>"
+  },
+  {
+    "name": "random-15-rich",
+    "fmt": "rich",
+    "input": "<h2><s>CMS</s></h2>",
+    "expected": "<h2><s>CMS</s></h2>"
+  },
+  {
+    "name": "random-16-inline",
+    "fmt": "inline",
+    "input": "<ul><li><blockquote>CMS</blockquote></li><li>hello</li><li><u>rich</u></li></ul><blockquote><ul><li><h2>text</h2></li><li><em>x&y</em></li><li><p><s><em>  spaced  </em></s></p></li></ul></blockquote>CMS",
+    "expected": "CMS<br>hello<br><u>rich</u><br>text<br><em>x&amp;y</em><br><s><em> spaced </em></s><br>CMS"
+  },
+  {
+    "name": "random-16-rich",
+    "fmt": "rich",
+    "input": "<ul><li><blockquote>CMS</blockquote></li><li>hello</li><li><u>rich</u></li></ul><blockquote><ul><li><h2>text</h2></li><li><em>x&y</em></li><li><p><s><em>  spaced  </em></s></p></li></ul></blockquote>CMS",
+    "expected": "<ul><li><p>CMS</p></li><li><p>hello</p></li><li><p><u>rich</u></p></li></ul><blockquote><ul><li><p>text</p></li><li><p><em>x&amp;y</em></p></li><li><p><s><em> spaced </em></s></p></li></ul></blockquote><p>CMS</p>"
+  },
+  {
+    "name": "random-17-inline",
+    "fmt": "inline",
+    "input": "<em><strong>a b</strong></em><p><blockquote><blockquote><u><u><s>a b</s></u></u></blockquote></blockquote></p>text",
+    "expected": "<em><strong>a b</strong></em><br><u><u><s>a b</s></u></u><br>text"
+  },
+  {
+    "name": "random-17-rich",
+    "fmt": "rich",
+    "input": "<em><strong>a b</strong></em><p><blockquote><blockquote><u><u><s>a b</s></u></u></blockquote></blockquote></p>text",
+    "expected": "<p><em><strong>a b</strong></em></p><blockquote><p><u><u><s>a b</s></u></u></p></blockquote><p>text</p>"
+  },
+  {
+    "name": "random-18-inline",
+    "fmt": "inline",
+    "input": "<strong><s>world</s></strong><blockquote><h2>world</h2></blockquote>",
+    "expected": "<strong><s>world</s></strong><br>world"
+  },
+  {
+    "name": "random-18-rich",
+    "fmt": "rich",
+    "input": "<strong><s>world</s></strong><blockquote><h2>world</h2></blockquote>",
+    "expected": "<p><strong><s>world</s></strong></p><blockquote><h2>world</h2></blockquote>"
+  },
+  {
+    "name": "random-19-inline",
+    "fmt": "inline",
+    "input": "<p><p><em><3</em></p></p>",
+    "expected": "<em>&lt;3</em>"
+  },
+  {
+    "name": "random-19-rich",
+    "fmt": "rich",
+    "input": "<p><p><em><3</em></p></p>",
+    "expected": "<p><em>&lt;3</em></p>"
+  }
+]

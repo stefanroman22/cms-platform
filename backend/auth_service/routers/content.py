@@ -16,14 +16,14 @@ _PRIVATE_SERVICE_TYPES = {"email_config"}
 
 # TS type shapes per service type slug
 _TS_TYPE_MAP: dict[str, str] = {
-    "text_block": '{ _type: "text_block"; _label: string; title?: string; body?: string }',
+    "text_block": '{ _type: "text_block"; _label: string; title?: InlineHtml; body?: RichHtml }',
     "image": '{ _type: "image"; _label: string; url?: string; alt?: string }',
     "gallery": '{ _type: "gallery"; _label: string; items?: string[] }',
     "floor_plan": '{ _type: "floor_plan"; _label: string; url?: string; alt?: string }',
     "video": '{ _type: "video"; _label: string; url?: string; poster?: string }',
     "file_download": '{ _type: "file_download"; _label: string; url?: string; filename?: string }',
-    "key_value": '{ _type: "key_value"; _label: string; entries?: Record<string, unknown> }',
-    "repeater": '{ _type: "repeater"; _label: string; _schema?: Array<{ key: string; label: string; type: string }>; items?: Record<string, unknown>[] }',
+    "key_value": '{ _type: "key_value"; _label: string; entries?: Record<string, unknown>; _formats?: Record<string, "plain" | "inline" | "rich"> }',
+    "repeater": '{ _type: "repeater"; _label: string; _schema?: Array<{ key: string; label: string; type: string /* "string" | "inline" | "richtext" | "url" | "tags" */ }>; items?: Record<string, unknown>[] }',
 }
 
 
@@ -31,7 +31,9 @@ def _resolve_project(project_slug: str) -> dict:
     sb = get_supabase_admin()
     result = (
         sb.table("projects")
-        .select("id, name, slug, is_active, preview_token, default_locale, locales")
+        .select(
+            "id, name, slug, is_active, preview_token, default_locale, locales, rich_text_version"
+        )
         .eq("slug", project_slug)
         .eq("is_active", True)
         .maybe_single()
@@ -170,6 +172,7 @@ async def get_project_content(project_slug: str, request: Request):
 
     payload = {
         "project_slug": project["slug"],
+        "rich_text_version": int(project.get("rich_text_version") or 0),
         "project_name": project["name"],
         "last_updated": last_updated,
         "content": content_map,
@@ -257,6 +260,7 @@ async def get_project_draft_content(project_slug: str, request: Request):
 
     payload = {
         "project_slug": project["slug"],
+        "rich_text_version": int(project.get("rich_text_version") or 0),
         "project_name": project["name"],
         "last_updated": last_updated,
         "content": content_map,
@@ -289,10 +293,19 @@ async def get_project_types(project_slug: str):
         f"// Auto-generated types for project: {project_slug}",
         "// Do not edit — regenerate with: GET /content/{slug}/types",
         "",
+        "/** Sanitised inline HTML (strong em u s a br) — render with the CMS rich-text kit "
+        '<RichText format="inline"> (ADR-0010). */',
+        "export type InlineHtml = string;",
+        "/** Sanitised block HTML (p h2-h4 ul ol li blockquote hr + inline marks) — render with "
+        '<RichText format="rich"> (ADR-0010). */',
+        "export type RichHtml = string;",
+        "",
         "export interface CMSContent {",
         f'  project_slug: "{project_slug}";',
         "  project_name: string;",
         "  last_updated: string | null;",
+        "  rich_text_version: number;",
+        "  // inline/rich fields are sanitised HTML strings — render with the CMS rich-text kit (ADR-0010)",
         "  content: {",
     ]
 
@@ -341,6 +354,7 @@ async def get_project_content_locale(project_slug: str, locale: str, request: Re
 
     payload = {
         "project_slug": project["slug"],
+        "rich_text_version": int(project.get("rich_text_version") or 0),
         "project_name": project["name"],
         "locale": locale,
         "last_updated": last_updated,
@@ -379,6 +393,7 @@ async def get_project_draft_content_locale(project_slug: str, locale: str, reque
 
     payload = {
         "project_slug": project["slug"],
+        "rich_text_version": int(project.get("rich_text_version") or 0),
         "project_name": project["name"],
         "locale": locale,
         "last_updated": last_updated,

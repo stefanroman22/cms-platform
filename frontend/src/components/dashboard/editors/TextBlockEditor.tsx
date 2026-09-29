@@ -4,13 +4,47 @@ import { useState } from "react";
 import type { EditorProps } from "./index";
 import { dashboardInputCn, dashboardFieldLabelCn, dashboardSectionCardCn } from "@/lib/styles";
 import { InfoTooltip } from "@/components/dashboard/InfoTooltip";
+import { ContentField } from "@/components/dashboard/rich-text/ContentField";
 
-export function TextBlockEditor({ initialContent, onChange }: EditorProps) {
+export function TextBlockEditor({ initialContent, onChange, richText, fieldFormats }: EditorProps) {
   const [title, setTitle] = useState(String(initialContent.title ?? ""));
   const [body, setBody] = useState(String(initialContent.body ?? ""));
 
   function emit(next: { title: string; body: string }) {
     onChange(next);
+  }
+
+  if (richText) {
+    return (
+      <div className={`${dashboardSectionCardCn} divide-y divide-zinc-100 dark:divide-zinc-800`}>
+        <div className="p-5">
+          <span className={dashboardFieldLabelCn}>Title</span>
+          <ContentField
+            format={fieldFormats?.title ?? "inline"}
+            value={title}
+            label="Title"
+            placeholder="Enter section title…"
+            onChange={(v) => {
+              setTitle(v);
+              emit({ title: v, body });
+            }}
+          />
+        </div>
+        <div className="p-5">
+          <span className={dashboardFieldLabelCn}>Body</span>
+          <ContentField
+            format={fieldFormats?.body ?? "rich"}
+            value={body}
+            label="Body"
+            placeholder="Write content here…"
+            onChange={(v) => {
+              setBody(v);
+              emit({ title, body: v });
+            }}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (

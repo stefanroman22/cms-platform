@@ -24,7 +24,7 @@ def require_project_access(project_slug: str, user: UserOut) -> dict:
     result = (
         sb.table("projects")
         .select(
-            "id, name, slug, user_id, is_active, github_repo, preview_url, production_url, production_branch, repo_branch, default_locale, locales"
+            "id, name, slug, user_id, is_active, github_repo, preview_url, production_url, production_branch, repo_branch, default_locale, locales, rich_text_version"
         )
         .eq("slug", project_slug)
         .eq("is_active", True)

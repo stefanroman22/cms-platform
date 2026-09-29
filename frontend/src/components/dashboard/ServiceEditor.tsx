@@ -8,6 +8,7 @@ import { useQuery } from "@/hooks/useQuery";
 import { ServiceIcon } from "@/components/dashboard/ServiceIcon";
 import { EDITOR_MAP } from "@/components/dashboard/editors";
 import { LocaleTabs } from "@/components/dashboard/LocaleTabs";
+import type { FieldFormat } from "@/components/dashboard/rich-text/ContentField";
 import {
   dashboardSectionCardCn,
   dashboardErrorBannerCn,
@@ -28,6 +29,9 @@ interface ServiceDetail {
   default_locale?: string;
   locales?: string[];
   translation_status?: Record<string, string> | null;
+  rich_text_version?: number;
+  field_formats?: Record<string, FieldFormat>;
+  can_edit_structure?: boolean;
 }
 
 function fetchServiceDetail(
@@ -60,7 +64,14 @@ async function saveContent(
   });
   if (!r.ok) {
     const b = await r.json().catch(() => ({}));
-    throw new Error(b.detail ?? "Failed to save.");
+    const d = b.detail;
+    throw new Error(
+      Array.isArray(d)
+        ? d.map((x) => x?.msg ?? String(x)).join("; ")
+        : typeof d === "string"
+          ? d
+          : "Save failed"
+    );
   }
 }
 
@@ -169,19 +180,37 @@ export function ServiceEditor({
     }
   }
 
+  // beforeunload guard while dirty
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isDirty]);
+
+  const confirmDiscard = useCallback(
+    () => !isDirty || window.confirm("You have unsaved changes. Discard them?"),
+    [isDirty]
+  );
+
   const setLocale = useCallback(
     (loc: string) => {
+      if (!confirmDiscard()) return;
       const params = new URLSearchParams(searchParams.toString());
       if (loc === service?.default_locale) params.delete("locale");
       else params.set("locale", loc);
       setDraft(null);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [router, pathname, searchParams, service?.default_locale]
+    [router, pathname, searchParams, service?.default_locale, confirmDiscard]
   );
 
   async function handleRetranslate() {
     if (!activeLocale) return;
+    if (!confirmDiscard()) return;
     setRetranslating(true);
     setSaveError("");
     try {
@@ -361,9 +390,13 @@ export function ServiceEditor({
               transition={{ duration: reduce ? 0.12 : 0.2, ease: [0.2, 0, 0, 1] }}
             >
               <EditorComponent
+                key={service.last_updated ?? ""}
                 initialContent={service.content}
                 onChange={handleChange}
                 onUpload={handleUpload}
+                richText={(service.rich_text_version ?? 0) >= 1}
+                fieldFormats={service.field_formats ?? {}}
+                canEditStructure={!!service.can_edit_structure}
               />
             </motion.div>
           </AnimatePresence>

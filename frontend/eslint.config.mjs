@@ -24,6 +24,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored rich-text client kit (ADR-0010) — re-sync via `make kit-sync`, never hand-edit.
+    "src/lib/cms-rich-text/**",
   ]),
 ]);
 

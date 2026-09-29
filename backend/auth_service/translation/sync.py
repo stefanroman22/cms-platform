@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 from typing import get_args
 
+from ..services.rich_text import canonicalize, format_of
 from ..services.segments import apply_segments, formats_of, segments_of
 from .provider import TextFormat, TranslationProvider
 
@@ -27,6 +28,8 @@ def sync_locale_draft(
     provider: TranslationProvider,
     source_locale: str,
     target_locale: str,
+    *,
+    rich_text_version: int = 0,
 ) -> tuple[dict, dict]:
     """Return (new_target_draft, new_target_meta) for one service in one locale.
 
@@ -42,11 +45,14 @@ def sync_locale_draft(
     if target_content lacks that leaf (a bootstrap case), the default-locale source text is
     used as a placeholder. Unchanged auto leaves keep their existing translation; changed or
     never-translated auto leaves are re-translated. The rebuilt draft mirrors default_content's
-    structure (non-translatable fields are copied from the default)."""
+    structure (non-translatable fields are copied from the default).
+
+    Version ≥ 1: inline/rich leaves are translated as HTML and the engine output is
+    re-canonicalised."""
     src_segs = segments_of(service_type, default_content)
     prev_segs = segments_of(service_type, prev_default_content or {})
     tgt_segs = segments_of(service_type, target_content or {})
-    fmts = formats_of(service_type, default_content)
+    fmts = formats_of(service_type, default_content, rich_text_version)
     meta = target_meta or {}
 
     values: dict[str, str] = {}  # path -> final translated/kept text
@@ -77,6 +83,10 @@ def sync_locale_draft(
             fmt=fmt,
         )
         for path, text in zip(group, translated, strict=True):
+            if fmt == "html":
+                text = canonicalize(
+                    text, format_of(service_type, path, default_content), enforce_limit=False
+                )
             values[path] = text
 
     new_content = apply_segments(copy.deepcopy(default_content), service_type, values)

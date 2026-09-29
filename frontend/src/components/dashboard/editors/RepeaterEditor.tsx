@@ -5,14 +5,24 @@ import type { EditorProps } from "./index";
 import { dashboardInputCn, dashboardFieldLabelCn, dashboardSectionCardCn } from "@/lib/styles";
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { InfoTooltip } from "@/components/dashboard/InfoTooltip";
+import { ContentField, type FieldFormat } from "@/components/dashboard/rich-text/ContentField";
 
 interface SchemaField {
   key: string;
   label: string;
-  type: "string" | "richtext" | "url" | "tags";
+  type: "string" | "inline" | "richtext" | "url" | "tags";
 }
 
 type ItemRecord = Record<string, unknown>;
+
+type Row = { key: string; item: ItemRecord };
+let keySeq = 0;
+const newKey = () => `r${Date.now().toString(36)}${(keySeq++).toString(36)}`;
+const toRows = (items: ItemRecord[]): Row[] =>
+  items.map((item) => ({
+    key: typeof item._id === "string" && item._id ? item._id : newKey(),
+    item,
+  }));
 
 function parseSchema(raw: unknown): SchemaField[] {
   if (Array.isArray(raw)) return raw as SchemaField[];
@@ -42,11 +52,26 @@ function FieldInput({
   field,
   value,
   onChange,
+  richText,
 }: {
   field: SchemaField;
   value: unknown;
   onChange: (val: unknown) => void;
+  richText?: boolean;
 }) {
+  if (richText && field.type !== "tags") {
+    const format: FieldFormat =
+      field.type === "inline" ? "inline" : field.type === "richtext" ? "rich" : "plain";
+    return (
+      <ContentField
+        format={format}
+        value={typeof value === "string" ? value : ""}
+        label={field.label}
+        inputType={field.type === "url" ? "url" : "text"}
+        onChange={onChange as (v: string) => void}
+      />
+    );
+  }
   if (field.type === "tags") {
     return (
       <input
@@ -79,14 +104,14 @@ function FieldInput({
   );
 }
 
-export function RepeaterEditor({ initialContent, onChange }: EditorProps) {
+export function RepeaterEditor({ initialContent, onChange, richText }: EditorProps) {
   const schema = parseSchema(initialContent._schema);
-  const [items, setItems] = useState<ItemRecord[]>(() => parseItems(initialContent.items));
+  const [rows, setRows] = useState<Row[]>(() => toRows(parseItems(initialContent.items)));
 
   const emit = useCallback(
-    (next: ItemRecord[]) => {
-      setItems(next);
-      onChange({ _schema: schema, items: next });
+    (next: Row[]) => {
+      setRows(next);
+      onChange({ _schema: schema, items: next.map((r) => r.item) });
     },
     [schema, onChange]
   );
@@ -96,15 +121,15 @@ export function RepeaterEditor({ initialContent, onChange }: EditorProps) {
     schema.forEach((f) => {
       blank[f.key] = f.type === "tags" ? [] : "";
     });
-    emit([...items, blank]);
+    emit([...rows, { key: newKey(), item: blank }]);
   }
 
   function removeItem(index: number) {
-    emit(items.filter((_, i) => i !== index));
+    emit(rows.filter((_, i) => i !== index));
   }
 
   function moveItem(index: number, direction: "up" | "down") {
-    const next = [...items];
+    const next = [...rows];
     const swap = direction === "up" ? index - 1 : index + 1;
     if (swap < 0 || swap >= next.length) return;
     [next[index], next[swap]] = [next[swap], next[index]];
@@ -112,7 +137,9 @@ export function RepeaterEditor({ initialContent, onChange }: EditorProps) {
   }
 
   function updateField(itemIndex: number, fieldKey: string, val: unknown) {
-    const next = items.map((item, i) => (i === itemIndex ? { ...item, [fieldKey]: val } : item));
+    const next = rows.map((r, i) =>
+      i === itemIndex ? { ...r, item: { ...r.item, [fieldKey]: val } } : r
+    );
     emit(next);
   }
 
@@ -131,8 +158,8 @@ export function RepeaterEditor({ initialContent, onChange }: EditorProps) {
 
   return (
     <div className="space-y-4">
-      {items.map((item, itemIndex) => (
-        <div key={itemIndex} className={dashboardSectionCardCn}>
+      {rows.map((row, itemIndex) => (
+        <div key={row.key} className={dashboardSectionCardCn}>
           {/* Item header */}
           <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-zinc-800">
             <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -151,7 +178,7 @@ export function RepeaterEditor({ initialContent, onChange }: EditorProps) {
               <button
                 type="button"
                 onClick={() => moveItem(itemIndex, "down")}
-                disabled={itemIndex === items.length - 1}
+                disabled={itemIndex === rows.length - 1}
                 className="flex items-center justify-center h-7 w-7 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
                 aria-label="Move down"
               >
@@ -185,14 +212,15 @@ export function RepeaterEditor({ initialContent, onChange }: EditorProps) {
                   {field.type === "tags" && (
                     <InfoTooltip hint="Enter values separated by commas. Example: React, TypeScript, Node.js" />
                   )}
-                  {field.type === "richtext" && (
+                  {field.type === "richtext" && !richText && (
                     <InfoTooltip hint="Supports Markdown formatting: **bold**, *italic*, [link](url), - bullet" />
                   )}
                 </span>
                 <FieldInput
                   field={field}
-                  value={item[field.key]}
+                  value={row.item[field.key]}
                   onChange={(val) => updateField(itemIndex, field.key, val)}
+                  richText={richText}
                 />
               </div>
             ))}

@@ -163,6 +163,9 @@ class ServiceDetailOut(BaseModel):
     default_locale: str | None = None
     locales: list[str] | None = None
     translation_status: dict | None = None
+    rich_text_version: int = 0
+    can_edit_structure: bool = False
+    field_formats: dict[str, str] | None = None
 
 
 class ContentSaveRequest(BaseModel):
@@ -172,7 +175,7 @@ class ContentSaveRequest(BaseModel):
 class RepeaterItemField(BaseModel):
     key: str
     label: str
-    type: str  # "string" | "richtext" | "url" | "tags"
+    type: str  # "string" | "inline" | "richtext" | "url" | "tags"
 
 
 class ServiceCreateRequest(BaseModel):
@@ -186,6 +189,9 @@ class ServiceCreateRequest(BaseModel):
     page_name: str = Field(default="General", min_length=1, max_length=80, pattern=_NO_CTRL_PATTERN)
     item_schema: list[RepeaterItemField] | None = (
         None  # required when service_type_slug == "repeater"
+    )
+    formats: dict[str, Literal["plain", "inline", "rich"]] | None = (
+        None  # key_value per-entry formats
     )
 
 
@@ -344,6 +350,7 @@ class AdminProjectPatchIn(BaseModel):
         default=None, min_length=2, max_length=10, pattern=r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
     )
     locales: list[str] | None = Field(default=None, max_length=20)
+    rich_text_version: int | None = Field(default=None, ge=0, le=1)
 
     @field_validator("production_url", "preview_url", "website_url", mode="after")
     @classmethod
