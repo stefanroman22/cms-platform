@@ -64,7 +64,14 @@ async function saveContent(
   });
   if (!r.ok) {
     const b = await r.json().catch(() => ({}));
-    throw new Error(b.detail ?? "Failed to save.");
+    const d = b.detail;
+    throw new Error(
+      Array.isArray(d)
+        ? d.map((x) => x?.msg ?? String(x)).join("; ")
+        : typeof d === "string"
+          ? d
+          : "Save failed"
+    );
   }
 }
 
@@ -173,19 +180,37 @@ export function ServiceEditor({
     }
   }
 
+  // beforeunload guard while dirty
+  useEffect(() => {
+    if (!isDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isDirty]);
+
+  const confirmDiscard = useCallback(
+    () => !isDirty || window.confirm("You have unsaved changes. Discard them?"),
+    [isDirty]
+  );
+
   const setLocale = useCallback(
     (loc: string) => {
+      if (!confirmDiscard()) return;
       const params = new URLSearchParams(searchParams.toString());
       if (loc === service?.default_locale) params.delete("locale");
       else params.set("locale", loc);
       setDraft(null);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [router, pathname, searchParams, service?.default_locale]
+    [router, pathname, searchParams, service?.default_locale, confirmDiscard]
   );
 
   async function handleRetranslate() {
     if (!activeLocale) return;
+    if (!confirmDiscard()) return;
     setRetranslating(true);
     setSaveError("");
     try {
