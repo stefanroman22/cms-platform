@@ -48,6 +48,56 @@ describe("KeyValueEditor", () => {
   });
 });
 
+describe("KeyValueEditor format on the row", () => {
+  it("clearing and retyping a key keeps its format", async () => {
+    const onChange = vi.fn();
+    render(
+      <KeyValueEditor initialContent={initial} onChange={onChange} richText canEditStructure />
+    );
+    const key = screen.getByDisplayValue("about");
+    await userEvent.clear(key);
+    await userEvent.type(key, "about");
+    expect(onChange).toHaveBeenLastCalledWith({
+      entries: { phone: "+40 7", about: "We &amp; you" },
+      _formats: { about: "inline" },
+    });
+  });
+  it("admin rename keeps the format", async () => {
+    const onChange = vi.fn();
+    render(
+      <KeyValueEditor initialContent={initial} onChange={onChange} richText canEditStructure />
+    );
+    await userEvent.type(screen.getByDisplayValue("about"), "2");
+    expect(onChange).toHaveBeenLastCalledWith({
+      entries: { phone: "+40 7", about2: "We &amp; you" },
+      _formats: { about2: "inline" },
+    });
+  });
+  it("non-admin key is read-only for formatted entries, editable for plain", () => {
+    render(<KeyValueEditor initialContent={initial} onChange={() => {}} richText />);
+    expect(screen.getByDisplayValue("about")).toHaveAttribute("readonly");
+    expect(screen.getByDisplayValue("phone")).not.toHaveAttribute("readonly");
+  });
+  it("admin format change converts the value and emits it", async () => {
+    const onChange = vi.fn();
+    render(
+      <KeyValueEditor initialContent={initial} onChange={onChange} richText canEditStructure />
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Format of phone"), "inline");
+    expect(onChange).toHaveBeenLastCalledWith({
+      entries: { phone: "+40 7", about: "We &amp; you" },
+      _formats: { phone: "inline", about: "inline" },
+    });
+    expect(screen.getByRole("textbox", { name: "phone" })).toHaveAttribute("data-mode", "inline");
+  });
+  it("version 0 emits only entries", async () => {
+    const onChange = vi.fn();
+    render(<KeyValueEditor initialContent={{ entries: { a: "1" } }} onChange={onChange} />);
+    await userEvent.type(screen.getByDisplayValue("1"), "2");
+    expect(onChange).toHaveBeenLastCalledWith({ entries: { a: "12" } });
+  });
+});
+
 describe("convertValue", () => {
   it.each([
     ["A & B", "plain", "inline", "A &amp; B"],

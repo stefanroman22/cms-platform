@@ -16,7 +16,7 @@ interface KVRow {
   value: string;
 }
 
-type Row = KVRow & { id: string };
+type Row = KVRow & { id: string; format: FieldFormat; initialFormat: FieldFormat };
 let keySeq = 0;
 const newKey = () => `k${Date.now().toString(36)}${(keySeq++).toString(36)}`;
 
@@ -46,65 +46,62 @@ export function KeyValueEditor({
 }: EditorProps) {
   const [rows, setRows] = useState<Row[]>(() => {
     const parsed = parseEntries(initialContent.entries);
-    return (parsed.length > 0 ? parsed : [{ key: "", value: "" }]).map((r) => ({
-      ...r,
-      id: newKey(),
-    }));
+    const initialFormats = parseFormats(initialContent._formats);
+    return (parsed.length > 0 ? parsed : [{ key: "", value: "" }]).map((r) => {
+      const format = initialFormats[r.key.trim()] ?? "plain";
+      return { ...r, id: newKey(), format, initialFormat: format };
+    });
   });
-  const [formats, setFormats] = useState<Record<string, FieldFormat>>(() =>
-    parseFormats(initialContent._formats)
-  );
   const hadFormats = "_formats" in initialContent;
   const showFormatSelect = !!richText && !!canEditStructure;
 
-  function emit(next: Row[], nextFormats: Record<string, FieldFormat> = formats) {
+  const blankRow = (): Row => ({
+    id: newKey(),
+    key: "",
+    value: "",
+    format: "plain",
+    initialFormat: "plain",
+  });
+
+  function emit(next: Row[]) {
     setRows(next);
     const entries: Record<string, string> = {};
-    for (const { key, value } of next) {
+    const formats: Record<string, FieldFormat> = {};
+    for (const { key, value, format } of next) {
       const k = key.trim();
-      if (k) entries[k] = value;
+      if (k) {
+        entries[k] = value;
+        if (format !== "plain") formats[k] = format;
+      }
     }
-    const pruned: Record<string, FieldFormat> = {};
-    for (const k of Object.keys(nextFormats)) {
-      if (k in entries) pruned[k] = nextFormats[k];
-    }
-    setFormats(pruned);
-    if (richText || hadFormats) onChange({ entries, _formats: pruned });
+    if (richText || hadFormats) onChange({ entries, _formats: formats });
     else onChange({ entries });
   }
 
   function updateRow(index: number, field: "key" | "value", val: string) {
-    const next = rows.map((r, i) => (i === index ? { ...r, [field]: val } : r));
-    const nextFormats = { ...formats };
-    if (field === "key") {
-      const oldKey = rows[index].key.trim();
-      const newKeyName = val.trim();
-      if (oldKey !== newKeyName && oldKey in nextFormats) {
-        if (newKeyName) nextFormats[newKeyName] = nextFormats[oldKey];
-        delete nextFormats[oldKey];
-      }
-    }
-    emit(next, nextFormats);
+    emit(rows.map((r, i) => (i === index ? { ...r, [field]: val } : r)));
   }
 
   function changeFormat(index: number, to: FieldFormat) {
-    const k = rows[index].key.trim();
-    if (!k) return;
-    const from = formats[k] ?? "plain";
-    const next = rows.map((r, i) =>
-      i === index ? { ...r, value: convertValue(r.value, from, to) } : r
+    emit(
+      rows.map((r, i) =>
+        i === index ? { ...r, value: convertValue(r.value, r.format, to), format: to } : r
+      )
     );
-    emit(next, { ...formats, [k]: to });
   }
 
   function addRow() {
-    emit([...rows, { id: newKey(), key: "", value: "" }]);
+    emit([...rows, blankRow()]);
   }
 
   function removeRow(index: number) {
     const next = rows.filter((_, i) => i !== index);
-    emit(next.length > 0 ? next : [{ id: newKey(), key: "", value: "" }]);
+    emit(next.length > 0 ? next : [blankRow()]);
   }
+
+  // A non-admin's _formats is replaced server-side, so renaming a formatted entry would strand its HTML as plain.
+  const keyLocked = (r: Row) => !!richText && !canEditStructure && r.initialFormat !== "plain";
+  const LOCK_HINT = "Only an admin can rename formatted entries";
 
   return (
     <div className={dashboardSectionCardCn}>
@@ -152,12 +149,14 @@ export function KeyValueEditor({
               type="text"
               value={row.key}
               onChange={(e) => updateRow(i, "key", e.target.value)}
+              readOnly={keyLocked(row)}
+              title={keyLocked(row) ? LOCK_HINT : undefined}
               placeholder="field_name"
               className={`${dashboardInputCn} font-mono text-xs`}
             />
             {richText ? (
               <ContentField
-                format={formats[row.key.trim()] ?? "plain"}
+                format={row.format}
                 label={row.key.trim() || "New entry value"}
                 placeholder="value"
                 value={row.value}
@@ -175,8 +174,7 @@ export function KeyValueEditor({
             {showFormatSelect && (
               <select
                 aria-label={`Format of ${row.key || "new entry"}`}
-                value={formats[row.key.trim()] ?? "plain"}
-                disabled={!row.key.trim()}
+                value={row.format}
                 onChange={(e) => changeFormat(i, e.target.value as FieldFormat)}
                 className={`${dashboardInputCn} w-auto text-xs cursor-pointer`}
               >
