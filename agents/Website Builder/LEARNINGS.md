@@ -18,6 +18,12 @@ lines (the empty scaffold is skipped to save tokens).
 
 <!-- Append below. Newest at the top. -->
 
+## 2026-09-27 — Generated sites vendor the rich-text kit and theme `--cms-rich-*`
+
+**Build:** CMS rich-text rollout (ADR-0010), no site build
+**Lesson:** CMS text leaves are now canonical HTML (`inline`/`rich`), not Markdown or plain strings. Rendering them as text shows tags, and `dangerouslySetInnerHTML`/`react-markdown` are unsafe or wrong. The kit (`client-kit/rich-text`) renders them without innerHTML and is themed purely by `--cms-rich-*` CSS variables.
+**Apply:** Phase 3 vendors the kit and defines the variables per surface (AA contrast rule); phase 4 renders prose with `<RichText>`/`splitRichWords` and metadata with `plainText`; phase 8 greps for the kit import, `--cms-rich-strong`, and the absence of `dangerouslySetInnerHTML`/`react-markdown`.
+
 ## 2026-06-21 — Validated Vite+React19 SSG build; pinned the working stack
 
 **Build:** Lumière Bistro dry-run (French bistro, Antwerp — PoC to validate the SSG stack)

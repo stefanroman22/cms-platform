@@ -245,6 +245,28 @@ export function TextReveal({
 }
 ```
 
+**CMS-driven headlines** must tokenize with `splitRichWords` (from `@/lib/cms-rich-text`), never
+`text.split(" ")`, so bold/italic/links in the CMS value survive per-word animation. Adapted snippet:
+
+```tsx
+import { splitRichWords, plainText } from "@/lib/cms-rich-text";
+
+// src/components/ui/TextReveal.tsx — `text` is a CMS inline value (may contain <strong>/<em>/<a>)
+const words = splitRichWords(text, "inline");            // RichWord { key, text, node, breakBefore }
+const label = plainText(text);                           // aria-label = tags stripped
+return createElement(Tag, { "aria-label": label }, words.map((w, i) => (
+  <Fragment key={w.key}>
+    {w.breakBefore && <br />}
+    <m.span aria-hidden="true" className="inline-block whitespace-pre-wrap"
+      initial={hidden} animate={{ opacity: 1, x: 0, y: 0 }}
+      transition={{ duration, ease: REVEAL_EASE, delay: delay + i * stagger }}>{w.node}{" "}</m.span>
+  </Fragment>
+)));
+```
+
+A multi-word link renders one `<a>` per word (kit known limit), so keep linked text out of animated
+headlines. "Last N words accented" logic also runs on `splitRichWords`, not string splitting.
+
 Optional scroll cue (ChevronDown) loops only AFTER the hero settles: `delay = D_ACTIONS + FADE + 0.2`.
 
 ---

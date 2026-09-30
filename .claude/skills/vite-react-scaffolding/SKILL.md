@@ -41,7 +41,7 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
   index.html                     # inline translation-shim <script>; SPA mount; head base
   vite.config.ts                 # React plugin, vite-react-ssg, manualChunks, alias @/*
   src/
-    main.tsx                     # ssg entry (createRoot/hydrate via vite-react-ssg)
+    main.tsx                     # ssg entry (createRoot/hydrate via vite-react-ssg); imports ./lib/cms-rich-text/cms-rich.css
     routes.tsx                   # React Router v7 route table (locale-prefixed, React.lazy)
     i18n/
       config.ts                  # react-i18next init, resources, fallbackLng
@@ -56,6 +56,7 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
       query.ts                   # QueryClient + localStorage persister
       store.ts                   # Zustand stores (persist): locale, booking, ui
       head.ts                    # per-route×locale head builder (React 19 hoisted tags)
+      cms-rich-text/             # vendored client-kit/rich-text (sync script; never hand-edit) incl. cms-rich.css
     seo/
       sitemap.gen.ts             # prebuild → public/sitemap.xml
       robots.gen.ts              # prebuild → public/robots.txt
@@ -64,6 +65,10 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
   .learnings/                    # per-build corrections (UNCHANGED)
   package.json                   # vite, react@19, react-router, react-i18next, @tanstack/*, zustand, motion, tailwind, playwright
 ```
+
+## Rich-text kit
+
+Vendor with `node "<cms-repo>/client-kit/rich-text/scripts/sync-rich-text-kit.mjs" src/lib/cms-rich-text` and import `./lib/cms-rich-text/cms-rich.css` in `src/main.tsx`. Define `--cms-rich-*` in `src/index.css` per surface. The kit has no dependencies, so **no `manualChunks` change is needed**.
 
 ## vite.config.ts (shape)
 

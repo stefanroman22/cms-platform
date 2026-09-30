@@ -210,6 +210,10 @@ const items = t("services.items", { returnObjects: true }) as ServiceItem[];
 
 Equivalent to next-intl's `t.raw("services.items")`.
 
+### CMS rich values
+
+CMS values that flow through react-i18next are `inline`/`rich` HTML. Read them as raw strings (`t("key")` with `interpolation.escapeValue: false`, or `returnObjects: true` for repeater objects) and render with `<RichText value={...} format="inline" />` (or `"rich"`) from `@/lib/cms-rich-text`. Never interpolate a rich value into another translation string and never concatenate it; use `plainText()` if a plain form is needed (title, alt, meta).
+
 ### Locale-aware internal links
 
 Use React Router's `Link` with the locale prefix:

@@ -7,11 +7,16 @@
 - Optionally `npx unlighthouse-ci --site http://127.0.0.1:5173`; note scores in `BUILD_PLAN.md`.
 - Final grep gates:
   - FAIL (must return zero matches): `framer-motion`, `next-intl`, `generateMetadata`,
-    `app/[locale]`, `next/image`, `NEXT_PUBLIC_`.
+    `app/[locale]`, `next/image`, `NEXT_PUBLIC_`, `react-markdown`, and `dangerouslySetInnerHTML`
+    outside the JSON-LD `<script>`.
   - REQUIRE (must return at least one match each): `react-i18next`, `vite-react-ssg`,
-    `VITE_CMS_ENDPOINT`.
+    `VITE_CMS_ENDPOINT`, `cms-rich-text` (an import of the vendored kit), and `--cms-rich-strong`
+    defined in the site CSS.
   - Zero raw `<img ` outside `src/seo/og.gen.ts` / `public/og/` (OG generation; raw `<img>` is
     correct there — do not flag it).
+- Playwright check: a `.cms-rich` element on a CMS-driven page renders with the themed `strong`
+  colour (`getComputedStyle(strong).color` equals the surface's `--cms-rich-strong`, not the
+  browser default), and no literal tags or `&amp;` are visible.
 - If a build/test failure is hard to diagnose and `superpowers` is installed, use its debugging
   methodology (root-cause-first).
 - Append at least one generalizable lesson to `agents/Website Builder/LEARNINGS.md`. If the
