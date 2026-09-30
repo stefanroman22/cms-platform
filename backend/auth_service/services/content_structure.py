@@ -64,7 +64,13 @@ def apply_structure_rules(
         _validate_schema(incoming)
         return content
     if service_type == "key_value":
-        stored_formats = _first(stored, "_formats", dict)
+        # A present-but-empty `_formats` on the draft is authoritative (the last
+        # formatted entry was switched to plain), so don't fall back to older blobs.
+        stored_formats = None
+        for blob in stored:
+            if isinstance(blob, dict) and isinstance(blob.get("_formats"), dict):
+                stored_formats = blob["_formats"]
+                break
         if not is_admin or "_formats" not in content:
             if stored_formats is not None:
                 return {**content, "_formats": stored_formats}

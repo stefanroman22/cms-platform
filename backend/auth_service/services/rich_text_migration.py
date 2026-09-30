@@ -255,7 +255,7 @@ def restore_sql(project_id: str, rows: list[dict]) -> str:
         rid = _check_id(r["id"])
         lines.append(
             f"  update content_entries set draft_content = {_lit(r.get('draft_content'), tag)}, "
-            f"published_content = {_lit(r.get('published_content') or {}, tag)}, "
+            f"published_content = {_lit(r.get('published_content'), tag)}, "
             f"translation_meta = {_lit(r.get('translation_meta') or {}, tag)}, updated_at = now() "
             f"where id = '{rid}';"
         )

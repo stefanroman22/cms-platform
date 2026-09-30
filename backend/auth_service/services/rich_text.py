@@ -710,10 +710,11 @@ def format_of(service_type: str, path: str, content: dict) -> Format:
     if service_type == "repeater" and path.startswith("items."):
         from .segments import repeater_schema
 
-        parts = path.split(".")
-        if len(parts) != 3:  # tags leaves: items.<id>.<key>.<j>
-            return "plain"
-        return _REPEATER_TYPE_FORMAT.get(repeater_schema(content).get(parts[2]), "plain")  # type: ignore[return-value]
+        # Item ids are client-supplied and may contain dots, so take the field
+        # key from the right. Tags leaves (items.<id>.<key>.<j>) end in an index,
+        # which is never a schema key, so they resolve to plain.
+        key = path.rsplit(".", 1)[-1]
+        return _REPEATER_TYPE_FORMAT.get(repeater_schema(content).get(key), "plain")  # type: ignore[return-value]
     return "plain"
 
 

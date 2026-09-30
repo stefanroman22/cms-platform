@@ -125,3 +125,11 @@ def test_formats_of_versions():
         "title": "html",
         "body": "html",
     }
+
+
+def test_format_of_repeater_item_id_with_dots_still_sanitised():
+    from auth_service.services.rich_text import format_of
+
+    content = {"_schema": [{"key": "body", "type": "richtext"}]}
+    assert format_of("repeater", "items.a.b.body", content) == "rich"
+    assert format_of("repeater", "items.a.b.tags.0", content) == "plain"
