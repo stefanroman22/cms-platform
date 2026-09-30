@@ -125,6 +125,18 @@ The operator typed `program` for opening hours; the website silently
 dropped it. Future generated sites must follow the heuristic-resolver
 pattern above so the same class of bug can't reappear.
 
+### Field formats and rich text contract (ADR-0010)
+
+Every text field has a format: `plain`, `inline` or `rich`. Repeater `item_schema` types are `string`, `inline`, `richtext`, `url`, `tags`; `key_value` services carry a per-entry `formats` map (seeded as `_formats`); `text_block` title/body are always inline/rich. Stored values are canonical HTML, never Markdown. Generated sites MUST:
+
+- vendor the kit from `client-kit/rich-text` (sync script) and import `cms-rich.css`;
+- render CMS prose with `<RichText>` (never `react-markdown`, never `dangerouslySetInnerHTML`), and never place a rich value inside `<p>`;
+- read next-intl-merged rich/inline values with `t.raw`, never `t()`;
+- use `plainText()` for metadata, JSON-LD, `alt`/`aria-*`, keys and `href`/`tel:`/`mailto:` building;
+- define `--cms-rich-*` on every surface and write `cms-rich-text.formats.json`.
+
+A new site must ship the kit before its project's `rich_text_version` is 1. See [ADR-0010](../../docs/decisions/0010-rich-text-content.md) and the [kit README](../../client-kit/rich-text/README.md).
+
 ### Booking (headless) contract
 
 When the manifest carries a `booking` block with `"detected": true`, Phase 4 provisions the booking service and generates `lib/booking.ts` in the client repo. The following contract is binding for all generated client websites:
@@ -157,6 +169,7 @@ For multilingual sites (manifest `locales` has >1 entry):
 
 ## Glossary
 
+- **Field format** — `plain` | `inline` | `rich`. Repeater types: `string`=plain, `inline`, `richtext`; `key_value` per-entry via `formats`/`_formats`; seeds carry canonical HTML for inline/rich (ADR-0010).
 - **Service** — CMS content unit. Eight types: `text_block`, `image`, `gallery`, `video`, `file_download`, `key_value`, `email_config`, `repeater`. For multilingual sites, each translatable service carries per-locale `initial_content` maps; locale-invariant assets (logo, file URLs) are marked `translatable:false`.
 - **Manifest** — JSON the agent emits. Slim variant `cms.config.json` (in client repo), full variant `cms-provision.json` (admin keeps). For multilingual sites, the manifest carries top-level `locales` (array, e.g. `["en","nl"]`) and `default_locale` (string), plus per-locale `initial_content` maps inside each service. Single-locale manifests stay flat (no per-locale nesting). The manifest may also carry an optional top-level `booking` block (see below).
 - **Booking service** — headless booking backend where one tenant equals one CMS project. The tenant is addressed by its `public_slug` (same slug as the CMS project). The booking service owns its own DB tables for resources, services, hours, and bookings; the CMS connector provisions them via admin endpoints during Phase 4.

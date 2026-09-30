@@ -205,3 +205,11 @@ Default to stale-while-revalidate with in-flight de-duplication and content-tier
 **Rationale:** Redundant requests and client-side waterfalls are the cheapest perf regressions to avoid on a content site. `force-dynamic` is a Next.js Route Handler concept that does not exist in Vite.
 **Established:** 2026-06-17
 **Source:** promoted — CMS frontend motion/perf pass
+
+### CMS — rich text via the kit
+
+Always vendor `client-kit/rich-text` into `src/lib/cms-rich-text/` with its sync script, import `cms-rich.css` once, and define `--cms-rich-*` on `:root`, the dark selector and every inverted surface (accent only where contrast is at least 4.5:1). Render human-prose CMS text with `<RichText>` (or `splitRichWords` for per-word animation); use `plainText` for metadata, JSON-LD, `alt`, keys and `tel:`/`mailto:`. Never `dangerouslySetInnerHTML` (except JSON-LD), never `react-markdown`, never put rich values inside `<p>`, and never put colours in CMS content.
+
+**Rationale:** CMS text is canonical allow-listed HTML; the kit renders it without innerHTML and lets each site's theme decide how emphasis looks.
+**Established:** 2026-09-27
+**Source:** ADR-0010

@@ -175,6 +175,8 @@ Operate at maximum thoroughness (xhigh effort): multi-pass self-review each phas
    - **localStorage is first-class:** data cache = TanStack Query persisted to localStorage (`lib/query.ts`); app/UI state = Zustand `persist` (`lib/store.ts`). (This REPLACES the old "never use localStorage" rule.)
    - All clickable elements have accessible names; all images have `alt`; all forms have labels. Mobile-first; verify 375/768/1024/1440 before done.
    - Ship the **browser-translation resilience shim** as the first inline `<script>` in `index.html` (patch `Node.prototype.removeChild`/`insertBefore` when `child.parentNode !== this`; never patch `replaceChild`). Add `suppressHydrationWarning` on `<html>` (covers translator mutation; relevant on the SSG-hydrated path).
+   - **CMS rich text via the kit:** vendor `client-kit/rich-text` into `src/lib/cms-rich-text/` (sync script, never hand-edit), import `cms-rich.css`, and define `--cms-rich-*` per surface (light, dark, every inverted surface) with the AA contrast rule. Render human-prose CMS text with `<RichText>` / `splitRichWords`; use `plainText` for metadata, JSON-LD, alt and keys. Content carries no colours.
+   - **CMS prose is rendered with `<RichText>`, never `dangerouslySetInnerHTML` (except JSON-LD), never `react-markdown`, never inside `<p>`.**
    - Booking/selection UI: the week-paginated 7-day picker, per-card cross-fade select, responsive icon-only pill, and no-scroll success screen behave exactly as before (framework-agnostic component patterns).
    - Inter-page route loader is first-class: a themed full-screen splash as the React Router Suspense `fallback` (`components/RouteLoader.tsx`) with a dedicated localized `loader.routeLoading` key; z-index above header + mobile menu; respect reduced-motion.
 
@@ -190,6 +192,7 @@ Skills come from two sources. CHECK which external ones are installed before ass
 | `vite-react-scaffolding` | 3 | Project setup, folders, dependencies |
 | `i18n-setup` | 3 | react-i18next wiring, locale routing, hreflang |
 | `motion-animations` | 4 | Motion patterns with `motion/react` |
+| `client-kit/rich-text` (repo doc, not a skill) | 3, 4, 8 | Vendored rich-text kit, `--cms-rich-*` theming, render rules |
 | `seo-pro` | 5 | Metadata, sitemap, JSON-LD, OG, hreflang |
 | `responsive-audit` | 6 | Breakpoint sweep + axe-core |
 | `playwright-user-stories` | 7 | E2E test generation |

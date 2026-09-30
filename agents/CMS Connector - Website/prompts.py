@@ -28,16 +28,24 @@ no code fences.
 
 | slug | shape |
 |------|-------|
-| text_block | { title?, body? } |
+| text_block | { title?: InlineHtml, body?: RichHtml } |
 | image | { url?, alt? } |
 | gallery | { items?: string[] } |
 | video | { url?, poster? } |
 | file_download | { url?, filename? } |
-| key_value | { entries?: Record<string, unknown> } |
+| key_value | { entries: Record<string,string>, _formats?: Record<string,"plain"|"inline"|"rich"> } |
 | email_config | { destination_email: string } |
 | repeater | { _schema: [{key,label,type}], items: object[] } |
 
-Repeater field types: `string`, `richtext`, `url`, `tags`.
+Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/link/line breaks), `richtext` (full: paragraphs, headings h2-h4, lists, quotes, dividers), `url`, `tags`.
+
+## Field formats (rich text, ADR-0010)
+
+- Prose the client should be able to format → `inline` (titles, labels, short lines) or   `richtext` (bodies, descriptions, bios, anything that could hold a list).
+- Machine values stay `string`/`url`/plain: URLs, emails, phone numbers, addresses parsed   by code, hours, prices used as numbers, slugs, alt text, anything feeding   `href`/`tel:`/`mailto:`/`Number()`/regex.
+- `key_value` entries get a `formats` map on the service (`{"<entry>": "plain"|"inline"|"rich"}`),   classified the same way; entries not listed default to `plain`.
+- `text_block` title/body need no config (always inline/rich).
+- Source rich text (Markdown, Portable Text, HTML in the old site) is emitted in   `initial_content` as canonical HTML (allowed tags only: strong em u s a br p ul ol li   h2 h3 h4 blockquote hr), never Markdown. Plain-format values stay plain strings.
 
 ## Hard rules — ALWAYS
 
@@ -151,7 +159,8 @@ Return only:
       "label": "Human-readable label shown in CMS dashboard",
       "display_order": 1,
       "page_name": "Home",
-      "item_schema": [{"key":"...","label":"...","type":"string|richtext|url|tags"}],
+      "item_schema": [{"key":"...","label":"...","type":"string|inline|richtext|url|tags"}],
+      "formats": {"<key_value entry>": "plain|inline|rich"},
       "initial_content": {},
       "translatable": true
     }
@@ -184,7 +193,7 @@ Return only:
   ]
 }
 
-`item_schema` is required only for `repeater`. `excluded` and `open_questions` are \
+`item_schema` is required only for `repeater`; `formats` only for `key_value` (optional). `excluded` and `open_questions` are \
 arrays — empty if none.
 
 For `initial_content`: when only one locale is detected, use a flat object of field \

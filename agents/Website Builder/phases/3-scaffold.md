@@ -29,8 +29,17 @@
   `replaceChild`. Add `suppressHydrationWarning` on `<html>`.
 - Create the canonical `src/` folder structure from `vite-react-scaffolding` (`main.tsx`,
   `routes.tsx`, `i18n/`, `pages/`, `components/sections/`, `components/RouteLoader.tsx`,
-  `lib/{cms-content,cms-site,query,store,head}.ts`,
+  `lib/{cms-content,cms-site,query,store,head}.ts`, `lib/cms-rich-text/` (vendored kit),
   `seo/{sitemap,robots,og}.gen.ts`).
+- Vendor the CMS rich-text kit: `node "<cms-repo>/client-kit/rich-text/scripts/sync-rich-text-kit.mjs" src/lib/cms-rich-text`
+  (never hand-edit the copy; re-sync instead). Import `./lib/cms-rich-text/cms-rich.css` once in
+  `src/main.tsx`. The kit has zero dependencies, so no `manualChunks` change is needed.
+- Define the `--cms-rich-*` variables in `src/index.css` (see `client-kit/rich-text/README.md` section 5)
+  from the manifest's `tokens.richText` (design-handoff), else derive them from the design palette:
+  on `:root`, on the dark-theme selector if any, and on EVERY inverted or coloured surface the design
+  has (hero, dark sections, header, footer). Contrast rule: use an accent for `--cms-rich-strong`,
+  `--cms-rich-link` etc. only if it reaches WCAG AA (4.5:1) on that surface; otherwise leave it
+  text-coloured and let weight carry the emphasis.
 - Copy the design's mock images to `public/images/<section>/<filename>`.
 - Copy `agents/Website Builder/learnings-template/*` into the new project's `.learnings/`.
 - If `ui-ux-pro-max` is installed, run its design-system generator and reconcile with the
@@ -39,6 +48,6 @@
 **Gate:** `npm run dev` boots (Vite dev server); `/` redirects to `/<default-locale>` via
 React Router; `.learnings/` has all three template files; mock images are in place;
 `src/lib/query.ts` and `src/lib/store.ts` exist; `index.html` first `<script>` is the
-translation shim.
+translation shim; `src/lib/cms-rich-text/` exists and `cms-rich.css` is imported in `main.tsx`; `--cms-rich-strong` is defined in `src/index.css` for every surface.
 
 **Token tactics:** don't echo full `npm create vite` output; summarize success/failure.

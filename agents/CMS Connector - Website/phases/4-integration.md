@@ -168,6 +168,15 @@ non-text data (images, hours, contact, brand) from **static constants in
    future upload host differs from the site's `next.config` `images.remotePatterns`,
    `next/image` will reject it — add the host (or a loader) when wiring galleries.
 
+6. **Rich text (ADR-0010).** Every inline/rich field must render through the kit:
+   - Vendor the kit: `node <cms-repo>/client-kit/rich-text/scripts/sync-rich-text-kit.mjs <site>/src/lib/cms-rich-text` (`lib/cms-rich-text` for Next sites without `src/`); import `cms-rich.css` once (Next root layout / Vite `main.tsx`). Never hand-edit the vendored copy. Full rules: [kit README](../../../client-kit/rich-text/README.md).
+   - Define `--cms-rich-*` on `:root`, the dark selector and every inverted surface. Use an accent for bold/links only where contrast is at least 4.5:1, otherwise rely on weight.
+   - Render rules: display prose -> `<RichText value format="inline|rich">`; rich values never inside `<p>`/`<h*>`/`<span>` (use `as="div"`); metadata/JSON-LD/`alt`/`aria-*`/keys/`href` building -> `plainText`; per-word animation -> `splitRichWords`/`<RichWords>`; inside a link/button -> `links={false}`; internal links -> `renderLink` with the router `Link`.
+   - next-intl sites: read message-merged CMS values with `t.raw("key")`, never `t()`; strip with `plainText(t.raw(...))` for metadata.
+   - Never use `react-markdown`/`remark-breaks` or `dangerouslySetInnerHTML` for CMS prose.
+   - Write `cms-rich-text.formats.json` (`{"repeaters": {svc: {field: "inline"|"richtext"|"string"}}, "key_values": {svc: {entry: "plain"|"inline"|"rich"}}}`) for the record, matching the manifest's `item_schema`/`formats`.
+   - The kit must be shipped before the project's `rich_text_version` is 1. The new-project DB default is currently 0 (see LEARNINGS), so set it to 1 only after the kit is deployed to the site; existing sites migrate via the site-rollout procedure, not here.
+
 ### 4.2 — Booking provisioning (only if `booking.detected` in manifest)
 
 Run after step 3 (services provisioned). Follow this sub-order exactly — do not reorder.

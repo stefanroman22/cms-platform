@@ -158,6 +158,12 @@ the owner relies on — never declare the integration done without it.**
   deprovision it (delete its `content_entries` + `project_services` row). Real case:
   a stray empty `contact_intro` (colliding `display_order`) on laurian.
 
+**Rich-text probe (ADR-0010):** for one `inline` and one `rich` field (skip if the site has none, and say so), before the sentinel loop:
+- Write a formatted probe to the draft (`<strong>`, a link, and for rich a `<ul><li><p>..</p></li></ul>`).
+- On cms-preview and localhost assert `.cms-rich strong`, `.cms-rich a[href]` and (rich) `.cms-rich li` exist, and that no literal `<strong>`, `&lt;` or `**` text is visible.
+- Assert `getComputedStyle(strong).color` equals the site's `--cms-rich-strong` on that surface.
+- Then restore the byte-identical original, as the loop below does.
+
 **Per-service loop** (sample ≤~12 services covering all types — text_block, key_value,
 repeater, image, gallery — plus every service that backs the `site` namespace; log
 exactly which services/locales were sampled and which were skipped — never silently

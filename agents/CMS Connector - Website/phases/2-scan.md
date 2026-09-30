@@ -80,6 +80,19 @@ For each:
   - For repeaters: full `item_schema` (key, label, type)
   - `initial_content`: extracted current values
 
+## Field formats (rich text, ADR-0010)
+
+The report MUST list each field's format. Classify like this:
+
+- Prose the client should be able to format -> `inline` (titles, labels, short lines) or `richtext` (bodies, descriptions, bios, anything that could hold a list).
+- Machine values stay `string`/`url`/plain: URLs, emails, phone numbers, addresses parsed by code, hours, prices used as numbers, slugs, alt text, anything feeding `href`/`tel:`/`mailto:`/`Number()`/regex.
+- Repeater `item_schema` types: `string` (plain), `inline`, `richtext`, `url`, `tags`.
+- `key_value` entries get a per-entry `formats` map (`plain`/`inline`/`rich`, default `plain`).
+- `text_block` title/body need no config (always inline/rich).
+- Source rich text (Markdown, Portable Text, HTML in the old site) is emitted in `initial_content` as **canonical HTML** (allowed tags only), never Markdown.
+
+See [ADR-0010](../../../docs/decisions/0010-rich-text-content.md) and the [kit README](../../../client-kit/rich-text/README.md).
+
 ## Booking Service (only if `booking.detected` is true in the manifest)
 
 ```markdown
