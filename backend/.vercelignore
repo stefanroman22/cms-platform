@@ -1,0 +1,15 @@
+# Keep non-runtime files out of the deployed Python function bundle.
+# Shrinks each deployment -> lowers Vercel "Function Storage" usage.
+# Runtime needs only auth_service/ app code + requirements.txt/.lock
+# (Vercel installs deps from requirements.txt). Tests run in CI,
+# migrations are applied by hand, scripts are dev tooling.
+auth_service/tests/
+auth_service/tests_integration/
+auth_service/.pytest_cache/
+auth_service/pytest.ini
+migrations/
+scripts/
+requirements-dev.txt
+requirements-dev.lock
+**/__pycache__/
+**/*.pyc
