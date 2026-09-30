@@ -21,6 +21,9 @@ The price is that every request may run in a fresh or a different instance.
   endpoint through `pg_net`, authenticated with a shared secret
   (`migrations/2026_06_05_booking_reminders_cron.sql`, `POST /booking/cron/reminders`).
 - Security headers are set at the platform layer in `backend/vercel.json`.
+- Both Vercel projects pin their functions to `dub1` (Dublin) via `regions` in `backend/vercel.json`
+  and `frontend/vercel.json`, next to the Supabase database (eu-west-1). Every request makes several
+  sequential Supabase calls, so a cross-region function (the old iad1 default) added ~80 ms per call.
 
 ## Consequences
 
@@ -32,4 +35,4 @@ The price is that every request may run in a fresh or a different instance.
 - Do NOT: add in-memory caches, counters, locks or queues that are assumed to be shared; add
   background threads, `asyncio` tasks that outlive the request, or in-app schedulers
   (APScheduler, Celery beat); or rely on the local filesystem between requests. Moving the backend
-  to a long-running server needs a new ADR.
+  to a long-running server needs a new ADR. Move the functions to another region without moving the database with them.
