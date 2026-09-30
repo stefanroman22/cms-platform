@@ -570,6 +570,18 @@ def _repeater_seed_content(svc: dict, content: object) -> object:
     return content
 
 
+def _key_value_seed_content(svc: dict, content: object) -> object:
+    """Graft the manifest's per-entry `formats` onto a key_value seed as `_formats`
+    (ADR-0010), the same way `_repeater_seed_content` grafts `_schema`. No-op for
+    other types, when no formats are declared, or when the content already has one."""
+    if svc.get("service_type_slug") != "key_value" or not isinstance(content, dict):
+        return content
+    formats = svc.get("formats")
+    if formats and not content.get("_formats"):
+        return {**content, "_formats": formats}
+    return content
+
+
 def _provision(
     manifest: dict, api_url: str, api_token: str, out_dir: str | Path | None = None
 ) -> None:
@@ -615,6 +627,8 @@ def _provision(
         }
         if svc["service_type_slug"] == "repeater" and svc.get("item_schema"):
             body["item_schema"] = svc["item_schema"]
+        if svc["service_type_slug"] == "key_value" and svc.get("formats"):
+            body["formats"] = svc["formats"]
 
         url = f"{base}/projects/{slug}/services"
         req = urllib.request.Request(
@@ -654,6 +668,7 @@ def _provision(
 
         # Repeaters must carry their `_schema` so the seed PUT doesn't wipe it.
         default_content = _repeater_seed_content(svc, default_content)
+        default_content = _key_value_seed_content(svc, default_content)
 
         put_url = f"{base}/projects/{slug}/services/{svc['service_key']}?seed=true"
         put_req = urllib.request.Request(
@@ -692,6 +707,7 @@ def _provision(
             # Repeaters must carry their `_schema` on every per-locale seed too,
             # else the editor can't render this locale's repeater.
             locale_content = _repeater_seed_content(svc, locale_content)
+            locale_content = _key_value_seed_content(svc, locale_content)
 
             put_url = (
                 f"{base}/projects/{slug}/services/{svc['service_key']}?seed=true&locale={locale}"
