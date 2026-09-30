@@ -18,6 +18,14 @@ import {
   Unlink,
 } from "lucide-react";
 import { LinkPopover } from "./LinkPopover";
+import { AnimatedSelect } from "../AnimatedSelect";
+
+const BLOCK_OPTIONS = [
+  { value: "p", label: "Paragraph" },
+  { value: "h2", label: "Heading 2" },
+  { value: "h3", label: "Heading 3" },
+  { value: "h4", label: "Heading 4" },
+] as const;
 import type { RichMode } from "./serialize";
 
 type BlockStyle = "p" | "h2" | "h3" | "h4";
@@ -99,9 +107,7 @@ export function Toolbar({
   });
 
   const items = () =>
-    Array.from(
-      barRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), select") ?? []
-    );
+    Array.from(barRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled)") ?? []);
   const disabledItems = () =>
     Array.from(barRef.current?.querySelectorAll<HTMLElement>("button:disabled") ?? []);
 
@@ -189,24 +195,19 @@ export function Toolbar({
         <Sep />
         {mode === "rich" && (
           <>
-            <select
-              aria-label="Text style"
+            <AnimatedSelect
+              ariaLabel="Text style"
+              compact
               value={s.block}
-              onChange={(e) => {
-                const v = e.target.value as BlockStyle;
+              onChange={(v) => {
                 if (v === "p") chain().setParagraph().run();
                 else
                   chain()
                     .setHeading({ level: Number(v[1]) as 2 | 3 | 4 })
                     .run();
               }}
-              className="h-7 cursor-pointer rounded border border-zinc-200 bg-transparent px-1.5 text-xs text-zinc-700 dark:border-zinc-700 dark:text-zinc-200"
-            >
-              <option value="p">Paragraph</option>
-              <option value="h2">Heading 2</option>
-              <option value="h3">Heading 3</option>
-              <option value="h4">Heading 4</option>
-            </select>
+              options={BLOCK_OPTIONS}
+            />
             <Sep />
           </>
         )}

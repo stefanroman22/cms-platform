@@ -23,7 +23,7 @@ export function hasContent(nodes: RichNode[]): boolean {
 // Mirrors backend _ends_with_br. Not called from inline() below — that uses
 // the running `endsWithBr` flag instead (see the comment there) — kept to
 // mirror the Python module's structure.
-function endsWithBr(nodes: RichNode[]): boolean {
+export function endsWithBr(nodes: RichNode[]): boolean {
   for (let k = nodes.length - 1; k >= 0; k--) {
     const n = nodes[k];
     if (typeof n === "string") {

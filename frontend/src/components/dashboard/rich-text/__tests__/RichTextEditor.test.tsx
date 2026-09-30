@@ -89,6 +89,16 @@ describe("RichTextEditor", () => {
     expect(onChange).toHaveBeenLastCalledWith("");
   });
 
+  it("text style uses the app dropdown and applies a heading", async () => {
+    const { editor } = await setup({ mode: "rich", value: "<p>x</p>" });
+    act(() => {
+      editor.commands.focus("end");
+    });
+    await userEvent.click(await screen.findByLabelText("Text style"));
+    await userEvent.click(screen.getByRole("option", { name: "Heading 2" }));
+    expect(editor.getHTML()).toContain("<h2>");
+  });
+
   it("inline mode: no lists/headings in the toolbar and Enter inserts a line break", async () => {
     const { editor, onChange } = await setup({ mode: "inline", value: "a", label: "Title" });
     expect(screen.queryByRole("button", { name: "Bullet list" })).toBeNull();

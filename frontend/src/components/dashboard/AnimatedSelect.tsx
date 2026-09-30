@@ -17,15 +17,19 @@ export function AnimatedSelect({
   options,
   ariaLabel,
   initialChevron = "down",
+  compact = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: readonly { value: string; label: string }[];
   ariaLabel: string;
   initialChevron?: "up" | "down";
+  /** Toolbar-sized trigger and a min-width list (default is the full-width form input). */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [openUp, setOpenUp] = useState(false);
+  const [active, setActive] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -36,7 +40,27 @@ export function AnimatedSelect({
       const approxListboxHeight = options.length * 40 + 16;
       setOpenUp(approxListboxHeight + 10 > spaceBelow);
     }
+    if (!open)
+      setActive(
+        Math.max(
+          0,
+          options.findIndex((o) => o.value === value)
+        )
+      );
     setOpen((o) => !o);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!open) return toggle();
+      const step = e.key === "ArrowDown" ? 1 : options.length - 1;
+      setActive((i) => (i + step) % options.length);
+    } else if (open && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      onChange(options[active].value);
+      setOpen(false);
+    }
   }
 
   useEffect(() => {
@@ -65,10 +89,15 @@ export function AnimatedSelect({
         ref={buttonRef}
         type="button"
         onClick={toggle}
+        onKeyDown={onKeyDown}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
-        className={`${dashboardInputLgCn} flex cursor-pointer items-center justify-between text-left`}
+        className={`${
+          compact
+            ? "flex h-7 min-w-[8.5rem] cursor-pointer items-center justify-between rounded border border-zinc-200 bg-transparent px-2 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            : `${dashboardInputLgCn} flex cursor-pointer items-center justify-between`
+        } text-left`}
       >
         <span className="truncate">{current?.label ?? ""}</span>
         {initialChevron === "up" ? (
@@ -96,7 +125,7 @@ export function AnimatedSelect({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: openUp ? 6 : -6 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
-            className={`absolute left-0 right-0 z-20 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800 ${
+            className={`absolute left-0 ${compact ? "min-w-full" : "right-0"} z-20 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800 ${
               openUp ? "bottom-full mb-2" : "top-full mt-2"
             }`}
           >
@@ -114,8 +143,10 @@ export function AnimatedSelect({
                     onChange(opt.value);
                     setOpen(false);
                   }}
-                  className={`cursor-pointer px-3 py-2.5 text-sm transition-colors ${
-                    isSelected
+                  className={`cursor-pointer whitespace-nowrap ${
+                    compact ? "px-3 py-1.5 text-xs" : "px-3 py-2.5 text-sm"
+                  } transition-colors ${
+                    isSelected || i === active
                       ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100"
                       : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
                   }`}
