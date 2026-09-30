@@ -8,72 +8,17 @@ import { useQuery } from "@/hooks/useQuery";
 import { ServiceIcon } from "@/components/dashboard/ServiceIcon";
 import { EDITOR_MAP } from "@/components/dashboard/editors";
 import { LocaleTabs } from "@/components/dashboard/LocaleTabs";
-import type { FieldFormat } from "@/components/dashboard/rich-text/ContentField";
+import {
+  type ServiceDetail,
+  fetchServiceDetail,
+  saveServiceContent,
+  serviceDetailKey,
+} from "@/components/dashboard/serviceApi";
 import {
   dashboardSectionCardCn,
   dashboardErrorBannerCn,
   dashboardSuccessBannerCn,
 } from "@/lib/styles";
-
-interface ServiceDetail {
-  id: string;
-  service_key: string;
-  label: string | null;
-  service_type_slug: string;
-  service_type_name: string;
-  service_type_icon: string;
-  schema: Record<string, unknown>;
-  content: Record<string, unknown>;
-  last_updated: string | null;
-  locale?: string;
-  default_locale?: string;
-  locales?: string[];
-  translation_status?: Record<string, string> | null;
-  rich_text_version?: number;
-  field_formats?: Record<string, FieldFormat>;
-  can_edit_structure?: boolean;
-}
-
-function fetchServiceDetail(
-  projectSlug: string,
-  serviceKey: string,
-  locale?: string
-): Promise<ServiceDetail> {
-  const q = locale ? `?locale=${encodeURIComponent(locale)}` : "";
-  return fetch(`/api/projects/${projectSlug}/services/${serviceKey}${q}`, {
-    credentials: "include",
-    cache: "no-store",
-  }).then((r) => {
-    if (!r.ok) throw new Error("Failed to load service.");
-    return r.json();
-  });
-}
-
-async function saveContent(
-  projectSlug: string,
-  serviceKey: string,
-  content: Record<string, unknown>,
-  locale?: string
-): Promise<void> {
-  const q = locale ? `?locale=${encodeURIComponent(locale)}` : "";
-  const r = await fetch(`/api/projects/${projectSlug}/services/${serviceKey}${q}`, {
-    method: "PUT",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
-  if (!r.ok) {
-    const b = await r.json().catch(() => ({}));
-    const d = b.detail;
-    throw new Error(
-      Array.isArray(d)
-        ? d.map((x) => x?.msg ?? String(x)).join("; ")
-        : typeof d === "string"
-          ? d
-          : "Save failed"
-    );
-  }
-}
 
 async function uploadFile(projectSlug: string, serviceKey: string, file: File): Promise<string> {
   const form = new FormData();
@@ -117,7 +62,7 @@ export function ServiceEditor({
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const localeParam = searchParams.get("locale") || "";
-  const cacheKey = `service:${projectSlug}:${serviceKey}:${localeParam || "default"}`;
+  const cacheKey = serviceDetailKey(projectSlug, serviceKey, localeParam || undefined);
 
   const {
     data: service,
@@ -168,7 +113,7 @@ export function ServiceEditor({
     setSaveError("");
     setSaveSuccess(false);
     try {
-      await saveContent(projectSlug, serviceKey, content, localeParam || undefined);
+      await saveServiceContent(projectSlug, serviceKey, content, localeParam || undefined);
       setSaveSuccess(true);
       setDraft(null);
       refresh();
