@@ -17,6 +17,7 @@ import {
   serviceDetailPrefix,
   servicesListKey,
   projectStatusKey,
+  prefetchServiceDetail,
 } from "@/components/dashboard/serviceApi";
 import {
   dashboardSectionCardCn,
@@ -318,6 +319,9 @@ export function ServiceEditor({
           activeLocale={activeLocale}
           defaultLocale={defaultLocale}
           onSelect={setLocale}
+          onPrefetch={(loc) =>
+            prefetchServiceDetail(projectSlug, serviceKey, loc === defaultLocale ? undefined : loc)
+          }
         />
       )}
 

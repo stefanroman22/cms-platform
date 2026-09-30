@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LocaleTabs } from "../LocaleTabs";
 
@@ -52,5 +52,25 @@ describe("LocaleTabs", () => {
       <LocaleTabs locales={["en"]} activeLocale="en" defaultLocale="en" onSelect={vi.fn()} />
     );
     expect(container.firstChild).toBeNull();
+  });
+});
+
+describe("LocaleTabs prefetch", () => {
+  it("prefetches a non-active locale on hover and focus, never the active one", () => {
+    const onPrefetch = vi.fn();
+    render(
+      <LocaleTabs
+        locales={["nl", "en"]}
+        activeLocale="nl"
+        defaultLocale="nl"
+        onSelect={() => {}}
+        onPrefetch={onPrefetch}
+      />
+    );
+    fireEvent.mouseEnter(screen.getByRole("tab", { name: /en/i }));
+    fireEvent.focus(screen.getByRole("tab", { name: /en/i }));
+    fireEvent.mouseEnter(screen.getByRole("tab", { name: /nl/i }));
+    expect(onPrefetch).toHaveBeenCalledWith("en");
+    expect(onPrefetch).not.toHaveBeenCalledWith("nl");
   });
 });

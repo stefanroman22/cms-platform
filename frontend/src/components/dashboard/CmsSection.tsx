@@ -130,6 +130,7 @@ export function CmsSection({ projectSlug, isAdmin, onEditorDirtyChange }: CmsSec
                 isAdmin={isAdmin}
                 removingKey={removingKey}
                 onRemove={handleRemoveService}
+                projectSlug={projectSlug}
               />
             )}
           </div>
