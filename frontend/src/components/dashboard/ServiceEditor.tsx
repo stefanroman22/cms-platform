@@ -94,7 +94,7 @@ export function ServiceEditor({
   // never remounts the editor, so focus, cursor and undo history survive it.
   const [editorRevision, setEditorRevision] = useState(0);
   const ownSaveStampRef = useRef<string | null>(null);
-  const seenStampRef = useRef<string | null | undefined>(undefined);
+  const seenStampRef = useRef<{ key: string; stamp: string | null } | undefined>(undefined);
   // Counts edits so a save only clears the draft if nothing was typed meanwhile.
   const changeSeqRef = useRef(0);
   const draftRef = useRef(draft);
@@ -106,18 +106,33 @@ export function ServiceEditor({
   useEffect(() => {
     if (!service) return;
     const stamp = service.last_updated;
-    if (seenStampRef.current === undefined) {
-      seenStampRef.current = stamp;
+    const seen = seenStampRef.current;
+    if (seen === undefined || seen.key !== cacheKey) {
+      seenStampRef.current = { key: cacheKey, stamp };
       return;
     }
-    if (stamp === seenStampRef.current) return;
-    seenStampRef.current = stamp;
-    if (stamp !== null && stamp === ownSaveStampRef.current) return; // our own save
+    if (stamp === seen.stamp) return;
+    // Only a strictly newer version counts; a stale in-flight GET must not
+    // remount the editor with older content.
+    const newer =
+      stamp !== null && seen.stamp !== null && Date.parse(stamp) > Date.parse(seen.stamp); // NaN compares false
+    seenStampRef.current = {
+      key: cacheKey,
+      stamp: newer || seen.stamp === null ? stamp : seen.stamp,
+    };
+    if (!newer) return;
+    if (stamp === ownSaveStampRef.current) return; // our own save
     if (draftRef.current !== null) return; // never clobber unsaved edits
     setEditorRevision((r) => r + 1);
-  }, [service]);
+  }, [service, cacheKey]);
 
   const isDirty = draft !== null;
+
+  // useQuery keeps the previous key's data while a new key loads (or fails), so
+  // `service` can belong to a different locale than the one requested.
+  const requestedLocale = localeParam || service?.default_locale;
+  const localeMismatch = !!service?.locale && service.locale !== requestedLocale;
+  const busy = loading || localeMismatch;
 
   useEffect(() => {
     onDirtyChange?.(isDirty);
@@ -141,7 +156,7 @@ export function ServiceEditor({
   );
 
   async function handleSave() {
-    if (!service || savingRef.current || loading) return;
+    if (!service || savingRef.current || loading || localeMismatch) return;
     const content = draft ?? service.content;
     const seqAtStart = changeSeqRef.current;
     savingRef.current = true;
@@ -234,6 +249,7 @@ export function ServiceEditor({
       }
       setDraft(null);
       cache.invalidate(projectStatusKey(projectSlug));
+      cache.invalidate(servicesListKey(projectSlug));
       refresh();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Re-translate failed.");
@@ -302,7 +318,7 @@ export function ServiceEditor({
             )}
             <button
               onClick={handleSave}
-              disabled={saving || loading}
+              disabled={saving || busy}
               className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer dark:bg-zinc-700 dark:hover:bg-zinc-600"
             >
               <Save className="h-4 w-4" />
@@ -387,7 +403,9 @@ export function ServiceEditor({
       )}
 
       {/* Fetch error (only when there's nothing to show). */}
-      {!loading && error && !service && <div className={dashboardErrorBannerCn}>{error}</div>}
+      {!loading && error && (!service || localeMismatch) && (
+        <div className={dashboardErrorBannerCn}>{error}</div>
+      )}
 
       {/* Editor — stale-while-revalidate on locale switch: keep the current editor
           visible during the refetch (with a subtle loading veil) and cross-fade to
@@ -396,12 +414,7 @@ export function ServiceEditor({
           editor is inert while another locale loads, so typing can't land in the
           wrong language. */}
       {service && EditorComponent && (
-        <div
-          className="relative"
-          data-testid="service-editor-body"
-          inert={loading}
-          aria-busy={loading}
-        >
+        <div className="relative" data-testid="service-editor-body" inert={busy} aria-busy={busy}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`${service.id}:${activeLocale}`}

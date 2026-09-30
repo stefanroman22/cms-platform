@@ -267,4 +267,34 @@ describe("ServiceEditor save flow", () => {
     await waitFor(() => expect(screen.getByTestId("service-editor-body")).toHaveAttribute("inert"));
     expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
   });
+
+  it("blocks saving when the new locale failed to load (no wrong-locale write)", async () => {
+    const { rerender } = render(
+      <ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />
+    );
+    await screen.findByPlaceholderText(/write content here/i);
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    mockSearch = "locale=en";
+    rerender(<ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />);
+    expect(await screen.findByText("Failed to load service.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    expect(screen.getByTestId("service-editor-body")).toHaveAttribute("inert");
+    await userEvent.setup().keyboard("{Control>}s{/Control}");
+    expect(puts()).toHaveLength(0);
+  });
+
+  it("ignores an older version arriving while clean (no remount)", async () => {
+    render(<ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />);
+    const before = await screen.findByPlaceholderText(/write content here/i);
+    act(() => {
+      cache.set("service:demo:about:default", {
+        ...DETAIL,
+        content: { title: "Hello", body: "Stale older" },
+        last_updated: "2026-09-01T10:00:00Z",
+      });
+    });
+    const after = screen.getByPlaceholderText(/write content here/i);
+    expect(after).toBe(before);
+    expect(after).toHaveValue("World");
+  });
 });
