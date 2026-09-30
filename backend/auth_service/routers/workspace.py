@@ -182,15 +182,10 @@ async def list_services(project_slug: str, request: Request, locale: str | None 
         raise HTTPException(status_code=500, detail="Failed to list services") from exc
 
 
-@router.get("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
-async def get_service(
-    project_slug: str, service_key: str, request: Request, locale: str | None = None
-):
-    user = await require_user(request)
-    project = require_project_access(project_slug, user)
+def _service_detail(project: dict, user, service_key: str, loc: str) -> dict:
+    """The dashboard detail payload for one service in one locale. One Supabase
+    call; the caller has already authenticated and resolved `project`."""
     default_locale = project.get("default_locale") or "en"
-    loc = locale or default_locale
-
     sb = get_supabase_admin()
     result = (
         sb.table("project_services")
@@ -218,6 +213,16 @@ async def get_service(
         result.data["service_type_slug"], flat.get("content") or {}
     )
     return flat
+
+
+@router.get("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
+async def get_service(
+    project_slug: str, service_key: str, request: Request, locale: str | None = None
+):
+    user = await require_user(request)
+    project = require_project_access(project_slug, user)
+    loc = locale or project.get("default_locale") or "en"
+    return _service_detail(project, user, service_key, loc)
 
 
 def _repeater_schema_of(content: object) -> list | None:
@@ -407,8 +412,9 @@ async def save_service(
                 prev_meta[path] = {"src_hash": src_hash(src_segs.get(path, ""))}
         _upsert(loc, content_in, prev_meta)
 
-    # Return fresh state for the edited locale
-    return await get_service(project_slug, service_key, request, locale=loc)
+    # Return fresh state for the edited locale. Auth and project are already
+    # resolved above; re-running them would cost two more Supabase calls.
+    return _service_detail(project, user, service_key, loc)
 
 
 @router.post("/projects/{project_slug}/services/{service_key}/upload")
@@ -1058,7 +1064,7 @@ async def retranslate_service(project_slug: str, service_key: str, request: Requ
         },
         on_conflict="project_service_id,locale",
     ).execute()
-    return await get_service(project_slug, service_key, request, locale=locale)
+    return _service_detail(project, user, service_key, locale)
 
 
 # ── Admin client management ──────────────────────────────────────────────────
