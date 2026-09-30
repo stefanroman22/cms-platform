@@ -297,4 +297,22 @@ describe("ServiceEditor save flow", () => {
     expect(after).toBe(before);
     expect(after).toHaveValue("World");
   });
+
+  it("remounts when a first-ever stamp arrives for a never-saved locale", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ...DETAIL, last_updated: null }),
+    });
+    render(<ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />);
+    await screen.findByPlaceholderText(/write content here/i);
+    act(() => {
+      cache.set("service:demo:about:default", {
+        ...DETAIL,
+        content: { title: "Hello", body: "Freshly translated" },
+        last_updated: "2026-09-30T14:00:00Z",
+      });
+    });
+    expect(await screen.findByDisplayValue("Freshly translated")).toBeInTheDocument();
+  });
 });

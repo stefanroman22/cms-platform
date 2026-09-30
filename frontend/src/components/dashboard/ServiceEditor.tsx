@@ -114,12 +114,10 @@ export function ServiceEditor({
     if (stamp === seen.stamp) return;
     // Only a strictly newer version counts; a stale in-flight GET must not
     // remount the editor with older content.
+    // A first-ever stamp (seen null) counts as newer; unparsable stamps never do.
     const newer =
-      stamp !== null && seen.stamp !== null && Date.parse(stamp) > Date.parse(seen.stamp); // NaN compares false
-    seenStampRef.current = {
-      key: cacheKey,
-      stamp: newer || seen.stamp === null ? stamp : seen.stamp,
-    };
+      stamp !== null && (seen.stamp === null || Date.parse(stamp) > Date.parse(seen.stamp));
+    seenStampRef.current = { key: cacheKey, stamp: newer ? stamp : seen.stamp };
     if (!newer) return;
     if (stamp === ownSaveStampRef.current) return; // our own save
     if (draftRef.current !== null) return; // never clobber unsaved edits
