@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { ArrowLeft, Save, CheckCircle, AlertCircle, Languages, RefreshCw } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
+import * as cache from "@/lib/cache";
 import { ServiceIcon } from "@/components/dashboard/ServiceIcon";
 import { EDITOR_MAP } from "@/components/dashboard/editors";
 import { LocaleTabs } from "@/components/dashboard/LocaleTabs";
@@ -13,6 +14,9 @@ import {
   fetchServiceDetail,
   saveServiceContent,
   serviceDetailKey,
+  serviceDetailPrefix,
+  servicesListKey,
+  projectStatusKey,
 } from "@/components/dashboard/serviceApi";
 import {
   dashboardSectionCardCn,
@@ -84,6 +88,34 @@ export function ServiceEditor({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [retranslating, setRetranslating] = useState(false);
 
+  // Bumped only when content changes underneath us (re-translate, or a newer
+  // server version arriving while there are no unsaved edits). Our own save
+  // never remounts the editor, so focus, cursor and undo history survive it.
+  const [editorRevision, setEditorRevision] = useState(0);
+  const ownSaveStampRef = useRef<string | null>(null);
+  const seenStampRef = useRef<string | null | undefined>(undefined);
+  // Counts edits so a save only clears the draft if nothing was typed meanwhile.
+  const changeSeqRef = useRef(0);
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+  const savingRef = useRef(false);
+
+  useEffect(() => {
+    if (!service) return;
+    const stamp = service.last_updated;
+    if (seenStampRef.current === undefined) {
+      seenStampRef.current = stamp;
+      return;
+    }
+    if (stamp === seenStampRef.current) return;
+    seenStampRef.current = stamp;
+    if (stamp !== null && stamp === ownSaveStampRef.current) return; // our own save
+    if (draftRef.current !== null) return; // never clobber unsaved edits
+    setEditorRevision((r) => r + 1);
+  }, [service]);
+
   const isDirty = draft !== null;
 
   useEffect(() => {
@@ -97,6 +129,7 @@ export function ServiceEditor({
   }, [onDirtyChange]);
 
   const handleChange = useCallback((content: Record<string, unknown>) => {
+    changeSeqRef.current += 1;
     setDraft(content);
     setSaveSuccess(false);
   }, []);
@@ -107,23 +140,54 @@ export function ServiceEditor({
   );
 
   async function handleSave() {
-    if (!service) return;
+    if (!service || savingRef.current || loading) return;
     const content = draft ?? service.content;
+    const seqAtStart = changeSeqRef.current;
+    savingRef.current = true;
     setSaving(true);
     setSaveError("");
     setSaveSuccess(false);
     try {
-      await saveServiceContent(projectSlug, serviceKey, content, localeParam || undefined);
+      const saved = await saveServiceContent(
+        projectSlug,
+        serviceKey,
+        content,
+        localeParam || undefined
+      );
+      ownSaveStampRef.current = saved.last_updated;
+      // Other locales were re-translated server-side; the grid's dates and the
+      // publish bar's unpublished count changed too.
+      cache.invalidatePrefix(serviceDetailPrefix(projectSlug, serviceKey), { except: cacheKey });
+      cache.set(cacheKey, saved);
+      cache.invalidate(servicesListKey(projectSlug));
+      cache.invalidate(projectStatusKey(projectSlug));
       setSaveSuccess(true);
-      setDraft(null);
-      refresh();
+      if (changeSeqRef.current === seqAtStart) setDraft(null);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
+
+  const handleSaveRef = useRef(handleSave);
+  useEffect(() => {
+    handleSaveRef.current = handleSave;
+  });
+
+  // Ctrl/Cmd+S saves (and never opens the browser's "Save page" dialog).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void handleSaveRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // beforeunload guard while dirty
   useEffect(() => {
@@ -168,6 +232,7 @@ export function ServiceEditor({
         throw new Error(b.detail ?? "Re-translate failed.");
       }
       setDraft(null);
+      cache.invalidate(projectStatusKey(projectSlug));
       refresh();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Re-translate failed.");
@@ -236,7 +301,7 @@ export function ServiceEditor({
             )}
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || loading}
               className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer dark:bg-zinc-700 dark:hover:bg-zinc-600"
             >
               <Save className="h-4 w-4" />
@@ -323,9 +388,16 @@ export function ServiceEditor({
       {/* Editor — stale-while-revalidate on locale switch: keep the current editor
           visible during the refetch (with a subtle loading veil) and cross-fade to
           the new locale's content when it arrives, so switching NL/EN is smooth and
-          never blanks. Keyed on service.id + activeLocale so it re-mounts cleanly. */}
+          never blanks. Keyed on service.id + activeLocale so it re-mounts cleanly. The
+          editor is inert while another locale loads, so typing can't land in the
+          wrong language. */}
       {service && EditorComponent && (
-        <div className="relative">
+        <div
+          className="relative"
+          data-testid="service-editor-body"
+          inert={loading}
+          aria-busy={loading}
+        >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`${service.id}:${activeLocale}`}
@@ -335,7 +407,7 @@ export function ServiceEditor({
               transition={{ duration: reduce ? 0.12 : 0.2, ease: [0.2, 0, 0, 1] }}
             >
               <EditorComponent
-                key={service.last_updated ?? ""}
+                key={editorRevision}
                 initialContent={service.content}
                 onChange={handleChange}
                 onUpload={handleUpload}
