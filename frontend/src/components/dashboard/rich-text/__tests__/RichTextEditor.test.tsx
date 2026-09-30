@@ -345,3 +345,60 @@ describe("RichTextEditor", () => {
     expect(input).toHaveFocus();
   });
 });
+
+describe("RichTextEditor render cost", () => {
+  it("does not call editor.setOptions when the parent re-renders with a new value/onChange", async () => {
+    let editor: Editor | undefined;
+    const { rerender } = render(
+      <RichTextEditor
+        value="<p>a</p>"
+        onChange={() => {}}
+        mode="rich"
+        label="Body"
+        onReady={(e) => (editor = e)}
+      />
+    );
+    await waitFor(() => expect(editor).toBeDefined());
+    const spy = vi.spyOn(editor!, "setOptions");
+    for (const v of ["<p>ab</p>", "<p>abc</p>", "<p>abcd</p>"]) {
+      rerender(
+        <RichTextEditor
+          value={v}
+          onChange={() => {}}
+          mode="rich"
+          label="Body"
+          onReady={(e) => (editor = e)}
+        />
+      );
+    }
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("still reconfigures when the placeholder changes", async () => {
+    let editor: Editor | undefined;
+    const onReady = (e: Editor) => (editor = e);
+    const { rerender } = render(
+      <RichTextEditor
+        value=""
+        onChange={() => {}}
+        mode="rich"
+        label="Body"
+        placeholder="One"
+        onReady={onReady}
+      />
+    );
+    await waitFor(() => expect(editor).toBeDefined());
+    const spy = vi.spyOn(editor!, "setOptions");
+    rerender(
+      <RichTextEditor
+        value=""
+        onChange={() => {}}
+        mode="rich"
+        label="Body"
+        placeholder="Two"
+        onReady={onReady}
+      />
+    );
+    expect(spy).toHaveBeenCalled();
+  });
+});
