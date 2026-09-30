@@ -202,3 +202,60 @@ def test_one_locale_failing_does_not_block_the_others(
 
     assert res.status_code == 200
     assert [u["locale"] for u in _content_upserts(mock_supabase)] == ["en", "nl", "fr"]
+
+
+def test_list_services_embeds_only_needed_locales(
+    mock_supabase, client, auth_as, client_user, monkeypatch
+):
+    auth_as(client_user)
+    monkeypatch.setattr(
+        "auth_service.routers.workspace.require_project_access",
+        lambda slug, user: _project(["en", "nl", "de"]),
+    )
+    mock_supabase.execute.side_effect = [
+        MagicMock(
+            data=[
+                {
+                    **SVC_ROW,
+                    "content_entries": [
+                        {
+                            "locale": "en",
+                            "updated_at": "2026-09-30T10:00:00Z",
+                            "draft_content": {"title": "Hi"},
+                            "published_content": None,
+                        }
+                    ],
+                }
+            ]
+        )
+    ]
+
+    res = client.get("/projects/demo/services?locale=nl")
+
+    assert res.status_code == 200
+    # nl requested, falls back to the default (en) row.
+    assert res.json()[0]["last_updated"] == "2026-09-30T10:00:00Z"
+    embed_filters = [
+        c.args for c in mock_supabase.in_.call_args_list if c.args[0] == "content_entries.locale"
+    ]
+    assert len(embed_filters) == 1
+    assert sorted(embed_filters[0][1]) == ["en", "nl"]
+
+
+def test_list_services_default_locale_filters_to_one(
+    mock_supabase, client, auth_as, client_user, monkeypatch
+):
+    auth_as(client_user)
+    monkeypatch.setattr(
+        "auth_service.routers.workspace.require_project_access",
+        lambda slug, user: _project(["en", "nl"]),
+    )
+    mock_supabase.execute.side_effect = [MagicMock(data=[])]
+
+    res = client.get("/projects/demo/services")
+
+    assert res.status_code == 200
+    embed_filters = [
+        c.args for c in mock_supabase.in_.call_args_list if c.args[0] == "content_entries.locale"
+    ]
+    assert embed_filters == [("content_entries.locale", ["en"])]

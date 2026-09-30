@@ -175,6 +175,9 @@ async def list_services(project_slug: str, request: Request, locale: str | None 
                 "id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon), content_entries(locale, updated_at, draft_content, published_content)"
             )
             .eq("project_id", project["id"])
+            # Filter the embedded rows (not the services) to the locale shown plus
+            # its default-locale fallback; other locales' JSON is never used here.
+            .in_("content_entries.locale", sorted({loc, default_locale}))
             .order("display_order")
             .execute()
         )
