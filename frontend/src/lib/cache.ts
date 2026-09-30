@@ -165,6 +165,16 @@ export function invalidate(key: string): void {
   notify(key);
 }
 
+/**
+ * Invalidate every key starting with `prefix` (e.g. all locales of one
+ * service after a save re-translated them), except `opts.except`.
+ */
+export function invalidatePrefix(prefix: string, opts: { except?: string } = {}): void {
+  for (const key of Array.from(store.keys())) {
+    if (key.startsWith(prefix) && key !== opts.except) invalidate(key);
+  }
+}
+
 /** Wipe everything — call on logout. */
 export function clearAll(): void {
   store.clear();

@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { BoxSelect, Mail } from "lucide-react";
 import { PageTabs } from "@/components/dashboard/PageTabs";
 import { ServiceCard, type ServiceCardService } from "@/components/dashboard/ServiceCard";
+import { prefetchServiceDetail } from "@/components/dashboard/serviceApi";
 
 const EMAIL_TYPES = new Set(["email_config"]);
 
@@ -24,9 +25,16 @@ interface ServiceGridProps {
   isAdmin: boolean;
   removingKey: string | null;
   onRemove: (serviceKey: string) => void;
+  projectSlug?: string;
 }
 
-export function ServiceGrid({ services, isAdmin, removingKey, onRemove }: ServiceGridProps) {
+export function ServiceGrid({
+  services,
+  isAdmin,
+  removingKey,
+  onRemove,
+  projectSlug,
+}: ServiceGridProps) {
   // Separate email services — they get their own section regardless of page
   const emailServices = services.filter((s) => EMAIL_TYPES.has(s.service_type_slug));
   const contentServices = services.filter((s) => !EMAIL_TYPES.has(s.service_type_slug));
@@ -62,6 +70,13 @@ export function ServiceGrid({ services, isAdmin, removingKey, onRemove }: Servic
     params.set("tab", effectivePage);
     params.set("service", serviceKey);
     return `${pathname}?${params.toString()}`;
+  }
+
+  // The editor opens with the current `?locale=` (usually none → default).
+  function prefetchFor(serviceKey: string) {
+    if (!projectSlug) return undefined;
+    return () =>
+      prefetchServiceDetail(projectSlug, serviceKey, searchParams.get("locale") || undefined);
   }
 
   const visibleServices = contentServices.filter(
@@ -118,6 +133,7 @@ export function ServiceGrid({ services, isAdmin, removingKey, onRemove }: Servic
                       isAdmin={isAdmin}
                       removing={removingKey === svc.service_key}
                       onRemove={onRemove}
+                      onPrefetch={prefetchFor(svc.service_key)}
                       variant="content"
                     />
                   ))}
@@ -146,6 +162,7 @@ export function ServiceGrid({ services, isAdmin, removingKey, onRemove }: Servic
                 isAdmin={isAdmin}
                 removing={removingKey === svc.service_key}
                 onRemove={onRemove}
+                onPrefetch={prefetchFor(svc.service_key)}
                 variant="email"
               />
             ))}

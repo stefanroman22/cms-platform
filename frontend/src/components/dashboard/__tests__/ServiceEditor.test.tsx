@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as cache from "@/lib/cache";
 
@@ -128,5 +128,191 @@ describe("ServiceEditor save errors", () => {
     const user = await renderAndType();
     await user.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(screen.getByText("x; y")).toBeInTheDocument());
+  });
+});
+
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+function getCalls() {
+  return (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+}
+const gets = () => getCalls().filter(([, init]) => !init || !init.method || init.method === "GET");
+const puts = () => getCalls().filter(([, init]) => init?.method === "PUT");
+
+const SAVED = {
+  ...DETAIL,
+  content: { title: "Hello", body: "World more" },
+  last_updated: "2026-09-30T12:00:00Z",
+};
+
+describe("ServiceEditor save flow", () => {
+  it("uses the PUT response: no refetch, no remount, clean afterwards", async () => {
+    mockFetch({ status: 200, body: SAVED });
+    const user = await renderAndType();
+    const before = screen.getByPlaceholderText(/write content here/i);
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/changes saved successfully/i)).toBeInTheDocument();
+    expect(gets()).toHaveLength(1); // only the initial load
+    const after = screen.getByPlaceholderText(/write content here/i);
+    expect(after).toBe(before); // same DOM node → editor was not remounted
+    expect(after).toHaveValue("World more");
+    expect(screen.queryByText(/unsaved changes/i)).not.toBeInTheDocument();
+    expect(cache.get("service:demo:about:default")).toEqual(SAVED);
+  });
+
+  it("keeps text typed while the save is in flight, and stays dirty", async () => {
+    const put = deferred<unknown>();
+    global.fetch = vi.fn().mockImplementation(async (_u: string, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        await put.promise;
+        return { ok: true, status: 200, json: async () => SAVED };
+      }
+      return { ok: true, status: 200, json: async () => DETAIL };
+    });
+    const user = await renderAndType();
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await user.type(screen.getByPlaceholderText(/write content here/i), " again");
+    await act(async () => put.resolve(undefined));
+    await screen.findByText(/changes saved successfully/i);
+    expect(screen.getByPlaceholderText(/write content here/i)).toHaveValue("World more again");
+    expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
+  });
+
+  it("invalidates other locales, the grid list and the publish status", async () => {
+    mockFetch({ status: 200, body: SAVED });
+    cache.set("service:demo:about:en", { stale: true });
+    cache.set("service:demo:hero:en", { other: true });
+    const onStatus = vi.fn();
+    const onList = vi.fn();
+    cache.subscribe("status:demo", onStatus);
+    cache.subscribe("services:demo", onList);
+    const user = await renderAndType();
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await screen.findByText(/changes saved successfully/i);
+    expect(cache.get("service:demo:about:en")).toBeNull();
+    expect(cache.get("service:demo:hero:en")).toEqual({ other: true });
+    expect(onStatus).toHaveBeenCalled();
+    expect(onList).toHaveBeenCalled();
+  });
+
+  it("on a failed save keeps the draft and touches no cache", async () => {
+    mockFetch({ status: 500, body: { detail: "boom" } });
+    cache.set("service:demo:about:en", { keep: true });
+    const onStatus = vi.fn();
+    cache.subscribe("status:demo", onStatus);
+    const user = await renderAndType();
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText("boom")).toBeInTheDocument();
+    expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/write content here/i)).toHaveValue("World more");
+    expect(cache.get("service:demo:about:en")).toEqual({ keep: true });
+    expect(onStatus).not.toHaveBeenCalled();
+  });
+
+  it("Ctrl+S saves once, even when pressed repeatedly during a save", async () => {
+    const put = deferred<unknown>();
+    global.fetch = vi.fn().mockImplementation(async (_u: string, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        await put.promise;
+        return { ok: true, status: 200, json: async () => SAVED };
+      }
+      return { ok: true, status: 200, json: async () => DETAIL };
+    });
+    const user = await renderAndType();
+    await user.keyboard("{Control>}s{/Control}");
+    await user.keyboard("{Control>}s{/Control}");
+    await user.keyboard("{Meta>}s{/Meta}");
+    await act(async () => put.resolve(undefined));
+    await screen.findByText(/changes saved successfully/i);
+    expect(puts()).toHaveLength(1);
+  });
+
+  it("does not remount or drop the draft when a background refresh brings a newer version", async () => {
+    await renderAndType();
+    const before = screen.getByPlaceholderText(/write content here/i);
+    act(() => {
+      cache.set("service:demo:about:default", { ...DETAIL, last_updated: "2026-09-30T13:00:00Z" });
+    });
+    const after = screen.getByPlaceholderText(/write content here/i);
+    expect(after).toBe(before);
+    expect(after).toHaveValue("World more");
+    expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
+  });
+
+  it("remounts with the new content when a newer version arrives while clean", async () => {
+    render(<ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />);
+    await screen.findByPlaceholderText(/write content here/i);
+    act(() => {
+      cache.set("service:demo:about:default", {
+        ...DETAIL,
+        content: { title: "Hello", body: "Changed elsewhere" },
+        last_updated: "2026-09-30T13:00:00Z",
+      });
+    });
+    expect(await screen.findByDisplayValue("Changed elsewhere")).toBeInTheDocument();
+  });
+
+  it("makes the editor inert and disables Save while another locale loads", async () => {
+    const { rerender } = render(
+      <ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />
+    );
+    await screen.findByPlaceholderText(/write content here/i);
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {})); // en never resolves
+    mockSearch = "locale=en";
+    rerender(<ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId("service-editor-body")).toHaveAttribute("inert"));
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+  });
+
+  it("blocks saving when the new locale failed to load (no wrong-locale write)", async () => {
+    const { rerender } = render(
+      <ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />
+    );
+    await screen.findByPlaceholderText(/write content here/i);
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    mockSearch = "locale=en";
+    rerender(<ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />);
+    expect(await screen.findByText("Failed to load service.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    expect(screen.getByTestId("service-editor-body")).toHaveAttribute("inert");
+    await userEvent.setup().keyboard("{Control>}s{/Control}");
+    expect(puts()).toHaveLength(0);
+  });
+
+  it("ignores an older version arriving while clean (no remount)", async () => {
+    render(<ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />);
+    const before = await screen.findByPlaceholderText(/write content here/i);
+    act(() => {
+      cache.set("service:demo:about:default", {
+        ...DETAIL,
+        content: { title: "Hello", body: "Stale older" },
+        last_updated: "2026-09-01T10:00:00Z",
+      });
+    });
+    const after = screen.getByPlaceholderText(/write content here/i);
+    expect(after).toBe(before);
+    expect(after).toHaveValue("World");
+  });
+
+  it("remounts when a first-ever stamp arrives for a never-saved locale", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ...DETAIL, last_updated: null }),
+    });
+    render(<ServiceEditor projectSlug="demo" serviceKey="about" onBack={() => {}} />);
+    await screen.findByPlaceholderText(/write content here/i);
+    act(() => {
+      cache.set("service:demo:about:default", {
+        ...DETAIL,
+        content: { title: "Hello", body: "Freshly translated" },
+        last_updated: "2026-09-30T14:00:00Z",
+      });
+    });
+    expect(await screen.findByDisplayValue("Freshly translated")).toBeInTheDocument();
   });
 });

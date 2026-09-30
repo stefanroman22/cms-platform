@@ -2,6 +2,7 @@
   "builds": [
     { "src": "vercel_entry.py", "use": "@vercel/python" }
   ],
+  "regions": ["dub1"],
   "routes": [
     { "src": "/(.*)", "dest": "/vercel_entry.py" }
   ],

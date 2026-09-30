@@ -1,79 +1,29 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { ArrowLeft, Save, CheckCircle, AlertCircle, Languages, RefreshCw } from "lucide-react";
 import { useQuery } from "@/hooks/useQuery";
+import * as cache from "@/lib/cache";
 import { ServiceIcon } from "@/components/dashboard/ServiceIcon";
 import { EDITOR_MAP } from "@/components/dashboard/editors";
 import { LocaleTabs } from "@/components/dashboard/LocaleTabs";
-import type { FieldFormat } from "@/components/dashboard/rich-text/ContentField";
+import {
+  type ServiceDetail,
+  fetchServiceDetail,
+  saveServiceContent,
+  serviceDetailKey,
+  serviceDetailPrefix,
+  servicesListKey,
+  projectStatusKey,
+  prefetchServiceDetail,
+} from "@/components/dashboard/serviceApi";
 import {
   dashboardSectionCardCn,
   dashboardErrorBannerCn,
   dashboardSuccessBannerCn,
 } from "@/lib/styles";
-
-interface ServiceDetail {
-  id: string;
-  service_key: string;
-  label: string | null;
-  service_type_slug: string;
-  service_type_name: string;
-  service_type_icon: string;
-  schema: Record<string, unknown>;
-  content: Record<string, unknown>;
-  last_updated: string | null;
-  locale?: string;
-  default_locale?: string;
-  locales?: string[];
-  translation_status?: Record<string, string> | null;
-  rich_text_version?: number;
-  field_formats?: Record<string, FieldFormat>;
-  can_edit_structure?: boolean;
-}
-
-function fetchServiceDetail(
-  projectSlug: string,
-  serviceKey: string,
-  locale?: string
-): Promise<ServiceDetail> {
-  const q = locale ? `?locale=${encodeURIComponent(locale)}` : "";
-  return fetch(`/api/projects/${projectSlug}/services/${serviceKey}${q}`, {
-    credentials: "include",
-    cache: "no-store",
-  }).then((r) => {
-    if (!r.ok) throw new Error("Failed to load service.");
-    return r.json();
-  });
-}
-
-async function saveContent(
-  projectSlug: string,
-  serviceKey: string,
-  content: Record<string, unknown>,
-  locale?: string
-): Promise<void> {
-  const q = locale ? `?locale=${encodeURIComponent(locale)}` : "";
-  const r = await fetch(`/api/projects/${projectSlug}/services/${serviceKey}${q}`, {
-    method: "PUT",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
-  if (!r.ok) {
-    const b = await r.json().catch(() => ({}));
-    const d = b.detail;
-    throw new Error(
-      Array.isArray(d)
-        ? d.map((x) => x?.msg ?? String(x)).join("; ")
-        : typeof d === "string"
-          ? d
-          : "Save failed"
-    );
-  }
-}
 
 async function uploadFile(projectSlug: string, serviceKey: string, file: File): Promise<string> {
   const form = new FormData();
@@ -117,7 +67,7 @@ export function ServiceEditor({
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const localeParam = searchParams.get("locale") || "";
-  const cacheKey = `service:${projectSlug}:${serviceKey}:${localeParam || "default"}`;
+  const cacheKey = serviceDetailKey(projectSlug, serviceKey, localeParam || undefined);
 
   const {
     data: service,
@@ -139,7 +89,48 @@ export function ServiceEditor({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [retranslating, setRetranslating] = useState(false);
 
+  // Bumped only when content changes underneath us (re-translate, or a newer
+  // server version arriving while there are no unsaved edits). Our own save
+  // never remounts the editor, so focus, cursor and undo history survive it.
+  const [editorRevision, setEditorRevision] = useState(0);
+  const ownSaveStampRef = useRef<string | null>(null);
+  const seenStampRef = useRef<{ key: string; stamp: string | null } | undefined>(undefined);
+  // Counts edits so a save only clears the draft if nothing was typed meanwhile.
+  const changeSeqRef = useRef(0);
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+  const savingRef = useRef(false);
+
+  useEffect(() => {
+    if (!service) return;
+    const stamp = service.last_updated;
+    const seen = seenStampRef.current;
+    if (seen === undefined || seen.key !== cacheKey) {
+      seenStampRef.current = { key: cacheKey, stamp };
+      return;
+    }
+    if (stamp === seen.stamp) return;
+    // Only a strictly newer version counts; a stale in-flight GET must not
+    // remount the editor with older content.
+    // A first-ever stamp (seen null) counts as newer; unparsable stamps never do.
+    const newer =
+      stamp !== null && (seen.stamp === null || Date.parse(stamp) > Date.parse(seen.stamp));
+    seenStampRef.current = { key: cacheKey, stamp: newer ? stamp : seen.stamp };
+    if (!newer) return;
+    if (stamp === ownSaveStampRef.current) return; // our own save
+    if (draftRef.current !== null) return; // never clobber unsaved edits
+    setEditorRevision((r) => r + 1);
+  }, [service, cacheKey]);
+
   const isDirty = draft !== null;
+
+  // useQuery keeps the previous key's data while a new key loads (or fails), so
+  // `service` can belong to a different locale than the one requested.
+  const requestedLocale = localeParam || service?.default_locale;
+  const localeMismatch = !!service?.locale && service.locale !== requestedLocale;
+  const busy = loading || localeMismatch;
 
   useEffect(() => {
     onDirtyChange?.(isDirty);
@@ -152,6 +143,7 @@ export function ServiceEditor({
   }, [onDirtyChange]);
 
   const handleChange = useCallback((content: Record<string, unknown>) => {
+    changeSeqRef.current += 1;
     setDraft(content);
     setSaveSuccess(false);
   }, []);
@@ -162,23 +154,54 @@ export function ServiceEditor({
   );
 
   async function handleSave() {
-    if (!service) return;
+    if (!service || savingRef.current || loading || localeMismatch) return;
     const content = draft ?? service.content;
+    const seqAtStart = changeSeqRef.current;
+    savingRef.current = true;
     setSaving(true);
     setSaveError("");
     setSaveSuccess(false);
     try {
-      await saveContent(projectSlug, serviceKey, content, localeParam || undefined);
+      const saved = await saveServiceContent(
+        projectSlug,
+        serviceKey,
+        content,
+        localeParam || undefined
+      );
+      ownSaveStampRef.current = saved.last_updated;
+      // Other locales were re-translated server-side; the grid's dates and the
+      // publish bar's unpublished count changed too.
+      cache.invalidatePrefix(serviceDetailPrefix(projectSlug, serviceKey), { except: cacheKey });
+      cache.set(cacheKey, saved);
+      cache.invalidate(servicesListKey(projectSlug));
+      cache.invalidate(projectStatusKey(projectSlug));
       setSaveSuccess(true);
-      setDraft(null);
-      refresh();
+      if (changeSeqRef.current === seqAtStart) setDraft(null);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
+
+  const handleSaveRef = useRef(handleSave);
+  useEffect(() => {
+    handleSaveRef.current = handleSave;
+  });
+
+  // Ctrl/Cmd+S saves (and never opens the browser's "Save page" dialog).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void handleSaveRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // beforeunload guard while dirty
   useEffect(() => {
@@ -223,6 +246,8 @@ export function ServiceEditor({
         throw new Error(b.detail ?? "Re-translate failed.");
       }
       setDraft(null);
+      cache.invalidate(projectStatusKey(projectSlug));
+      cache.invalidate(servicesListKey(projectSlug));
       refresh();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Re-translate failed.");
@@ -291,7 +316,7 @@ export function ServiceEditor({
             )}
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || busy}
               className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer dark:bg-zinc-700 dark:hover:bg-zinc-600"
             >
               <Save className="h-4 w-4" />
@@ -308,6 +333,9 @@ export function ServiceEditor({
           activeLocale={activeLocale}
           defaultLocale={defaultLocale}
           onSelect={setLocale}
+          onPrefetch={(loc) =>
+            prefetchServiceDetail(projectSlug, serviceKey, loc === defaultLocale ? undefined : loc)
+          }
         />
       )}
 
@@ -373,14 +401,18 @@ export function ServiceEditor({
       )}
 
       {/* Fetch error (only when there's nothing to show). */}
-      {!loading && error && !service && <div className={dashboardErrorBannerCn}>{error}</div>}
+      {!loading && error && (!service || localeMismatch) && (
+        <div className={dashboardErrorBannerCn}>{error}</div>
+      )}
 
       {/* Editor — stale-while-revalidate on locale switch: keep the current editor
           visible during the refetch (with a subtle loading veil) and cross-fade to
           the new locale's content when it arrives, so switching NL/EN is smooth and
-          never blanks. Keyed on service.id + activeLocale so it re-mounts cleanly. */}
+          never blanks. Keyed on service.id + activeLocale so it re-mounts cleanly. The
+          editor is inert while another locale loads, so typing can't land in the
+          wrong language. */}
       {service && EditorComponent && (
-        <div className="relative">
+        <div className="relative" data-testid="service-editor-body" inert={busy} aria-busy={busy}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`${service.id}:${activeLocale}`}
@@ -390,7 +422,7 @@ export function ServiceEditor({
               transition={{ duration: reduce ? 0.12 : 0.2, ease: [0.2, 0, 0, 1] }}
             >
               <EditorComponent
-                key={service.last_updated ?? ""}
+                key={editorRevision}
                 initialContent={service.content}
                 onChange={handleChange}
                 onUpload={handleUpload}

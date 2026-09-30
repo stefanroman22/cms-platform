@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { Fragment, Slice, type ResolvedPos } from "@tiptap/pm/model";
 import { normalizeInline, parse, serialize } from "@/lib/cms-rich-text";
@@ -64,24 +64,29 @@ export function RichTextEditor({
   const [length, setLength] = useState(() => value.length);
   const [linkOpen, setLinkOpen] = useState(false);
 
-  const editor = useEditor({
-    extensions: mode === "inline" ? inlineExtensions(placeholder) : richExtensions(placeholder),
-    content: fromStored(value, mode),
-    editable: !disabled,
-    immediatelyRender: false,
-    editorProps: {
+  // TipTap compares these by identity on every render and calls
+  // editor.setOptions() (a full view update) when they differ, so they must be
+  // stable. `content` is mount-time only: this component is uncontrolled.
+  const [initialContent] = useState(() => fromStored(value, mode));
+  const extensions = useMemo(
+    () => (mode === "inline" ? inlineExtensions(placeholder) : richExtensions(placeholder)),
+    [mode, placeholder]
+  );
+  const editorId = id ?? autoId;
+  const editorProps = useMemo(
+    () => ({
       attributes: {
         role: "textbox",
         "aria-multiline": mode === "rich" ? "true" : "false",
         "aria-label": label,
-        id: id ?? autoId,
+        id: editorId,
         class: `prose prose-sm prose-zinc dark:prose-invert max-w-none px-3 py-2 focus:outline-none ${
           mode === "rich" ? "min-h-[10rem]" : "min-h-[2.25rem]"
         }`,
       },
       transformPastedHTML: mode === "inline" ? inlinePaste : undefined,
       clipboardTextParser: mode === "inline" ? inlineClipboardTextParser : undefined,
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (_view: unknown, event: KeyboardEvent) => {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
           event.preventDefault();
           setLinkOpen(true);
@@ -89,7 +94,16 @@ export function RichTextEditor({
         }
         return false;
       },
-    },
+    }),
+    [mode, label, editorId]
+  );
+
+  const editor = useEditor({
+    extensions,
+    content: initialContent,
+    editable: !disabled,
+    immediatelyRender: false,
+    editorProps,
     onUpdate: ({ editor: e }) => {
       const stored = toStored(e.getHTML(), mode);
       setLength(stored.length);

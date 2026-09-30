@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ExternalLink, CheckCircle2, Check } from "lucide-react";
 import { PublishConfirmModal } from "./PublishConfirmModal";
+import * as cache from "@/lib/cache";
+import { projectStatusKey } from "./serviceApi";
 
 interface ProjectStatus {
   unpublished_count: number;
@@ -69,6 +71,11 @@ export function PreviewPublishBar({
     const id = setInterval(refresh, POLL_MS);
     return () => clearInterval(id);
   }, [refresh]);
+
+  // Saves and re-translates elsewhere in the dashboard invalidate this key so
+  // the unpublished count (and the Publish button) update at once, not on the
+  // next 30s poll.
+  useEffect(() => cache.subscribe(projectStatusKey(projectSlug), refresh), [projectSlug, refresh]);
 
   useEffect(() => {
     if (!toast) return;

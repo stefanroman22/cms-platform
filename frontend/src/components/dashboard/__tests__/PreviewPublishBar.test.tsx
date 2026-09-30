@@ -123,4 +123,20 @@ describe("PreviewPublishBar", () => {
       expect(screen.queryByRole("button", { name: /unpublished change/i })).not.toBeInTheDocument();
     });
   });
+
+  it("refetches status immediately when status:{slug} is invalidated", async () => {
+    const { invalidate } = await import("@/lib/cache");
+    (global.fetch as MockFetch).mockResolvedValue(
+      mockStatus({
+        unpublished_count: 0,
+        last_published_at: null,
+        preview_url: null,
+        production_url: null,
+      })
+    );
+    render(<PreviewPublishBar projectSlug="demo" projectName="Demo" />);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    invalidate("status:demo");
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+  });
 });

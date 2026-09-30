@@ -24,6 +24,8 @@ interface ServiceCardProps {
   isAdmin: boolean;
   removing: boolean;
   onRemove: (serviceKey: string) => void;
+  /** Warm the editor's data on hover/focus of Edit. */
+  onPrefetch?: () => void;
   /** Visual variant: "content" (default) or "email" (dimmed, action-oriented) */
   variant?: "content" | "email";
 }
@@ -34,6 +36,7 @@ export function ServiceCard({
   isAdmin,
   removing,
   onRemove,
+  onPrefetch,
   variant = "content",
 }: ServiceCardProps) {
   const isEmail = variant === "email";
@@ -92,6 +95,8 @@ export function ServiceCard({
         <Link
           href={editHref}
           scroll={false}
+          onMouseEnter={onPrefetch}
+          onFocus={onPrefetch}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
             isEmail
               ? "bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600"

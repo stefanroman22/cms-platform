@@ -7,9 +7,17 @@ interface LocaleTabsProps {
   activeLocale: string;
   defaultLocale: string;
   onSelect: (locale: string) => void;
+  /** Warm a locale's content on hover/focus so switching is instant. */
+  onPrefetch?: (locale: string) => void;
 }
 
-export function LocaleTabs({ locales, activeLocale, defaultLocale, onSelect }: LocaleTabsProps) {
+export function LocaleTabs({
+  locales,
+  activeLocale,
+  defaultLocale,
+  onSelect,
+  onPrefetch,
+}: LocaleTabsProps) {
   if (locales.length <= 1) return null;
   return (
     <div
@@ -26,6 +34,8 @@ export function LocaleTabs({ locales, activeLocale, defaultLocale, onSelect }: L
             role="tab"
             aria-selected={active}
             onClick={() => onSelect(loc)}
+            onMouseEnter={active ? undefined : () => onPrefetch?.(loc)}
+            onFocus={active ? undefined : () => onPrefetch?.(loc)}
             className={`relative cursor-pointer px-3 py-2 text-sm font-medium transition-colors ${
               active
                 ? "text-zinc-900 dark:text-zinc-50"

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import type { ServiceCardService } from "../ServiceCard";
 
 let mockSearch = "";
@@ -9,6 +9,11 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(mockSearch),
 }));
 
+vi.mock("../serviceApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../serviceApi")>()),
+  prefetchServiceDetail: vi.fn(),
+}));
+import { prefetchServiceDetail } from "../serviceApi";
 import { ServiceGrid } from "../ServiceGrid";
 
 const SERVICES: ServiceCardService[] = [
@@ -67,5 +72,24 @@ describe("ServiceGrid editHref", () => {
     expect(params.get("view")).toBe("cms");
     expect(params.get("tab")).toBe("Contact");
     expect(params.get("service")).toBe("contact-info");
+  });
+});
+
+describe("ServiceGrid prefetch", () => {
+  it("prefetches the service detail when hovering Edit", () => {
+    const spy = vi.mocked(prefetchServiceDetail);
+    spy.mockClear();
+    render(
+      <ServiceGrid
+        services={SERVICES}
+        isAdmin={false}
+        removingKey={null}
+        onRemove={() => {}}
+        projectSlug="demo"
+      />
+    );
+    // "Contact" sorts first, so the first Edit link is contact-info.
+    fireEvent.mouseEnter(screen.getAllByRole("link", { name: /edit/i })[0]);
+    expect(spy).toHaveBeenCalledWith("demo", "contact-info", undefined);
   });
 });
