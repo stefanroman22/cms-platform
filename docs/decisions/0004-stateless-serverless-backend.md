@@ -35,4 +35,5 @@ The price is that every request may run in a fresh or a different instance.
 - Do NOT: add in-memory caches, counters, locks or queues that are assumed to be shared; add
   background threads, `asyncio` tasks that outlive the request, or in-app schedulers
   (APScheduler, Celery beat); or rely on the local filesystem between requests. Moving the backend
-  to a long-running server needs a new ADR. Move the functions to another region without moving the database with them.
+  to a long-running server needs a new ADR. Do not move the functions to another region without
+  moving the database with them.
