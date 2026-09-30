@@ -1,8 +1,10 @@
+import copy
 import logging
 import secrets
 import string
 import uuid
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -53,6 +55,8 @@ from .deps import (
 logger = logging.getLogger(__name__)
 
 STORAGE_BUCKET = "cms-files"
+# Upper bound on concurrent machine-translation calls in one save request.
+MAX_TRANSLATE_WORKERS = 8
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
 # Which MIME prefix is allowed per service type. None = any type accepted.
@@ -375,28 +379,39 @@ async def save_service(
         other_locales = [t for t in locales if t != default_locale]
         if other_locales:
             provider = get_provider()
-            for target in other_locales:
+
+            # Each worker gets its own deep copies so no two threads share a
+            # mutable dict. The pool lives and is joined inside this request.
+            def _translate(target: str) -> tuple[dict, dict]:
                 trow = by_locale.get(target) or {}
-                try:
-                    new_content, new_meta = sync_locale_draft(
-                        service_type,
-                        content_in,
-                        prev_default,
-                        trow.get("draft_content"),
-                        trow.get("translation_meta") or {},
-                        provider,
-                        default_locale,
-                        target,
-                        rich_text_version=version,
-                    )
-                    _upsert(target, new_content, new_meta)
-                except Exception:  # noqa: BLE001 — resilience: never fail the save
-                    logger.exception(
-                        "auto-translate failed for %s/%s locale %s (row unchanged)",
-                        project_slug,
-                        service_key,
-                        target,
-                    )
+                return sync_locale_draft(
+                    service_type,
+                    copy.deepcopy(content_in),
+                    copy.deepcopy(prev_default),
+                    copy.deepcopy(trow.get("draft_content")),
+                    copy.deepcopy(trow.get("translation_meta") or {}),
+                    provider,
+                    default_locale,
+                    target,
+                    rich_text_version=version,
+                )
+
+            workers = min(len(other_locales), MAX_TRANSLATE_WORKERS)
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {t: pool.submit(_translate, t) for t in other_locales}
+                # Upserts stay in this thread, in locale order: deterministic writes
+                # and no shared Supabase client across threads.
+                for target in other_locales:
+                    try:
+                        new_content, new_meta = futures[target].result()
+                        _upsert(target, new_content, new_meta)
+                    except Exception:  # noqa: BLE001 — resilience: never fail the save
+                        logger.exception(
+                            "auto-translate failed for %s/%s locale %s (row unchanged)",
+                            project_slug,
+                            service_key,
+                            target,
+                        )
     else:
         # Override edit on a non-default locale: any leaf whose value changed
         # versus the stored draft becomes a manual override, anchored to the
