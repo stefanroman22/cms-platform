@@ -15,11 +15,8 @@ Environment = Literal["development", "preview", "production"]
 class Settings(BaseSettings):
     # Supabase
     SUPABASE_URL: str
-    SUPABASE_ANON_KEY: str
     # Service role key — bypasses RLS; required for server-side storage writes
     SUPABASE_SERVICE_ROLE_KEY: str = ""
-    # Direct PostgreSQL connection string (used by Django / migrations)
-    SUPABASE_DB_URL: str = ""
 
     # App — comma-separated list of allowed origins, e.g. "http://localhost:3000,http://127.0.0.1:3000"
     FRONTEND_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
@@ -43,7 +40,6 @@ class Settings(BaseSettings):
     BOOKING_MIN_NOTICE_HOURS: int = 2
     BOOKING_HORIZON_DAYS: int = 120
     BOOKING_HOST_EMAIL: str = "stefanromanpers@gmail.com"
-    BOOKING_MEETING_URL: str = ""  # standing Meet/Zoom link, shown in emails
     BOOKING_CRON_SECRET: str = ""  # guards POST /booking/cron/reminders
 
     # Google Calendar auto-sync (over urllib, no extra deps). When these are

@@ -30,7 +30,7 @@ Effort is pinned to `xhigh` (frontmatter). For trivial single-file/single-servic
 
 1. Read `agents/CMS Connector - Website/AGENTS.md` — the workflow index.
 2. Read `agents/CMS Connector - Website/LEARNINGS.md` only if `wc -l` reports more than 25 lines (skip the empty scaffold to save tokens).
-3. Confirm credentials available before phase 1: `GITHUB_TOKEN`, `VERCEL_TOKEN`, `CMS_API_TOKEN`. If any missing, list what's needed and halt.
+3. Confirm credentials available before phase 1: `gh` CLI logged in (or `GITHUB_TOKEN`), `claude` CLI on PATH, `VERCEL_TOKEN`, `CMS_ADMIN_API_KEY`. If any missing, list what's needed and halt.
 4. Echo a one-line plan: *"Starting CMS Connector for `<folder>`. 6 phases: GitHub repo → scan → review → integrate → test → confirm."* Do not preview every phase.
 
 ## Lazy phase loading

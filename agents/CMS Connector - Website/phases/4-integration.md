@@ -36,8 +36,8 @@ Phase 6). Otherwise reuse the existing row.
    - `find_project_by_repo` → reuse if found, else `create_project`.
    - **CMS endpoint** — set `{prefix}CMS_ENDPOINT` (framework-aware prefix: `NEXT_PUBLIC_` for Next.js, `VITE_` for Vite, `PUBLIC_` for Astro/SvelteKit) to the **locale-less base** `{cms_endpoint_base}/content/{slug}` on **BOTH** production AND preview (the SAME value — do NOT suffix preview with `/draft`). The site appends `/{locale}` and `/draft` itself at fetch time; draft-vs-published is decided by the **token's presence**, not the URL.
    - **Preview token** — do **NOT** set a `NEXT_PUBLIC_*`/prefixed token (that inlines a credential into the client bundle), and do **NOT** PATCH `preview_token` onto the project row (`AdminProjectPatchIn` deliberately drops it — audit BE-004 — so the PATCH is a silent no-op that leaves the DB token NULL while Vercel has one → `/draft` 401s → drafts never show). Instead, provision it via the **rotate endpoint**, the single writer of both stores:
-     - If the project row has no `preview_token`, `POST /admin/projects/{slug}/rotate-preview-token` (admin bearer). It writes the DB `preview_token` AND the Vercel **`CMS_PREVIEW_TOKEN`** (server-only key, preview target). It returns the token.
-     - Mirror that token onto Vercel yourself too — `set_env_var("CMS_PREVIEW_TOKEN", token, target=["preview"])` (literal unprefixed key) — because rotate skips its Vercel write silently when the backend `VERCEL_TOKEN` is unset. Set this BEFORE triggering the build.
+     - If the project row has no `preview_token`, `POST /admin/projects/{slug}/rotate-preview-token` (admin bearer). It writes the DB `preview_token` only and returns the token. The backend holds no Vercel token and never writes to Vercel.
+     - Set that token on Vercel yourself: `set_env_var("CMS_PREVIEW_TOKEN", token, target=["preview"])` (literal unprefixed key). Set this BEFORE triggering the build.
      - The token key is the server-only **`CMS_PREVIEW_TOKEN`** for Next.js sites (read only in server components / `i18n/request.ts`, never a client component).
      - **Vite + React 19 SPA sites** also set **`VITE_CMS_PREVIEW_TOKEN`** on the Vercel **preview** environment (preview-only; absent on production). This is the client-visible env var `src/lib/cms-content.ts` reads via `import.meta.env.VITE_CMS_PREVIEW_TOKEN` to branch draft vs. published. Value is the same DB token.
      - Re-runs are idempotent: reuse the existing DB token, never rotate when one already exists.
@@ -239,7 +239,7 @@ The `manage_url` returned by `createBooking` points to the CMS-hosted `/manage/{
 | Resend env vars missing | "RESEND_API_KEY or RESEND_FROM_EMAIL not set on CMS Vercel project. Set them in Vercel dashboard, then re-run Phase 4." |
 | Resend domain not verified | "Resend from-domain `<domain>` is not verified. Verify in Resend dashboard before forms will send." |
 | Vercel 403 / token bad | "Vercel token rejected. Refresh `VERCEL_TOKEN`." |
-| GitHub push 403 | "Cannot push to `<repo>`. Check `GITHUB_TOKEN` has write access." |
+| GitHub push 403 | "Cannot push to `<repo>`. Check the active `gh` account (`gh auth status`) or `GITHUB_TOKEN` has write access." |
 
 ## Token tactics
 

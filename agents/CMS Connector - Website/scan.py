@@ -24,14 +24,14 @@ Options:
     --model        Claude model to use (default: claude-opus-4-8 — strongest available; scan accuracy drives every downstream phase, do not downgrade)
 
 Requirements:
-    pip install anthropic click
-    export ANTHROPIC_API_KEY=sk-ant-...
+    pip install -r requirements.txt
+    Claude Code CLI (`claude`) on PATH, logged in (the scan runs on it)
+    `gh` CLI logged in, or GITHUB_TOKEN set (only for Vercel setup)
 """
 
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 import time
@@ -227,84 +227,70 @@ def _extract_json_object(text: str) -> str:
     return text[start:]
 
 
+def _gh_cli_token() -> str | None:
+    """Token of the logged-in `gh` CLI account (kept in the OS keyring), so the
+    agent needs no GitHub PAT in its .env. Returns None if gh is missing or
+    logged out. Pushes use whichever gh account is active."""
+    import shutil
+    import subprocess
+
+    gh_bin = shutil.which("gh")
+    if not gh_bin:
+        return None
+    result = subprocess.run([gh_bin, "auth", "token"], capture_output=True, text=True)
+    token = result.stdout.strip()
+    return token if result.returncode == 0 and token else None
+
+
 def _call_claude(model: str, project_slug: str, files: dict[str, str]) -> dict:
     """Send files to Claude and parse the returned JSON manifest.
 
-    Prefers the `claude` CLI (covered by Max/Pro subscriptions, no extra
-    billing). Falls back to the anthropic Python SDK if the CLI isn't found,
-    which requires ANTHROPIC_API_KEY and bills per-token.
+    Runs on the `claude` CLI (covered by the Max/Pro subscription, no API key
+    or per-token billing). The anthropic-SDK fallback was removed so the agent
+    no longer needs an ANTHROPIC_API_KEY.
     """
     import shutil
+    import subprocess
 
     system_prompt = build_system_prompt()
     user_message = build_user_message(project_slug, files)
     combined = f"{system_prompt}\n\n{user_message}"
 
     claude_bin = shutil.which("claude")
-    if claude_bin:
-        import subprocess
-
-        click.echo(f"  Sending {len(files)} files to Claude CLI ({model})…")
-        try:
-            result = subprocess.run(
-                [
-                    claude_bin,
-                    "-p",
-                    "--output-format",
-                    "text",
-                    "--model",
-                    model,
-                    "--effort",
-                    "max",
-                ],
-                input=combined,
-                capture_output=True,
-                text=True,
-                check=True,
-                encoding="utf-8",
-            )
-        except subprocess.CalledProcessError as e:
-            click.echo(
-                f"Error: claude CLI failed (exit {e.returncode}).\nstderr: {e.stderr}",
-                err=True,
-            )
-            sys.exit(1)
-        raw = result.stdout.strip()
-    else:
-        # Fallback: SDK + API key (pay-per-token)
-        try:
-            import anthropic
-        except ImportError:
-            click.echo(
-                "Error: neither `claude` CLI nor anthropic package available. "
-                "Install Claude Code (`npm i -g @anthropic-ai/claude-code`) or "
-                "`pip install anthropic` + set ANTHROPIC_API_KEY.",
-                err=True,
-            )
-            sys.exit(1)
-
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            click.echo(
-                "Error: `claude` CLI not on PATH and ANTHROPIC_API_KEY not set. "
-                "Install Claude Code for Max-plan usage or set the API key.",
-                err=True,
-            )
-            sys.exit(1)
-
-        client = anthropic.Anthropic(api_key=api_key)
-        click.echo(f"  Sending {len(files)} files to Claude SDK ({model}, billed)…")
-
-        # cache_control on system block hits the 5-min prompt cache on retries.
-        response = client.messages.create(
-            model=model,
-            max_tokens=4096,
-            system=[
-                {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
-            ],
-            messages=[{"role": "user", "content": user_message}],
+    if not claude_bin:
+        click.echo(
+            "Error: `claude` CLI not on PATH. Install Claude Code "
+            "(`npm i -g @anthropic-ai/claude-code`) and log in.",
+            err=True,
         )
-        raw = response.content[0].text.strip()
+        sys.exit(1)
+
+    click.echo(f"  Sending {len(files)} files to Claude CLI ({model})…")
+    try:
+        result = subprocess.run(
+            [
+                claude_bin,
+                "-p",
+                "--output-format",
+                "text",
+                "--model",
+                model,
+                "--effort",
+                "max",
+            ],
+            input=combined,
+            capture_output=True,
+            text=True,
+            check=True,
+            encoding="utf-8",
+        )
+    except subprocess.CalledProcessError as e:
+        click.echo(
+            f"Error: claude CLI failed (exit {e.returncode}).\nstderr: {e.stderr}",
+            err=True,
+        )
+        sys.exit(1)
+    raw = result.stdout.strip()
 
     # Strip markdown code fences if Claude wrapped the JSON anyway
     if raw.startswith("```"):
@@ -991,7 +977,7 @@ def _vercel_setup(
     "github_token",
     default=None,
     envvar="GITHUB_TOKEN",
-    help="GitHub API token (env: GITHUB_TOKEN).",
+    help="GitHub API token (env: GITHUB_TOKEN). Defaults to the `gh` CLI login.",
 )
 @click.option(
     "--skip-vercel",
@@ -1116,9 +1102,11 @@ def main(
 
     # ── Optional Vercel setup ──────────────────────────────────────────────────
     if github_repo and not skip_vercel:
+        github_token = github_token or _gh_cli_token()
         if not vercel_token or not github_token:
             raise click.ClickException(
-                "--vercel-token and --github-token (or env vars) required for Vercel setup."
+                "Vercel setup needs --vercel-token (or VERCEL_TOKEN) and a GitHub token "
+                "(--github-token, GITHUB_TOKEN, or a logged-in `gh` CLI)."
             )
         if not admin_key:
             raise click.ClickException(

@@ -1,16 +1,13 @@
 import os
 
 # Guardrail T1: unit tests must never reach the one shared (production) Supabase DB,
-# Resend, Google Calendar or Vercel. Set before any app import: env vars beat backend/.env,
+# Resend or Google Calendar. Set before any app import: env vars beat backend/.env,
 # so an un-mocked call fails fast or is skipped instead of touching prod.
 os.environ["SUPABASE_URL"] = "http://127.0.0.1:9"
-os.environ["SUPABASE_ANON_KEY"] = "test-anon-key"
 os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key"
-os.environ["SUPABASE_DB_URL"] = ""
 os.environ["RESEND_API_KEY"] = "re_test_guardrail"
 os.environ["GOOGLE_REFRESH_TOKEN"] = ""
 os.environ["GOOGLE_CLIENT_SECRET"] = ""
-os.environ["VERCEL_TOKEN"] = ""
 
 from unittest.mock import MagicMock, patch
 

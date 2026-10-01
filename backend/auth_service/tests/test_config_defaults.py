@@ -23,7 +23,6 @@ def _baseline_env(monkeypatch) -> None:
     ]:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
-    monkeypatch.setenv("SUPABASE_ANON_KEY", "dummy-anon")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "dummy-service-role")
 
 

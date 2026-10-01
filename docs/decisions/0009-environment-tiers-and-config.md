@@ -46,7 +46,6 @@ frontend with an opaque error.
   backend variables through.
 - Adding a variable takes four steps: add it to `.env.example`, add it to `Settings`, set it in
   Vercel for every tier that needs it, and add a validator if it is required.
-- Do NOT: read `os.environ` for new settings instead of adding them to `Settings` (the old
-  `VERCEL_TOKEN` read in `routers/publish.py` is the exception, not the pattern); add a silent
+- Do NOT: read `os.environ` for new settings instead of adding them to `Settings`; add a silent
   default for a production-required variable; widen the credentialed CORS allowlist to `*`; or
   add credentials or cookie-based auth to the `/forms` sub-app.

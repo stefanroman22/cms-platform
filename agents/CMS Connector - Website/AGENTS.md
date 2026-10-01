@@ -29,13 +29,14 @@ Each phase doc contains: goal, inputs, steps, outputs, failure messages, self-im
 
 ## Required credentials
 
-The four below live in `agents/CMS Connector - Website/.env` (copy
-from `.env.example`, gitignored, auto-loaded by `scan.py`).
+The two keys below live in `agents/CMS Connector - Website/.env` (copy
+from `.env.example`, gitignored, auto-loaded by `scan.py`). GitHub and
+Claude use your logged-in CLIs, so no key is stored for them.
 
-| Tool | Env var | Used in |
-|------|---------|---------|
-| GitHub | `GITHUB_TOKEN` | Phase 1, 4 |
-| Anthropic Claude | `claude` CLI preferred; `ANTHROPIC_API_KEY` fallback | Phase 2, 5 |
+| Tool | Credential | Used in |
+|------|------------|---------|
+| GitHub | `gh` CLI login (`GITHUB_TOKEN` in `.env` overrides it) | Phase 1, 4 |
+| Anthropic Claude | `claude` CLI login (no API key) | Phase 2, 5 |
 | Vercel | `VERCEL_TOKEN` | Phase 4 |
 | CMS admin | `CMS_ADMIN_API_KEY` (cmsk_…) | Phase 4, 5, 6 |
 

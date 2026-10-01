@@ -1,9 +1,5 @@
-import json
 import logging
-import os
 import secrets
-import urllib.error
-import urllib.request
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -118,88 +114,18 @@ async def project_status(project_slug: str, request: Request):
     }
 
 
-VERCEL_API_BASE = "https://api.vercel.com"
-
-
-def _update_vercel_preview_env_var(vercel_project_id: str, new_token: str) -> None:
-    """Updates CMS_PREVIEW_TOKEN env var on the Vercel project's Preview environment.
-
-    Uses VERCEL_TOKEN from the server environment. If unset, skip silently —
-    the DB token is still rotated and a re-deploy of the preview can pull the
-    latest env later. The agent's initial setup is the normal path to set this.
-    """
-    vercel_token = os.environ.get("VERCEL_TOKEN")
-    if not vercel_token:
-        return
-
-    # Find existing env var ID
-    list_url = f"{VERCEL_API_BASE}/v9/projects/{vercel_project_id}/env"
-    req = urllib.request.Request(list_url, headers={"Authorization": f"Bearer {vercel_token}"})
-    try:
-        with urllib.request.urlopen(req) as resp:
-            envs = json.loads(resp.read().decode()).get("envs", [])
-    except urllib.error.HTTPError:
-        return
-
-    existing = next(
-        (
-            e
-            for e in envs
-            if e.get("key") == "CMS_PREVIEW_TOKEN" and "preview" in (e.get("target") or [])
-        ),
-        None,
-    )
-
-    body = json.dumps(
-        {
-            "key": "CMS_PREVIEW_TOKEN",
-            "value": new_token,
-            "type": "encrypted",
-            "target": ["preview"],
-        }
-    ).encode()
-
-    if existing:
-        patch_url = f"{VERCEL_API_BASE}/v9/projects/{vercel_project_id}/env/{existing['id']}"
-        req = urllib.request.Request(
-            patch_url,
-            data=body,
-            headers={
-                "Authorization": f"Bearer {vercel_token}",
-                "Content-Type": "application/json",
-            },
-            method="PATCH",
-        )
-    else:
-        req = urllib.request.Request(
-            list_url,
-            data=body,
-            headers={
-                "Authorization": f"Bearer {vercel_token}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-    try:
-        urllib.request.urlopen(req).read()
-    except urllib.error.HTTPError:
-        pass
-
-
 @router.post(
     "/admin/projects/{project_slug}/rotate-preview-token", response_model=RotateTokenResponse
 )
 async def rotate_preview_token(project_slug: str, request: Request):
+    """Writes a new draft-preview token to the project row and returns it.
+    It does not touch Vercel: whoever calls this (the CMS Connector agent)
+    sets the returned token as the client site's CMS_PREVIEW_TOKEN, so the
+    backend never needs a Vercel token of its own."""
     await admin_user_via_bearer_or_sid(request)
 
     sb = get_supabase_admin()
-    p_result = (
-        sb.table("projects")
-        .select("id, vercel_project_id")
-        .eq("slug", project_slug)
-        .single()
-        .execute()
-    )
+    p_result = sb.table("projects").select("id").eq("slug", project_slug).single().execute()
     if not p_result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
@@ -207,8 +133,5 @@ async def rotate_preview_token(project_slug: str, request: Request):
     sb.table("projects").update({"preview_token": new_token}).eq(
         "id", p_result.data["id"]
     ).execute()
-
-    if p_result.data.get("vercel_project_id"):
-        _update_vercel_preview_env_var(p_result.data["vercel_project_id"], new_token)
 
     return {"preview_token": new_token}

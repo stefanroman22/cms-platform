@@ -2,7 +2,7 @@
 
 **Goal:** New GitHub repo exists, populated with the contents of `<folder_name>`.
 
-**Inputs:** `<folder_name>`, `GITHUB_TOKEN`, GitHub MCP connection.
+**Inputs:** `<folder_name>`, `gh` CLI login (or `GITHUB_TOKEN`), GitHub MCP connection.
 
 ## Steps
 
@@ -23,7 +23,7 @@
 | Cause | Message to user |
 |-------|-----------------|
 | MCP unavailable | "Cannot access GitHub MCP. Check that the GitHub MCP server is running and connected." |
-| Token expired / 401 | "GitHub token rejected (401). Refresh `GITHUB_TOKEN` and re-run." |
+| Token expired / 401 | "GitHub token rejected (401). Run `gh auth login` (or refresh `GITHUB_TOKEN`) and re-run." |
 | Token lacks scope | "GitHub token is missing required scopes (`repo`, `workflow`). Update token permissions and re-run." |
 | Folder empty / missing | "Folder `<folder_name>` is empty or does not exist. Provide a valid path." |
 | Repo name collision | "Repo `<owner>/<name>` already exists. Provide a different `--repo-name` or delete the existing repo." |
