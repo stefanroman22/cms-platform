@@ -42,6 +42,33 @@ This table is the **source of truth for status**. Detail for each finding lives 
 > pre-publish diff gate) is a prompt/design change on an autonomous-publish path with no unit-testable seam, so it
 > is **deferred to a human**, not auto-fixed.
 
+> **Saturday Solver 2026-10-03 — no open critical/high/medium remain; status-only run.**
+> This week's run selected against the C/H/M fix threshold and verified every candidate against the
+> **actual current dev tree** (HEAD `fa7796a`, 2026-10-01), not the trackers. Result: **zero open
+> critical/high/medium vulnerabilities exist in the dev codebase** — so no fix PRs were shipped.
+> Verification:
+> - The freshest Friday-review branch, `origin/security/weekly-review-2026-09-24`, is **stale**: it was
+>   cut against a tree that still contained the Solver agent, the scraper, the SEO router and the
+>   SEO-GEO Optimizer agent. On current dev **all of these are removed** — `agents/Solver - Issues/`,
+>   `agents/SEO-GEO Optimizer/`, `scraper/`, `backend/auth_service/routers/seo.py`,
+>   `backend/auth_service/routers/issues.py`, `backend/auth_service/services/slack_notify.py`,
+>   `.github/workflows/solver-agent.yml`, `.github/workflows/scraper-ci.yml` and
+>   `.github/workflows/dependabot-auto-merge.yml` are all **absent**. Its new mediums map to:
+>   **SEC-058 (accent XSS in `booking_email._cta_block`) → already fixed** on dev — `_cta_block` runs
+>   `accent = email_layout.safe_hex(accent, "#18181b")` before both style sinks (this tracker's SEC-057,
+>   PR #61); **SEC-061 (SEO-GEO indirect-prompt-injection) → obsolete** (agent code removed).
+> - Every C/H/M row in **this** tracker is already `fixed` or `obsolete` (Solver/scraper/issues/dependabot
+>   code removed 2026-08-26 and in the 2026-06-09 CI teardown). A grep for open/in-progress C/H/M rows
+>   returns none.
+> - **Needs a human (unchanged):** the `SEC-057…`/`SEC-058…` **ID collision** between this tracker and the
+>   two unmerged review branches (`weekly-review-2026-09-17`, `-2026-09-24`) still wants a single
+>   renumbering pass — see the 2026-09-26 note above. **SEC-039** (credentialed-CORS reflects any
+>   `*.vercel.app`) remains `needs-decision`. **SEC-054** stays `accepted-risk`.
+> - Remaining genuinely-open work is all **low/info** (below this routine's C/H/M threshold): SEC-015,
+>   SEC-016, SEC-024(remnant), SEC-027, SEC-029, SEC-040, SEC-046, SEC-047, SEC-048, SEC-051, SEC-055,
+>   SEC-060, SEC-061(info), SEC-062, SEC-065, SEC-066, SEC-067, SEC-068. These are left for a future
+>   run or a human; none was modified this week.
+
 > **Remediation 2026-06-07 — `SEC-001` (critical) + `SEC-002` + `SEC-056` (high): FIXED.** The full
 > Solver hardening shipped (commits `fix(security): SEC-001` + `SEC-056`) and the egress allowlist was
 > validated by a `workflow_dispatch` `egress_policy=audit` run (clean). Closed: cross-tenant
