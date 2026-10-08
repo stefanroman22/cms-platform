@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-**13** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
+**15** finding(s) (SEC-069/070 added 2026-10-08). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-08.
 
 ---
 
@@ -702,5 +702,102 @@ lossless for real widget use while removing the CPU-amplification primitive.
 `tests/test_booking_legacy_ratelimit.py` (4 tests: 429 on both legacy endpoints when over cap; 422 on an
 unbounded span with `load_eligible_resources` never called; 200 on a normal 7-day range). Full backend
 suite: 580 passed, 5 skipped.
+
+---
+
+<a id="sec-069"></a>
+
+## SEC-069 — PreToolUse safety guard (`.claude/hooks/guard.mjs`) is bypassed by any interpreter wrapper or shell expansion — the "non-negotiable" push-to-main / prod-SQL / no-verify controls are advisory only
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Agent guardrail bypass |
+| **Dimension** | agent-guardrails |
+| **Location** | `.claude/hooks/guard.mjs:42-84 (segments tokenizer), 146-150 (git refspec match), 170-211 (checkBash dispatch)` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (medium) |
+| **First seen** | 2026-10-08 |
+
+**Description**
+
+`checkBash` only inspects a command segment when its first token is literally `git`, `vercel`, `npx`, `psql`, or `supabase` (plus the Edit/Write migration check and the Supabase-MCP matcher). The `segments()` tokenizer splits on `&&`/`||`/`;`/`|`/newlines but does **not** recurse into quoted strings, `$(...)` command substitution, or variable expansion, and `checkBash` strips only the `sudo`/`command`/`exec` wrappers plus leading `VAR=` assignments. Every other indirection reaches the shell unchecked. CLAUDE.md designates these guardrails the hard stop for production-destructive actions ("Safety (non-negotiable)"), yet all of the following were verified live to pass the guard **silently** (empty output → falls through to the normal permission flow), where the direct form is denied:
+
+- **H1 (never push to `main`)**: `bash -c 'git push origin main'`, `env git push origin main`, `timeout 60 git push origin main`; and via expansion `b=main; git push origin $b` or `git push origin $(printf main)` — the refspec matcher compares the literal token (`$b`, `main)`) to `'main'`, never equal, so `block()` is skipped and the shell then expands it.
+- **H2 (prod SQL / migrations ask-gate)**: `bash -c 'psql ... -c "drop table x"'`, `sh -c 'python scripts/apply_supabase_migration.py backend/migrations/x.sql'` — `cmd` is `bash`/`sh`, so the psql/apply_supabase_migration checks never fire; SQL runs against the one shared **production** Supabase DB with no "ask".
+- **H4 (never `--no-verify`)**: `bash -c 'git commit --no-verify'` bypasses the gitleaks pre-commit gate.
+
+The hook also fails open by design (outer try/catch → `process.exit(0)`). Because the main dev session operates in this repo and ingests untrusted content (the SEC-016 client-source path, scraped/lead data via the agents, Claude Design exports), a single injected wrapped Bash call defeats all three production safety controls at once.
+
+**Attack scenario**
+
+A prompt-injection payload in an onboarded client repo, a scraped lead field, or a design export the agent reads instructs the session to run `bash -c 'git push origin HEAD:main'` or `sh -c "python scripts/apply_supabase_migration.py backend/migrations/x.sql"`. The guard sees `cmd=bash`/`sh` and stays silent; the irreversible push to production `main` (no auto-rollback) or the write-migration against the shared prod DB proceeds under the normal permission flow with no deny/ask from the backstop CLAUDE.md treats as the hard stop.
+
+**Evidence**
+
+```javascript
+function checkBash(command, cwd) {
+  let dir = cwd;
+  for (let seg of segments(command)) {
+    while (seg.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(seg[0])) seg = seg.slice(1);
+    if (seg[0] === "sudo" || seg[0] === "command" || seg[0] === "exec") seg = seg.slice(1);
+    const [cmd, ...args] = seg;
+    if (!cmd) continue;
+    ...
+    if (cmd === "git") checkGit(args, dir);   // only when first token is literally "git"
+```
+
+**Adversarial verification**
+
+Confirmed by re-reading the full hook and running it read-only against live payloads. Dispatch is first-token-literal (checkGit only when `cmd === "git"`; psql/apply_supabase_migration only on `cmd === "psql"`/`supabase` or an `apply_supabase_migration.py$` token). The only stripped wrappers are a leading `VAR=` and `sudo`/`command`/`exec`; `bash`/`sh`/`env`/`eval`/`xargs`/`timeout` are not. `segments()` keeps `bash -c '<cmd>'`'s body as one opaque token and never expands `$VAR`/`$(...)`. Empirical (cwd = prod repo): `git push origin main` → **deny**; all eight wrapped/expanded variants above → **empty** (silent). The hook is genuinely wired (`.claude/settings.json` PreToolUse, 3 matchers) and fails open. Not in `dismissed.md`. Severity held at **medium** (not high) because it is a fail-open defense-in-depth backstop — a bypass still faces the normal permission flow, and absent injection a cooperative agent would not choose the wrapped form; not low because CLAUDE.md treats it as the hard stop and it is defeated by first-year shell syntax, with the injection channels present in this very platform.
+
+**Recommendation**
+
+Treat interpreter wrappers (`bash`/`sh`/`zsh`/`env`/`eval`/`xargs`/`timeout`/`nice`/`stdbuf`/`setsid`, …) as requiring recursion into their `-c`/inner command, or deny them outright in git/psql/supabase/vercel contexts. Detect unexpanded tokens (`$`, backticks, `$(`) in git refspecs/remotes and `ask` rather than allow. Prefer an allowlist posture over best-effort pattern matching for controls described as non-negotiable. At minimum, document in CLAUDE.md that `guard.mjs` is advisory and not a security boundary.
+
+---
+
+<a id="sec-070"></a>
+
+## SEC-070 — Public booking `/{slug}/availability` omits the shared rate limiter; URL-keyed edge cache is trivially cache-busted → DB + external-calendar amplification DoS
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Rate limiting / DoS (resource exhaustion) |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/booking.py:436-445 (route), 239-317 (_availability_for_range)` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (medium) |
+| **First seen** | 2026-10-08 |
+
+**Description**
+
+`GET /booking/{slug}/availability` is the only unauthenticated booking read that **deliberately** omits `Depends(_public_read_limit)` — every sibling carries it (`/config`:370, `/services`:388, `/resources`:409, `/contract`:475, and the legacy `GET /availability`:987 and `/slots`:1009 that SEC-058/2026-09-17 hardened). `main.py` has no global rate-limit middleware (slowapi is per-route only). Each request runs `_availability_for_range`: ~6 service-role Postgres queries (`load_eligible_resources`, `load_hours`, `load_exceptions`, `busy_guard_intervals_by_resource`, plus tenant/service loads), one outbound Google Calendar `list_busy` when `cfg.calendar_provider != 'none'`, then a day-by-day loop up to `max_span_days` (defaults to **366** when the service's `max_advance_days` is 0). The sole mitigation is the `Cache-Control: s-maxage=30, stale-while-revalidate=60` response header — but Vercel's edge keys on the **full request URL including query string**, and the attacker controls `service_id`, `from`, `to`, and `resource_id`. Incrementing `from`/`to` by one day per request yields a unique URL, a guaranteed cache miss, and a fresh origin computation every time. The maintainer comment assumes the cache "collapses repeats" — true for honest clients, false for a deliberate abuser.
+
+**Attack scenario**
+
+An unauthenticated attacker obtains a public slug (used by the widget) and a `service_id` (returned by the unauthenticated `GET /booking/{slug}/services`), then hammers `GET /booking/{slug}/availability?service_id=<id>&from=<varying>&to=<varying>&resource_id=<varying>`. Each distinct date pair bypasses the edge cache and forces ~6 service-role DB round-trips + a 366-iteration availability computation + a Google Calendar `list_busy` call at the origin. One IP amplifies cheap HTTP into heavy DB load and burns the tenant's Google Calendar quota / Vercel function-time budget. Because one Supabase DB serves local/preview/prod (CLAUDE.md), the DB-load amplification degrades availability for **all** tenants.
+
+**Evidence**
+
+```python
+# Availability is intentionally NOT behind _public_read_limit (unlike the sibling public
+# reads): it is the highest-frequency read, and the edge Cache-Control below collapses
+# repeats so a per-request Postgres limiter round-trip would only add latency. [...]
+@router.get("/{slug}/availability")
+def availability(slug: str, service_id: str, from_: str = Query(..., alias="from"),
+                 to: str = Query(...), resource_id: str = Query("")) -> JSONResponse:
+```
+
+**Adversarial verification**
+
+Confirmed by re-reading the route and `_availability_for_range`. The slug `/availability` handler is the only public read lacking `Depends(_public_read_limit)` (all siblings verified to carry it); `main.py` has CORS/GZip/SecurityHeaders/PrivateNetworkAccess middleware + a slowapi exception handler but no global limiter. The edge cache keys on path+query, so query-param variation bypasses the `s-maxage=30` mitigation entirely — the non-obvious key insight. `SEC-058` bounds per-request work to `max_span_days`, so this is a sustained rate-based amplification, not an unbounded single-request kill — hence **medium** (availability/quota impact, not confidentiality/integrity), not higher. Calendar-quota burn applies only to tenants with a calendar provider; DB-load + function-time amplification applies universally. Not in `dismissed.md` (the dismissed ratelimit entries D-01/D-03/D-14 are all XFF-spoofing, a different issue).
+
+**Recommendation**
+
+Add `Depends(_public_read_limit)` to the availability route like its siblings (120/60s shared Postgres cap is generous for real widget use and the edge cache still absorbs honest repeats), or a dedicated per-IP shared limit keyed independently of query params. Also apply the `max_span_days` cap when `max_advance_days == 0` instead of defaulting to 366.
 
 ---
