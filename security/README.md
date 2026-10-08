@@ -5,23 +5,39 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-20** (remediation in progress)
+## Status snapshot — last full review **2026-10-08** (branch `main`)
 
-| Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **13** | **38** | **12** | **68** | 16 |
+**Currently OPEN (actionable):**
 
-The 2026-06-07 baseline's headline criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) are **fixed**.
-The 2026-06-20 review found **no new critical/high**; it added **12** lower-severity findings (all `open`) and flipped
-`SEC-050`→fixed and `SEC-007`/`SEC-023`/`SEC-025`/`SEC-026`→obsolete. See the 2026-06-20 note + the full table in
-[`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+| Critical | High | Medium | Low | Info | needs-decision |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| **0** | **0** | **2** | **14** | **4** | **2** |
 
-### The next things to fix (2026-06-20 remediation order)
-1. **`SEC-058` + `SEC-059` (medium)** — move the unauthenticated **booking write paths** and the **marketing `/forms/contact`** endpoint onto the shared Postgres rate limiter; they still use the per-instance in-memory limiter (Resend cost/DoS amplification). Mechanical — the pattern already exists in-repo (`pg_rate_limit`).
-2. **`SEC-057` (medium)** — route the tenant `accent` through the `safe_hex` allowlist in `booking_email._cta_block` (the one email sink the `SEC-045` hardening missed).
-3. **`SEC-029` (low) + `SEC-060` (low)** — expire/invalidate cancelled-booking manage tokens for reads; stop using tenant copy overrides as a `str.format` format string.
-4. **`SEC-006` (medium)** — deny `Write`/`Edit` to `package.json`/lockfiles/`*.sh` during the untrusted Solver step (package-poisoning RCE), or run lint/test from the orchestrator after the agent exits against a clean tree.
-5. **Hygiene:** `SEC-066` (enforce admin-key `scopes`), `SEC-063`/`SEC-064`/`SEC-065` (pin the Solver CLI + actions, verify the gitleaks binary), `SEC-068` (login-lockout fail-open brake). The **Saturday Solver routine** now drains this queue automatically.
+**Cumulative confirmed (all-time, incl. fixed/obsolete):** 74 · **Dismissed (false-positive):** 16.
+
+The 2026-06-07 baseline's criticals/highs (`SEC-001`–`004`/`056`/`003`) are **fixed or obsolete**. The former
+dominant risk theme — the agentic/CI **Solver** pipeline + the public Supabase **anon** surface (Slack/scraper) —
+is **gone**: that code and its DB objects were removed (teardown 2026-08-26, DB drop applied 2026-09-27), obsoleting
+~15 findings. The **2026-10-08** review found **no new critical/high** and confirmed the large new **rich-text /
+ADR-0010** surface is sound (allow-list tree-rebuild + default-deny `safe_href`, not a filter). It added **6** findings
+(2 medium, 4 low; all `open`) and flipped `SEC-024`/`SEC-046`→fixed and `SEC-067`→obsolete. See the 2026-10-08 note +
+full table in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+
+> **⚠ MCP gap (2026-10-08):** this headless cloud run had **no Supabase/Vercel MCP** — the DB layer was reviewed from
+> migration SQL + repo only. Live `get_advisors`/`execute_sql`/`get_project` state was **not** re-pulled; re-check on
+> the next local run.
+
+### The next things to fix (2026-10-08 remediation order)
+1. **`SEC-069` (medium)** — the `.claude/hooks/guard.mjs` PreToolUse guard (CLAUDE.md's non-negotiable push-to-main / prod-SQL / no-verify hard stop) is bypassed by any `bash -c`/`sh -c` wrapper or `$VAR`/`$(…)` expansion. Recurse into interpreter wrappers / deny them in git+psql+supabase contexts, or document that the guard is advisory, not a security boundary.
+2. **`SEC-070` (medium)** — add `Depends(_public_read_limit)` to the public booking `/{slug}/availability` read (the one sibling left off the shared limiter) and apply the `max_span_days` cap when `max_advance_days==0`.
+3. **`SEC-060` (low)** — stop using tenant `email_copy` overrides as a `str.format` template (explicit `.replace()` of known keys; broaden the caught exceptions to include `MemoryError`/`OverflowError`).
+4. **`SEC-071` (low)** — narrow `.gitleaks.toml`'s whole-tree `tests/`/`docs/` path allowlist to content-based exceptions so real secrets there are still caught.
+5. **`SEC-068` (low)** — add a durable secondary brake on the login-lockout fail-open path.
+6. **Agent-input hardening:** `SEC-073` (`json.dumps`/slug-allowlist the model `public_slug` before `lib/booking.ts`), `SEC-074` (soften the per-account lockout DoS), `SEC-072` (randomized dollar-quote tag / bound param in the Design-Prompt writeback).
+7. **Hygiene carried over:** `SEC-066` (enforce admin-key `scopes`), `SEC-065` (verify the gitleaks binary checksum), `SEC-015` (admin-key rotation/revoke surface), `SEC-040` (tighten frontend CSP), `SEC-027` (prune the stale `backend/auth_service/requirements.txt`).
+
+> **Note:** the auto-fixing "Saturday Solver routine" referenced below no longer exists (its code was removed). Open
+> findings now require **manual** remediation. A human should reconcile the automation references in this folder.
 
 ## How to read this folder
 
@@ -32,17 +48,18 @@ The 2026-06-20 review found **no new critical/high**; it added **12** lower-seve
 | [`dismissed.md`](./dismissed.md) | Candidate findings **adversarially verified as false positives** — recorded so we don't re-litigate them. |
 | [`methodology.md`](./methodology.md) | How a review is run: architecture facts, the 14 dimensions, severity scale, ID scheme, process. |
 | [`scope-checklist.md`](./scope-checklist.md) | The concrete file/area inventory to scan. **Grows with the app.** |
-| [`scheduled-review-prompt.md`](./scheduled-review-prompt.md) | The self-contained ultra-effort prompt the **weekly review** runs (now **Friday 00:00 Berlin**, routine `trig_014vxyf4JSNpvucdjNKUSUgH`). A separate **Saturday 06:00 Berlin Solver** routine (`trig_01EsPjxVZGJciYRDYhZq8d9G`) branches/fixes/tests findings and opens PRs. |
+| [`scheduled-review-prompt.md`](./scheduled-review-prompt.md) | The self-contained ultra-effort prompt the **weekly review** runs. _(The previously-referenced Saturday "Solver" auto-fix routine no longer exists — its code was removed 2026-08-26; open findings now need manual remediation.)_ |
 | [`review-log.md`](./review-log.md) | Dated log of each review run (what was scanned, what changed). |
 
 ## How this review was produced
 
-A 14-dimension multi-agent workflow (find → **adversarial verification** → synthesize): 84 agents,
-one finder per security dimension scanning frontend, backend, services, workflows, agents, scraper,
-and the live Supabase/Vercel state via MCP. **Every finding was independently re-verified by a
-skeptical agent that re-read the cited code** and defaulted to *false-positive* unless the code
-supported the claim — that's why 14 candidates were dismissed and the 55 survivors cite real
-`file:line` + code evidence. The recurring methodology and the weekly automation live in this folder
+A 14-dimension multi-agent workflow (find → **adversarial verification** → synthesize). The latest run
+(2026-10-08) used 32 agents: a reconciliation pass over every open tracker finding plus one finder per
+security dimension (two for XSS, covering the new rich-text backend + the TS client kit), each candidate
+re-verified by an independent skeptic that re-read the cited code and defaulted to *false-positive* unless
+the code supported the claim. The 2026-06-07 baseline ran 84 agents over a wider surface (frontend,
+backend, services, workflows, agents, the since-removed scraper, and live Supabase/Vercel MCP state).
+Surviving findings cite real `file:line` + code evidence. The recurring methodology lives in this folder
 so the next review starts from here, not from scratch.
 
 ## Scope reviewed
