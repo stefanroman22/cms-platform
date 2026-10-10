@@ -2,7 +2,7 @@
 never offer or auto-assign an unlinked staff member.
 
 This pins existing correct behaviour so the Resources->Staff relabel (and any
-future refactor of `_free_resource_for` / `_availability_for_day`) cannot regress
+future refactor of `_free_resource_for` / `_availability_for_range`) cannot regress
 it. Eligibility is enforced at `load_eligible_resources`, which returns only the
 resources linked via `booking_service_resources`; we stub that linker to return
 ONLY staff A while staff B exists, then drive the real availability/assignment
