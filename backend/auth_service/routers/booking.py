@@ -433,11 +433,13 @@ def list_resources(slug: str, service_id: str = Query("")) -> JSONResponse:
     )
 
 
-# Availability is intentionally NOT behind _public_read_limit (unlike the sibling public
-# reads): it is the highest-frequency read, and the edge Cache-Control below collapses
-# repeats so a per-request Postgres limiter round-trip would only add latency. Write paths
-# keep their limiter and remain the abuse + double-booking boundary.
-@router.get("/{slug}/availability")
+# SEC-070: availability carries the shared per-IP read limit like every sibling public
+# read. The edge Cache-Control below still absorbs honest repeats, but Vercel's edge keys
+# on the full URL (path + query), so an attacker who varies service_id/from/to/resource_id
+# forces a guaranteed cache miss and a fresh origin computation on every request. Without
+# the limiter that is a per-IP DB + Google-Calendar amplification DoS (and the one shared
+# Supabase DB serves all tenants). 120/60s is generous for real widget use.
+@router.get("/{slug}/availability", dependencies=[Depends(_public_read_limit)])
 def availability(
     slug: str,
     service_id: str,

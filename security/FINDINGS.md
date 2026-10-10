@@ -169,6 +169,14 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-066](findings/low.md#sec-066) | low | Admin API key `scopes` are stored but never enforced — every key is full-admin | `backend/auth_service/services/admin_keys.py:106; routers/deps.py:42-81` | admin-priv | open |
 | [SEC-067](findings/info.md#sec-067) | info | New `seo_*` tables inherit full anon/authenticated DML grants from Supabase default ACLs; safe only because RLS is enabled (no explicit REVOKE) | `backend/migrations/2026_06_14_seo_geo.sql:159-167` | supabase-db | open |
 | [SEC-068](findings/low.md#sec-068) | low | Per-account login lockout fails open on any Postgres error, leaving only per-instance in-memory throttling | `backend/auth_service/core/pg_rate_limit.py:40-55; routers/auth.py:79-96` | authn-session | open |
+| [SEC-070](findings/medium.md#sec-070) | medium | Public booking `/{slug}/availability` omits the shared rate limiter; URL-keyed edge cache is trivially cache-busted → DB + external-calendar amplification DoS | `backend/auth_service/routers/booking.py:436-445,239-317` | ratelimit-dos | ✅ fixed (PR `security/fix-SEC-070-2026-10-10` → dev — `/{slug}/availability` now carries `Depends(_public_read_limit)` like every sibling public read; regression test added) |
+
+> **⚠ Saturday Solver 2026-10-10 — note on SEC-069/070 provenance.** SEC-069 and SEC-070 are
+> findings from the **2026-10-08 weekly review**, which lives on the unmerged
+> `origin/security/weekly-review-2026-10-08` branch (its tracker, not this dev tracker, is the
+> authoritative 2026-10-08 source). This dev tracker is still at the 2026-06-20 header. The rows
+> added here record the Saturday-Solver fix status so it is not lost; a human reconciling the two
+> trackers should keep both the authoritative review-branch rows and these fix-status rows.
 
 ## 2026-09-17 weekly review — fixes applied 2026-09-19 (⚠ ID reconciliation needed)
 

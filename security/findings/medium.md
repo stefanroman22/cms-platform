@@ -704,3 +704,56 @@ unbounded span with `load_eligible_resources` never called; 200 on a normal 7-da
 suite: 580 passed, 5 skipped.
 
 ---
+
+<a id="sec-070"></a>
+
+## SEC-070 — Public booking `/{slug}/availability` omits the shared rate limiter; URL-keyed edge cache is trivially cache-busted → DB + external-calendar amplification DoS
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | ✅ fixed (2026-10-10, Saturday Solver) |
+| **Category** | Rate limiting / DoS (resource exhaustion) |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/booking.py:436-445 (route), 239-317 (_availability_for_range)` |
+| **First seen** | 2026-10-08 (review branch `origin/security/weekly-review-2026-10-08`) |
+
+**Description**
+
+`GET /booking/{slug}/availability` was the only unauthenticated booking read deliberately left
+without `Depends(_public_read_limit)` — every sibling (`/config`, `/services`, `/resources`,
+`/contract`, and the legacy `/availability` + `/slots` hardened by the 2026-09-17 SEC-058) carries
+it. `main.py` has no global rate-limit middleware (slowapi is per-route only), so the sole mitigation
+was the `Cache-Control: s-maxage=30, stale-while-revalidate=60` response header. But Vercel's edge
+keys on the full request URL (path + query), and the attacker controls `service_id`, `from`, `to`,
+and `resource_id`: varying any of them yields a unique URL, a guaranteed cache miss, and a fresh
+origin computation (~6 service-role Postgres queries + a day-by-day loop + one outbound Google
+Calendar `list_busy`) on every request. One IP amplifies cheap HTTP into heavy DB load and Google
+Calendar quota burn; because one shared Supabase DB serves all tenants, the DB-load amplification
+degrades availability platform-wide.
+
+**Fix (2026-10-10)**
+
+Added `dependencies=[Depends(_public_read_limit)]` to the `/{slug}/availability` route, exactly like
+its sibling public reads (shared Postgres per-IP cap, 120/60s — generous for real widget use, and the
+edge cache still absorbs honest repeats). The limiter runs as a route dependency, so it short-circuits
+with 429 **before** any of the heavy per-range DB work.
+
+The review's secondary suggestion (apply the `max_span_days` cap when `max_advance_days == 0` instead
+of defaulting to 366) was deliberately **not** applied: `available_starts` treats `max_advance_days`
+as the booking horizon, and `max_advance_days == 0` is used as an "unbounded/display" sentinel — the
+widget still requests multi-day display ranges for such services, so clamping the span to 0 would
+422 legitimate calls. The existing 366 bound (SEC-058) already prevents a single-request unbounded
+loop, and the shared per-IP limiter is the correct, sibling-consistent fix for the sustained
+amplification vector.
+
+**Regression tested**
+
+New `tests/test_booking_slug_availability_ratelimit.py` (2 tests: 429 over cap with
+`load_eligible_resources` asserted never called — i.e. the limiter short-circuits before DB work; 200
+on a normal in-cap range). Updated `tests/test_booking_availability_cache.py` (the edge-cache header
+still asserted; the former `test_availability_not_rate_limited_while_config_still_is` — which pinned
+the now-removed exemption — rewritten to assert availability 429s alongside `/config`). Full backend
+suite: 4640 passed, 5 skipped.
+
+---
