@@ -11,7 +11,7 @@ interface ThemeContextValue {
 }
 
 const DEFAULT_THEME: Theme = "dark";
-export const THEME_STORAGE_KEY = "dashboard-theme";
+const THEME_STORAGE_KEY = "dashboard-theme";
 
 const ThemeContext = createContext<ThemeContextValue>({
   theme: DEFAULT_THEME,

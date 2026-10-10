@@ -11,5 +11,3 @@ export function renderWithIntl(ui: ReactElement) {
     </NextIntlClientProvider>
   );
 }
-
-export { messages };

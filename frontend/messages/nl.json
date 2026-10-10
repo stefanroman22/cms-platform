@@ -37,7 +37,6 @@
     "showPassword": "Wachtwoord weergeven",
     "hidePassword": "Wachtwoord verbergen",
     "rememberMe": "Onthoud mij",
-    "forgotPassword": "Wachtwoord vergeten?",
     "signIn": "Log in op het dashboard",
     "successHeading": "Inloggen gelukt",
     "successBody": "Je bent helemaal klaar. Ga naar je dashboard om je projecten te beheren.",
@@ -317,8 +316,6 @@
   },
   "about": {
     "hero": {
-      "eyebrow": "Over ons",
-      "title": "Software die rekening houdt met uw tijd, uw budget en uw gegevens.",
       "lead": "Roman Technologies is een in de EU gevestigde softwareontwikkelaar. Wij ontwerpen en bouwen op maat gemaakte websites, applicaties en AI-workflows voor ambitieuze bedrijven — en zorgen vervolgens voor de hosting, beveiliging en het onderhoud ervan, zodat u zich kunt concentreren op uw bedrijf in plaats van op uw technostack."
     },
     "story": {

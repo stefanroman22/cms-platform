@@ -496,8 +496,6 @@ class LeadOut(BaseModel):
     lead_status: LeadStatus
     lead_contact_type: LeadContactType
     payment_status: PaymentStatus
-    ai_score: int | None = None
-    ai_scored_at: str | None = None
     design_prompt: str | None = None
     extra: dict = Field(default_factory=dict)
     closed_amount: float | None = None

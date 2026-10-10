@@ -14,7 +14,7 @@ Required env vars:
   SUPABASE_PAT     personal access token (sbp_*) — has DB query rights
   SUPABASE_PROJECT_REF  project ref (e.g. xeluydwpgiddbamysgyu)
   SUPABASE_URL     https://<ref>.supabase.co
-  SUPABASE_SERVICE_ROLE  the new sb_secret_* key (not legacy JWT)
+  SUPABASE_SERVICE_ROLE_KEY  the new sb_secret_* key (not legacy JWT)
   E2E_USER_PASSWORD       known password to set on regular user
   E2E_ADMIN_PASSWORD      known password to set on admin user
 
@@ -34,7 +34,7 @@ import urllib.request
 PAT = os.environ["SUPABASE_PAT"]
 REF = os.environ["SUPABASE_PROJECT_REF"]
 SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
-SERVICE_ROLE = os.environ["SUPABASE_SERVICE_ROLE"]
+SERVICE_ROLE = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 E2E_USER_PASSWORD = os.environ["E2E_USER_PASSWORD"]
 E2E_ADMIN_PASSWORD = os.environ["E2E_ADMIN_PASSWORD"]
 
@@ -218,9 +218,12 @@ def upsert_seed_services(project_id: str) -> None:
             print(f"  + service {svc['service_key']} created ({sid})")
         ce_json = json.dumps(svc["content"]).replace("'", "''")
         supabase_sql(
-            "INSERT INTO content_entries (project_service_id, draft_content, "
-            f"published_content) VALUES ('{sid}', '{ce_json}'::jsonb, '{ce_json}'::jsonb) "
-            "ON CONFLICT (project_service_id) DO UPDATE SET draft_content = EXCLUDED.draft_content, "
+            "INSERT INTO content_entries (project_service_id, locale, draft_content, "
+            f"published_content) VALUES ('{sid}', "
+            f"(SELECT default_locale FROM projects WHERE id = '{project_id}'), "
+            f"'{ce_json}'::jsonb, '{ce_json}'::jsonb) "
+            "ON CONFLICT (project_service_id, locale) DO UPDATE SET "
+            "draft_content = EXCLUDED.draft_content, "
             "published_content = EXCLUDED.published_content"
         )
         print(f"    ↳ content seeded for {svc['service_key']}")

@@ -23,7 +23,6 @@ def _row(*, key_prefix, key_hash, expires_at=None, revoked_at=None, is_admin=Tru
         "key_hash": key_hash,
         "expires_at": expires_at,
         "revoked_at": revoked_at,
-        "scopes": ["agent"],
         "users": {
             "email": "admin@example.com",
             "is_admin": is_admin,

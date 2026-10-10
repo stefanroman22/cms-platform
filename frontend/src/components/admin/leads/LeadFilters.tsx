@@ -7,7 +7,6 @@ import { dashboardInputCn, dashboardFieldLabelCn } from "@/lib/styles";
 import { AnimatedSelect } from "@/components/dashboard/AnimatedSelect";
 import { WEB_PRESENCE_LABEL, LEAD_STATUS_LABEL, LEAD_TYPE_LABEL } from "@/lib/leadEnums";
 import type { LeadFiltersState } from "./types";
-import { EMPTY_FILTERS } from "./types";
 import type { LeadType, WebPresence, LeadStatus } from "@/lib/leadEnums";
 
 interface Props {
@@ -197,5 +196,3 @@ export function LeadFilters({ value, onChange }: Props) {
     </div>
   );
 }
-
-export { EMPTY_FILTERS };

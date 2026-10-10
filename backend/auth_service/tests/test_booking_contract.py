@@ -1,5 +1,4 @@
-"""Tests for the versioned create-booking contract: the public
-`GET /booking/{slug}/contract` endpoint, field-level validation errors on
+"""Tests for the create-booking contract: field-level validation errors on
 `POST /booking/{slug}`, and behavior preservation for already-valid payloads."""
 
 from unittest.mock import patch
@@ -10,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from auth_service.core.config import settings
 from auth_service.main import app
-from auth_service.models.booking_contract import BOOKING_CONTRACT_VERSION
 from auth_service.services.booking_tenant import TenantConfig
 
 UTC = ZoneInfo("UTC")
@@ -27,7 +25,6 @@ TENANT = TenantConfig(
     slot_granularity_min=45,
     reminders_enabled=True,
     reminder_offsets_min=[60],
-    calendar_provider="none",
     is_active=True,
 )
 SERVICE = {
@@ -54,32 +51,6 @@ def client():
 # whole suite runs together.
 def _ip(n: int) -> dict[str, str]:
     return {"X-Forwarded-For": f"203.0.113.{n}"}
-
-
-def test_contract_endpoint_returns_versioned_shape(client):
-    with patch(
-        "auth_service.routers.booking.booking_tenant.load_tenant_by_slug", return_value=TENANT
-    ):
-        r = client.get("/booking/acme/contract")
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["version"] == BOOKING_CONTRACT_VERSION
-    assert "service_id" in body["required"]
-    assert "start_utc" in body["required"]
-    assert "customer.name" in body["required"]
-    assert "customer.email" in body["required"]
-    fields = body["fields"]
-    assert fields["service_id"]["type"] == "string"
-    assert fields["start_utc"]["format"] == "date-time"
-    assert fields["customer.email"]["format"] == "email"
-
-
-def test_contract_endpoint_unknown_slug_404(client):
-    with patch(
-        "auth_service.routers.booking.booking_tenant.load_tenant_by_slug", return_value=None
-    ):
-        r = client.get("/booking/nope/contract")
-    assert r.status_code == 404
 
 
 def test_create_missing_email_names_the_field(client):

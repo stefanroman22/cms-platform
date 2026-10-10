@@ -10,7 +10,7 @@ from .supabase_client import get_supabase_admin
 _FIELDS = (
     "tenant_id, public_slug, timezone, locale, business_name, "
     "owner_notification_email, email_from_name, meeting_url, slot_granularity_min, "
-    "reminders_enabled, reminder_offsets_min, calendar_provider, is_active, "
+    "reminders_enabled, reminder_offsets_min, is_active, "
     "logo_url, primary_color, accent_color, widget_color, email_copy"
 )
 
@@ -28,7 +28,6 @@ class TenantConfig:
     slot_granularity_min: int
     reminders_enabled: bool
     reminder_offsets_min: list[int]
-    calendar_provider: str
     is_active: bool
     logo_url: str | None = None
     primary_color: str | None = None
@@ -53,7 +52,6 @@ def _to_config(row: dict, *, website_url: str | None = None) -> TenantConfig:
         slot_granularity_min=row.get("slot_granularity_min") or 15,
         reminders_enabled=bool(row.get("reminders_enabled")),
         reminder_offsets_min=list(row.get("reminder_offsets_min") or []),
-        calendar_provider=row.get("calendar_provider") or "none",
         is_active=bool(row.get("is_active")),
         logo_url=row.get("logo_url"),
         primary_color=row.get("primary_color"),

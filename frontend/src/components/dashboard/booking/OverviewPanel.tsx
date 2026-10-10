@@ -232,6 +232,3 @@ export function OverviewPanel({ projectSlug }: Props) {
     </div>
   );
 }
-
-// Re-export the registry so callers can introspect available views if needed.
-export { STAT_VIEWS };

@@ -384,7 +384,6 @@ _ADMIN_PROJECT = {
     "slug": "demo",
     "name": "Demo",
     "github_repo": "https://github.com/test/demo",
-    "repo_branch": "cms-preview",
     "production_branch": "master",
     "preview_url": "https://demo-dev.vercel.app",
     "production_url": "https://demo.vercel.app",

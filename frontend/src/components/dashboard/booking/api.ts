@@ -20,9 +20,6 @@ export interface BookingSettings {
   owner_notification_email?: string;
   meeting_url?: string;
   slot_granularity_min?: number;
-  reminders_enabled?: boolean;
-  reminder_offsets_min?: number[];
-  calendar_provider?: string;
   public_slug?: string;
 }
 
@@ -101,10 +98,6 @@ export interface EmailTemplateField {
   // The saved per-field colour override hex (or "" when none) — round-trips the editor.
   color_value?: string;
 }
-
-// Mirror of booking_i18n.COLOR_SUFFIX — per-field colours live in email_copy
-// under `${key}${COLOR_SUFFIX}`.
-export const COLOR_SUFFIX = "__color";
 
 export interface EmailTemplateBrand {
   logo_url?: string | null;

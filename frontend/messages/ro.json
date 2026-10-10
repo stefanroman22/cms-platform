@@ -37,7 +37,6 @@
     "showPassword": "Afișează parola",
     "hidePassword": "Ascunde parola",
     "rememberMe": "Reține-mă",
-    "forgotPassword": "Ți-ai uitat parola?",
     "signIn": "Conectează-te la panoul de control",
     "successHeading": "Autentificare reușită",
     "successBody": "Ești gata. Accesează panoul de control pentru a-ți gestiona proiectele.",
@@ -317,8 +316,6 @@
   },
   "about": {
     "hero": {
-      "eyebrow": "Despre noi",
-      "title": "Un software care ține cont de timpul, bugetul și datele dumneavoastră.",
       "lead": "Roman Technologies este un studio de software cu sediul în UE. Proiectăm și dezvoltăm site-uri web personalizate, aplicații și fluxuri de lucru bazate pe inteligență artificială pentru companii ambițioase — apoi le găzduim, le securizăm și le întreținem, astfel încât dumneavoastră să vă puteți concentra pe afacerea dumneavoastră, nu pe infrastructura tehnologică."
     },
     "story": {

@@ -103,7 +103,7 @@ def verify_admin_api_key(plain_key: str) -> dict | None:
     sb = get_supabase_admin()
     res = (
         sb.table("admin_api_keys")
-        .select("id, user_id, key_hash, expires_at, scopes, " "users(email, is_admin, is_active)")
+        .select("id, user_id, key_hash, expires_at, users(email, is_admin, is_active)")
         .eq("key_prefix", lookup)
         .is_("revoked_at", "null")
         .maybe_single()

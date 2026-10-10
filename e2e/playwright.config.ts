@@ -4,7 +4,7 @@ import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
 const baseURL =
-  process.env.E2E_BASE_URL_FRONTEND ?? "https://cms-frontend-roman.vercel.app";
+  process.env.E2E_BASE_URL_FRONTEND ?? "https://roman-technologies.dev";
 
 export default defineConfig({
   testDir: "./tests",

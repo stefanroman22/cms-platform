@@ -22,7 +22,6 @@ T1 = TenantConfig(
     slot_granularity_min=45,
     reminders_enabled=True,
     reminder_offsets_min=[60],
-    calendar_provider="none",
     is_active=True,
 )
 SVC = {
@@ -38,80 +37,6 @@ SVC = {
 @pytest.fixture
 def client():
     return TestClient(app)
-
-
-def test_legacy_slots_returns_iso(client):
-    starts = [__import__("datetime").datetime(2099, 6, 10, 7, 0, tzinfo=UTC_ZONE)]
-    with (
-        patch("auth_service.routers.booking.booking_tenant.load_tenant_by_slug", return_value=T1),
-        patch("auth_service.routers.booking.booking_repo.load_active_services", return_value=[SVC]),
-        patch("auth_service.routers.booking._availability_for_day", return_value=starts),
-    ):
-        r = client.get("/booking/slots?date=2099-06-10&tz=Europe/London")
-    assert r.status_code == 200
-    assert r.json()["slots"][0].startswith("2099-06-10")
-
-
-def test_legacy_booking_honeypot(client):
-    with (
-        patch("auth_service.routers.booking.booking_tenant.load_tenant_by_slug", return_value=T1),
-        patch("auth_service.routers.booking.booking_repo.load_active_services", return_value=[SVC]),
-    ):
-        r = client.post(
-            "/booking",
-            json={
-                "slot_start": "2099-06-10T06:00:00+00:00",
-                "name": "Bot",
-                "email": "b@b.com",
-                "website": "x",
-            },
-        )
-    assert r.status_code == 200 and r.json()["success"] is True
-
-
-def test_legacy_booking_422_bad_email(client):
-    with (
-        patch("auth_service.routers.booking.booking_tenant.load_tenant_by_slug", return_value=T1),
-        patch("auth_service.routers.booking.booking_repo.load_active_services", return_value=[SVC]),
-    ):
-        r = client.post(
-            "/booking",
-            json={"slot_start": "2099-06-10T06:00:00+00:00", "name": "J", "email": "nope"},
-        )
-    assert r.status_code == 422
-
-
-def test_legacy_booking_happy_path(client, monkeypatch):
-    monkeypatch.setattr(settings, "RESEND_API_KEY", "k")
-    with (
-        patch("auth_service.routers.booking.booking_tenant.load_tenant_by_slug", return_value=T1),
-        patch("auth_service.routers.booking.booking_repo.load_active_services", return_value=[SVC]),
-        patch("auth_service.routers.booking.booking_repo.load_service", return_value=SVC),
-        patch("auth_service.routers.booking._free_resource_for", return_value="r1"),
-        patch("auth_service.routers.booking.booking_repo.upsert_customer", return_value="c1"),
-        patch("auth_service.routers.booking.booking_repo.insert_booking", return_value="b1"),
-        patch("auth_service.routers.booking.booking_repo.insert_audit"),
-        patch(
-            "auth_service.routers.booking.booking_repo.notification_already_sent",
-            return_value=False,
-        ),
-        patch("auth_service.routers.booking.booking_repo.record_notification"),
-        patch("auth_service.routers.booking.booking_email.send_host_notification") as host,
-        patch("auth_service.routers.booking.booking_email.send_visitor_confirmation") as vis,
-    ):
-        r = client.post(
-            "/booking",
-            json={
-                "slot_start": "2099-06-10T06:00:00+00:00",
-                "name": "Jane",
-                "email": "jane@acme.com",
-                "note": "hi",
-                "visitor_timezone": "Europe/London",
-            },
-        )
-    assert r.status_code == 200, r.text
-    host.assert_called_once()
-    vis.assert_called_once()
 
 
 def test_reminders_requires_secret(client, monkeypatch):
@@ -133,7 +58,6 @@ def _make_tenant_with_offsets(offsets, enabled=True):
         slot_granularity_min=45,
         reminders_enabled=enabled,
         reminder_offsets_min=offsets,
-        calendar_provider="none",
         is_active=True,
     )
 

@@ -4,8 +4,6 @@ from typing import Literal
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
-SESSION_COOKIE_NAME: str = "sid"
-
 # Three deploy tiers. Anything else is rejected at startup so a typo
 # (`prod`, `PRODUCTION`, ``) cannot silently flow through the production
 # code path. See docs/decisions/0009-environment-tiers-and-config.md for tier semantics.
@@ -30,53 +28,18 @@ class Settings(BaseSettings):
     # password changed). Replies to noreply@ would otherwise go nowhere.
     SUPPORT_EMAIL: str = "stefanromanpers@gmail.com"
 
-    # Booking widget — hours below are interpreted in BOOKING_TIMEZONE (CET).
-    BOOKING_TIMEZONE: str = "Europe/Berlin"
-    # Per-weekday availability windows: "<iso_weekday>=<start_hour>-<end_hour>",
-    # comma-separated. Mon=1 .. Sun=7. Days not listed are unavailable.
-    BOOKING_HOURS: str = "1=9-20,2=9-20,3=9-20,4=9-20,5=9-20,6=9-17,7=12-17"
-    BOOKING_SLOT_MINUTES: int = 45
-    BOOKING_BUFFER_MINUTES: int = 0
-    BOOKING_MIN_NOTICE_HOURS: int = 2
-    BOOKING_HORIZON_DAYS: int = 120
+    # Booking
     BOOKING_HOST_EMAIL: str = "stefanromanpers@gmail.com"
     BOOKING_CRON_SECRET: str = ""  # guards POST /booking/cron/reminders
 
-    # Google Calendar auto-sync (over urllib, no extra deps). When these are
-    # empty the booking widget falls back to Supabase-only availability — no
-    # calendar read/write.
-    GOOGLE_CLIENT_ID: str = ""
-    GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_REFRESH_TOKEN: str = ""
-    GOOGLE_CALENDAR_ID: str = "primary"
-
     # Client self-service management (cancel/reschedule)
     BOOKING_PUBLIC_BASE_URL: str = "https://roman-technologies.dev"  # base for /manage/{token}
-    BOOKING_MAX_RESCHEDULES: int = 2
     # Base URL for building /manage/{token} links (defaults to the public base).
     BOOKING_MANAGE_BASE_URL: str = ""
 
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.FRONTEND_ORIGINS.split(",") if o.strip()]
-
-    @property
-    def booking_hours(self) -> dict[int, tuple[int, int]]:
-        """ISO weekday (Mon=1..Sun=7) → (start_hour, end_hour), parsed from
-        BOOKING_HOURS. Days absent from the map are unavailable."""
-        out: dict[int, tuple[int, int]] = {}
-        for part in self.BOOKING_HOURS.split(","):
-            part = part.strip()
-            if not part:
-                continue
-            day_s, _, rng = part.partition("=")
-            start_s, _, end_s = rng.partition("-")
-            out[int(day_s)] = (int(start_s), int(end_s))
-        return out
-
-    @property
-    def booking_working_days(self) -> set[int]:
-        return set(self.booking_hours)
 
     @property
     def manage_base_url(self) -> str:

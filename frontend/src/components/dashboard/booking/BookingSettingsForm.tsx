@@ -27,7 +27,6 @@ type Draft = {
   meeting_url: string;
   email_from_name: string;
   slot_granularity_min: string;
-  calendar_provider: string;
 };
 
 function settingsToDraft(s: BookingSettings): Draft {
@@ -40,7 +39,6 @@ function settingsToDraft(s: BookingSettings): Draft {
     meeting_url: s.meeting_url ?? "",
     email_from_name: s.email_from_name ?? "",
     slot_granularity_min: String(s.slot_granularity_min ?? 15),
-    calendar_provider: s.calendar_provider ?? "none",
   };
 }
 
@@ -92,7 +90,6 @@ export function BookingSettingsForm({ projectSlug }: Props) {
         meeting_url: draft.meeting_url.trim() || undefined,
         email_from_name: draft.email_from_name.trim() || undefined,
         slot_granularity_min: parseInt(draft.slot_granularity_min, 10) || undefined,
-        calendar_provider: draft.calendar_provider || undefined,
       });
       cache.set(cacheKey, updated);
       setMsg({ type: "ok", text: "Settings saved." });
@@ -227,22 +224,6 @@ export function BookingSettingsForm({ projectSlug }: Props) {
                 className={dashboardInputCn}
               />
             </div>
-
-            <div>
-              <label className={dashboardFieldLabelCn}>Calendar provider</label>
-              <select
-                value={draft.calendar_provider}
-                onChange={(e) => set("calendar_provider", e.target.value)}
-                className={dashboardInputCn}
-              >
-                <option value="none">None</option>
-                <option value="google">Google Calendar</option>
-              </select>
-            </div>
-
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">
-              Email reminders are configured under <span className="font-medium">Policies</span>.
-            </p>
 
             <div className="flex justify-end pt-1">
               <button

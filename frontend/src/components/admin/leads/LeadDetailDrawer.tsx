@@ -415,18 +415,6 @@ function DrawerBody({
 
         <LanguagesSection lead={lead} onPatched={onPatched} />
 
-        {/* AI scoring */}
-        <DetailCard title="AI scoring">
-          {lead.ai_score == null ? (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 italic">Not scored yet.</p>
-          ) : (
-            <>
-              <Row label="Score" value={`${lead.ai_score} / 100`} />
-              <Row label="Scored at" value={lead.ai_scored_at} />
-            </>
-          )}
-        </DetailCard>
-
         <DesignPromptSection lead={lead} onPatched={onPatched} />
 
         <OpeningHoursSection lead={lead} onPatched={onPatched} />
@@ -473,41 +461,6 @@ function SelectField<T extends string>({
         initialChevron="up"
         options={(Object.keys(options) as T[]).map((k) => ({ value: k, label: options[k] }))}
       />
-    </div>
-  );
-}
-
-function DetailCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="mt-5">
-      <h3 className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-semibold mb-2">
-        {title}
-      </h3>
-      <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-3 space-y-1.5">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function Row({ label, value, isLink }: { label: string; value: string | null; isLink?: boolean }) {
-  return (
-    <div className="flex items-baseline gap-3 text-xs">
-      <span className="text-zinc-500 dark:text-zinc-400 w-24 shrink-0">{label}</span>
-      {value == null || value === "" ? (
-        <span className="text-zinc-400 dark:text-zinc-600">—</span>
-      ) : isLink ? (
-        <a
-          href={value}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 dark:text-blue-400 hover:underline truncate"
-        >
-          {value}
-        </a>
-      ) : (
-        <span className="text-zinc-900 dark:text-zinc-100 break-words">{value}</span>
-      )}
     </div>
   );
 }

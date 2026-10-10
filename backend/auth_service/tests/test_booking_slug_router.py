@@ -22,7 +22,6 @@ TENANT = TenantConfig(
     slot_granularity_min=45,
     reminders_enabled=True,
     reminder_offsets_min=[60],
-    calendar_provider="none",
     is_active=True,
 )
 SERVICE = {

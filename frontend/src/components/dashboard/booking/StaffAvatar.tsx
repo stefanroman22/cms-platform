@@ -4,7 +4,7 @@ import { useState } from "react";
 
 /** Served from `public/booking/`. Every staff member always has an avatar —
  *  this neutral silhouette stands in when none is uploaded. */
-export const DEFAULT_STAFF_AVATAR = "/booking/default-staff-avatar.svg";
+const DEFAULT_STAFF_AVATAR = "/booking/default-staff-avatar.svg";
 
 interface Props {
   src?: string | null;

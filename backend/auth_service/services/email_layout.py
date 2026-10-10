@@ -5,8 +5,8 @@ compose ``shell(header + accent_rule + <blocks> + footer)`` from the helpers
 below; don't hand-roll a standalone template.
 
 New in P4: optional Brand dataclass. All new params default to DEFAULT_BRAND
-(Roman Technologies), so the issue-resolved and any other existing callers that
-pass no brand argument produce byte-for-byte identical output."""
+(Roman Technologies), so existing callers that pass no brand argument produce
+byte-for-byte identical output."""
 
 from __future__ import annotations
 

@@ -133,7 +133,6 @@ include. Otherwise exclude.
   integration time; list the source file paths to connect in \
   `ui_wiring.components`. Set `fallback_embed: true` ONLY when scheduling intent \
   is detected but no usable booking UI exists in the source. \
-  `calendar_provider` is always `"none"` for clients. \
   Emit a `field_mapping` object inside the `booking` block that maps EVERY \
   required contract field (`service_id`, `start_utc`, `customer.name`, \
   `customer.email`) to the client form's corresponding field name/id (the SDK \
@@ -172,7 +171,6 @@ Return only:
     "accent_color": "#...", "primary_color": "#...", "logo_url": "...",
     "locale": "en", "timezone": "Europe/Berlin",
     "destination_email": "",
-    "calendar_provider": "none",
     "reminders": { "enabled": true, "offsets_min": [1440, 120] },
     "services":  [{ "name": "Consultation", "duration_min": 30, "price": 30 }],
     "resources": [{ "name": "Staff", "type": "staff", "image_url": "" }],

@@ -377,7 +377,6 @@ def _provision_booking(
         "email_from_name": business_name,
         "accent_color": booking.get("accent_color", ""),
         "primary_color": booking.get("primary_color", ""),
-        "calendar_provider": "none",
         "reminders_enabled": booking.get("reminders", {}).get("enabled", False),
         "reminder_offsets_min": booking.get("reminders", {}).get("offsets_min", []),
         "owner_notification_email": owner_email,

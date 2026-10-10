@@ -17,9 +17,11 @@ The price is that every request may run in a fresh or a different instance.
   Rate limiting uses the Postgres limiter (`core/pg_rate_limit.py`), because the in-memory slowapi
   limiter "resets per Vercel serverless invocation and is not shared across warm instances, so its
   limits were effectively N×limit".
-- Scheduled work runs in the database, not in the app: Supabase `pg_cron` calls a backend HTTP
-  endpoint through `pg_net`, authenticated with a shared secret
-  (`migrations/2026_06_05_booking_reminders_cron.sql`, `POST /booking/cron/reminders`).
+- Scheduled work runs in the database, not in the app: Supabase `pg_cron` jobs (session and
+  rate-limit GC, the e2e purge). A job that needs app code calls a backend HTTP endpoint through
+  `pg_net`, authenticated with a shared secret. The parked booking reminders are the template
+  (`migrations/2026_06_05_booking_reminders_cron.sql`, `POST /booking/cron/reminders`); their job
+  was unscheduled in `2026_09_30_drop_booking_reminder_cron.sql`.
 - Security headers are set at the platform layer in `backend/vercel.json`.
 - Both Vercel projects pin their functions to `dub1` (Dublin) via `regions` in `backend/vercel.json`
   and `frontend/vercel.json`, next to the Supabase database (eu-west-1). Every request makes several

@@ -7,8 +7,6 @@ from datetime import UTC, datetime
 
 from .supabase_client import get_supabase_admin
 
-_DEFAULT_RESOURCE = "00000000-0000-0000-0000-000000000000"  # placeholder, unused
-
 
 def get_settings(tenant_id: str) -> dict | None:
     sb = get_supabase_admin()
@@ -62,7 +60,6 @@ def provision(
                 "business_name": business_name,
                 "owner_notification_email": owner_email,
                 "email_from_name": business_name,
-                "calendar_provider": "none",
                 "reminder_offsets_min": [1440, 120],
             }
         )

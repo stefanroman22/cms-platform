@@ -14,5 +14,3 @@ export const Link = ({
   children: ReactNode;
   [key: string]: unknown;
 }) => createElement("a", { href, ...rest }, children);
-export const redirect = vi.fn();
-export const getPathname = vi.fn(() => "/");

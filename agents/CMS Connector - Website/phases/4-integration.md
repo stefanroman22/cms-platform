@@ -199,7 +199,6 @@ Body fields (all required):
 - `destination_email` — use the value Stefan edited into the Phase-2 report; if blank/absent fall back to `stefanromanpers@gmail.com`.
 - `business_name` — from manifest `booking.business_name`.
 - `accent_color`, `primary_color` — brand colors from manifest.
-- `calendar_provider: "none"` — always `"none"` at this stage; no calendar sync.
 - `reminder_offsets` — list of hour-offsets from manifest.
 
 **c. Create resources, then services, then hours — in this order**

@@ -27,6 +27,20 @@ def _form_bucket(request: Request) -> str:
     return f"{slug}:{form}:{client_ip(request)}"
 
 
+def _destination_email(rows: list[dict], default_locale: str | None) -> str | None:
+    """Destination address from a form's content_entries rows (one per locale).
+    Prefers the project's default-locale row, then any row that has one; within a
+    row the published value wins over the draft."""
+
+    def of(row: dict) -> str | None:
+        pub = row.get("published_content") or {}
+        draft = row.get("draft_content") or {}
+        return pub.get("destination_email") or draft.get("destination_email")
+
+    ordered = sorted(rows, key=lambda r: r.get("locale") != default_locale)
+    return next((d for d in map(of, ordered) if d), None)
+
+
 def _build_email_html(
     project_name: str,
     form_key: str,
@@ -110,7 +124,7 @@ async def submit_form(
     sb = get_supabase_admin()
     proj_result = (
         sb.table("projects")
-        .select("id, name, allowed_origins")
+        .select("id, name, allowed_origins, default_locale")
         .eq("slug", project_slug)
         .eq("is_active", True)
         .maybe_single()
@@ -167,18 +181,15 @@ async def submit_form(
     svc_id = svc_result.data["id"]
 
     # Destination email lives in content_entries (where the CMS UI writes it
-    # via the generic save path). Prefer the published value; fall back to
-    # draft so a client can wire up forms before the first publish.
+    # via the generic save path), one row per locale. Prefer the published value;
+    # fall back to draft so a client can wire up forms before the first publish.
     ce_result = (
         sb.table("content_entries")
-        .select("published_content, draft_content")
+        .select("locale, published_content, draft_content")
         .eq("project_service_id", svc_id)
-        .single()
         .execute()
     )
-    pub = (ce_result.data or {}).get("published_content") or {}
-    draft = (ce_result.data or {}).get("draft_content") or {}
-    destination = pub.get("destination_email") or draft.get("destination_email")
+    destination = _destination_email(ce_result.data or [], project.get("default_locale"))
     if not destination:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

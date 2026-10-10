@@ -46,10 +46,6 @@ export interface Lead {
   lead_status: LeadStatus;
   lead_contact_type: LeadContactType;
   payment_status: PaymentStatus;
-  ai_score: number | null;
-  ai_recommendation: string | null;
-  ai_reasoning: string | null;
-  ai_scored_at: string | null;
   design_prompt: string | null;
   extra: Record<string, unknown>;
   closed_amount: number | null;

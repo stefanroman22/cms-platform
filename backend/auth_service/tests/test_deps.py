@@ -9,9 +9,9 @@ from __future__ import annotations
 
 
 def test_require_project_access_selects_publish_fields(mock_supabase, admin_user):
-    """Regression: deps.require_project_access must SELECT production_branch,
-    production_url and repo_branch so the publish/connector flows have the
-    fields they need."""
+    """Regression: deps.require_project_access must SELECT production_branch
+    and production_url so the publish/connector flows have the fields they
+    need."""
     from auth_service.routers import deps
 
     mock_supabase.execute.return_value.data = {
@@ -24,7 +24,6 @@ def test_require_project_access_selects_publish_fields(mock_supabase, admin_user
         "preview_url": "https://acme-dev.vercel.app",
         "production_url": "https://acme.vercel.app",
         "production_branch": "master",
-        "repo_branch": "cms-preview",
     }
 
     project = deps.require_project_access("acme", admin_user)
@@ -32,7 +31,5 @@ def test_require_project_access_selects_publish_fields(mock_supabase, admin_user
     select_arg = mock_supabase.select.call_args.args[0]
     assert "production_branch" in select_arg
     assert "production_url" in select_arg
-    assert "repo_branch" in select_arg
 
     assert project["production_branch"] == "master"
-    assert project["repo_branch"] == "cms-preview"

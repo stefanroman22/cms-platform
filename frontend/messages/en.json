@@ -34,7 +34,6 @@
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "rememberMe": "Remember me",
-    "forgotPassword": "Forgot your password?",
     "signIn": "Sign in to dashboard",
     "successHeading": "Successfully Logged In",
     "successBody": "You're all set. Head over to your dashboard to manage your projects.",
@@ -274,8 +273,6 @@
   "aboutPage": { "metaTitle": "About — Roman Technologies" },
   "about": {
     "hero": {
-      "eyebrow": "About us",
-      "title": "Software that respects your time, your budget, and your data.",
       "lead": "Roman Technologies is an EU-based software studio. We design and build custom websites, applications and AI workflows for ambitious companies — then host, secure and maintain them, so you can focus on your business instead of your stack."
     },
     "story": {

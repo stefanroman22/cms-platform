@@ -1,4 +1,4 @@
-"""Owner-facing booking config API (Phase 2a + 2b). Project-scoped; mirrors issues.py.
+"""Owner-facing booking config API (Phase 2a + 2b). Project-scoped.
 Auth: session → require_user → require_project_access (owner-or-admin) →
 project['id'] is the booking tenant_id. `enable` additionally requires admin."""
 

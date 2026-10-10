@@ -29,7 +29,6 @@ TENANT = TenantConfig(
     slot_granularity_min=30,
     reminders_enabled=False,
     reminder_offsets_min=[],
-    calendar_provider="none",
     is_active=True,
 )
 SERVICE = {
@@ -98,11 +97,11 @@ def test_unlinked_staff_does_not_widen_availability():
             return_value={},
         ) as busy,
     ):
-        starts = booking_router._availability_for_day(
-            cfg=TENANT, service=SERVICE, day=DAY, now_utc=now
+        days = booking_router._availability_for_range(
+            cfg=TENANT, service=SERVICE, d0=DAY, d1=DAY, now_utc=now
         )
     # Slots exist (A is open), and the busy-interval query was scoped to A only.
-    assert starts, "expected available slots from the linked staff member"
+    assert days, "expected available slots from the linked staff member"
     busy.assert_called_once()
     assert busy.call_args.kwargs["resource_ids"] == ["staff-A"]
 
@@ -115,8 +114,8 @@ def test_no_eligible_staff_yields_no_assignment():
         rid = booking_router._free_resource_for(
             cfg=TENANT, service=SERVICE, start_utc=start, now_utc=now
         )
-        starts = booking_router._availability_for_day(
-            cfg=TENANT, service=SERVICE, day=DAY, now_utc=now
+        days = booking_router._availability_for_range(
+            cfg=TENANT, service=SERVICE, d0=DAY, d1=DAY, now_utc=now
         )
     assert rid is None
-    assert starts == []
+    assert days == []

@@ -77,10 +77,6 @@ function beginProgrammatic(maxMs: number) {
   progTimer = setTimeout(() => setProgrammatic(false), maxMs);
 }
 
-export function isProgrammaticScroll() {
-  return programmatic;
-}
-
 export function subscribeProgrammaticScroll(fn: (v: boolean) => void) {
   progListeners.add(fn);
   return () => {

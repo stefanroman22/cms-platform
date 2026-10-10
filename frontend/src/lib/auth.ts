@@ -49,11 +49,3 @@ export async function getMe(): Promise<UserOut | null> {
   if (!res.ok) return null;
   return res.json();
 }
-
-export async function refreshToken(): Promise<boolean> {
-  const res = await fetch("/api/auth/refresh", {
-    method: "POST",
-    credentials: "include",
-  });
-  return res.ok;
-}

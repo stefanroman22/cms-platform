@@ -12,12 +12,10 @@ interface Props {
 export function LeadStatsCards({ leads, total }: Props) {
   const noWebsite = leads.filter((l) => l.web_presence === "none").length;
   const sent = leads.filter((l) => l.lead_status === "sent").length;
-  const aiScored = leads.filter((l) => l.ai_score !== null).length;
   const stats = [
     { label: "Total (filtered)", value: total },
     { label: "No website (page)", value: noWebsite },
     { label: "Sent (page)", value: sent },
-    { label: "AI scored (page)", value: aiScored },
   ];
 
   return (
@@ -25,7 +23,7 @@ export function LeadStatsCards({ leads, total }: Props) {
       variants={staggerFast}
       initial="hidden"
       animate="visible"
-      className="grid grid-cols-2 md:grid-cols-4 gap-3"
+      className="grid grid-cols-2 md:grid-cols-3 gap-3"
     >
       {stats.map((s) => (
         <motion.div

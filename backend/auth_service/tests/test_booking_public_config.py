@@ -18,7 +18,6 @@ TENANT = TenantConfig(
     slot_granularity_min=45,
     reminders_enabled=True,
     reminder_offsets_min=[60],
-    calendar_provider="none",
     is_active=True,
     logo_url="https://acme.com/logo.png",
     primary_color="#123456",

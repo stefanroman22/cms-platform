@@ -232,37 +232,6 @@ async def get_service(
     return _service_detail(project, user, service_key, loc)
 
 
-def _repeater_schema_of(content: object) -> list | None:
-    """Return a repeater content blob's non-empty `_schema`, else None.
-
-    `_schema` is structural metadata (the per-item field definitions) the
-    dashboard editor needs to render the repeater. It is seeded at create time
-    from `item_schema`; a content write that omits it must NOT drop it."""
-    if isinstance(content, dict):
-        schema = content.get("_schema")
-        if isinstance(schema, list) and schema:
-            return schema
-    return None
-
-
-def _grafted_repeater_content(content: dict, *fallback_blobs: object) -> dict:
-    """Guarantee a repeater save carries a non-empty `_schema`.
-
-    Keeps the incoming `_schema` when present; otherwise grafts the first
-    non-empty one found in the fallback blobs (the stored default/target-locale
-    content). This makes the schema sticky so an items-only payload — e.g. the
-    connector's seed PUT, or any client that round-trips only `items` — can
-    never wipe the field definitions and leave an uneditable repeater. Returns
-    `content` unchanged when no schema is available anywhere."""
-    if _repeater_schema_of(content) is not None:
-        return content
-    for blob in fallback_blobs:
-        schema = _repeater_schema_of(blob)
-        if schema is not None:
-            return {**content, "_schema": schema}
-    return content
-
-
 @router.put("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
 async def save_service(
     project_slug: str,

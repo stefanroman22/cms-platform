@@ -25,7 +25,6 @@ _SORTABLE_COLUMNS = frozenset(
         "business_name",
         "rating",
         "review_count",
-        "ai_score",
         "lead_status",
         "lead_type",
         "category",
@@ -49,8 +48,6 @@ async def list_leads(
     max_rating: float | None = Query(None),
     min_reviews: int | None = Query(None),
     max_reviews: int | None = Query(None),
-    min_ai_score: int | None = Query(None),
-    max_ai_score: int | None = Query(None),
     search: str | None = Query(None),
     sort: str = Query("created_at"),
     desc: bool = Query(True),
@@ -80,10 +77,6 @@ async def list_leads(
         q = q.gte("review_count", min_reviews)
     if max_reviews is not None:
         q = q.lte("review_count", max_reviews)
-    if min_ai_score is not None:
-        q = q.gte("ai_score", min_ai_score)
-    if max_ai_score is not None:
-        q = q.lte("ai_score", max_ai_score)
     if search:
         q = q.ilike("business_name", f"%{search}%")
 

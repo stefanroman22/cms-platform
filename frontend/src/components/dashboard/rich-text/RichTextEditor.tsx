@@ -8,7 +8,7 @@ import { inlineExtensions, richExtensions } from "./extensions";
 import { fromStored, toStored, type RichMode } from "./serialize";
 import { Toolbar } from "./Toolbar";
 
-export const RICH_LIMITS: Record<RichMode, number> = { inline: 2000, rich: 50000 };
+const RICH_LIMITS: Record<RichMode, number> = { inline: 2000, rich: 50000 };
 
 export interface RichTextEditorProps {
   value: string;

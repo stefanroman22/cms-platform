@@ -91,7 +91,7 @@ function KpiCard({ label, value, icon, danger, highlight }: KpiCardProps) {
   );
 }
 
-export function KpiGroup({ stats }: { stats: BookingStats }) {
+function KpiGroup({ stats }: { stats: BookingStats }) {
   const { kpis, cancellation_rate, no_show_rate } = stats;
   // One responsive grid — Upcoming is the single gold-highlighted metric an owner
   // glances at most; the rest stay neutral zinc, danger states go red.

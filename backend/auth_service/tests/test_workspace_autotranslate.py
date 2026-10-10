@@ -9,7 +9,6 @@ def _project(locales):
         "default_locale": locales[0],
         "locales": locales,
         "github_repo": "https://github.com/test/demo",
-        "repo_branch": "cms-preview",
         "production_branch": "master",
         "preview_url": "https://demo-dev.vercel.app",
         "production_url": "https://demo.vercel.app",

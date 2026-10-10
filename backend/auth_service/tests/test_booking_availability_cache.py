@@ -30,7 +30,6 @@ TENANT = TenantConfig(
     slot_granularity_min=30,
     reminders_enabled=False,
     reminder_offsets_min=[],
-    calendar_provider="none",
     is_active=True,
 )
 SERVICE = {"id": "s1", "tenant_id": "t1", "name": "Cut", "duration_min": 30, "is_active": True}

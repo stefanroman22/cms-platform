@@ -1,13 +1,11 @@
 import os
 
 # Guardrail T1: unit tests must never reach the one shared (production) Supabase DB,
-# Resend or Google Calendar. Set before any app import: env vars beat backend/.env,
+# or Resend. Set before any app import: env vars beat backend/.env,
 # so an un-mocked call fails fast or is skipped instead of touching prod.
 os.environ["SUPABASE_URL"] = "http://127.0.0.1:9"
 os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key"
 os.environ["RESEND_API_KEY"] = "re_test_guardrail"
-os.environ["GOOGLE_REFRESH_TOKEN"] = ""
-os.environ["GOOGLE_CLIENT_SECRET"] = ""
 
 from unittest.mock import MagicMock, patch
 
@@ -139,24 +137,14 @@ def auth_as(monkeypatch):
         # from the deps module — patch it there too so the fake user reaches the
         # admin-gated routes refactored in Task 3.
         monkeypatch.setattr("auth_service.routers.deps.require_user", fake_require_user)
-        # projects.py uses a private _require_user that doesn't import from deps — skip safely
-        try:
-            monkeypatch.setattr("auth_service.routers.projects.require_user", fake_require_user)
-        except (AttributeError, ModuleNotFoundError, ImportError):
-            pass
         # publish.py — added in Task 9, but the patch is idempotent (AttributeError caught)
         try:
             monkeypatch.setattr("auth_service.routers.publish.require_user", fake_require_user)
         except (AttributeError, ModuleNotFoundError, ImportError):
             pass
-        # issues.py — new in S1
-        try:
-            monkeypatch.setattr("auth_service.routers.issues.require_user", fake_require_user)
-        except (AttributeError, ModuleNotFoundError, ImportError):
-            pass
 
-        # S3 Task 2 — admin endpoint authenticates via admin_user_via_bearer_or_sid.
-        # Patch the reference imported into issues.py so bearer-auth tests can run
+        # Admin endpoints authenticate via admin_user_via_bearer_or_sid.
+        # Patch the reference imported into admin_leads.py so bearer-auth tests can run
         # without a real Supabase admin_keys lookup. async def per deps.py.
         async def fake_admin_user(request):  # noqa: ARG001
             from fastapi import HTTPException
@@ -182,7 +170,6 @@ def auth_as(monkeypatch):
                 "slug": slug,
                 "name": slug.title(),
                 "github_repo": f"https://github.com/test/{slug}",
-                "repo_branch": "cms-preview",
                 "production_branch": "master",
                 "preview_url": f"https://{slug}-dev.vercel.app",
                 "production_url": f"https://{slug}.vercel.app",
@@ -194,12 +181,6 @@ def auth_as(monkeypatch):
         try:
             monkeypatch.setattr(
                 "auth_service.routers.publish.require_project_access", fake_require_project_access
-            )
-        except (AttributeError, ModuleNotFoundError, ImportError):
-            pass
-        try:
-            monkeypatch.setattr(
-                "auth_service.routers.issues.require_project_access", fake_require_project_access
             )
         except (AttributeError, ModuleNotFoundError, ImportError):
             pass

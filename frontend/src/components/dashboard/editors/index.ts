@@ -14,17 +14,6 @@ export interface EditorProps {
   canEditStructure?: boolean;
 }
 
-// Dynamically import to keep each editor's bundle separate
-export { TextBlockEditor } from "./TextBlockEditor";
-export { EmailConfigEditor } from "./EmailConfigEditor";
-export { ImageEditor } from "./ImageEditor";
-export { FloorPlanEditor } from "./FloorPlanEditor";
-export { GalleryEditor } from "./GalleryEditor";
-export { VideoEditor } from "./VideoEditor";
-export { FileDownloadEditor } from "./FileDownloadEditor";
-export { KeyValueEditor } from "./KeyValueEditor";
-export { RepeaterEditor } from "./RepeaterEditor";
-
 import { TextBlockEditor } from "./TextBlockEditor";
 import { EmailConfigEditor } from "./EmailConfigEditor";
 import { ImageEditor } from "./ImageEditor";

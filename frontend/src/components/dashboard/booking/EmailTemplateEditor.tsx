@@ -18,7 +18,7 @@ import type { EmailDraft, EmailTemplateData, EmailTemplateField } from "./api";
 import { EmailPreviewFrame } from "./EmailPreviewFrame";
 
 // Per-field colours live in the same email_copy dict under `${key}${COLOR_SUFFIX}`
-// — mirrors COLOR_SUFFIX in api.ts / booking_i18n.py.
+// — mirrors COLOR_SUFFIX in booking_i18n.py.
 const COLOR_SUFFIX = "__color";
 // Default swatch shown in the colour picker when a field has no colour override.
 const DEFAULT_TEXT_COLOR = "#18181b";
@@ -27,13 +27,12 @@ interface Props {
   projectSlug: string;
 }
 
-type CaseKey = "confirmation" | "reschedule" | "cancellation" | "reminder";
+type CaseKey = "confirmation" | "reschedule" | "cancellation";
 
 const CASE_TABS: { key: CaseKey; label: string }[] = [
   { key: "confirmation", label: "Confirmation" },
   { key: "reschedule", label: "Reschedule" },
   { key: "cancellation", label: "Cancellation" },
-  { key: "reminder", label: "Reminder" },
 ];
 
 // Keys that get a single-line <input>; everything else gets <textarea>
@@ -41,7 +40,6 @@ const INPUT_KEYS = new Set([
   "confirm_subject",
   "reschedule_subject",
   "cancel_subject",
-  "reminder_subject",
   "manage_cta",
   "join_cta",
   "add_cal_cta",

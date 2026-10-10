@@ -42,7 +42,6 @@ _TENANT_CFG_ROW = {
     "slot_granularity_min": 15,
     "reminders_enabled": False,
     "reminder_offsets_min": [],
-    "calendar_provider": "none",
     "is_active": True,
 }
 
@@ -244,7 +243,6 @@ def _mock_tenant_config():
         slot_granularity_min=15,
         reminders_enabled=False,
         reminder_offsets_min=[],
-        calendar_provider="none",
         is_active=True,
     )
 

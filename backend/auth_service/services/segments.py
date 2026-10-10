@@ -26,9 +26,6 @@ def repeater_schema(content: dict) -> dict[str, str | None]:
     }
 
 
-_repeater_schema = repeater_schema  # backwards-compatible alias
-
-
 def src_hash(text: str) -> str:
     """Stable 16-hex-char fingerprint of a source string, used to detect when a
     default-locale source changed since a translation/override was anchored."""

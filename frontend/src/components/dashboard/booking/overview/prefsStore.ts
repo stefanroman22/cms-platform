@@ -22,8 +22,8 @@ export const DEFAULT_SCOPE: ScopeValue = "all";
 
 /** Calendar granularity. Day-first by request, defaulting to the day timeline. */
 export type CalendarView = "day" | "week" | "month";
-export const CALENDAR_VIEWS: CalendarView[] = ["day", "week", "month"];
-export const DEFAULT_CALENDAR_VIEW: CalendarView = "day";
+const CALENDAR_VIEWS: CalendarView[] = ["day", "week", "month"];
+const DEFAULT_CALENDAR_VIEW: CalendarView = "day";
 
 const STORAGE_PREFIX = "booking.overview.v1.";
 

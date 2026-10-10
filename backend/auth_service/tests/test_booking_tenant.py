@@ -23,7 +23,6 @@ SETTINGS_ROW = {
     "slot_granularity_min": 15,
     "reminders_enabled": True,
     "reminder_offsets_min": [60],
-    "calendar_provider": "none",
     "is_active": True,
 }
 
@@ -37,7 +36,6 @@ def test_load_by_slug_returns_config():
     assert cfg is not None
     assert cfg.tenant_id == "t1"
     assert cfg.timezone == "Europe/Berlin"
-    assert cfg.calendar_provider == "none"
 
 
 def test_load_by_slug_reads_embedded_website_url():

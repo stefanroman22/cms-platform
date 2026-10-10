@@ -10,10 +10,10 @@ import json
 from pathlib import Path
 
 # Mirror of the backend create-booking contract
-# (backend/auth_service/models/booking_contract.py). The connector is a
+# (`CreateIn` in backend/auth_service/routers/booking.py). The connector is a
 # standalone agent and cannot import the backend package, so the version +
 # required fields are duplicated here; keep them in lockstep when the contract
-# changes. These travel into cms.config.json so the booking-client SDK is
+# changes. These travel into cms.config.json so the client's booking code is
 # correctly targeted and a miswired form is caught at provisioning.
 BOOKING_CONTRACT_VERSION = "1.0.0"
 BOOKING_REQUIRED_FIELDS = ["service_id", "start_utc", "customer.name", "customer.email"]

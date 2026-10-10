@@ -20,7 +20,6 @@ from pydantic import BaseModel
 from ..core import pg_rate_limit
 from ..core.config import settings
 from ..core.limiter import client_ip, limiter
-from ..models.booking_contract import BOOKING_CONTRACT
 from ..services import (
     booking_availability,
     booking_email,
@@ -28,7 +27,6 @@ from ..services import (
     booking_reminder_email,
     booking_repo,
     booking_tenant,
-    calendar_provider,
 )
 from ..services.booking_availability import ResourceAvailability
 from ..services.booking_repo import BookingConflict
@@ -122,17 +120,6 @@ def _build_resource_availability(
         window_end_utc=window_end,
         exclude_booking_id=exclude_booking_id,
     )
-    # Calendar busy (tenant #1 / google) blocks every resource — it is the host's
-    # personal calendar. Noop providers return []. Best-effort: a fetch failure
-    # falls back to DB-only availability.
-    cal_busy: list[tuple[datetime, datetime]] = []
-    if cfg.calendar_provider != "none":
-        try:
-            cal_busy = calendar_provider.provider_for(cfg.calendar_provider).list_busy(
-                window_start, window_end
-            )
-        except Exception:  # noqa: BLE001
-            log.exception("calendar busy fetch failed; supabase-only availability")
     out: list[ResourceAvailability] = []
     for r in resources:
         out.append(
@@ -140,44 +127,10 @@ def _build_resource_availability(
                 resource_id=r["id"],
                 hours=_hours_for_weekday(hours_rows, r["id"], dow),
                 exception=_exception_for(exc_rows, r["id"], day),
-                busy=busy.get(r["id"], []) + cal_busy,
+                busy=busy.get(r["id"], []),
             )
         )
     return out
-
-
-def _availability_for_day(
-    *, cfg: TenantConfig, service: dict, day: date, now_utc: datetime
-) -> list[datetime]:
-    resources = booking_repo.load_eligible_resources(cfg.tenant_id, service["id"])
-    if not resources:
-        return []
-    tz = ZoneInfo(cfg.timezone)
-    win_start = datetime.combine(day, time(0, 0), tzinfo=tz).astimezone(_UTC) - timedelta(days=1)
-    win_end = win_start + timedelta(days=3)
-    hours_rows = booking_repo.load_hours(cfg.tenant_id)
-    exc_rows = booking_repo.load_exceptions(cfg.tenant_id, day.isoformat(), day.isoformat())
-    avail = _build_resource_availability(
-        cfg=cfg,
-        resources=resources,
-        hours_rows=hours_rows,
-        exc_rows=exc_rows,
-        day=day,
-        window_start=win_start,
-        window_end=win_end,
-    )
-    return booking_availability.available_starts(
-        day=day,
-        now_utc=now_utc,
-        tz_name=cfg.timezone,
-        duration_min=service["duration_min"],
-        buffer_before_min=service["buffer_before_min"],
-        buffer_after_min=service["buffer_after_min"],
-        granularity_min=cfg.slot_granularity_min,
-        lead_time_min=service["lead_time_min"],
-        max_advance_days=service["max_advance_days"],
-        resources=avail,
-    )
 
 
 def _free_resource_for(
@@ -247,8 +200,7 @@ def _availability_for_range(
 ) -> list[dict]:
     """Batched availability for a whole date range. Loads resources/hours/
     exceptions/busy (and calendar busy) ONCE for the range, then computes each
-    day purely — vs. _availability_for_day which re-queries per day (fine for a
-    single day, far too slow for a month). Returns
+    day purely. Returns
     [{"date": "YYYY-MM-DD", "starts": [datetime, ...]}] for days with >=1 slot.
     `resource_id` (the customer's chosen barber): restricts the computation to that
     single barber's own calendar; an ineligible id yields no days."""
@@ -278,14 +230,6 @@ def _availability_for_range(
         window_start_utc=win_start,
         window_end_utc=win_end,
     )
-    cal_busy: list[tuple[datetime, datetime]] = []
-    if cfg.calendar_provider != "none":
-        try:
-            cal_busy = calendar_provider.provider_for(cfg.calendar_provider).list_busy(
-                win_start, win_end
-            )
-        except Exception:  # noqa: BLE001
-            log.exception("calendar busy fetch failed; supabase-only availability")
     out: list[dict] = []
     cur = d0
     while cur <= d1:
@@ -295,7 +239,7 @@ def _availability_for_range(
                 resource_id=r["id"],
                 hours=_hours_for_weekday(hours_rows, r["id"], dow),
                 exception=_exception_for(exc_rows, r["id"], cur),
-                busy=busy.get(r["id"], []) + cal_busy,
+                busy=busy.get(r["id"], []),
             )
             for r in resources
         ]
@@ -474,15 +418,6 @@ def availability(
     )
 
 
-@router.get("/{slug}/contract", dependencies=[Depends(_public_read_limit)])
-def public_contract(slug: str) -> JSONResponse:
-    """Machine-readable create-booking contract (version + required fields +
-    per-field types). The SDK + connector validate against this; serving it
-    behind the slug keeps the public-read surface consistent."""
-    _require_tenant(slug)
-    return JSONResponse(content=BOOKING_CONTRACT)
-
-
 class CustomerIn(BaseModel):
     name: str
     email: str
@@ -594,21 +529,6 @@ def _create_core(cfg: TenantConfig, body: CreateIn) -> JSONResponse:
         actor="customer",
         payload={"resource_id": resource_id},
     )
-
-    provider = calendar_provider.provider_for(cfg.calendar_provider)
-    try:
-        event_id = provider.create_event(
-            start_utc=start,
-            end_utc=end,
-            name=name,
-            email=email,
-            note=note,
-            meeting_url=cfg.meeting_url,
-        )
-        if event_id:
-            booking_repo.update_booking(booking_id, {"google_event_id": event_id})
-    except Exception:  # noqa: BLE001
-        log.exception("calendar create failed for booking %s", booking_id)
 
     manage_url = f"{settings.manage_base_url}/manage/{raw_token}"
     visitor_tz = body.customer.tz or cfg.timezone
@@ -744,12 +664,6 @@ async def manage_cancel(request: Request, token: str) -> JSONResponse:
         hours=policy.get("cancellation_window_hours", 24)
     ):
         raise HTTPException(status_code=403, detail="Too late to cancel online")
-    provider = calendar_provider.provider_for(cfg.calendar_provider)
-    if b.get("google_event_id"):
-        try:
-            provider.delete_event(b["google_event_id"])
-        except Exception:  # noqa: BLE001
-            log.exception("calendar delete failed for %s", b["id"])
     booking_repo.update_booking(
         b["id"], {"status": "cancelled", "cancelled_at": datetime.now(UTC).isoformat()}
     )
@@ -853,12 +767,6 @@ async def manage_reschedule(request: Request, token: str, body: RescheduleIn) ->
     booking_repo.insert_audit(
         tenant_id=cfg.tenant_id, booking_id=b["id"], action="reschedule", actor="customer"
     )
-    provider = calendar_provider.provider_for(cfg.calendar_provider)
-    if b.get("google_event_id"):
-        try:
-            provider.update_event(b["google_event_id"], new_start, new_end)
-        except Exception:  # noqa: BLE001
-            log.exception("calendar patch failed for %s", b["id"])
     cust = booking_repo.load_customer(b["customer_id"]) or {}
     manage_url = f"{settings.manage_base_url}/manage/{new_token}"
     brand = _brand_for(cfg)
@@ -979,72 +887,3 @@ async def send_reminders(request: Request) -> JSONResponse:
             except Exception:  # noqa: BLE001
                 log.exception("reminder failed for %s offset %s", b.get("id"), offset_min)
     return JSONResponse(content={"sent": sent})
-
-
-# ---------- legacy shims (tenant #1; keep the live widget working) ----------
-
-_LEGACY_SLUG = "roman-technologies-website"
-
-
-@router.get("/availability", dependencies=[Depends(_public_read_limit)])
-def legacy_availability(
-    from_: str = Query(..., alias="from"), to: str = Query(...)
-) -> JSONResponse:
-    cfg = _require_tenant(_LEGACY_SLUG)
-    services = booking_repo.load_active_services(cfg.tenant_id)
-    if not services:
-        return JSONResponse(content={"days": []})
-    service = services[0]
-    try:
-        d0 = datetime.strptime(from_, "%Y-%m-%d").date()
-        d1 = datetime.strptime(to, "%Y-%m-%d").date()
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Bad range") from exc
-    now = datetime.now(UTC)
-    # Batched: load resources/hours/exceptions/busy ONCE for the range instead of
-    # re-querying per calendar day (was ~4-5 round-trips/day). Same per-day math;
-    # the legacy shape only needs the dates that have >=1 slot.
-    rng = _availability_for_range(cfg=cfg, service=service, d0=d0, d1=d1, now_utc=now)
-    return JSONResponse(content={"days": [d["date"] for d in rng]})
-
-
-@router.get("/slots", dependencies=[Depends(_public_read_limit)])
-def legacy_slots(date: str, tz: str = "") -> JSONResponse:
-    cfg = _require_tenant(_LEGACY_SLUG)
-    services = booking_repo.load_active_services(cfg.tenant_id)
-    if not services:
-        return JSONResponse(content={"slots": []})
-    try:
-        day = datetime.strptime(date, "%Y-%m-%d").date()
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Bad date") from exc
-    starts = _availability_for_day(cfg=cfg, service=services[0], day=day, now_utc=datetime.now(UTC))
-    return JSONResponse(content={"slots": [s.isoformat() for s in starts]})
-
-
-class LegacyBookingRequest(BaseModel):
-    slot_start: str
-    name: str
-    email: str
-    note: str = ""
-    visitor_timezone: str = ""
-    website: str = ""
-
-
-@router.post("")
-@limiter.limit("5/hour", key_func=client_ip)
-async def legacy_create(request: Request, body: LegacyBookingRequest) -> JSONResponse:
-    _public_write_limit(request, "create", limit=5, window_seconds=3600)
-    cfg = _require_tenant(_LEGACY_SLUG)
-    services = booking_repo.load_active_services(cfg.tenant_id)
-    if not services:
-        raise HTTPException(status_code=503, detail="Booking unavailable")
-    payload = CreateIn(
-        service_id=services[0]["id"],
-        start_utc=body.slot_start,
-        customer=CustomerIn(name=body.name, email=body.email, tz=body.visitor_timezone),
-        note=body.note,
-        website=body.website,
-    )
-    # Single code path, no re-entry into the rate-limited route.
-    return _create_core(cfg, payload)

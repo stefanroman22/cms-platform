@@ -18,7 +18,6 @@ class SettingsPatch(BaseModel):
     slot_granularity_min: int | None = None
     reminders_enabled: bool | None = None
     reminder_offsets_min: list[int] | None = None
-    calendar_provider: str | None = None
     public_slug: str | None = None
     email_copy: dict | None = None
 

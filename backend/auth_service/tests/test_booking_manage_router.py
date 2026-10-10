@@ -20,7 +20,6 @@ TENANT = TenantConfig(
     slot_granularity_min=45,
     reminders_enabled=True,
     reminder_offsets_min=[60],
-    calendar_provider="none",
     is_active=True,
 )
 POLICY = {
@@ -47,7 +46,6 @@ def _booking(**over):
         "start_utc": "2099-06-10T06:00:00+00:00",
         "end_utc": "2099-06-10T06:45:00+00:00",
         "reschedule_count": 0,
-        "google_event_id": None,
     }
     b.update(over)
     return b
