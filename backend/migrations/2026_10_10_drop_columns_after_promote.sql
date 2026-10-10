@@ -1,8 +1,8 @@
 -- backend/migrations/2026_10_10_drop_columns_after_promote.sql
--- NOT YET APPLIED. Apply ONLY after the 2026-10-10 cleanup has been promoted to
--- main: the code on main still selects these columns, and dropping them first
--- 500s every project endpoint (repo_branch), the booking widget (calendar_provider)
--- and admin API-key auth (scopes).
+-- Applied 2026-10-10, after the cleanup was promoted to main. It had to wait:
+-- the previous main still selected these columns, so dropping them first would
+-- have 500'd every project endpoint (repo_branch), the booking widget
+-- (calendar_provider) and admin API-key auth (scopes).
 --
 --   projects.repo_branch               — nothing reads it; cms-preview is the convention.
 --   booking_settings.calendar_provider — Google Calendar sync removed (was "none" everywhere).
