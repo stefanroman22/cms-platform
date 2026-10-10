@@ -1,10 +1,12 @@
-"""Booking availability speed changes (2026-06-21):
+"""Booking availability speed + rate-limit behaviour:
 
 - GET /{slug}/availability carries an edge Cache-Control so Vercel's CDN can serve
   repeat reads (s-maxage) and revalidate in the background (stale-while-revalidate).
-- That same route is intentionally NOT behind the per-IP _public_read_limit anymore
-  (the edge cache absorbs repeats), while the sibling public reads (/config, ...) still
-  are. Write paths keep their limiter and remain the double-booking boundary.
+- SEC-070 (2026-10-10): that same route now ALSO carries the per-IP _public_read_limit,
+  like every sibling public read (/config, /services, ...). The edge cache keys on the
+  full URL (path + query), so query-param variation defeats it for a deliberate abuser;
+  the shared Postgres limiter is the real backstop against DB + calendar amplification.
+  Write paths keep their own limiter and remain the double-booking boundary.
 """
 
 from unittest.mock import patch
@@ -59,10 +61,10 @@ def test_availability_sets_edge_cache_control(client):
     assert r.headers.get("cache-control") == CACHE_HEADER
 
 
-def test_availability_not_rate_limited_while_config_still_is(client):
-    """Availability dropped the per-IP _public_read_limit (the edge cache absorbs repeats),
-    so even when the limiter would 429, availability still serves. The sibling reads — here
-    /config — keep the limiter and still 429. This pins the asymmetry."""
+def test_availability_rate_limited_like_siblings(client):
+    """SEC-070: availability now carries the per-IP _public_read_limit, so when the
+    limiter trips it 429s just like the sibling reads — here /config. This pins that
+    the previous asymmetry (availability exempt from the limiter) is gone."""
     boom = HTTPException(status_code=429, detail="rate limited")
     with (
         patch("auth_service.routers.booking.pg_rate_limit.enforce", side_effect=boom),
@@ -75,5 +77,5 @@ def test_availability_not_rate_limited_while_config_still_is(client):
     ):
         avail = client.get("/booking/acme/availability", params=AVAIL_PARAMS)
         config = client.get("/booking/acme/config")
-    assert avail.status_code == 200, avail.text
+    assert avail.status_code == 429, avail.text
     assert config.status_code == 429, config.text
