@@ -51,7 +51,7 @@ Defended:
 - **Tenant isolation:** one client's content, form submissions or config never reach another
   client. Enforced in FastAPI (ADR-0002); RLS is defense in depth only.
 - **Admin authority:** `/admin/*` and `cmsk_*` Bearer keys run only for the operator
-  (`users.is_admin` + key match; scoped keys only reach their `scopes`).
+  (`users.is_admin` + key match). Keys carry no scopes: a valid key acts as its admin user.
 - **Credential confidentiality:** service-role key, Resend key, Vercel and Supabase PATs are never
   logged, returned, bundled into the client, or committed.
 - **Session integrity:** `httponly`, `samesite=strict` in production, rotated on password change,
