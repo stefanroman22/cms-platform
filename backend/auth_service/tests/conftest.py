@@ -81,6 +81,8 @@ def mock_supabase():
         "auth_service.routers.admin_leads.get_supabase_admin",  # C2 — leads admin router
         "auth_service.routers.deps.get_supabase_admin",
         "auth_service.services.sessions.get_supabase_admin",
+        "auth_service.core.pg_rate_limit.get_supabase_admin",  # ADR-0012 import rate limits
+        "auth_service.services.google_places.quota.get_supabase_admin",  # ADR-0012 monthly cap
         # auth.change_password does `from ..services.supabase_client import get_supabase_admin`
         # inline — patch the source so the late import sees the mock.
         "auth_service.services.supabase_client.get_supabase_admin",

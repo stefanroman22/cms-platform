@@ -186,7 +186,18 @@ def test_patch_location_and_contact_fields(mock_supabase, client, auth_as, admin
         instagram_url="https://instagram.com/acme",
         menu_url="https://acme.test/menu",
     )
-    mock_supabase.execute.return_value = MagicMock(data=[updated])
+    mock_supabase.execute.side_effect = [
+        MagicMock(
+            data={
+                "lead_status": "sent",
+                "closed_amount": None,
+                "extra": {},
+                "social_links": {},
+                "photo_urls": [],
+            }
+        ),
+        MagicMock(data=[updated]),
+    ]
     resp = client.patch(
         "/admin/leads/lead-1",
         json={
@@ -435,3 +446,150 @@ def test_patch_languages_rejects_overlong_name(client, auth_as, admin_user):
     auth_as(admin_user)
     resp = client.patch("/admin/leads/lead-1", json={"languages": ["x" * 61]})
     assert resp.status_code == 422
+
+
+def test_patch_social_links_mirrors_legacy_columns(mock_supabase, client, auth_as, admin_user):
+    auth_as(admin_user)
+    mock_supabase.execute.side_effect = [
+        MagicMock(
+            data={
+                "lead_status": "sent",
+                "closed_amount": None,
+                "extra": {},
+                "social_links": {},
+                "photo_urls": [],
+            }
+        ),
+        MagicMock(
+            data=[
+                _lead_row(
+                    social_links={"facebook": "https://facebook.com/acme"},
+                    facebook_url="https://facebook.com/acme",
+                )
+            ]
+        ),
+    ]
+    resp = client.patch(
+        "/admin/leads/lead-1",
+        json={
+            "social_links": {
+                "facebook": "https://facebook.com/acme",
+                "tiktok": "https://www.tiktok.com/@acme",
+            }
+        },
+    )
+    assert resp.status_code == 200
+    sent = mock_supabase.update.call_args.args[0]
+    assert sent["social_links"] == {
+        "facebook": "https://facebook.com/acme",
+        "tiktok": "https://www.tiktok.com/@acme",
+    }
+    assert sent["facebook_url"] == "https://facebook.com/acme" and sent["instagram_url"] is None
+
+
+def test_patch_social_links_null_stores_empty_map(mock_supabase, client, auth_as, admin_user):
+    auth_as(admin_user)
+    mock_supabase.execute.side_effect = [
+        MagicMock(
+            data={
+                "lead_status": "sent",
+                "closed_amount": None,
+                "extra": {},
+                "social_links": {"facebook": "https://facebook.com/acme"},
+                "photo_urls": [],
+            }
+        ),
+        MagicMock(data=[_lead_row()]),
+    ]
+    resp = client.patch("/admin/leads/lead-1", json={"social_links": None})
+    assert resp.status_code == 200
+    sent = mock_supabase.update.call_args.args[0]
+    assert sent["social_links"] == {}
+    assert sent["facebook_url"] is None and sent["instagram_url"] is None
+
+
+def test_patch_legacy_column_updates_social_links(mock_supabase, client, auth_as, admin_user):
+    auth_as(admin_user)
+    mock_supabase.execute.side_effect = [
+        MagicMock(
+            data={
+                "lead_status": "sent",
+                "closed_amount": None,
+                "extra": {},
+                "social_links": {"tiktok": "https://www.tiktok.com/@acme"},
+                "photo_urls": [],
+            }
+        ),
+        MagicMock(data=[_lead_row()]),
+    ]
+    resp = client.patch("/admin/leads/lead-1", json={"instagram_url": "https://instagram.com/acme"})
+    assert resp.status_code == 200
+    sent = mock_supabase.update.call_args.args[0]
+    assert sent["social_links"] == {
+        "tiktok": "https://www.tiktok.com/@acme",
+        "instagram": "https://instagram.com/acme",
+    }
+
+
+def test_patch_photo_urls_deletes_dropped_objects(
+    mock_supabase, client, auth_as, admin_user, monkeypatch
+):
+    auth_as(admin_user)
+    keep = "https://x.supabase.co/storage/v1/object/public/lead-photos/lead-1/00-a.jpg"
+    drop = "https://x.supabase.co/storage/v1/object/public/lead-photos/lead-1/01-b.jpg"
+    mock_supabase.execute.side_effect = [
+        MagicMock(
+            data={
+                "lead_status": "sent",
+                "closed_amount": None,
+                "social_links": {},
+                "photo_urls": [keep, drop],
+                "extra": {
+                    "google": {"photos": [{"url": keep, "name": "a"}, {"url": drop, "name": "b"}]}
+                },
+            }
+        ),
+        MagicMock(data=[_lead_row(photo_urls=[keep])]),
+    ]
+    deleted = {}
+    monkeypatch.setattr(
+        "auth_service.routers.admin_leads.delete_lead_photos",
+        lambda sb, lead_id, urls=None: deleted.update(
+            lead_id=lead_id, urls=urls, after_update=mock_supabase.update.called
+        )
+        or ["lead-1/01-b.jpg"],
+    )
+    resp = client.patch("/admin/leads/lead-1", json={"photo_urls": [keep]})
+    assert resp.status_code == 200
+    assert deleted == {"lead_id": "lead-1", "urls": [drop], "after_update": True}
+    sent = mock_supabase.update.call_args.args[0]
+    assert sent["photo_urls"] == [keep]
+    assert [p["name"] for p in sent["extra"]["google"]["photos"]] == ["a"]
+
+
+def test_patch_photo_cleanup_failure_still_returns_200(
+    mock_supabase, client, auth_as, admin_user, monkeypatch
+):
+    auth_as(admin_user)
+    keep = "https://x.supabase.co/storage/v1/object/public/lead-photos/lead-1/00-a.jpg"
+    drop = "https://x.supabase.co/storage/v1/object/public/lead-photos/lead-1/01-b.jpg"
+    mock_supabase.execute.side_effect = [
+        MagicMock(
+            data={
+                "lead_status": "sent",
+                "closed_amount": None,
+                "social_links": {},
+                "photo_urls": [keep, drop],
+                "extra": {},
+            }
+        ),
+        MagicMock(data=[_lead_row(photo_urls=[keep])]),
+    ]
+
+    def boom(sb, lead_id, urls=None):
+        raise RuntimeError("storage down")
+
+    monkeypatch.setattr("auth_service.routers.admin_leads.delete_lead_photos", boom)
+    resp = client.patch("/admin/leads/lead-1", json={"photo_urls": [keep]})
+    assert resp.status_code == 200, resp.text
+    assert mock_supabase.update.call_args.args[0]["photo_urls"] == [keep]

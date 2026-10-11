@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # Base URL for building /manage/{token} links (defaults to the public base).
     BOOKING_MANAGE_BASE_URL: str = ""
 
+    # Google Maps lead import (ADR-0012). Empty key disables the feature.
+    GOOGLE_MAPS_API_KEY: str = ""
+    # Imports per calendar month across all admins. 90 keeps Place Details and
+    # Place Photos (10 per import) inside Google's free tier.
+    GOOGLE_PLACES_MONTHLY_CAP: int = 90
+    GOOGLE_PLACES_MAX_PHOTOS: int = 10
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.FRONTEND_ORIGINS.split(",") if o.strip()]

@@ -53,6 +53,13 @@ export interface Lead {
   notes: string | null;
   call_count: number;
   languages: string[];
+  google_place_id: string | null;
+  google_imported_at: string | null;
+  business_status: string | null;
+  primary_type: string | null;
+  types: string[];
+  price_level: string | null;
+  social_links: Record<string, string>;
   created_at: string;
   updated_at: string;
 }
@@ -97,6 +104,16 @@ export interface LeadCreateInput {
   languages?: string[];
   notes?: string | null;
 }
+
+export interface GoogleImportCandidate {
+  place_id: string;
+  name: string | null;
+  address: string | null;
+}
+
+export type GoogleImportResult =
+  | { status: "created"; lead: Lead }
+  | { status: "candidates"; candidates: GoogleImportCandidate[] };
 
 export interface LeadFiltersState {
   country: string;

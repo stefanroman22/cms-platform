@@ -34,6 +34,8 @@ export interface LeadUpdatePayload {
   about_attributes?: Record<string, Record<string, boolean>> | null;
   // languages — full replacement of the target-locale list; [] clears all.
   languages?: string[];
+  social_links?: Record<string, string>;
+  photo_urls?: string[];
 }
 
 export interface UseLeadPatchResult {

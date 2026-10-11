@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Facebook, Globe, Instagram, Mail, Menu, Phone } from "lucide-react";
+import { Facebook, Globe, Instagram, Link2, Mail, Menu, Phone } from "lucide-react";
 import type { Lead } from "../types";
 import { EditableSectionShell } from "./EditableSectionShell";
 import { useLeadPatch, type LeadUpdatePayload } from "../hooks/useLeadPatch";
@@ -20,22 +20,42 @@ function normalizeUrl(v: string): string {
   return `https://${t}`;
 }
 
+const SOCIAL_FIELDS: { key: string; label: string }[] = [
+  { key: "facebook", label: "Facebook URL" },
+  { key: "instagram", label: "Instagram URL" },
+  { key: "tiktok", label: "TikTok URL" },
+  { key: "linkedin", label: "LinkedIn URL" },
+  { key: "youtube", label: "YouTube URL" },
+  { key: "x", label: "X URL" },
+  { key: "pinterest", label: "Pinterest URL" },
+  { key: "whatsapp", label: "WhatsApp URL" },
+];
+
+function socialOf(lead: Lead): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const { key } of SOCIAL_FIELDS) out[key] = lead.social_links?.[key] ?? "";
+  // legacy columns win when social_links lacks them (leads created before ADR-0012)
+  if (!out.facebook && lead.facebook_url) out.facebook = lead.facebook_url;
+  if (!out.instagram && lead.instagram_url) out.instagram = lead.instagram_url;
+  return out;
+}
+
 export function ContactSection({ lead, onPatched }: Props) {
   const { patch, saving, error, clearError } = useLeadPatch(lead.id, onPatched);
 
   const [phone, setPhone] = useState(lead.phone ?? "");
   const [email, setEmail] = useState(lead.email ?? "");
   const [website, setWebsite] = useState(lead.website_url ?? "");
-  const [facebook, setFacebook] = useState(lead.facebook_url ?? "");
-  const [instagram, setInstagram] = useState(lead.instagram_url ?? "");
+  const [social, setSocial] = useState<Record<string, string>>(() => socialOf(lead));
   const [menu, setMenu] = useState(lead.menu_url ?? "");
+  // a fresh-but-equal social_links object (any parent re-render) must not wipe edits
+  const socialKey = JSON.stringify(lead.social_links ?? {});
 
   useEffect(() => {
     setPhone(lead.phone ?? "");
     setEmail(lead.email ?? "");
     setWebsite(lead.website_url ?? "");
-    setFacebook(lead.facebook_url ?? "");
-    setInstagram(lead.instagram_url ?? "");
+    setSocial(socialOf(lead));
     setMenu(lead.menu_url ?? "");
     clearError();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,6 +66,7 @@ export function ContactSection({ lead, onPatched }: Props) {
     lead.website_url,
     lead.facebook_url,
     lead.instagram_url,
+    socialKey,
     lead.menu_url,
   ]);
 
@@ -53,7 +74,7 @@ export function ContactSection({ lead, onPatched }: Props) {
     email.trim() === "" || EMAIL_RE.test(email.trim())
       ? null
       : "Enter a valid email or leave empty.";
-  const urlError = [website, facebook, instagram, menu].some((u) => /\s/.test(u.trim()))
+  const urlError = [website, menu, ...Object.values(social)].some((u) => /\s/.test(u.trim()))
     ? "URLs cannot contain spaces."
     : null;
 
@@ -64,8 +85,15 @@ export function ContactSection({ lead, onPatched }: Props) {
     if (norm(phone) !== (lead.phone ?? null)) out.phone = norm(phone);
     if (norm(email) !== (lead.email ?? null)) out.email = norm(email);
     if (normU(website) !== (lead.website_url ?? null)) out.website_url = normU(website);
-    if (normU(facebook) !== (lead.facebook_url ?? null)) out.facebook_url = normU(facebook);
-    if (normU(instagram) !== (lead.instagram_url ?? null)) out.instagram_url = normU(instagram);
+    const nextSocial: Record<string, string> = {};
+    for (const { key } of SOCIAL_FIELDS) {
+      const v = normU(social[key] ?? "");
+      if (v) nextSocial[key] = v;
+    }
+    const cur = socialOf(lead);
+    const curSocial: Record<string, string> = {};
+    for (const { key } of SOCIAL_FIELDS) if (cur[key]) curSocial[key] = cur[key];
+    if (JSON.stringify(nextSocial) !== JSON.stringify(curSocial)) out.social_links = nextSocial;
     if (normU(menu) !== (lead.menu_url ?? null)) out.menu_url = normU(menu);
     return out;
   }
@@ -80,8 +108,7 @@ export function ContactSection({ lead, onPatched }: Props) {
     setPhone(lead.phone ?? "");
     setEmail(lead.email ?? "");
     setWebsite(lead.website_url ?? "");
-    setFacebook(lead.facebook_url ?? "");
-    setInstagram(lead.instagram_url ?? "");
+    setSocial(socialOf(lead));
     setMenu(lead.menu_url ?? "");
     clearError();
   }
@@ -98,6 +125,11 @@ export function ContactSection({ lead, onPatched }: Props) {
       <Row label="Website" value={lead.website_url} isLink />
       <Row label="Facebook" value={lead.facebook_url} isLink />
       <Row label="Instagram" value={lead.instagram_url} isLink />
+      {SOCIAL_FIELDS.slice(2).map(({ key, label }) =>
+        lead.social_links?.[key] ? (
+          <Row key={key} label={label.replace(" URL", "")} value={lead.social_links[key]} isLink />
+        ) : null
+      )}
       <Row label="Menu" value={lead.menu_url} isLink />
     </div>
   );
@@ -124,20 +156,26 @@ export function ContactSection({ lead, onPatched }: Props) {
         onChange={setWebsite}
         onBlur={() => handleUrlBlur(setWebsite, website)}
       />
-      <IconInput
-        icon={<Facebook className="h-3.5 w-3.5" />}
-        label="Facebook URL"
-        value={facebook}
-        onChange={setFacebook}
-        onBlur={() => handleUrlBlur(setFacebook, facebook)}
-      />
-      <IconInput
-        icon={<Instagram className="h-3.5 w-3.5" />}
-        label="Instagram URL"
-        value={instagram}
-        onChange={setInstagram}
-        onBlur={() => handleUrlBlur(setInstagram, instagram)}
-      />
+      {SOCIAL_FIELDS.map(({ key, label }) => (
+        <IconInput
+          key={key}
+          icon={
+            key === "facebook" ? (
+              <Facebook className="h-3.5 w-3.5" />
+            ) : key === "instagram" ? (
+              <Instagram className="h-3.5 w-3.5" />
+            ) : (
+              <Link2 className="h-3.5 w-3.5" />
+            )
+          }
+          label={label}
+          value={social[key] ?? ""}
+          onChange={(v) => setSocial((prev) => ({ ...prev, [key]: v }))}
+          onBlur={() =>
+            handleUrlBlur((v) => setSocial((prev) => ({ ...prev, [key]: v })), social[key] ?? "")
+          }
+        />
+      ))}
       <IconInput
         icon={<Menu className="h-3.5 w-3.5" />}
         label="Menu URL"

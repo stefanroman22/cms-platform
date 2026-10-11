@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Loader2, Plus, Trash2, X } from "lucide-react";
+import { Download, Loader2, Plus, Trash2, X } from "lucide-react";
 import {
   LEAD_TYPE_LABEL,
   WEB_PRESENCE_LABEL,
@@ -11,12 +11,18 @@ import {
 } from "@/lib/leadEnums";
 import { dashAccent } from "@/lib/dashboardTheme";
 import { AnimatedSelect } from "@/components/dashboard/AnimatedSelect";
-import type { LeadCreateInput, LeadReviewInput } from "./types";
+import type {
+  GoogleImportCandidate,
+  GoogleImportResult,
+  LeadCreateInput,
+  LeadReviewInput,
+} from "./types";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onCreate: (payload: LeadCreateInput) => Promise<void>;
+  onImport: (input: string, leadType: LeadType) => Promise<GoogleImportResult>;
 }
 
 const DRAWER_VARIANTS = {
@@ -31,7 +37,7 @@ const BACKDROP_VARIANTS = {
 
 const EMPTY_REVIEW: LeadReviewInput = { author: "", rating: null, text: "", date: "" };
 
-export function AddLeadDrawer({ open, onClose, onCreate }: Props) {
+export function AddLeadDrawer({ open, onClose, onCreate, onImport }: Props) {
   return (
     <AnimatePresence>
       {open && (
@@ -55,7 +61,7 @@ export function AddLeadDrawer({ open, onClose, onCreate }: Props) {
             transition={{ duration: 0.22, ease: "easeOut" }}
             className="lead-drawer no-scrollbar fixed right-0 top-0 z-50 h-full w-full md:w-[40rem] overflow-y-auto bg-white dark:bg-zinc-950 shadow-2xl"
           >
-            <DrawerBody onClose={onClose} onCreate={onCreate} />
+            <DrawerBody onClose={onClose} onCreate={onCreate} onImport={onImport} />
           </motion.aside>
         </>
       )}
@@ -66,9 +72,11 @@ export function AddLeadDrawer({ open, onClose, onCreate }: Props) {
 function DrawerBody({
   onClose,
   onCreate,
+  onImport,
 }: {
   onClose: () => void;
   onCreate: (payload: LeadCreateInput) => Promise<void>;
+  onImport: (input: string, leadType: LeadType) => Promise<GoogleImportResult>;
 }) {
   const prefersReduced = useReducedMotion();
   const press = prefersReduced ? {} : { whileTap: { scale: 0.97 } };
@@ -110,6 +118,35 @@ function DrawerBody({
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Google Maps import (ADR-0012)
+  const [importInput, setImportInput] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<GoogleImportCandidate[]>([]);
+
+  async function runImport(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setImportError("Paste a Google Maps link, place ID or 'Name, City' first.");
+      return;
+    }
+    setImporting(true);
+    setImportError(null);
+    try {
+      const result = await onImport(trimmed, leadType);
+      if (result.status === "candidates") {
+        setCandidates(result.candidates);
+        if (result.candidates.length === 0) setImportError("No matching place found.");
+      } else {
+        setCandidates([]);
+      }
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   function updateReview(i: number, patch: Partial<LeadReviewInput>) {
     setReviews((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -227,6 +264,79 @@ function DrawerBody({
             <X className="h-4 w-4" />
           </button>
         </div>
+      </div>
+
+      <section className="mt-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-3 space-y-2">
+        <div className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-semibold">
+          Import from Google Maps
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            aria-label="Google Maps link, place ID or 'Name, City'"
+            placeholder="https://maps.app.goo.gl/… or 'Samir Kapsalon, Lelystad'"
+            value={importInput}
+            onChange={(e) => setImportInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                runImport(importInput).catch(() => {});
+              }
+            }}
+            disabled={importing}
+            className="flex-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              runImport(importInput).catch(() => {});
+            }}
+            disabled={importing || saving}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer disabled:cursor-not-allowed ${dashAccent.ctaPrimary}`}
+          >
+            {importing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            {importing ? "Importing…" : "Import"}
+          </button>
+        </div>
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+          Fills name, address, contact, hours, reviews, photos and social links. Uses the Product
+          selected below.
+        </p>
+        {importError && (
+          <div className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+            {importError}
+          </div>
+        )}
+        {candidates.length > 0 && (
+          <div className="space-y-1">
+            <div className="text-xs text-zinc-600 dark:text-zinc-300">
+              Several places match — pick one:
+            </div>
+            {candidates.map((c) => (
+              <button
+                key={c.place_id}
+                type="button"
+                disabled={importing}
+                onClick={() => {
+                  runImport(c.place_id).catch(() => {});
+                }}
+                className="w-full text-left rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {c.name ?? c.place_id}
+                </div>
+                {c.address && <div className="text-zinc-500 dark:text-zinc-400">{c.address}</div>}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+      <div className="mt-4 text-xs uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+        or fill in manually
       </div>
 
       {error && (

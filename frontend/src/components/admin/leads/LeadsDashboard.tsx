@@ -12,8 +12,15 @@ import { LeadKanban } from "./LeadKanban";
 import { LeadDetailDrawer } from "./LeadDetailDrawer";
 import { AddLeadDrawer } from "./AddLeadDrawer";
 import { EMPTY_FILTERS } from "./types";
-import type { Lead, LeadCreateInput, LeadFiltersState, LeadsListResponse } from "./types";
-import type { LeadStatus } from "@/lib/leadEnums";
+import type {
+  GoogleImportCandidate,
+  GoogleImportResult,
+  Lead,
+  LeadCreateInput,
+  LeadFiltersState,
+  LeadsListResponse,
+} from "./types";
+import type { LeadStatus, LeadType } from "@/lib/leadEnums";
 
 const PAGE_SIZE = 50;
 
@@ -99,6 +106,35 @@ export function LeadsDashboard() {
     await refresh();
   }
 
+  async function handleImport(input: string, leadType: LeadType): Promise<GoogleImportResult> {
+    const res = await fetch(`/api/admin/leads/google-import`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input, lead_type: leadType }),
+    });
+    if (res.status === 201) {
+      const lead: Lead = await res.json();
+      setAddOpen(false);
+      setSelectedLead(lead);
+      await refresh();
+      return { status: "created", lead };
+    }
+    if (res.status === 200) {
+      const body = (await res.json()) as { candidates: GoogleImportCandidate[] };
+      return { status: "candidates", candidates: body.candidates };
+    }
+    const body = (await res.json().catch(() => ({}))) as {
+      detail?: string | { message?: string; lead_id?: string };
+    };
+    if (typeof body.detail === "object" && body.detail) {
+      throw new Error(`${body.detail.message ?? "Already imported"} (open the existing lead)`);
+    }
+    throw new Error(
+      typeof body.detail === "string" ? body.detail : `Import failed (${res.status})`
+    );
+  }
+
   const leads = data?.items ?? [];
   const total = data?.total ?? 0;
 
@@ -167,7 +203,12 @@ export function LeadsDashboard() {
         onPatched={handlePatched}
         onDeleted={handleDeleted}
       />
-      <AddLeadDrawer open={addOpen} onClose={() => setAddOpen(false)} onCreate={handleCreate} />
+      <AddLeadDrawer
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreate={handleCreate}
+        onImport={handleImport}
+      />
     </div>
   );
 }

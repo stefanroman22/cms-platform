@@ -494,8 +494,48 @@ class LeadOut(BaseModel):
     notes: str | None = None
     call_count: int = 0
     languages: list[str] = Field(default_factory=list)
+    # Google Maps import (ADR-0012)
+    google_place_id: str | None = None
+    google_imported_at: str | None = None
+    business_status: str | None = None
+    primary_type: str | None = None
+    types: list[str] = Field(default_factory=list)
+    price_level: str | None = None
+    social_links: dict[str, str] = Field(default_factory=dict)
     created_at: str
     updated_at: str
+
+    @field_validator("types", mode="before")
+    @classmethod
+    def _none_types_to_list(cls, v):
+        return [] if v is None else v
+
+
+SOCIAL_PLATFORMS = frozenset(
+    {"facebook", "instagram", "tiktok", "linkedin", "youtube", "x", "pinterest", "whatsapp"}
+)
+
+
+def _clean_social_links(v: dict[str, str] | None) -> dict[str, str] | None:
+    """Keep known platforms with a non-blank http(s) URL; drop blank values so the
+    dashboard can 'clear' a platform by sending an empty string."""
+    if v is None:
+        return None
+    out: dict[str, str] = {}
+    for key, raw in v.items():
+        if key not in SOCIAL_PLATFORMS:
+            raise ValueError(f"unknown social platform '{key}'")
+        if not isinstance(raw, str):
+            raise ValueError("social link must be a string")
+        url = raw.strip()
+        if not url:
+            continue
+        if not url.lower().startswith(("http://", "https://")):
+            raise ValueError(f"{key} link must start with http:// or https://")
+        if len(url) > 500:
+            raise ValueError(f"{key} link too long (max 500 chars)")
+        out[key] = url
+    return out
 
 
 class LeadUpdate(BaseModel):
@@ -541,6 +581,17 @@ class LeadUpdate(BaseModel):
 
     # about — virtual field; router merges into extra.attributes (handled in a later task)
     about_attributes: dict[str, dict[str, bool]] | None = None
+
+    # social links — full replacement of the platform -> url map (ADR-0012);
+    # the router mirrors facebook/instagram into their legacy columns.
+    social_links: dict[str, str] | None = None
+    # photos — full replacement; the router deletes dropped lead-photos objects.
+    photo_urls: list[str] | None = None
+
+    @field_validator("social_links", mode="after")
+    @classmethod
+    def _validate_social_links(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        return _clean_social_links(v)
 
     @field_validator("languages", mode="after")
     @classmethod
@@ -636,6 +687,22 @@ class LeadCreate(BaseModel):
         if len(cleaned) > 50:
             raise ValueError("too many languages (max 50)")
         return cleaned
+
+
+class GoogleImportIn(BaseModel):
+    """POST /admin/leads/google-import — a Maps URL, short link, place ID or free text."""
+
+    input: str = Field(min_length=1, max_length=2000)
+    lead_type: LeadType = "website"
+    language: str = Field("en", pattern=r"^[a-z]{2}(-[A-Z]{2})?$")
+
+
+class GoogleReimportIn(BaseModel):
+    """POST /admin/leads/{id}/google-import — defaults to the stored google_place_id."""
+
+    input: str | None = Field(None, min_length=1, max_length=2000)
+    overwrite: bool = False
+    language: str = Field("en", pattern=r"^[a-z]{2}(-[A-Z]{2})?$")
 
 
 class ConversionTimePoint(BaseModel):

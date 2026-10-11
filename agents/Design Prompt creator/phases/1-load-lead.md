@@ -38,18 +38,23 @@
    ```
    business_name, category, description, about, design_prompt,
    country, region, city, address, postal_code, lat, lng,
-   phone, email, website_url, facebook_url, instagram_url,
+   phone, email, website_url, facebook_url, instagram_url, social_links,
    menu_url, web_presence, source_url,
    rating, review_count, reviews,
-   opening_hours, extra, notes, languages
+   opening_hours, extra, notes, languages,
+   google_place_id, business_status, primary_type, types, price_level
    ```
 
-   Plus inject `photo_urls` into `extra.photo_urls` if `photo_urls` is non-empty:
+   Split the Google photos into owner vs reference and inject them into `extra`:
 
    ```python
    extra = dict(lead.get("extra") or {})
-   if lead.get("photo_urls"):
-       extra["photo_urls"] = lead["photo_urls"]
+   google_photos = ((extra.get("google") or {}).get("photos")) or []
+   if google_photos:
+       extra["owner_photo_urls"] = [p["url"] for p in google_photos if p.get("owner_photo") and p.get("url")]
+       extra["reference_photo_urls"] = [p["url"] for p in google_photos if not p.get("owner_photo") and p.get("url")]
+   elif lead.get("photo_urls"):
+       extra["reference_photo_urls"] = lead["photo_urls"]  # provenance unknown → reference only
    projected["extra"] = extra
    ```
 

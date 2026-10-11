@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "frontend/src/components/admin/leads/AddLeadDrawer.tsx"
+        ],
+        "createdAt": "2026-10-11T10:05:55.752Z",
+        "reason": "Agent: remove-review icon is text-zinc-400 on a neutral zinc-50 card at rest; the red-50 background only appears on hover together with text-red-600, so gray never sits on color. Pre-existing line, not changed by this branch."
+      }
+    ]
+  }
+}

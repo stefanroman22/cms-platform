@@ -1,0 +1,69 @@
+{
+  "id": "ChIJsamir0000000000000000000",
+  "displayName": {"text": "Samir Kapsalon", "languageCode": "nl"},
+  "primaryType": "barber_shop",
+  "primaryTypeDisplayName": {"text": "Barber shop", "languageCode": "en"},
+  "types": ["barber_shop", "hair_salon", "point_of_interest", "establishment"],
+  "businessStatus": "OPERATIONAL",
+  "googleMapsUri": "https://maps.google.com/?cid=1234567890",
+  "googleMapsLinks": {"directionsUri": "https://www.google.com/maps/dir/?x", "placeUri": "https://maps.google.com/?cid=1234567890", "writeAReviewUri": "https://www.google.com/maps/place//r", "reviewsUri": "https://www.google.com/maps/place//rv", "photosUri": "https://www.google.com/maps/place//ph"},
+  "formattedAddress": "Stadhuisplein 12, 8232 ZX Lelystad, Netherlands",
+  "shortFormattedAddress": "Stadhuisplein 12, Lelystad",
+  "addressComponents": [
+    {"longText": "12", "shortText": "12", "types": ["street_number"], "languageCode": "nl"},
+    {"longText": "Stadhuisplein", "shortText": "Stadhuisplein", "types": ["route"], "languageCode": "nl"},
+    {"longText": "Lelystad", "shortText": "Lelystad", "types": ["locality", "political"], "languageCode": "nl"},
+    {"longText": "Flevoland", "shortText": "FL", "types": ["administrative_area_level_1", "political"], "languageCode": "nl"},
+    {"longText": "Netherlands", "shortText": "NL", "types": ["country", "political"], "languageCode": "en"},
+    {"longText": "8232 ZX", "shortText": "8232 ZX", "types": ["postal_code"], "languageCode": "nl"}
+  ],
+  "postalAddress": {"regionCode": "NL", "postalCode": "8232 ZX", "locality": "Lelystad", "addressLines": ["Stadhuisplein 12"]},
+  "location": {"latitude": 52.5083, "longitude": 5.4751},
+  "plusCode": {"globalCode": "9F47GF5G+8W", "compoundCode": "GF5G+8W Lelystad"},
+  "viewport": {"low": {"latitude": 52.50, "longitude": 5.47}, "high": {"latitude": 52.51, "longitude": 5.48}},
+  "timeZone": {"id": "Europe/Amsterdam"},
+  "utcOffsetMinutes": 120,
+  "pureServiceAreaBusiness": false,
+  "nationalPhoneNumber": "0320 123456",
+  "internationalPhoneNumber": "+31 320 123456",
+  "websiteUri": "https://samirkapsalon.nl/",
+  "regularOpeningHours": {
+    "periods": [
+      {"open": {"day": 1, "hour": 9, "minute": 0}, "close": {"day": 1, "hour": 18, "minute": 0}},
+      {"open": {"day": 2, "hour": 9, "minute": 0}, "close": {"day": 2, "hour": 18, "minute": 0}}
+    ],
+    "weekdayDescriptions": [
+      "Monday: 9:00 AM – 6:00 PM", "Tuesday: 9:00 AM – 6:00 PM", "Wednesday: 9:00 AM – 6:00 PM",
+      "Thursday: 9:00 AM – 8:00 PM", "Friday: 9:00 AM – 6:00 PM", "Saturday: 9:00 AM – 5:00 PM", "Sunday: Closed"
+    ]
+  },
+  "rating": 4.8,
+  "userRatingCount": 212,
+  "reviews": [
+    {
+      "name": "places/ChIJsamir/reviews/r1",
+      "relativePublishTimeDescription": "2 months ago",
+      "rating": 5,
+      "text": {"text": "Beste kapper van Lelystad!", "languageCode": "nl"},
+      "originalText": {"text": "Beste kapper van Lelystad!", "languageCode": "nl"},
+      "authorAttribution": {"displayName": "Maria K.", "uri": "https://www.google.com/maps/contrib/1", "photoUri": "https://lh3.googleusercontent.com/a/1"},
+      "publishTime": "2026-08-01T10:00:00Z",
+      "googleMapsUri": "https://www.google.com/maps/reviews/r1"
+    }
+  ],
+  "reviewSummary": {"text": {"text": "People praise the fades.", "languageCode": "en"}},
+  "editorialSummary": {"text": "Modern barber shop with walk-ins.", "languageCode": "en"},
+  "generativeSummary": {"overview": {"text": "A busy barber shop known for sharp fades.", "languageCode": "en"}, "disclosureText": {"text": "Summarized with Gemini", "languageCode": "en"}},
+  "priceLevel": "PRICE_LEVEL_MODERATE",
+  "priceRange": {"startPrice": {"currencyCode": "EUR", "units": "20"}, "endPrice": {"currencyCode": "EUR", "units": "40"}},
+  "photos": [
+    {"name": "places/ChIJsamir/photos/p1", "widthPx": 4032, "heightPx": 3024, "authorAttributions": [{"displayName": "Samir Kapsalon", "uri": "https://maps.google.com/maps/contrib/9", "photoUri": "https://lh3.googleusercontent.com/a/9"}], "googleMapsUri": "https://www.google.com/maps/place//photos/p1"},
+    {"name": "places/ChIJsamir/photos/p2", "widthPx": 1080, "heightPx": 1080, "authorAttributions": [{"displayName": "Jan de Vries", "uri": "https://maps.google.com/maps/contrib/8", "photoUri": ""}], "googleMapsUri": "https://www.google.com/maps/place//photos/p2"}
+  ],
+  "accessibilityOptions": {"wheelchairAccessibleEntrance": true, "wheelchairAccessibleRestroom": false},
+  "parkingOptions": {"freeStreetParking": true},
+  "paymentOptions": {"acceptsCreditCards": true, "acceptsNfc": true, "acceptsCashOnly": false},
+  "restroom": true,
+  "goodForChildren": true,
+  "reservable": false
+}

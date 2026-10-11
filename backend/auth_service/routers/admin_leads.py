@@ -3,17 +3,33 @@ Writes are limited to pipeline-status and business-data fields (LeadUpdate)."""
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from starlette.concurrency import run_in_threadpool
 
-from ..models.schemas import LeadCreate, LeadOut, LeadUpdate
+from ..core.config import settings
+from ..core.pg_rate_limit import enforce
+from ..models.schemas import GoogleImportIn, GoogleReimportIn, LeadCreate, LeadOut, LeadUpdate
+from ..services.google_places.client import GooglePlacesError
+from ..services.google_places.importer import (
+    DuplicateLead,
+    ImportOutcome,
+    MissingPlaceId,
+    MonthlyCapReached,
+    QuotaUnavailable,
+    import_place,
+    reimport_place,
+)
+from ..services.google_places.photos import delete_lead_photos
 from ..services.html_sanitizer import sanitize_design_prompt
 from ..services.supabase_client import get_supabase_admin
 from .deps import admin_user_via_bearer_or_sid
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/leads", tags=["admin", "leads"])
 
 # SEC-028: columns the list endpoint may sort by. Anything else falls back to
@@ -114,6 +130,121 @@ async def create_lead(body: LeadCreate, request: Request) -> LeadOut:
     return LeadOut(**res.data[0])
 
 
+_GOOGLE_STATUS = {400: 422, 401: 502, 403: 502, 404: 404, 429: 503, 504: 504}
+
+
+def _google_http(e: GooglePlacesError) -> HTTPException:
+    if e.status == 503:
+        return HTTPException(status_code=503, detail=e.message)
+    code = _GOOGLE_STATUS.get(e.status, 502)
+    prefix = {
+        404: "Place not found",
+        422: "Google rejected the request",
+        503: "Google quota exceeded, try later",
+        504: "Google did not answer in time",
+    }.get(code, "Google Places error")
+    return HTTPException(status_code=code, detail=f"{prefix}: {e.message}")
+
+
+def _require_google_key() -> None:
+    if not settings.GOOGLE_MAPS_API_KEY:
+        raise HTTPException(
+            status_code=503, detail="Google Maps import is not configured on this backend"
+        )
+
+
+def _outcome_response(outcome: ImportOutcome, response: Response, *, created: bool):
+    response.headers["X-Import-Warnings"] = str(len(outcome.warnings))
+    if outcome.lead is None:
+        if not outcome.candidates:
+            raise HTTPException(
+                status_code=404,
+                detail="Could not find a place for that input. Try the full Google Maps link or 'Name, City'.",
+            )
+        response.status_code = 200
+        return {
+            "status": "candidates",
+            "candidates": outcome.candidates,
+            "warnings": outcome.warnings,
+        }
+    response.status_code = 201 if created else 200
+    return LeadOut(**outcome.lead)
+
+
+async def _run_import(fn, response: Response, *, created: bool):
+    try:
+        # the importer does blocking HTTP + DB calls; keep them off the event loop
+        outcome = await run_in_threadpool(fn)
+    except DuplicateLead as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "This Google place is already a lead.", "lead_id": e.lead_id},
+        ) from e
+    except MonthlyCapReached as e:
+        raise HTTPException(
+            status_code=429,
+            detail="Monthly Google import cap reached (GOOGLE_PLACES_MONTHLY_CAP). Raise it on cms-backend-roman if you accept the cost.",
+        ) from e
+    except QuotaUnavailable as e:
+        raise HTTPException(
+            status_code=503, detail="Import counter unavailable; try again shortly."
+        ) from e
+    except GooglePlacesError as e:
+        raise _google_http(e) from e
+    except MissingPlaceId as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return _outcome_response(outcome, response, created=created)
+
+
+@router.post("/google-import", response_model=None, status_code=status.HTTP_201_CREATED)
+async def google_import(body: GoogleImportIn, request: Request, response: Response):
+    """Create a lead from a Google Maps link / place ID / 'Name, City' (ADR-0012)."""
+    user = await admin_user_via_bearer_or_sid(request)
+    _require_google_key()
+    enforce(
+        f"google_import:user:{user.id}",
+        20,
+        3600,
+        detail="Too many imports this hour; try again later.",
+    )
+    raw = body.input.strip()
+    if not raw:
+        raise HTTPException(422, "Paste a Google Maps link, place ID or 'Name, City'.")
+    sb = get_supabase_admin()
+    return await _run_import(
+        lambda: import_place(sb, raw_input=raw, lead_type=body.lead_type, language=body.language),
+        response,
+        created=True,
+    )
+
+
+@router.post("/{lead_id}/google-import", response_model=None)
+async def google_reimport(
+    lead_id: str, body: GoogleReimportIn, request: Request, response: Response
+):
+    """Refresh an existing lead from Google: fill empty fields, or overwrite=true."""
+    user = await admin_user_via_bearer_or_sid(request)
+    _require_google_key()
+    enforce(
+        f"google_import:user:{user.id}",
+        20,
+        3600,
+        detail="Too many imports this hour; try again later.",
+    )
+    sb = get_supabase_admin()
+    current = sb.table("leads").select("*").eq("id", lead_id).maybe_single().execute()
+    if not (current and current.data):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead not found")
+    raw = body.input.strip() if body.input else None
+    return await _run_import(
+        lambda: reimport_place(
+            sb, current.data, raw_input=raw, overwrite=body.overwrite, language=body.language
+        ),
+        response,
+        created=False,
+    )
+
+
 @router.get("/{lead_id}", response_model=LeadOut)
 async def get_lead(lead_id: str, request: Request) -> LeadOut:
     await admin_user_via_bearer_or_sid(request)
@@ -145,16 +276,26 @@ async def patch_lead(lead_id: str, body: LeadUpdate, request: Request) -> LeadOu
     # row is already accepted, OR this same PATCH transitions it to accepted.
     # about_attributes is a virtual field that must be merged into extra.
     # A single fetch covers both branches when either is in the patch.
-    needs_current = "closed_amount" in patch or "about_attributes" in patch
+    needs_current = any(
+        k in patch
+        for k in (
+            "closed_amount",
+            "about_attributes",
+            "social_links",
+            "facebook_url",
+            "instagram_url",
+            "photo_urls",
+        )
+    )
     if needs_current:
         current = (
             sb.table("leads")
-            .select("lead_status, closed_amount, extra")
+            .select("lead_status, closed_amount, extra, social_links, photo_urls")
             .eq("id", lead_id)
             .maybe_single()
             .execute()
         )
-        if not current.data:
+        if not (current and current.data):
             raise HTTPException(status_code=404, detail="Lead not found")
 
     if "closed_amount" in patch:
@@ -176,9 +317,45 @@ async def patch_lead(lead_id: str, body: LeadUpdate, request: Request) -> LeadOu
         current_extra["attributes"] = new_attrs
         patch["extra"] = current_extra
 
+    # ADR-0012: social_links is the full map; facebook_url/instagram_url mirror two keys.
+    if "social_links" in patch:
+        links = patch["social_links"] or {}
+        patch["social_links"] = links
+        patch["facebook_url"] = links.get("facebook")
+        patch["instagram_url"] = links.get("instagram")
+    elif "facebook_url" in patch or "instagram_url" in patch:
+        links = dict(current.data.get("social_links") or {})
+        for col, key in (("facebook_url", "facebook"), ("instagram_url", "instagram")):
+            if col in patch:
+                if patch[col]:
+                    links[key] = str(patch[col])
+                else:
+                    links.pop(key, None)
+        patch["social_links"] = links
+    for key in ("facebook_url", "instagram_url", "website_url", "menu_url"):
+        if key in patch and patch[key] is not None:
+            patch[key] = str(patch[key])
+
+    # ADR-0012: dropping a photo deletes our copy and its metadata.
+    dropped: list[str] = []
+    if "photo_urls" in patch:
+        new_urls = list(patch["photo_urls"] or [])
+        dropped = [u for u in (current.data.get("photo_urls") or []) if u not in new_urls]
+        extra = patch.get("extra") or dict(current.data.get("extra") or {})
+        google = dict(extra.get("google") or {})
+        if google.get("photos"):
+            google["photos"] = [p for p in google["photos"] if p.get("url") in new_urls]
+            extra["google"] = google
+            patch["extra"] = extra
+
     res = sb.table("leads").update(patch).eq("id", lead_id).execute()
     if not res.data:
         raise HTTPException(status_code=500, detail="Update failed")
+    if dropped:
+        try:
+            delete_lead_photos(sb, lead_id, dropped)
+        except Exception:  # noqa: BLE001 — row is already consistent; orphaned objects are harmless
+            logger.exception("lead %s: dropped photo cleanup failed", lead_id)
     return LeadOut(**res.data[0])
 
 

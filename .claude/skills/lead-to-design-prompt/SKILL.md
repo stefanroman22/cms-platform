@@ -29,10 +29,18 @@ The user provides a lead record. Any field may be `null` or missing. The skill m
 | `languages` | no | **Target website locales** (`text[]`, canonical English names e.g. Dutch, English). Drives `<languages>` and the language-switcher requirement. Empty = single-language site (locale primary), no switcher |
 | `lat`, `lng` | no | Map widget (only embed if BOTH non-null) |
 | `phone`, `email` | no | Header CTA, contact section; wrap as `tel:` / `mailto:` |
-| `website_url` | no | If present and `web_presence=outdated`, flag to scrape for legacy tone |
+| `website_url` | no | If present and `web_presence=has_website`, flag to scrape for legacy tone |
 | `facebook_url`, `instagram_url` | no | Footer social icons; Instagram embed if present |
+| `social_links` | no | `{facebook,instagram,tiktok,linkedin,youtube,x,pinterest,whatsapp}` → url. Source of truth for footer social icons; `facebook_url`/`instagram_url` are mirrors of two keys |
+| `business_status` | no | `CLOSED_TEMPORARILY`/`CLOSED_PERMANENTLY` → add a status banner requirement; `FUTURE_OPENING` → "opening soon" hero framing |
+| `primary_type`, `types` | no | Google place types (`barber_shop`, `hair_salon`…); use alongside `category` for bucket classification (step 2) |
+| `price_level` | no | `free`…`very_expensive` → price-positioning copy ("affordable", "premium"); never print the raw enum |
+| `extra.google.photos[]` | no | `{url, owner_photo, attributions[{name,uri}], google_maps_uri}`. **`owner_photo=true` → usable site imagery (list in `<imagery>` as real assets). `owner_photo=false` → visual reference for art direction only; never instruct the site to embed them** |
+| `extra.google.generative_summary` | no | `{overview, disclosure}` — Google's AI summary. Research input for tone/positioning only; **never quote it as the business's own words** and never include `disclosure` in site copy |
+| `extra.google.review_summary`, `extra.google.editorial_summary` | no | Same rule as above; `editorial_summary` already feeds `about` |
+| `extra.google.price_range`, `extra.google.opening_hours.secondary` | no | Price range for menu/pricing section hints; secondary hours (e.g. delivery) → optional hours sub-widget |
 | `menu_url` | no | "View menu" button — food businesses only |
-| `web_presence` | no | `none`/`social_only`/`outdated`/`ok` — sets framing |
+| `web_presence` | no | `none`/`social_only`/`has_website`/`unknown` — sets framing (`has_website` = the old "ok/outdated" case) |
 | `source_url` | no | Google Maps URL for additional photo sourcing |
 | `rating`, `review_count` | no | Trust band (`"5.0 ★ · 629 reviews"`); only include if `review_count >= 5` |
 | `reviews` | no | Array of `{author, text, relative_date, rating}` — pick top 3–5 by rating × length, trim names ("Maria K."), strip emoji-only |
@@ -57,6 +65,8 @@ Follow these steps in order. Do not skip the quality gate.
 - If `lat` or `lng` is null, drop the map embed entirely (no half-map).
 - Sanitize HTML in `design_prompt` → plain Markdown.
 - If `rating < 4.0` OR `review_count < 5`, **suppress** the trust-band section (don't lead with weak social proof).
+- `web_presence` values are `none`, `social_only`, `has_website`, `unknown` (the DB enum). Treat `has_website` as the old "ok/outdated" case: if `website_url` is set, flag it for a legacy-tone scrape.
+- Build the imagery input from `extra.google.photos`: `owner_photos = [p.url for p in photos if p.owner_photo]`, `reference_photos = the rest`. Fall back to `photo_urls` as reference-only when `extra.google.photos` is absent (pre-ADR-0012 leads).
 
 ### 2. Classify into a category bucket
 

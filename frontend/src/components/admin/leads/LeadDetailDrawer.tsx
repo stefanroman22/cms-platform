@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ExternalLink, Loader2, Save, Trash2, X } from "lucide-react";
+import { ExternalLink, Loader2, RefreshCw, Save, Trash2, X } from "lucide-react";
 import {
   AI_WORKFLOW_STATUS_LABEL,
   CALL_COUNT_LABEL,
@@ -16,7 +16,7 @@ import {
   type PaymentStatus,
   type WebsiteBuildStatus,
 } from "@/lib/leadEnums";
-import type { Lead } from "./types";
+import type { GoogleImportCandidate, Lead } from "./types";
 import { ReviewsList } from "./ReviewsList";
 import { AnimatedSelect } from "@/components/dashboard/AnimatedSelect";
 import { EditingSectionProvider } from "./context/EditingSectionContext";
@@ -26,6 +26,8 @@ import { LanguagesSection } from "./sections/LanguagesSection";
 import { DesignPromptSection } from "./sections/DesignPromptSection";
 import { OpeningHoursSection } from "./sections/OpeningHoursSection";
 import { AboutSection } from "./sections/AboutSection";
+import { BusinessSection } from "./sections/BusinessSection";
+import { PhotosSection } from "./sections/PhotosSection";
 
 interface Props {
   lead: Lead | null;
@@ -108,6 +110,12 @@ function DrawerBody({
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reimportOpen, setReimportOpen] = useState(false);
+  const [reimportInput, setReimportInput] = useState("");
+  const [reimportOverwrite, setReimportOverwrite] = useState(false);
+  const [reimporting, setReimporting] = useState(false);
+  const [reimportError, setReimportError] = useState<string | null>(null);
+  const [reimportCandidates, setReimportCandidates] = useState<GoogleImportCandidate[]>([]);
 
   // Subtle press feedback, disabled when the user prefers reduced motion.
   // Hover keeps the CSS color change only — no scale on hover.
@@ -127,6 +135,12 @@ function DrawerBody({
     setError(null);
     setConfirmingDelete(false);
     setDeleting(false);
+    setReimportOpen(false);
+    setReimportInput("");
+    setReimportOverwrite(false);
+    setReimporting(false);
+    setReimportError(null);
+    setReimportCandidates([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
 
@@ -203,6 +217,49 @@ function DrawerBody({
     }
   }
 
+  async function handleReimport(inputOverride?: string) {
+    const input = (inputOverride ?? reimportInput).trim();
+    if (!lead.google_place_id && !input) {
+      setReimportError("Paste a Google Maps link or place ID first.");
+      return;
+    }
+    setReimporting(true);
+    setReimportError(null);
+    try {
+      const body: { input?: string; overwrite: boolean } = { overwrite: reimportOverwrite };
+      if (input) body.input = input;
+      const res = await fetch(`/api/admin/leads/${lead.id}/google-import`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const d = (data as { detail?: string | { message?: string } }).detail;
+        throw new Error(
+          typeof d === "object" && d
+            ? (d.message ?? "Import failed")
+            : (d ?? `Import failed (${res.status})`)
+        );
+      }
+      if ((data as { status?: string }).status === "candidates") {
+        setReimportCandidates((data as { candidates: GoogleImportCandidate[] }).candidates);
+        return;
+      }
+      if (!(typeof data === "object" && data && "id" in data)) {
+        throw new Error("Unexpected response from the server");
+      }
+      onPatched(data as Lead);
+      setReimportOpen(false);
+      setReimportCandidates([]);
+    } catch (err) {
+      setReimportError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setReimporting(false);
+    }
+  }
+
   return (
     <EditingSectionProvider>
       <div className="p-5">
@@ -227,6 +284,15 @@ function DrawerBody({
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setReimportOpen((v) => !v)}
+              disabled={saving || deleting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${reimporting ? "animate-spin" : ""}`} />
+              Re-import
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -261,6 +327,105 @@ function DrawerBody({
         </div>
 
         <AnimatePresence initial={false}>
+          {reimportOpen && (
+            <motion.div
+              key="reimport"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: prefersReduced ? 0 : 0.24, ease: "easeOut" }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-3 py-3 space-y-2">
+                <p className="text-xs text-zinc-600 dark:text-zinc-300">
+                  {lead.google_place_id
+                    ? "Refresh this lead from its Google Maps listing. By default only empty fields are filled."
+                    : "This lead was not imported from Google yet. Paste its Google Maps link to import."}
+                </p>
+                {!lead.google_place_id && (
+                  <input
+                    type="text"
+                    aria-label="Google Maps link or place ID"
+                    value={reimportInput}
+                    onChange={(e) => setReimportInput(e.target.value)}
+                    disabled={reimporting}
+                    className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2.5 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+                  />
+                )}
+                <label className="inline-flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    aria-label="Overwrite existing fields"
+                    checked={reimportOverwrite}
+                    onChange={(e) => setReimportOverwrite(e.target.checked)}
+                    disabled={reimporting}
+                  />
+                  Overwrite existing fields (also re-downloads photos)
+                </label>
+                {reimportError && (
+                  <div className="rounded-md bg-red-50 dark:bg-red-950 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                    {reimportError}
+                  </div>
+                )}
+                {reimportCandidates.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-zinc-600 dark:text-zinc-300">
+                      Several places match — pick one:
+                    </div>
+                    {reimportCandidates.map((c) => (
+                      <button
+                        key={c.place_id}
+                        type="button"
+                        disabled={reimporting}
+                        onClick={() => {
+                          handleReimport(c.place_id).catch(() => {});
+                        }}
+                        className="w-full text-left rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                          {c.name ?? c.place_id}
+                        </div>
+                        {c.address && (
+                          <div className="text-zinc-500 dark:text-zinc-400">{c.address}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    {...press}
+                    type="button"
+                    disabled={reimporting}
+                    onClick={() => {
+                      handleReimport().catch(() => {});
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    {reimporting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    {reimporting ? "Importing…" : "Import from Google"}
+                  </motion.button>
+                  <motion.button
+                    {...press}
+                    type="button"
+                    disabled={reimporting}
+                    onClick={() => {
+                      setReimportOpen(false);
+                      setReimportError(null);
+                      setReimportCandidates([]);
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          )}
           {confirmingDelete && (
             <motion.div
               key="confirm-delete"
@@ -409,6 +574,8 @@ function DrawerBody({
           </section>
         )}
 
+        <BusinessSection lead={lead} />
+
         <LocationSection lead={lead} onPatched={onPatched} />
 
         <ContactSection lead={lead} onPatched={onPatched} />
@@ -418,6 +585,7 @@ function DrawerBody({
         <DesignPromptSection lead={lead} onPatched={onPatched} />
 
         <OpeningHoursSection lead={lead} onPatched={onPatched} />
+        <PhotosSection lead={lead} onPatched={onPatched} />
         <ReviewsList
           reviews={
             (lead.reviews ?? null) as
