@@ -9,7 +9,6 @@ import {
   LogOut,
   Layers,
   Users,
-  Puzzle,
   FolderKanban,
   UserPen,
 } from "lucide-react";
@@ -40,7 +39,6 @@ const navItems = [
 const adminItems = [
   { href: "/dashboard/admin/clients", label: "All Clients", icon: Users, exact: false },
   { href: "/dashboard/admin/projects", label: "All Projects", icon: FolderKanban, exact: false },
-  { href: "/dashboard/admin/service-types", label: "Service Types", icon: Puzzle, exact: false },
   { href: "/dashboard/admin/leads", label: "Leads", icon: UserPen, exact: false },
 ];
 

@@ -20,7 +20,6 @@ const HERO_DETAIL = {
   service_type_slug: "unknown_type",
   service_type_name: "Hero",
   service_type_icon: "image",
-  schema: {},
   content: {},
   last_updated: null,
 };

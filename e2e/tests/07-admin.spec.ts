@@ -61,18 +61,6 @@ test.describe("Admin pages", () => {
     await expect(page.getByText(/E2E Test Project/i).first()).toBeVisible();
   });
 
-  test("admin user — Service Types renders 8+ types", async ({ page }) => {
-    await login(
-      page,
-      process.env.E2E_ADMIN_EMAIL!,
-      process.env.E2E_ADMIN_PASSWORD!,
-    );
-    await page.goto("/dashboard/admin/service-types");
-    await expect(
-      page.getByRole("heading", { name: /Service Types/i }),
-    ).toBeVisible();
-  });
-
   test("regular user gets blocked / redirected from /dashboard/admin/*", async ({
     page,
   }) => {

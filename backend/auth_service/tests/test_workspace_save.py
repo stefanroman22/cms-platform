@@ -19,7 +19,6 @@ def test_put_service_writes_to_draft_content_only(mock_supabase, client, auth_as
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
         # rows fetch (no existing locale rows)
@@ -35,7 +34,6 @@ def test_put_service_writes_to_draft_content_only(mock_supabase, client, auth_as
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
                 "content_entries": {
                     "published_content": {"title": "OLD"},
                     "draft_content": {"title": "NEW"},
@@ -79,7 +77,6 @@ def test_get_service_returns_draft_with_fallback_to_published(
             "display_order": 1,
             "page_name": "General",
             "service_type_slug": "text_block",
-            "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             "content_entries": {
                 "published_content": {"title": "PUB"},
                 "draft_content": {"title": "DRAFT"},
@@ -106,7 +103,6 @@ def test_get_service_falls_back_to_published_when_draft_null(
             "display_order": 1,
             "page_name": "General",
             "service_type_slug": "text_block",
-            "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             "content_entries": {
                 "published_content": {"title": "PUB"},
                 "draft_content": None,
@@ -132,7 +128,6 @@ def test_put_service_with_seed_true_writes_both_columns(mock_supabase, client, a
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
         # rows fetch (no existing locale rows)
@@ -146,7 +141,6 @@ def test_put_service_with_seed_true_writes_both_columns(mock_supabase, client, a
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
                 "content_entries": {
                     "published_content": {"title": "X"},
                     "draft_content": {"title": "X"},
@@ -406,7 +400,6 @@ def test_put_service_seed_true_accepts_bearer_admin_key(mock_supabase, client):
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
         # rows fetch (no existing locale rows)
@@ -422,7 +415,6 @@ def test_put_service_seed_true_accepts_bearer_admin_key(mock_supabase, client):
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
                 "content_entries": {
                     "published_content": {"title": "SEEDED"},
                     "draft_content": {"title": "SEEDED"},

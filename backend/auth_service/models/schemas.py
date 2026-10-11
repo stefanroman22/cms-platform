@@ -156,7 +156,6 @@ class ServiceDetailOut(BaseModel):
     service_type_icon: str
     display_order: int
     page_name: str
-    schema: dict
     content: dict
     last_updated: str | None
     locale: str | None = None
@@ -180,7 +179,7 @@ class RepeaterItemField(BaseModel):
 
 class ServiceCreateRequest(BaseModel):
     # service_type_slug is one of a fixed set; route still validates
-    # against the DB. Length cap blocks DoS via huge strings.
+    # against SERVICE_TYPES. Length cap blocks DoS via huge strings.
     service_type_slug: str = Field(min_length=1, max_length=64, pattern=_SERVICE_KEY_PATTERN)
     # Used as a Supabase storage path component — must be slug-safe (snake_case).
     service_key: str = Field(min_length=1, max_length=64, pattern=_SERVICE_KEY_PATTERN)
@@ -196,14 +195,6 @@ class ServiceCreateRequest(BaseModel):
 
 
 # ── Admin ────────────────────────────────────────────────────────────────────
-
-
-class ServiceTypeOut(BaseModel):
-    slug: str
-    name: str
-    description: str | None
-    icon: str
-    schema: dict
 
 
 class AdminProjectOut(BaseModel):

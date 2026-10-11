@@ -9,7 +9,6 @@ def _svc_with_locale_rows():
         "display_order": 1,
         "page_name": "General",
         "service_type_slug": "text_block",
-        "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
         "content_entries": [
             {
                 "locale": "en",
@@ -72,7 +71,6 @@ def test_save_service_writes_locale_and_correct_conflict_target(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
         # rows fetch (no existing locale rows)
@@ -88,7 +86,6 @@ def test_save_service_writes_locale_and_correct_conflict_target(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
                 "content_entries": [
                     {
                         "locale": "en",

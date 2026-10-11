@@ -11,7 +11,6 @@ SVC_ROW = {
     "display_order": 1,
     "page_name": "General",
     "service_type_slug": "text_block",
-    "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
 }
 
 

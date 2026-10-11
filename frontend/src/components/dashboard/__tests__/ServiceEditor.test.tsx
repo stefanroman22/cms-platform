@@ -20,7 +20,6 @@ const DETAIL = {
   service_type_slug: "text_block",
   service_type_name: "Text block",
   service_type_icon: "type",
-  schema: {},
   content: { title: "Hello", body: "World" },
   last_updated: "2026-09-27T10:00:00Z",
   locale: "nl",

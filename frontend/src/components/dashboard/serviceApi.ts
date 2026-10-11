@@ -9,7 +9,6 @@ export interface ServiceDetail {
   service_type_slug: string;
   service_type_name: string;
   service_type_icon: string;
-  schema: Record<string, unknown>;
   content: Record<string, unknown>;
   last_updated: string | null;
   locale?: string;

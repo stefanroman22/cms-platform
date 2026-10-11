@@ -29,7 +29,6 @@ from ..models.schemas import (
     ServiceCreateRequest,
     ServiceDetailOut,
     ServiceOut,
-    ServiceTypeOut,
     UserAdminOut,
     WelcomeEmailIn,
 )
@@ -39,6 +38,7 @@ from ..services.content_structure import VALID_REPEATER_TYPES, StructureError, a
 from ..services.password_changed_email import send_password_changed_email
 from ..services.rich_text import RichTextFieldError, field_formats, normalize_content
 from ..services.segments import segments_of, src_hash
+from ..services.service_types import SERVICE_TYPES
 from ..services.sessions import revoke_all_for_user
 from ..services.supabase_client import get_supabase_admin
 from ..services.test_data import is_test_email, is_test_slug
@@ -128,14 +128,14 @@ def _translation_status(
 
 
 def _flatten_service(svc: dict, locale: str, default_locale: str) -> dict:
-    """Extracts nested service_types + the per-locale content_entries row into a
-    flat dict for the dashboard.
+    """Flattens the service row + its per-locale content_entries row into a dict
+    for the dashboard.
 
     `content` is the draft for the chosen locale (falling back to published, then
     to the default-locale row). Uses `is not None` (not `or`) so an explicitly-
     cleared draft ({}) renders as empty rather than falling back to published.
     """
-    st = svc.get("service_types") or {}
+    name, icon = SERVICE_TYPES.get(svc["service_type_slug"], (svc["service_type_slug"], "Box"))
     entry = pick_locale_entry(svc.get("content_entries"), locale, default_locale)
 
     draft = entry.get("draft_content") if entry else None
@@ -147,12 +147,11 @@ def _flatten_service(svc: dict, locale: str, default_locale: str) -> dict:
         "service_key": svc["service_key"],
         "label": svc.get("label"),
         "service_type_slug": svc["service_type_slug"],
-        "service_type_name": st.get("name", svc["service_type_slug"]),
-        "service_type_icon": st.get("icon", "Box"),
+        "service_type_name": name,
+        "service_type_icon": icon,
         "display_order": svc.get("display_order", 0),
         "page_name": svc.get("page_name", "General"),
         "last_updated": entry.get("updated_at") if entry else None,
-        "schema": st.get("schema", {}),
         "content": content,
     }
 
@@ -172,7 +171,7 @@ async def list_services(project_slug: str, request: Request, locale: str | None 
         result = (
             sb.table("project_services")
             .select(
-                "id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon), content_entries(locale, updated_at, draft_content, published_content)"
+                "id, service_key, label, display_order, page_name, service_type_slug, content_entries(locale, updated_at, draft_content, published_content)"
             )
             .eq("project_id", project["id"])
             # Filter the embedded rows (not the services) to the locale shown plus
@@ -197,7 +196,7 @@ def _service_detail(project: dict, user, service_key: str, loc: str) -> dict:
     result = (
         sb.table("project_services")
         .select(
-            "id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema), content_entries(locale, draft_content, published_content, updated_at, translation_meta)"
+            "id, service_key, label, display_order, page_name, service_type_slug, content_entries(locale, draft_content, published_content, updated_at, translation_meta)"
         )
         .eq("project_id", project["id"])
         .eq("service_key", service_key)
@@ -267,9 +266,7 @@ async def save_service(
     # Resolve the project_service (id + type)
     svc_result = (
         sb.table("project_services")
-        .select(
-            "id, service_key, label, display_order, page_name, service_type_slug, service_types(name, icon, schema)"
-        )
+        .select("id, service_key, label, display_order, page_name, service_type_slug")
         .eq("project_id", project["id"])
         .eq("service_key", service_key)
         .single()
@@ -488,19 +485,12 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
     user = await admin_user_via_bearer_or_sid(request)
     project = require_project_access(project_slug, user)
 
-    # Validate service_type_slug exists
-    sb = get_supabase_admin()
-    st_check = (
-        sb.table("service_types")
-        .select("slug")
-        .eq("slug", body.service_type_slug)
-        .single()
-        .execute()
-    )
-    if not st_check.data:
+    if body.service_type_slug not in SERVICE_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown service type"
         )
+
+    sb = get_supabase_admin()
 
     # Validate service_key is alphanumeric + underscores only
     import re
@@ -827,20 +817,6 @@ async def admin_list_clients(request: Request, include_test: bool = False):
             continue
         out.append({**u, "projects_count": counts.get(u["id"], 0)})
     return out
-
-
-@router.get("/admin/service-types", response_model=list[ServiceTypeOut])
-async def admin_list_service_types(request: Request):
-    await admin_user_via_bearer_or_sid(request)
-
-    sb = get_supabase_admin()
-    result = (
-        sb.table("service_types")
-        .select("slug, name, description, icon, schema")
-        .order("slug")
-        .execute()
-    )
-    return result.data or []
 
 
 @router.get("/projects/{project_slug}/settings", response_model=ProjectSettingsOut)

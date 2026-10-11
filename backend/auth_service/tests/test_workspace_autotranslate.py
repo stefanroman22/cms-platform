@@ -45,7 +45,6 @@ def test_editing_default_propagates_to_other_locales(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
         # fetch existing rows for this service (none yet)
@@ -61,7 +60,6 @@ def test_editing_default_propagates_to_other_locales(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
                 "content_entries": [
                     {
                         "locale": "en",
@@ -98,7 +96,6 @@ def test_manual_override_survives_default_edit(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
         # existing rows: en draft, nl with a MANUAL override on "title"
@@ -130,7 +127,6 @@ def test_manual_override_survives_default_edit(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
                 "content_entries": [
                     {
                         "locale": "en",
@@ -165,7 +161,6 @@ def test_editing_nondefault_locale_marks_changed_leaf_manual(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
         # rows: en source + nl auto translation
@@ -196,7 +191,6 @@ def test_editing_nondefault_locale_marks_changed_leaf_manual(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
                 "content_entries": [
                     {
                         "locale": "nl",
@@ -239,7 +233,6 @@ def test_single_locale_project_does_not_call_provider(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
             }
         ),
         MagicMock(data=[]),  # existing rows
@@ -252,7 +245,6 @@ def test_single_locale_project_does_not_call_provider(
                 "display_order": 1,
                 "page_name": "General",
                 "service_type_slug": "text_block",
-                "service_types": {"name": "Text block", "icon": "Box", "schema": {}},
                 "content_entries": [
                     {
                         "locale": "en",
