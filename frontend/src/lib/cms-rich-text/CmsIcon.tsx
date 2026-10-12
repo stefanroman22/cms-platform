@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.2.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.2.1 — do not edit; re-sync instead.
 import type { ReactNode } from "react";
 import type { CmsIconValue } from "./theme";
 

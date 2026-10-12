@@ -178,6 +178,9 @@ const item = items.find((i) => i.slug === slugify(params.slug)); // tolerant of 
 `""` for text with no Latin letters. Generate `generateStaticParams`/links from the stored slug,
 never from the title.
 
+Kit `1.2.1` fixes `slugify` so non-ASCII punctuation (en/em dashes, NBSP, `·`, emoji) separates
+words instead of joining them (`javítás–karbantartás` → `javitas-karbantartas`); re-sync sites on `1.2.0`.
+
 ## 6. Formats
 
 - **`plain`** — a bare string, no markup. Machine values: URLs, phone numbers, tags, IDs.

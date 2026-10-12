@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.2.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.2.1 — do not edit; re-sync instead.
 import { Fragment, createElement, type ElementType, type ReactNode } from "react";
 import { isHtml } from "./detect";
 import { legacyToHtml } from "./legacy";

@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.2.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.2.1 — do not edit; re-sync instead.
 import type { LinkHTMLAttributes } from "react";
 import { googleFontsHref, themeCss, type CmsTheme } from "./theme";
 

@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.2.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.2.1 — do not edit; re-sync instead.
 // Legacy (pre-rich-text) text → canonical HTML. 1:1 port of backend services/rich_text_legacy.py;
 // both are pinned by fixtures/legacy-vectors.json — change them together.
 import { escapeAttr, escapeText } from "./serialize";

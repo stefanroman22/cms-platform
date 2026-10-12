@@ -37,6 +37,14 @@ def slugify(text: object) -> str:
     decomposed = unicodedata.normalize("NFKD", text)
     no_marks = "".join(ch for ch in decomposed if not unicodedata.category(ch).startswith("M"))
     mapped = "".join(_SPECIAL.get(ch, ch) for ch in no_marks)
-    ascii_text = mapped.encode("ascii", "ignore").decode("ascii").lower()
-    slug = _NON_ALNUM_RE.sub("-", ascii_text).strip("-")
+    # ASCII letters/digits stay; any other letter or number (a script with no
+    # transliteration, e.g. 東) is dropped; everything else (dashes, NBSP, ·, &,
+    # emoji…) becomes a separator instead of silently joining two words.
+    kept = []
+    for ch in mapped:
+        if ch.isascii() and ch.isalnum():
+            kept.append(ch)
+        elif unicodedata.category(ch)[0] not in "LN":
+            kept.append("-")
+    slug = _NON_ALNUM_RE.sub("-", "".join(kept).lower()).strip("-")
     return slug[:MAX_SLUG_LENGTH].rstrip("-")

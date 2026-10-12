@@ -21,7 +21,8 @@ const SPECIAL: Record<string, string> = {
   "Œ": "oe",
 };
 const MARK_RE = /\p{M}/u;
-const NON_ASCII_RE = /[^\x00-\x7f]/g;
+const ASCII_ALNUM_RE = /^[A-Za-z0-9]$/;
+const LETTER_OR_NUMBER_RE = /[\p{L}\p{N}]/u;
 const NON_ALNUM_RE = /[^a-z0-9]+/g;
 
 /** `"Reparații și întreținere"` → `"reparatii-si-intretinere"`. Non-Latin text gives `""`. */
@@ -32,8 +33,15 @@ export function slugify(text: string): string {
     if (MARK_RE.test(ch)) continue;
     mapped += SPECIAL[ch] ?? ch;
   }
-  const slug = mapped
-    .replace(NON_ASCII_RE, "")
+  // ASCII letters/digits stay; any other letter or number (a script with no
+  // transliteration, e.g. 東) is dropped; everything else (dashes, NBSP, ·, &,
+  // emoji…) becomes a separator instead of silently joining two words.
+  let kept = "";
+  for (const ch of mapped) {
+    if (ASCII_ALNUM_RE.test(ch)) kept += ch;
+    else if (!LETTER_OR_NUMBER_RE.test(ch)) kept += "-";
+  }
+  const slug = kept
     .toLowerCase()
     .replace(NON_ALNUM_RE, "-")
     .replace(/^-+|-+$/g, "");

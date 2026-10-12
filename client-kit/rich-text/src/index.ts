@@ -1,4 +1,4 @@
-export const RICH_TEXT_KIT_VERSION = "1.2.0";
+export const RICH_TEXT_KIT_VERSION = "1.2.1";
 export { parse, decodeEntities, MARK_TAGS, INLINE_TAGS, HEADING_TAGS, BLOCK_TAGS, type RichNode, type RichElement } from "./parse";
 export { safeHref, MAX_HREF_LENGTH } from "./href";
 export { isHtml } from "./detect";
