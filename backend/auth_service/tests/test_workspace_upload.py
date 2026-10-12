@@ -183,3 +183,109 @@ def test_html_still_denied(client, upload_env):
     r = _post(client, "x.html", b"<script></script>", "text/html")
     assert r.status_code == 422
     storage.upload.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("service_type", "name", "mime", "bare"),
+    [
+        ("file_download", "x.txt", "text/html; charset=utf-8", "text/html"),
+        ("file_download", "x.txt", "TEXT/HTML", "text/html"),
+        ("file_download", "feed.dat", "application/xml", "application/xml"),
+        ("file_download", "feed.dat", "text/xml", "text/xml"),
+        ("file_download", "feed.dat", "application/atom+xml", "application/atom+xml"),
+        ("image", "x.png", "application/atom+xml", "application/atom+xml"),
+        ("file_download", "x.dat", "application/xhtml+xml", "application/xhtml+xml"),
+        ("file_download", "x.dat", "application/javascript", "application/javascript"),
+        ("file_download", "x.dat", "text/javascript", "text/javascript"),
+        ("file_download", "x.dat", "application/ecmascript", "application/ecmascript"),
+        ("file_download", "x.dat", "text/ecmascript; charset=utf-8", "text/ecmascript"),
+    ],
+)
+def test_active_document_mime_denied(client, upload_env, service_type, name, mime, bare):
+    storage = upload_env(service_type)
+    r = _post(client, name, b"<x/>", mime)
+    assert r.status_code == 422
+    assert r.json()["detail"] == f"File type '{bare}' is not allowed (potential stored-XSS vector)."
+    storage.upload.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "name", ["x.html", "x.HTM", "x.xhtml", "x.xht", "x.xml", "x.js", "x.mjs", "x.svgz"]
+)
+def test_active_document_extension_denied_whatever_the_mime(client, upload_env, name):
+    storage = upload_env("file_download")
+    r = _post(client, name, b"%PDF", "application/pdf")
+    assert r.status_code == 422
+    assert r.json()["detail"] == (
+        "File type 'application/pdf' is not allowed (potential stored-XSS vector)."
+    )
+    storage.upload.assert_not_called()
+
+
+@pytest.mark.parametrize("name", ["x.html.", "x.html ", "x.HTML. ", "x.js..", "x.html. ."])
+def test_extension_deny_ignores_trailing_dots_and_spaces(client, upload_env, name):
+    storage = upload_env("file_download")
+    r = _post(client, name, b"%PDF", "application/pdf")
+    assert r.status_code == 422
+    assert r.json()["detail"] == (
+        "File type 'application/pdf' is not allowed (potential stored-XSS vector)."
+    )
+    storage.upload.assert_not_called()
+
+
+def test_storage_extension_uses_cleaned_filename(client, upload_env):
+    storage = upload_env("image")
+    r = _post(client, "photo.PNG. ", b"PNG", "image/png")
+    assert r.status_code == 200
+    assert _uploaded(storage)[0].endswith(".png")
+
+
+@pytest.mark.parametrize(
+    "mime", ["text/html charset=utf-8", "image/png/x", "image", "/png", "image/", "im age/png"]
+)
+def test_malformed_mime_rejected(client, upload_env, mime):
+    storage = upload_env("file_download")
+    r = _post(client, "x.bin", b"data", mime)
+    assert r.status_code == 422
+    assert r.json()["detail"] == f"File type '{mime}' is not allowed."
+    storage.upload.assert_not_called()
+
+
+def test_missing_content_type_stored_as_octet_stream(client, upload_env):
+    storage = upload_env("file_download")
+    r = _post(client, "x.bin", b"data", "")
+    assert r.status_code == 200
+    assert _uploaded(storage)[2]["content-type"] == "application/octet-stream"
+
+
+def test_svgz_denied_on_image_service(client, upload_env):
+    storage = upload_env("image")
+    r = _post(client, "x.svgz", b"\x1f\x8b", "image/svg+xml")
+    assert r.status_code == 422
+    storage.upload.assert_not_called()
+
+
+def test_svg_mime_with_charset_is_sanitised_and_stored_bare(client, upload_env):
+    storage = upload_env("repeater")
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>x</script><g/></svg>'
+    r = _post(client, "icon.svg", svg, "image/svg+xml; charset=utf-8")
+    assert r.status_code == 200
+    _, body, opts = _uploaded(storage)
+    assert b"script" not in body
+    assert opts["content-type"] == "image/svg+xml"
+    assert r.json()["mime_type"] == "image/svg+xml"
+
+
+def test_uppercase_png_accepted_and_stored_lowercase(client, upload_env):
+    storage = upload_env("image")
+    r = _post(client, "a.png", b"PNG", "IMAGE/PNG")
+    assert r.status_code == 200
+    assert _uploaded(storage)[2]["content-type"] == "image/png"
+    assert r.json()["mime_type"] == "image/png"
+
+
+def test_png_with_params_stored_bare(client, upload_env):
+    storage = upload_env("file_download")
+    r = _post(client, "a.png", b"PNG", "image/png; foo=bar")
+    assert r.status_code == 200
+    assert _uploaded(storage)[2]["content-type"] == "image/png"

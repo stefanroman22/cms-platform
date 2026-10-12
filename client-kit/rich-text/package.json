@@ -1,6 +1,6 @@
 {
   "name": "@cms/rich-text-kit",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "Vendored rich-text renderer for CMS client sites (ADR-0010). Zero runtime deps besides React.",

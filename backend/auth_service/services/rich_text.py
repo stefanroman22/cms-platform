@@ -769,6 +769,7 @@ _REPEATER_TYPE_FORMAT: dict[str | None, str] = {
     "richtext": "rich",
     "url": "plain",
     "tags": "plain",
+    "slug": "plain",
     "image": "plain",
     "icon": "plain",
 }

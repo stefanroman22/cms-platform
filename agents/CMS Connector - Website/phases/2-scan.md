@@ -89,8 +89,9 @@ For each:
 The report MUST list each field's format. Classify like this:
 
 - Prose the client should be able to format -> `inline` (titles, labels, short lines) or `richtext` (bodies, descriptions, bios, anything that could hold a list).
-- Machine values stay `string`/`url`/plain: URLs, emails, phone numbers, addresses parsed by code, hours, prices used as numbers, slugs, alt text, anything feeding `href`/`tel:`/`mailto:`/`Number()`/regex.
-- Repeater `item_schema` types: `string` (plain), `inline`, `richtext`, `url`, `tags`, plus the media types `image` and `icon` (see below).
+- Machine values stay `string`/`url`/plain: URLs, emails, phone numbers, addresses parsed by code, hours, prices used as numbers, alt text, anything feeding `href`/`tel:`/`mailto:`/`Number()`/regex.
+- A per-item URL slug field is type `slug`, never `string`. A `string` slug is machine-translated as prose (EN `laptop repairs and maintenance`, spaces and all); a `slug` field is translated per locale and always stored as lowercase `a-z`, `0-9` and hyphens.
+- Repeater `item_schema` types: `string` (plain), `inline`, `richtext`, `url`, `tags`, `slug`, plus the media types `image` and `icon` (see below).
 - `key_value` entries get a per-entry `formats` map (`plain`/`inline`/`rich`, default `plain`).
 - `text_block` title/body need no config (always inline/rich).
 - Source rich text (Markdown, Portable Text, HTML in the old site) is emitted in `initial_content` as **canonical HTML** (allowed tags only), never Markdown.

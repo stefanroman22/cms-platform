@@ -13,8 +13,12 @@ from __future__ import annotations
 
 import hashlib
 
-# Repeater field types whose values are translatable text.
-_TRANSLATABLE_FIELD_TYPES = {"string", "inline", "richtext", "tags"}
+from .slug import slugify
+
+# Repeater field types whose values are translatable text. A `slug` leaf is
+# exposed with its hyphens as spaces (the engine sees words) and written back
+# slugified, so every locale stores its own URL-safe slug.
+_TRANSLATABLE_FIELD_TYPES = {"string", "inline", "richtext", "tags", "slug"}
 
 
 def repeater_schema(content: dict) -> dict[str, str | None]:
@@ -81,6 +85,8 @@ def segments_of(service_type: str, content: dict) -> dict[str, str]:
                     for j, tag in enumerate(val):
                         if isinstance(tag, str) and tag:
                             out[f"items.{item_id}.{key}.{j}"] = tag
+                elif ftype == "slug" and isinstance(val, str) and val:
+                    out[f"items.{item_id}.{key}"] = val.replace("-", " ")
                 elif isinstance(val, str) and val:
                     out[f"items.{item_id}.{key}"] = val
 
@@ -134,6 +140,9 @@ def apply_segments(content: dict, service_type: str, values: dict[str, str]) -> 
                         path = f"{base}.{j}"
                         if path in values:
                             val[j] = values[path]
+                elif ftype == "slug" and base in values and key in item:
+                    # A translation with no Latin letters keeps the existing slug.
+                    item[key] = slugify(values[base]) or slugify(val)
                 elif base in values and key in item:  # only overwrite, never insert
                     item[key] = values[base]
 

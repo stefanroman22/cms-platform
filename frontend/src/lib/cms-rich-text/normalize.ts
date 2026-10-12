@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.2.0 — do not edit; re-sync instead.
 // src/normalize.ts — 1:1 port of the canonical transform in backend services/rich_text.py.
 import { BLOCK_TAGS, HEADING_TAGS, INLINE_TAGS, MARK_TAGS, type RichElement, type RichNode } from "./parse";
 import { safeHref } from "./href";

@@ -45,6 +45,52 @@ describe("RepeaterEditor rich fields", () => {
   });
 });
 
+describe("RepeaterEditor slug fields", () => {
+  const slugSchema = [{ key: "slug", type: "slug", label: "Slug" }];
+
+  it.each([false, true])(
+    "renders a plain input that slugifies on blur (richText=%s)",
+    async (richText) => {
+      const onChange = vi.fn();
+      render(
+        <RepeaterEditor
+          initialContent={{ _schema: slugSchema, items: [{ slug: "" }] }}
+          onChange={onChange}
+          richText={richText}
+        />
+      );
+      expect(screen.queryByTestId("rte")).not.toBeInTheDocument();
+      expect(screen.getByText("URL part — letters, numbers and hyphens")).toBeInTheDocument();
+      const input = screen.getByRole("textbox");
+      await userEvent.click(input);
+      await userEvent.paste("Reparații Laptop & PC");
+      expect(onChange).toHaveBeenLastCalledWith({
+        _schema: slugSchema,
+        items: [{ slug: "Reparații Laptop & PC" }],
+      });
+      await userEvent.tab();
+      expect(onChange).toHaveBeenLastCalledWith({
+        _schema: slugSchema,
+        items: [{ slug: "reparatii-laptop-pc" }],
+      });
+      expect(input).toHaveValue("reparatii-laptop-pc");
+    }
+  );
+
+  it("does not emit on blur when the value is already a slug", async () => {
+    const onChange = vi.fn();
+    render(
+      <RepeaterEditor
+        initialContent={{ _schema: slugSchema, items: [{ slug: "laptop-repairs" }] }}
+        onChange={onChange}
+      />
+    );
+    await userEvent.click(screen.getByRole("textbox"));
+    await userEvent.tab();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
 describe("RepeaterEditor media fields", () => {
   const imageSchema = [
     { key: "banner", type: "image", label: "Banner", hint: { width: 1600, height: 600 } },

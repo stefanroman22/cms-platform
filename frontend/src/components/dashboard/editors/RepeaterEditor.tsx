@@ -6,7 +6,7 @@ import { dashboardInputCn, dashboardFieldLabelCn, dashboardSectionCardCn } from 
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { InfoTooltip } from "@/components/dashboard/InfoTooltip";
 import { ContentField, type FieldFormat } from "@/components/dashboard/rich-text/ContentField";
-import { readIcon } from "@/lib/cms-rich-text";
+import { readIcon, slugify } from "@/lib/cms-rich-text";
 import { readHint } from "./ImageHint";
 import { RepeaterImageField } from "./RepeaterImageField";
 import { IconField } from "./IconField";
@@ -14,7 +14,7 @@ import { IconField } from "./IconField";
 interface SchemaField {
   key: string;
   label: string;
-  type: "string" | "inline" | "richtext" | "url" | "tags" | "image" | "icon";
+  type: "string" | "inline" | "richtext" | "url" | "tags" | "slug" | "image" | "icon";
   hint?: { width: number; height: number };
   surface?: string;
 }
@@ -88,6 +88,26 @@ function FieldInput({
           onUpload={onUpload}
           surface={field.surface}
         />
+      </div>
+    );
+  }
+  if (field.type === "slug") {
+    // Typed freely, stored URL-safe: the backend slugifies on save with the same algorithm.
+    return (
+      <div>
+        <input
+          type="text"
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => {
+            const slug = slugify(e.target.value);
+            if (slug !== e.target.value) onChange(slug);
+          }}
+          className={dashboardInputCn}
+        />
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          URL part — letters, numbers and hyphens
+        </p>
       </div>
     );
   }

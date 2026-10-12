@@ -11,7 +11,7 @@ const { version } = JSON.parse(readFileSync(join(kitRoot, "package.json"), "utf8
 const FILES = [
   "parse.ts", "href.ts", "whitespace.ts", "detect.ts", "normalize.ts", "serialize.ts", "legacy.ts",
   "style.ts", "plainText.ts", "RichText.tsx", "splitRichWords.tsx",
-  "theme.ts", "ThemeStyles.tsx", "CmsIcon.tsx", "index.ts", "cms-rich.css",
+  "theme.ts", "ThemeStyles.tsx", "CmsIcon.tsx", "slug.ts", "index.ts", "cms-rich.css",
 ];
 const [target, flag] = process.argv.slice(2);
 if (!target) {

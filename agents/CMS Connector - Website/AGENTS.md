@@ -133,7 +133,7 @@ pattern above so the same class of bug can't reappear.
 
 ### Field formats and rich text contract (ADR-0010)
 
-Every text field has a format: `plain`, `inline` or `rich`. Repeater `item_schema` text types are `string`, `inline`, `richtext`, `url`, `tags` (plus the media types `image` and `icon`, below); `key_value` services carry a per-entry `formats` map (seeded as `_formats`); `text_block` title/body are always inline/rich. Stored values are canonical HTML, never Markdown. Generated sites MUST:
+Every text field has a format: `plain`, `inline` or `rich`. Repeater `item_schema` text types are `string`, `inline`, `richtext`, `url`, `tags`, `slug` (plus the media types `image` and `icon`, below); a per-item URL slug field is always `slug`, never `string`; `key_value` services carry a per-entry `formats` map (seeded as `_formats`); `text_block` title/body are always inline/rich. Stored values are canonical HTML, never Markdown. Generated sites MUST:
 
 - vendor the kit from `client-kit/rich-text` (sync script) and import `cms-rich.css`;
 - render CMS prose with `<RichText>` (never `react-markdown`, never `dangerouslySetInnerHTML`), and never place a rich value inside `<p>`;
@@ -187,6 +187,7 @@ For multilingual sites (manifest `locales` has >1 entry):
 ## Glossary
 
 - **Field format** — `plain` | `inline` | `rich`. Repeater types: `string`=plain, `inline`, `richtext`; `key_value` per-entry via `formats`/`_formats`; seeds carry canonical HTML for inline/rich (ADR-0010).
+- **Slug field** — repeater `slug`: one URL path segment per item (`/services/<slug>`), localised per locale. Machine translation sees it as words; every save stores it slugified (lowercase `a-z`, `0-9`, single hyphens, max 96 chars, `""` when empty). Sites match a URL param with the kit's `slugify` (kit ≥ 1.2.0).
 - **Media field** — repeater `image` (https URL or `""`) and `icon` (`{src, mode: "tint"|"original", color: ""|"#rrggbb", name}` or null) fields; may carry `hint: {width, height}` (ints 16–8000) and, on icons, `surface`. A standalone `image` service carries the same hint as `_hint` (ADR-0011).
 - **Service** — CMS content unit. Types the connector emits: `text_block`, `image`, `gallery`, `video`, `file_download`, `key_value`, `email_config`, `repeater`, `theme` (the full catalogue lives in code: `backend/auth_service/services/service_types.py` `SERVICE_TYPES`; there is no service-types admin page or endpoint). For multilingual sites, each translatable service carries per-locale `initial_content` maps; locale-invariant assets (logo, file URLs, the theme) are marked `translatable:false`.
 - **Theme service** — `theme` type, key `general_theme`, page General, at most one per project: `{colors:[{name,value}], surfaces:[{name,value}], fonts:[…], body_font, heading_font}`. Created with `POST /projects/{slug}/services` (`service_type_slug: "theme"`, seeds an empty theme), filled with `PUT /projects/{slug}/services/general_theme` (always the default locale).

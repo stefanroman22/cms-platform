@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.2.0 — do not edit; re-sync instead.
 import { pyStrip } from "./whitespace";
 
 const CTRL = /[\x00-\x1f\x7f]/g;

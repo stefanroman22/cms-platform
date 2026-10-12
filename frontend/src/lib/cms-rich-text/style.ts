@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.2.0 — do not edit; re-sync instead.
 // span[style] (ADR-0011): the only declarations a styled span keeps.
 // 1:1 port of backend services/rich_text.canonical_style. Explicit ASCII
 // classes (no \s, \d or /i, whose Unicode behaviour differs between Python and

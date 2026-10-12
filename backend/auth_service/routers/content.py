@@ -23,7 +23,7 @@ _TS_TYPE_MAP: dict[str, str] = {
     "video": '{ _type: "video"; _label: string; url?: string; poster?: string }',
     "file_download": '{ _type: "file_download"; _label: string; url?: string; filename?: string }',
     "key_value": '{ _type: "key_value"; _label: string; entries?: Record<string, unknown>; _formats?: Record<string, "plain" | "inline" | "rich"> }',
-    "repeater": '{ _type: "repeater"; _label: string; _schema?: Array<{ key: string; label: string; type: string /* "string" | "inline" | "richtext" | "url" | "tags" | "image" | "icon" */; hint?: { width: number; height: number }; surface?: string }>; items?: Record<string, unknown>[] }',
+    "repeater": '{ _type: "repeater"; _label: string; _schema?: Array<{ key: string; label: string; type: string /* "string" | "inline" | "richtext" | "url" | "tags" | "slug" | "image" | "icon" */; hint?: { width: number; height: number }; surface?: string }>; items?: Record<string, unknown>[] }',
     "theme": '{ _type: "theme"; _label: string; colors?: {name: string; value: string}[]; surfaces?: {name: string; value: string}[]; fonts?: Array<{ family: string; source: "google"; weights: number[]; italic: boolean } | { family: string; source: "upload"; files: { url: string; weight: number; style: "normal" | "italic" }[] } | { family: string; source: "system" }>; body_font?: string; heading_font?: string }',
 }
 

@@ -70,7 +70,7 @@ def test_prompt_asks_for_general_theme_service():
 
 def test_prompt_lists_image_and_icon_field_types_with_hint_and_surface():
     p = prompts.SYSTEM_PROMPT
-    assert "string|inline|richtext|url|tags|image|icon" in p
+    assert "string|inline|richtext|url|tags|slug|image|icon" in p
     assert '"hint"' in p and '"surface"' in p
     assert "_hint" in p
     assert "<CmsIcon>" in p

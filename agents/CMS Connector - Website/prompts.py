@@ -38,12 +38,13 @@ no code fences.
 | repeater | { _schema: [{key,label,type,hint?,surface?}], items: object[] } |
 | theme | { colors: [{name,value}], surfaces: [{name,value}], fonts: Font[], body_font, heading_font } |
 
-Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/link/line breaks), `richtext` (full: paragraphs, headings h2-h4, lists, quotes, dividers), `url`, `tags`, `image` (an https URL string, `""` for none), `icon` (`{src, mode: "tint"|"original", color: ""|"#rrggbb", name}` or null).
+Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/link/line breaks), `richtext` (full: paragraphs, headings h2-h4, lists, quotes, dividers), `url`, `tags`, `slug` (one URL path segment per item, e.g. the `<slug>` in `/services/<slug>`; stored lowercase a-z, 0-9 and hyphens, translated per locale), `image` (an https URL string, `""` for none), `icon` (`{src, mode: "tint"|"original", color: ""|"#rrggbb", name}` or null).
 
 ## Field formats (rich text, ADR-0010)
 
 - Prose the client should be able to format → `inline` (titles, labels, short lines) or   `richtext` (bodies, descriptions, bios, anything that could hold a list).
-- Machine values stay `string`/`url`/plain: URLs, emails, phone numbers, addresses parsed   by code, hours, prices used as numbers, slugs, alt text, anything feeding   `href`/`tel:`/`mailto:`/`Number()`/regex.
+- Machine values stay `string`/`url`/plain: URLs, emails, phone numbers, addresses parsed   by code, hours, prices used as numbers, alt text, anything feeding   `href`/`tel:`/`mailto:`/`Number()`/regex.
+- A per-item URL slug field is type `slug`, never `string` (a `string` slug gets   machine-translated into words with spaces and breaks the URL).
 - `key_value` entries get a `formats` map on the service (`{"<entry>": "plain"|"inline"|"rich"}`),   classified the same way; entries not listed default to `plain`.
 - `text_block` title/body need no config (always inline/rich).
 - Source rich text (Markdown, Portable Text, HTML in the old site) is emitted in   `initial_content` as canonical HTML (allowed tags only: strong em u s a br p ul ol li   h2 h3 h4 blockquote hr), never Markdown. Plain-format values stay plain strings.
@@ -192,7 +193,7 @@ Return only:
       "label": "Human-readable label shown in CMS dashboard",
       "display_order": 1,
       "page_name": "Home",
-      "item_schema": [{"key":"...","label":"...","type":"string|inline|richtext|url|tags|image|icon", \
+      "item_schema": [{"key":"...","label":"...","type":"string|inline|richtext|url|tags|slug|image|icon", \
 "hint": {"width": 800, "height": 600}, "surface": "Card"}],
       "formats": {"<key_value entry>": "plain|inline|rich"},
       "initial_content": {},

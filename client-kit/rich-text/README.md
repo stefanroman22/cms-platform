@@ -161,6 +161,23 @@ const theme = readTheme(raw);          // null when absent or nothing valid
 - `recommendIconColors(theme, surfaceName?)` ranks theme colours by WCAG contrast (>= 3:1 is `ok`)
   against a named surface, or against every surface when the name is absent or unknown.
 
+## Slugs
+
+Repeater `slug` fields (kit `1.2.0`+) hold one URL path segment per locale, such as
+`/services/<slug>`. The backend stores every slug through the same `slugify` the kit exports, so
+stored values are always lowercase `a-z`, `0-9` and single hyphens, at most 96 characters (`""` when
+empty). Translations are localised: the RO item can be `reparatii-laptop` while the EN one is
+`laptop-repairs`.
+
+```ts
+import { slugify } from "@/lib/cms-rich-text";
+const item = items.find((i) => i.slug === slugify(params.slug)); // tolerant of case and accents
+```
+
+`slugify` drops accents (`ă`→`a`, `ß`→`ss`, `ø`→`o`), lowercases, joins words with `-` and returns
+`""` for text with no Latin letters. Generate `generateStaticParams`/links from the stored slug,
+never from the title.
+
 ## 6. Formats
 
 - **`plain`** — a bare string, no markup. Machine values: URLs, phone numbers, tags, IDs.

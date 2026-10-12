@@ -43,7 +43,7 @@ Code session, revoke the old token, log it above.
 |---|---|
 | Vercel → `cms-backend-roman`, `roman-technologies` → Deployment Protection | Production OFF; preview SSO optional |
 | Vercel → every client project → Deployment Protection | Production AND preview OFF (the dashboard's preview link must open without a login). The connector sets this; retrofit with `scripts/disable_vercel_auth.py` |
-| Supabase → Storage → `cms-files` → Configuration | `file_size_limit` 52428800 (mirrors `MAX_FILE_SIZE` in `routers/workspace.py`); `allowed_mime_types` = the `_MIME_TO_EXT` list, **never** `image/svg+xml` (stored-XSS sink); `public` true |
+| Supabase → Storage → `cms-files` → Configuration | `file_size_limit` 52428800 (mirrors `MAX_FILE_SIZE` in `routers/workspace.py`); `allowed_mime_types` = `image/jpeg image/png image/gif image/webp image/svg+xml video/mp4 video/webm application/pdf font/woff2 font/woff font/ttf font/otf` (migration `2026_10_11_cms_files_bucket_svg_fonts.sql`; `image/svg+xml` is allowed only because every SVG is rewritten by `services/svg_sanitize.py` before storage, ADR-0011 — never add `text/html` or any XML/script type); `public` true |
 
 ## Threat model
 

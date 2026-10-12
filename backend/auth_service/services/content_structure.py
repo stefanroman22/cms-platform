@@ -15,9 +15,12 @@ import re
 
 from .rich_text import FORMATS
 from .segments import repeater_schema
+from .slug import slugify
 from .theme import normalize_hex
 
-VALID_REPEATER_TYPES = frozenset({"string", "inline", "richtext", "url", "tags", "image", "icon"})
+VALID_REPEATER_TYPES = frozenset(
+    {"string", "inline", "richtext", "url", "tags", "slug", "image", "icon"}
+)
 _MEDIA_TYPES = frozenset({"image", "icon"})
 HINT_MIN, HINT_MAX = 16, 8000
 MAX_SURFACE_LENGTH = 40
@@ -192,3 +195,34 @@ def normalize_media_fields(content: dict) -> dict:
                         item[key] = _icon_value(item[key], where)
         out.append(item)
     return {**content, "items": out}
+
+
+def normalize_slug_fields(content: dict) -> dict:
+    """Store every repeater item's `slug` field value slugified (URL-safe in
+    every locale); an empty value or null stays/becomes `""`, a number is kept
+    as its text, and any other non-string is rejected."""
+    if not isinstance(content, dict):
+        return content
+    slug_keys = [k for k, t in repeater_schema(content).items() if t == "slug"]
+    items = content.get("items")
+    if not slug_keys or not isinstance(items, list):
+        return content
+    out = []
+    for idx, item in enumerate(items):
+        if isinstance(item, dict):
+            item = dict(item)
+            for key in slug_keys:
+                if key in item:
+                    item[key] = _slug_value(item[key], f"items[{idx}].{key}")
+        out.append(item)
+    return {**content, "items": out}
+
+
+def _slug_value(value: object, where: str) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        value = str(value)
+    if not isinstance(value, str):
+        raise StructureError(f"{where} must be a string")
+    return slugify(value)

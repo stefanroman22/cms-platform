@@ -1,5 +1,6 @@
 import copy
 import logging
+import re
 import secrets
 import string
 import uuid
@@ -42,6 +43,7 @@ from ..services.content_structure import (
     _validate_schema,
     apply_structure_rules,
     normalize_media_fields,
+    normalize_slug_fields,
 )
 from ..services.password_changed_email import send_password_changed_email
 from ..services.rich_text import RichTextFieldError, field_formats, normalize_content
@@ -80,17 +82,40 @@ _ALLOWED_MIME: dict[str, str | None] = {
     "theme": None,  # validated by extension (_FONT_EXT_TO_MIME)
 }
 
-# Explicit deny — INFRA-004. These types render as active documents from
-# a public URL, making them a stored-XSS sink. SVG (also XML that can
-# carry inline <script>) is no longer denied: every SVG upload is
-# rewritten by services/svg_sanitize.py first (ADR-0011).
+# Explicit deny — INFRA-004. These types render as active documents (or run
+# as scripts) from a public URL, making them a stored-XSS sink. Any other
+# `+xml` type is denied too (_is_denied_mime). SVG (also XML that can carry
+# inline <script>) is not denied: every SVG upload is rewritten by
+# services/svg_sanitize.py first (ADR-0011).
 _DENIED_MIME: frozenset[str] = frozenset(
     {
         "text/html",
         "application/xhtml+xml",
+        "text/xml",
+        "application/xml",
+        "application/javascript",
+        "text/javascript",
+        "application/ecmascript",
+        "text/ecmascript",
         "application/x-shockwave-flash",
     }
 )
+# Denied whatever MIME the browser declares. `.svgz` is gzip-compressed, so
+# it cannot be sanitised.
+_DENIED_EXT: frozenset[str] = frozenset(
+    {".html", ".htm", ".xhtml", ".xht", ".xml", ".js", ".mjs", ".svgz"}
+)
+
+
+# A bare MIME type is `type/subtype`; anything else is refused before any other check.
+_MIME_RE = re.compile(r"^[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*$")
+
+
+def _is_denied_mime(bare_mime: str) -> bool:
+    return bare_mime in _DENIED_MIME or (
+        bare_mime.endswith("+xml") and bare_mime != "image/svg+xml"
+    )
+
 
 # Theme uploads are font files. Browsers send odd MIME types for fonts,
 # so the extension decides and the stored content-type is set from it.
@@ -361,7 +386,8 @@ async def save_service(
     # project is rich-text-enabled, every inline/rich leaf is canonicalised
     # (sanitised + limit-checked) before it is ever persisted or translated.
     # Theme content and repeater image/icon values are validated on every save,
-    # whatever the rich-text version (ADR-0011).
+    # whatever the rich-text version (ADR-0011); repeater slug values are stored
+    # slugified.
     version = int(project.get("rich_text_version") or 0)
     d = by_locale.get(default_locale) or {}
     t = by_locale.get(loc) or {}
@@ -380,7 +406,7 @@ async def save_service(
         if service_type == "theme":
             content_in = normalize_theme(content_in, storage_prefix=_storage_prefix(project_slug))
         elif service_type == "repeater":
-            content_in = normalize_media_fields(content_in)
+            content_in = normalize_slug_fields(normalize_media_fields(content_in))
         if version >= 1:
             content_in = normalize_content(service_type, content_in)
     except StructureError as exc:
@@ -507,9 +533,22 @@ async def upload_file(
             detail=f"Service type '{service_type}' does not support file uploads.",
         )
 
-    # MIME type validation
+    # MIME type validation. Every check uses the bare type, so neither
+    # "TEXT/HTML; charset=utf-8" nor "IMAGE/SVG+XML; charset=utf-8" slips past.
     mime = file.content_type or "application/octet-stream"
-    original_suffix = Path(file.filename or "").suffix.lower()
+    bare = mime.split(";", 1)[0].strip().lower()
+    if not _MIME_RE.match(bare):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"File type '{mime}' is not allowed.",
+        )
+    # Trailing dots/spaces ("x.html.", "x.html ") must not hide the real extension.
+    original_suffix = Path((file.filename or "").strip().rstrip(". ")).suffix.lower()
+    if _is_denied_mime(bare) or original_suffix in _DENIED_EXT:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"File type '{bare}' is not allowed (potential stored-XSS vector).",
+        )
     if service_type == "theme":
         font_mime = _FONT_EXT_TO_MIME.get(original_suffix)
         if font_mime is None:
@@ -517,22 +556,15 @@ async def upload_file(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Theme uploads accept font files (.woff2, .woff, .ttf, .otf)",
             )
-        mime = font_mime
-    # Compare the bare type: "IMAGE/SVG+XML; charset=utf-8" must not skip sanitising.
-    bare_mime = mime.split(";", 1)[0].strip().lower()
-    is_svg = bare_mime == "image/svg+xml" or original_suffix == ".svg"
+        bare = font_mime
+    is_svg = bare == "image/svg+xml" or original_suffix == ".svg"
     if is_svg:
-        mime = "image/svg+xml"
-    if mime in _DENIED_MIME:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"File type '{mime}' is not allowed (potential stored-XSS vector).",
-        )
+        bare = "image/svg+xml"
     allowed_prefix = _ALLOWED_MIME[service_type]
-    if allowed_prefix is not None and not mime.startswith(allowed_prefix):
+    if allowed_prefix is not None and not bare.startswith(allowed_prefix):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"File type '{mime}' is not allowed for service type '{service_type}'. Expected: {allowed_prefix}*",
+            detail=f"File type '{bare}' is not allowed for service type '{service_type}'. Expected: {allowed_prefix}*",
         )
 
     # Read + size check
@@ -560,7 +592,7 @@ async def upload_file(
     if is_svg:
         ext = ".svg"
     else:
-        ext = original_suffix if original_suffix else _MIME_TO_EXT.get(mime, "")
+        ext = original_suffix if original_suffix else _MIME_TO_EXT.get(bare, "")
     storage_path = f"{project_slug}/{service_key}/{uuid.uuid4()}{ext}"
 
     # Upload via service role client (bypasses RLS)
@@ -569,7 +601,7 @@ async def upload_file(
         sb_admin.storage.from_(STORAGE_BUCKET).upload(
             path=storage_path,
             file=content,
-            file_options={"content-type": mime, "upsert": "false"},
+            file_options={"content-type": bare, "upsert": "false"},
         )
     except StorageApiError as exc:
         # The bucket's own allow-list (mime types, size) has the last word.
@@ -584,7 +616,7 @@ async def upload_file(
         "url": public_url,
         "filename": file.filename,
         "size": len(content),
-        "mime_type": mime,
+        "mime_type": bare,
     }
 
 
