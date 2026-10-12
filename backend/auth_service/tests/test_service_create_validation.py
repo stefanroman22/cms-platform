@@ -22,6 +22,31 @@ def test_accepts_plain_lowercase_and_digits():
     assert m.service_key == "reviews2"
 
 
+def test_repeater_item_field_hint_and_surface_optional():
+    m = ServiceCreateRequest(
+        service_type_slug="repeater",
+        service_key="services_list",
+        item_schema=[
+            {"key": "t", "label": "T", "type": "string"},
+            {
+                "key": "i",
+                "label": "I",
+                "type": "icon",
+                "hint": {"width": 64, "height": 64},
+                "surface": "Dark",
+            },
+        ],
+    )
+    assert m.item_schema[0].hint is None and m.item_schema[0].surface is None
+    assert m.item_schema[1].hint == {"width": 64, "height": 64}
+    assert m.item_schema[1].surface == "Dark"
+    assert m.item_schema[0].model_dump(exclude_none=True) == {
+        "key": "t",
+        "label": "T",
+        "type": "string",
+    }
+
+
 @pytest.mark.parametrize("bad", ["a/b", "a.b", "Service_Key", "with space", "a-b", "", "x" * 65])
 def test_rejects_storage_unsafe_or_uppercase(bad):
     with pytest.raises(ValidationError):

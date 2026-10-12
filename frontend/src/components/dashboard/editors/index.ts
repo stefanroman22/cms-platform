@@ -23,6 +23,7 @@ import { VideoEditor } from "./VideoEditor";
 import { FileDownloadEditor } from "./FileDownloadEditor";
 import { KeyValueEditor } from "./KeyValueEditor";
 import { RepeaterEditor } from "./RepeaterEditor";
+import { ThemeEditor } from "./ThemeEditor";
 
 export const EDITOR_MAP: Record<string, ComponentType<EditorProps>> = {
   text_block: TextBlockEditor,
@@ -34,4 +35,5 @@ export const EDITOR_MAP: Record<string, ComponentType<EditorProps>> = {
   file_download: FileDownloadEditor,
   key_value: KeyValueEditor,
   repeater: RepeaterEditor,
+  theme: ThemeEditor,
 };

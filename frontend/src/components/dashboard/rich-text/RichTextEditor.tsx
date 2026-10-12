@@ -23,8 +23,38 @@ export interface RichTextEditorProps {
   onReady?: (editor: Editor) => void;
 }
 
+const PASTED_PROPS = ["color", "font-family", "font-size"];
+
+/**
+ * Drops the colour, font and size declarations from pasted HTML, so a paste
+ * (e.g. from Google Docs or Word) never creates styled spans. Goes through the
+ * CSSOM so a `font:` shorthand is caught too; the remaining longhands survive,
+ * so style-based bold/italic is still recognised. The editor's own clipboard
+ * (ProseMirror's `data-pm-slice` marker) is left alone: its spans are canonical.
+ */
+function stripPastedStyles(html: string): string {
+  const tpl = document.createElement("template");
+  tpl.innerHTML = html;
+  if (tpl.content.querySelector("[data-pm-slice]")) return html;
+  tpl.content.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
+    const s = el.style;
+    if (!PASTED_PROPS.some((p) => s.getPropertyValue(p))) return;
+    PASTED_PROPS.forEach((p) => s.removeProperty(p));
+    // Rewritten from the remaining longhands (what browsers serialise anyway):
+    // jsdom keeps the `font` shorthand as an item and in cssText after removal.
+    const kept = Array.from({ length: s.length }, (_, i) => s.item(i))
+      .filter((p) => p !== "font")
+      .map((p) => `${p}:${s.getPropertyValue(p)}`)
+      .join(";");
+    if (kept) el.setAttribute("style", kept);
+    else el.removeAttribute("style");
+  });
+  return tpl.innerHTML;
+}
+
 /** Inline paste: an inline document holds one paragraph, so flatten blocks to <br>. */
-const inlinePaste = (html: string) => `<p>${serialize(normalizeInline(parse(html).children))}</p>`;
+const inlinePaste = (html: string) =>
+  `<p>${serialize(normalizeInline(parse(stripPastedStyles(html)).children))}</p>`;
 
 /**
  * Inline mode plain-text paste: the document allows exactly one paragraph, so
@@ -84,7 +114,7 @@ export function RichTextEditor({
           mode === "rich" ? "min-h-[10rem]" : "min-h-[2.25rem]"
         }`,
       },
-      transformPastedHTML: mode === "inline" ? inlinePaste : undefined,
+      transformPastedHTML: mode === "inline" ? inlinePaste : stripPastedStyles,
       clipboardTextParser: mode === "inline" ? inlineClipboardTextParser : undefined,
       handleKeyDown: (_view: unknown, event: KeyboardEvent) => {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {

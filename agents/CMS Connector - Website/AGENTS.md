@@ -66,16 +66,18 @@ surface a clear remediation. Do not silently skip.
 ## Hard rules — what is / isn't a CMS service
 
 **Always include** (Phase 2 surfaces them as candidates):
-- General section: display name, logo if `<folder_name>/public/` has one
+- General section: display name, logo if `<folder_name>/public/` has one, and the `general_theme` service (palette, surfaces, fonts)
 - Contact: email, phone, location, schedule (if business has hours)
 - Domain-specific sections: about, hobbies, projects, experience (portfolio); menu (food/drink); about-us text; service catalogue (if business sells services — every per-service field must map to a repeater field)
+- Every image, illustration and content icon (as image/icon fields, see "Theme, images and icons contract" below); UI-control icons stay in code
 
 **Never include**:
 - Button / CTA labels
 - Navigation items
 - Page-level routes / page metadata
 - Hard-coded UI affordance copy ("Loading…", "Subscribe", form-field placeholders)
-- Class names, design tokens, animation config, breakpoints
+- Class names, design tokens, animation config, breakpoints (the palette and fonts go only into `general_theme`)
+- The favicon and OG generator assets (they stay in code)
 - Test fixtures, mock data
 - The language-switcher control and its locale labels (chrome, not content) — but DO detect the locale set and import per-locale CONTENT as first-class CMS data
 
@@ -119,6 +121,9 @@ keys. Concretely:
 - The operator MUST be free to type any key in the CMS and see the
   field render with a sensible icon. No naming convention enforced
   on them.
+- These heuristic contact icons are the one exception to "every content
+  icon is a CMS icon field" (ADR-0011): a `key_value` service has no icon
+  field, so its icons stay picked by the resolver.
 
 This was a real bug: an early generated site (`it-global-services`)
 hardcoded `phone | email | address | hours` as the only valid keys.
@@ -128,7 +133,7 @@ pattern above so the same class of bug can't reappear.
 
 ### Field formats and rich text contract (ADR-0010)
 
-Every text field has a format: `plain`, `inline` or `rich`. Repeater `item_schema` types are `string`, `inline`, `richtext`, `url`, `tags`; `key_value` services carry a per-entry `formats` map (seeded as `_formats`); `text_block` title/body are always inline/rich. Stored values are canonical HTML, never Markdown. Generated sites MUST:
+Every text field has a format: `plain`, `inline` or `rich`. Repeater `item_schema` text types are `string`, `inline`, `richtext`, `url`, `tags` (plus the media types `image` and `icon`, below); `key_value` services carry a per-entry `formats` map (seeded as `_formats`); `text_block` title/body are always inline/rich. Stored values are canonical HTML, never Markdown. Generated sites MUST:
 
 - vendor the kit from `client-kit/rich-text` (sync script) and import `cms-rich.css`;
 - render CMS prose with `<RichText>` (never `react-markdown`, never `dangerouslySetInnerHTML`), and never place a rich value inside `<p>`;
@@ -137,6 +142,18 @@ Every text field has a format: `plain`, `inline` or `rich`. Repeater `item_schem
 - define `--cms-rich-*` on every surface and write `cms-rich-text.formats.json`.
 
 A new site must ship the kit before its project's `rich_text_version` is 1. See [ADR-0010](../../docs/decisions/0010-rich-text-content.md) and the [kit README](../../client-kit/rich-text/README.md).
+
+### Theme, images and icons contract (ADR-0011)
+
+Every generated site is built on these five principles (the Website Builder, the Design Prompt creator and the skills carry the same wording):
+
+1. **Every image and illustration is a CMS image field** (standalone `image` service or a repeater `image` field) with a `hint: {width, height}` matching the slot's rendered aspect at 2× density (e.g. full-width banner 1600×600, card 800×600, avatar 400×400). The design's artwork is uploaded as the seed value (or kept as the in-code fallback when it is an animated SVG component). Only the favicon/OG generator assets stay in code.
+2. **Every content icon is a CMS icon field** (icons on services, features, items, contact methods and the like; `icon` repeater field, value `{src, mode, color, name}`) with `surface` set to the theme surface it sits on; rendered via the kit's `<CmsIcon>`; the design's icon (or a matching Lucide icon) is the seed; when empty, sites fall back to their designed icon. UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code. Contact-method icons stay heuristic only where the contact service is `key_value` (see above).
+3. **Every project gets a `general_theme` service** (`theme` type, page General) seeded from the design: palette colours (named), surfaces (page light/dark, card, header, footer), fonts (Google by default, weights actually used, italic only if used), `body_font`, `heading_font`. Sites render `<ThemeStyles theme>` in the root layout/head and use `var(--cms-font-body, <bundled default>)` / `var(--cms-font-heading, …)` for font tokens; the bundled default (`@fontsource` for Vite sites, `next/font` for Next sites) stays as fallback. Theme colours are recommendations; do not drive the site palette from them.
+4. **Rich text may contain styled spans** (ADR-0011): sites render through the kit `<RichText>` (kit ≥ 1.1.0), never strip `style` themselves. Content may carry span colours/fonts/sizes chosen by the client; themes keep `--cms-rich-*` for marks; check AA contrast of the theme palette against its surfaces.
+5. **Test matrix additions** (Phase 5 5i): swap an image in draft → preview shows the new URL; set an icon (Lucide pick) with a colour → preview shows a `.cms-icon` with that `background-color`; set `body_font` to a different Google font → computed `font-family` of `body` starts with it; save a title with a span colour → rendered span has that colour; empty image/icon → fallback renders, no layout gap.
+
+Read the values with the kit (`readTheme`, `readIcon`; `googleFontsHref`/`fontStack`/`recommendIconColors` when a site needs them; see the kit README section "Theme, fonts and icons"). `hint`, `surface` and `_hint` are admin/agent-set structure: a client save never changes them. Themes, images and icons are never translated. Example pattern for Next sites: it-global-services (`src/app/[locale]/layout.tsx` ThemeStyles + `next/font` fallback, `src/app/globals.css` font tokens, `src/components/ui/ServiceCard.tsx` CmsIcon with an animated-scene fallback, `src/app/[locale]/services/[slug]/ServicePageContent.tsx` banner image, `src/lib/cms.ts` `theme()` accessor). See [ADR-0011](../../docs/decisions/0011-theme-styled-text-and-media-fields.md).
 
 ### Booking (headless) contract
 
@@ -170,8 +187,10 @@ For multilingual sites (manifest `locales` has >1 entry):
 ## Glossary
 
 - **Field format** — `plain` | `inline` | `rich`. Repeater types: `string`=plain, `inline`, `richtext`; `key_value` per-entry via `formats`/`_formats`; seeds carry canonical HTML for inline/rich (ADR-0010).
-- **Service** — CMS content unit. Eight types: `text_block`, `image`, `gallery`, `video`, `file_download`, `key_value`, `email_config`, `repeater`. For multilingual sites, each translatable service carries per-locale `initial_content` maps; locale-invariant assets (logo, file URLs) are marked `translatable:false`.
-- **Manifest** — JSON the agent emits. Slim variant `cms.config.json` (in client repo), full variant `cms-provision.json` (admin keeps). For multilingual sites, the manifest carries top-level `locales` (array, e.g. `["en","nl"]`) and `default_locale` (string), plus per-locale `initial_content` maps inside each service. Single-locale manifests stay flat (no per-locale nesting). The manifest may also carry an optional top-level `booking` block (see below).
+- **Media field** — repeater `image` (https URL or `""`) and `icon` (`{src, mode: "tint"|"original", color: ""|"#rrggbb", name}` or null) fields; may carry `hint: {width, height}` (ints 16–8000) and, on icons, `surface`. A standalone `image` service carries the same hint as `_hint` (ADR-0011).
+- **Service** — CMS content unit. Types the connector emits: `text_block`, `image`, `gallery`, `video`, `file_download`, `key_value`, `email_config`, `repeater`, `theme` (the full catalogue lives in code: `backend/auth_service/services/service_types.py` `SERVICE_TYPES`; there is no service-types admin page or endpoint). For multilingual sites, each translatable service carries per-locale `initial_content` maps; locale-invariant assets (logo, file URLs, the theme) are marked `translatable:false`.
+- **Theme service** — `theme` type, key `general_theme`, page General, at most one per project: `{colors:[{name,value}], surfaces:[{name,value}], fonts:[…], body_font, heading_font}`. Created with `POST /projects/{slug}/services` (`service_type_slug: "theme"`, seeds an empty theme), filled with `PUT /projects/{slug}/services/general_theme` (always the default locale).
+- **Manifest** — JSON the agent emits. Slim variant `cms.config.json` (in client repo; records each service's `type`/`page`, plus `media` for repeater image/icon fields and `hint` for image services), full variant `cms-provision.json` (admin keeps). For multilingual sites, the manifest carries top-level `locales` (array, e.g. `["en","nl"]`) and `default_locale` (string), plus per-locale `initial_content` maps inside each service. Single-locale manifests stay flat (no per-locale nesting). The manifest may also carry an optional top-level `booking` block (see below).
 - **Booking service** — headless booking backend where one tenant equals one CMS project. The tenant is addressed by its `public_slug` (same slug as the CMS project). The booking service owns its own DB tables for resources, services, hours, and bookings; the CMS connector provisions them via admin endpoints during Phase 4.
 - **Manifest `booking` block** — optional top-level block in the manifest (parallel to `locales`). When present it signals that the site has scheduling intent and describes how to provision the booking service. Fields: `detected`, `public_slug`, `business_name`, `accent_color`, `primary_color`, `logo_url`, `locale`, `timezone`, `destination_email`, `reminders`, `services` (list with `duration_min`), `resources` (list with `type`), `hours` (list with weekday 0=Sun..6=Sat and local `start_time`/`end_time`), and `ui_wiring` (`components` + `fallback_embed`). A plain contact form with no scheduling intent does NOT get a `booking` block — it stays on the `email_config` path.
 - **Preview token** — opaque string in `NEXT_PUBLIC_CMS_PREVIEW_TOKEN` (Next.js) or `VITE_CMS_PREVIEW_TOKEN` (Vite) authenticating draft-content reads via header `X-CMS-Preview-Token`.

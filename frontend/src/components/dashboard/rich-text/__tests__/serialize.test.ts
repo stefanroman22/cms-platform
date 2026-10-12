@@ -24,6 +24,20 @@ describe("toStored", () => {
     ).toBe('<p><a href="https://x.ro">x</a></p>');
   });
 
+  it("canonicalizes TipTap's styled spans (rgb, quoted family, spaced declarations)", () => {
+    expect(
+      toStored(
+        '<p><span style="color: rgb(30, 90, 168); font-family: &quot;Open Sans&quot;; font-size: 1.25em">x</span></p>',
+        "rich"
+      )
+    ).toBe(
+      "<p><span style=\"color:#1e5aa8;font-family:'Open Sans';font-size:1.25em\">x</span></p>"
+    );
+    expect(toStored("<p><span style=\"font-family: 'Lora'\">x</span> y</p>", "inline")).toBe(
+      "<span style=\"font-family:'Lora'\">x</span> y"
+    );
+  });
+
   it("canonicalizes inline mode the same way", () => {
     expect(
       toStored('<p><a href="https://x.ro" target="_blank" rel="noopener">x</a></p>', "inline")

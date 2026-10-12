@@ -4,9 +4,10 @@ import { legacyToHtml } from "./legacy";
 import { normalizeInline } from "./normalize";
 import { parse, type RichNode } from "./parse";
 import type { RichFormat } from "./RichText";
+import { styleCss } from "./style";
 
 export interface RichWord { key: string; text: string; node: ReactNode; breakBefore: boolean }
-type Mark = { tag: string; href?: string | null };
+type Mark = { tag: string; href?: string | null; style?: string | null };
 const EXTERNAL = /^https?:\/\//i;
 
 function wrap(text: string, marks: Mark[]): ReactNode {
@@ -18,6 +19,8 @@ function wrap(text: string, marks: Mark[]): ReactNode {
       node = EXTERNAL.test(href)
         ? createElement("a", { href, target: "_blank", rel: "noopener noreferrer" }, node)
         : createElement("a", { href }, node);
+    } else if (m.tag === "span") {
+      node = createElement("span", { className: "cms-rich-style", style: styleCss(m.style) }, node);
     } else {
       node = createElement(m.tag, null, node);
     }
@@ -54,7 +57,7 @@ export function splitRichWords(value: string | null | undefined, format: RichFor
         pendingBreak = true;
         glue = false;
       } else {
-        walk(n.children, [...marks, { tag: n.tag, href: n.href }]);
+        walk(n.children, [...marks, { tag: n.tag, href: n.href, style: n.style }]);
       }
     }
   };

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as cache from "@/lib/cache";
 
@@ -109,6 +109,30 @@ describe("ServiceEditor unsaved-work guards", () => {
   });
 });
 
+describe("ServiceEditor theme service", () => {
+  it("shows no language tabs or translation banner and always edits the default locale", async () => {
+    mockSearch = "locale=en";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ...DETAIL,
+        service_key: "general_theme",
+        service_type_slug: "theme",
+        content: { colors: [{ name: "Brand", value: "#1e5aa8" }] },
+        locale: "en",
+      }),
+    });
+    render(<ServiceEditor projectSlug="demo" serviceKey="general_theme" onBack={() => {}} />);
+    await screen.findByDisplayValue("Brand");
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(screen.queryByText(/auto-translated from/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /re-translate/i })).not.toBeInTheDocument();
+    await waitFor(() => expect(replaceSpy).toHaveBeenCalled());
+    expect(replaceSpy.mock.calls.at(-1)?.[0]).not.toContain("locale=");
+  });
+});
+
 describe("ServiceEditor save errors", () => {
   it("shows a string detail verbatim", async () => {
     mockFetch({
@@ -196,6 +220,35 @@ describe("ServiceEditor save flow", () => {
     expect(cache.get("service:demo:hero:en")).toEqual({ other: true });
     expect(onStatus).toHaveBeenCalled();
     expect(onList).toHaveBeenCalled();
+  });
+
+  it("refreshes the project theme only after a theme save", async () => {
+    mockFetch({ status: 200, body: SAVED });
+    cache.set("theme:demo", { theme: null, service_key: null });
+    const user = await renderAndType();
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await screen.findByText(/changes saved successfully/i);
+    expect(cache.get("theme:demo")).not.toBeNull();
+
+    cleanup();
+    cache.clearAll();
+    const THEME_DETAIL = {
+      ...DETAIL,
+      service_key: "general_theme",
+      service_type_slug: "theme",
+      content: { colors: [{ name: "Brand", value: "#1e5aa8" }] },
+    };
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => THEME_DETAIL,
+    });
+    cache.set("theme:demo", { theme: null, service_key: null });
+    render(<ServiceEditor projectSlug="demo" serviceKey="general_theme" onBack={() => {}} />);
+    await screen.findByDisplayValue("Brand");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    await screen.findByText(/changes saved successfully/i);
+    expect(cache.get("theme:demo")).toBeNull();
   });
 
   it("on a failed save keeps the draft and touches no cache", async () => {

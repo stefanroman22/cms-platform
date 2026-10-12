@@ -44,7 +44,7 @@ The "AI slop" phenomenon is real and documented. The causal chain: Tailwind's or
 ## Banned layouts
 
 - Centered hero with a vague subtitle + an "above-the-fold" CTA button
-- Three identical icon-card grid below the hero ("Easy / Fast / Reliable", "Strategy / Execution / Results")
+- Three identical icon-card grid below the hero ("Easy / Fast / Reliable", "Strategy / Execution / Results") — the ban is the generic filler layout, not icons: icons on real items are fine (each is a CMS icon slot the client can replace)
 - "Trusted by [greyscale logo bar]" without real logos and permission
 - Faceless 3D character illustrations holding floating UI elements (the "Notion duck" aesthetic everywhere)
 - Identical card grids for every section (cards for testimonials, cards for services, cards for team — same shape, same spacing, same shadow)
@@ -59,7 +59,7 @@ The "AI slop" phenomenon is real and documented. The causal chain: Tailwind's or
 
 - Bento grid when content doesn't have ≥ 4 genuinely distinct categories (bento for bento's sake)
 - Glassmorphism on every surface — use selectively if at all
-- Identical icon style across all components from a single icon library (Lucide/Heroicons everywhere) — mix sources or use bespoke
+- Icons as filler on every element (an icon on every heading, card and list item). One consistent icon set (Lucide or a matching line set) is fine and expected: every content icon is a CMS icon slot the client can replace or recolour (UI-control icons stay fixed), so do not mix sources to look bespoke
 - Rotating logo carousels (`<marquee>` energy)
 - "Sign up for our newsletter" modals on first visit
 - Cookie banner that takes >25% of the viewport on mobile
@@ -90,7 +90,7 @@ The "AI slop" phenomenon is real and documented. The causal chain: Tailwind's or
 - Faceless silhouette avatars for team members
 - Generic Unsplash "modern office" or "restaurant interior"
 - Faces stitched from AI generators
-- Decorative SVG illustrations from undraw.co or storyset (you'll recognize them immediately)
+- Decorative SVG illustrations from undraw.co or storyset (you'll recognize them immediately) as the *final* art. Every illustration sits in a CMS image slot with a size and an art-direction spec; a placeholder there is fine as the seed because the client replaces it
 
 ---
 
@@ -117,7 +117,7 @@ These are not aesthetic preferences — they are correctness bugs that repeatedl
 | Purple gradient | Category-bound color: terracotta/wine for restaurants; deep forest/cream for venues; high-contrast B&W + brand accent for salons |
 | Inter or system-ui | A paired display + body system from the category playbook (e.g., Fraunces + Söhne) |
 | Centered hero with subtitle + CTA | Asymmetric editorial layout — photography weighting one side, type the other — OR full-bleed photography with text overlaid lower-third |
-| Three-icon feature grid | A real menu list / real services list / real gallery / real story section |
+| Three-icon feature grid | A real menu list / real services list / real gallery / real story section (icons on real items come from one set, as CMS icon slots) |
 | "Trusted by" logo bar | Specific testimonial quotes with named real people (and real photos for venues) |
 | Uniform 8px border-radius | Differentiated radii: sharp on cards, rounded on inputs, full on chips — bound to archetype |
 | Bento grid | Editorial sections with varied widths and tighter, more characterful layouts |

@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.0.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead.
 // Text content of a stored value, for meta tags, JSON-LD, alt/aria, React keys,
 // search, tel:/mailto:. 1:1 port of backend services/rich_text.plain_text
 // (rich_text.py lines ~633-666), restricted to the "inline"/"rich" formats the

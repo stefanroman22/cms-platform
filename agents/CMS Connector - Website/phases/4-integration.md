@@ -28,6 +28,13 @@ Phase 6). Otherwise reuse the existing row.
    b. `PUT /projects/<slug>/services/<key>` (no `?locale=` param) to seed the **default locale** content. Skip seeding for `email_config`.
    c. For each **non-default locale** in `manifest.locales`: `PUT /projects/<slug>/services/<key>?locale=<l>` with that locale's `initial_content` slice (manual override import). This preserves existing human translations from `messages/<locale>.json`.
    d. **LAST** — `PATCH /admin/projects/<slug>` with `{default_locale, locales}` to set the locale set on the project row. Doing this last prevents the backend from triggering auto-translate before all per-locale imports are in place.
+   e. **Media and theme seeds (ADR-0011).** `general_theme` is created like any service (`service_type_slug: "theme"` seeds an empty theme) and filled by its default-locale `PUT /projects/<slug>/services/general_theme`; it is never seeded per locale. A non-Google font is seeded as `source: "system"` (the site's bundled `@font-face` resolves it). Then, logged in with the client session (see LEARNINGS 2026-06-17), upload each seed named in the report to its own service (`POST /projects/<slug>/services/<key>/upload`):
+      - **Standalone image services (including `general_logo`):** the design's artwork; save the returned URL in `url`, replacing the `public/` path.
+      - **Repeater image fields:** the design's artwork; save the returned URL in the item's field.
+      - **Repeater icon fields:** the design's icon SVG (or the matching Lucide icon rendered to SVG); save `{src, mode: "tint", color: "", name}`. SVGs are sanitised server-side.
+      - **Self-hosted theme fonts:** the font files the report lists (.woff2/.woff/.ttf/.otf) to `general_theme`; then `PUT /projects/<slug>/services/general_theme` again with that font as `{"family", "source": "upload", "files": [{url, weight, style}]}`.
+
+      Media fields and the theme are not translated, so one default-locale save per service plus a publish is enough.
 4. **Wire `email_config`** to Resend:
    - Set `destination_email` in the service's content.
    - Confirm backend env vars `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are set on the CMS backend Vercel project. If missing, **halt** and ask the user to set them — do not write `RESEND_API_KEY` from the agent.
@@ -102,9 +109,12 @@ non-text data (images, hours, contact, brand) from **static constants in
    - `repeater` → the namespace's items array.
    - `image` → a `site.*` url string.
    - `gallery` → a `site.*` url array.
+   - `theme` → `site.theme` (the raw `general_theme` content, read with the kit's `readTheme`).
+   - repeater `image`/`icon` fields stay on their items (URL string / icon object); they are
+     values, not messages, so never pass them through `t()` or translation.
    Inject the non-text services under a dedicated **`site`** namespace in the merged
    messages (brandName / contact / hours / heroImage / aboutImages / galleryImages /
-   …). Map service keys to the site's ACTUAL `t()` namespaces — the scan's keys
+   theme / …). Map service keys to the site's ACTUAL `t()` namespaces — the scan's keys
    often don't match the built site's namespaces, so reconcile them here.
 
    **Vite + React 19 SPA — `src/lib/cms-content.ts`:** same per-service-type mapping and
@@ -123,7 +133,11 @@ non-text data (images, hours, contact, brand) from **static constants in
    from a handle, split a one-line address, override only the TIMES on the weekly
    hours rows). Components call `resolveSite(await getMessages())` (Server) or
    `resolveSite(useMessages())` (Client) and read from it INSTEAD of importing the
-   static constant directly.
+   static constant directly. Media and theme follow the same rule: an image accessor
+   returns the CMS URL, else the designed asset (an empty CMS image renders the
+   fallback or nothing, never an empty box); icons go through
+   `readIcon(...)` → `<CmsIcon icon fallback={<DesignedIcon/>} />`; `theme` is
+   `readTheme(...)` or null.
 
    **Vite + React 19 SPA — `src/lib/cms-site.ts`:** `resolveSite(messages)` contract is
    UNCHANGED — same safe-fallback to `src/lib/site.ts` constants, same shape bridging. The only
@@ -137,7 +151,11 @@ non-text data (images, hours, contact, brand) from **static constants in
    Grep the client repo for direct imports of `lib/site.ts` constants that shadow a
    CMS service (`HERO_IMAGE`, `BUSINESS`, `HOURS`, `GALLERY_IMAGES`, …) — each such
    usage must be replaced by `resolveSite`. A service with no consumer is either
-   wired or removed from the manifest; never leave it editable-but-inert.
+   wired or removed from the manifest; never leave it editable-but-inert. Also grep for
+   hard-coded images and content icons (`<img src="/images/…"`, `lucide-react` or inline
+   `<svg>` icons on services, features, items or contact methods) outside the fallbacks:
+   every one is a CMS image/icon field. UI-control icons (menu, close, chevrons, arrows,
+   spinners, form affordances) stay in code and are not flagged.
    (Canonical reference: the samir-kapsalon `lib/cms-content.ts` + `lib/cms-site.ts`.)
 
    **The same data is often rendered in MULTIPLE places — wire ALL of them.** A
@@ -166,16 +184,25 @@ non-text data (images, hours, contact, brand) from **static constants in
 5. **Note on uploaded images:** CMS image uploads may be served as relative
    `/images/uploads/*` (committed to the client `public/`) or absolute URLs. If a
    future upload host differs from the site's `next.config` `images.remotePatterns`,
-   `next/image` will reject it — add the host (or a loader) when wiring galleries.
+   `next/image` will reject it — add the host (or a loader) when wiring galleries and
+   image fields. Render each image at its field's `hint` size (`width`/`height`
+   attributes, `object-fit: cover`) so a client upload of any size keeps the layout.
 
 6. **Rich text (ADR-0010).** Every inline/rich field must render through the kit:
    - Vendor the kit: `node <cms-repo>/client-kit/rich-text/scripts/sync-rich-text-kit.mjs <site>/src/lib/cms-rich-text` (`lib/cms-rich-text` for Next sites without `src/`); import `cms-rich.css` once (Next root layout / Vite `main.tsx`). Never hand-edit the vendored copy. Full rules: [kit README](../../../client-kit/rich-text/README.md).
    - Define `--cms-rich-*` on `:root`, the dark selector and every inverted surface. Use an accent for bold/links only where contrast is at least 4.5:1, otherwise rely on weight.
+   - Rich text may contain styled spans (ADR-0011): sync kit ≥ 1.1.0 and render through `<RichText>`; never strip `style` yourself. Content may carry span colours/fonts/sizes chosen by the client; themes keep `--cms-rich-*` for marks; check AA contrast of the theme palette against its surfaces.
    - Render rules: display prose -> `<RichText value format="inline|rich">`; rich values never inside `<p>`/`<h*>`/`<span>` (use `as="div"`); metadata/JSON-LD/`alt`/`aria-*`/keys/`href` building -> `plainText`; per-word animation -> `splitRichWords`/`<RichWords>`; inside a link/button -> `links={false}`; internal links -> `renderLink` with the router `Link`.
    - next-intl sites: read message-merged CMS values with `t.raw("key")`, never `t()`; strip with `plainText(t.raw(...))` for metadata.
    - Never use `react-markdown`/`remark-breaks` or `dangerouslySetInnerHTML` for CMS prose.
    - Write `cms-rich-text.formats.json` (`{"repeaters": {svc: {field: "inline"|"richtext"|"string"}}, "key_values": {svc: {entry: "plain"|"inline"|"rich"}}}`) for the record, matching the manifest's `item_schema`/`formats`.
    - The kit must be shipped before the project's `rich_text_version` is 1. The new-project DB default is currently 0 (see LEARNINGS), so set it to 1 only after the kit is deployed to the site; existing sites migrate via the site-rollout procedure, not here.
+
+7. **Theme, images and icons (ADR-0011).** Follow the [contract in AGENTS.md](../AGENTS.md#theme-images-and-icons-contract-adr-0011):
+   - **Theme:** render `<ThemeStyles theme={readTheme(<general_theme content>)} />` in the root layout `<head>` (Next) or the root layout component (Vite; React 19 hoists its font `<link>`s). Font tokens become `var(--cms-font-body, <bundled default>)` / `var(--cms-font-heading, …)`; the bundled default (`next/font` for Next sites, `@fontsource` for Vite sites) stays as fallback. Theme colours are recommendations; do not drive the site palette from them.
+   - **Images:** every image and illustration reads its CMS image field (resolver fallback = the designed asset, or an animated SVG component kept in code). Only the favicon/OG generator assets stay in code.
+   - **Icons:** every content icon renders `<CmsIcon icon={readIcon(value)} size=… label=… fallback={<DesignedIcon/>} />`; size it from the layout, colour comes from the icon value or `currentColor`. UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code. Contact-method icons on a `key_value` contact service stay heuristic.
+   - Next-site example pattern: it-global-services `src/app/[locale]/layout.tsx` (ThemeStyles + `next/font` fallback), `src/app/globals.css` (`--font-body: var(--cms-font-body, var(--font-open-sans)), …`), `src/components/ui/ServiceCard.tsx` (CmsIcon with an animated-scene fallback), `src/app/[locale]/services/[slug]/ServicePageContent.tsx` (banner image), `src/lib/cms.ts` (`theme()` accessor).
 
 ### 4.2 — Booking provisioning (only if `booking.detected` in manifest)
 

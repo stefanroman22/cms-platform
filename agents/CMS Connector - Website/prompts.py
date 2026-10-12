@@ -29,15 +29,16 @@ no code fences.
 | slug | shape |
 |------|-------|
 | text_block | { title?: InlineHtml, body?: RichHtml } |
-| image | { url?, alt? } |
+| image | { url?, alt?, _hint?: {width, height} } |
 | gallery | { items?: string[] } |
 | video | { url?, poster? } |
 | file_download | { url?, filename? } |
 | key_value | { entries: Record<string,string>, _formats?: Record<string,"plain"|"inline"|"rich"> } |
 | email_config | { destination_email: string } |
-| repeater | { _schema: [{key,label,type}], items: object[] } |
+| repeater | { _schema: [{key,label,type,hint?,surface?}], items: object[] } |
+| theme | { colors: [{name,value}], surfaces: [{name,value}], fonts: Font[], body_font, heading_font } |
 
-Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/link/line breaks), `richtext` (full: paragraphs, headings h2-h4, lists, quotes, dividers), `url`, `tags`.
+Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/link/line breaks), `richtext` (full: paragraphs, headings h2-h4, lists, quotes, dividers), `url`, `tags`, `image` (an https URL string, `""` for none), `icon` (`{src, mode: "tint"|"original", color: ""|"#rrggbb", name}` or null).
 
 ## Field formats (rich text, ADR-0010)
 
@@ -46,13 +47,44 @@ Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/l
 - `key_value` entries get a `formats` map on the service (`{"<entry>": "plain"|"inline"|"rich"}`),   classified the same way; entries not listed default to `plain`.
 - `text_block` title/body need no config (always inline/rich).
 - Source rich text (Markdown, Portable Text, HTML in the old site) is emitted in   `initial_content` as canonical HTML (allowed tags only: strong em u s a br p ul ol li   h2 h3 h4 blockquote hr), never Markdown. Plain-format values stay plain strings.
+- Rich text may contain styled spans (`<span style="color:#1e5aa8;font-family:'Open Sans';font-size:1.25em">`, ADR-0011): keep a source span's colour/font/size in that canonical form, never strip it.
+
+## Theme, images and icons (ADR-0011)
+
+- Every image and illustration is a CMS image field: a standalone `image` service \
+  (`_hint` in its `initial_content`) or a repeater `image` field (`hint` in its \
+  `item_schema` entry), with `{"width", "height"}` matching the slot's rendered aspect \
+  at 2x density (full-width banner 1600x600, card 800x600, avatar 400x400; integers \
+  16-8000). Per-item images (a service banner, a team portrait) are repeater `image` \
+  fields, never `url` fields. Only the favicon and OG generator assets stay in code.
+- Every content icon is a CMS icon field (icons on services, features, items, contact \
+  methods and the like): a repeater `icon` field with `surface` set to the theme \
+  surface it sits on (e.g. `"Card"`); sites render it with the kit's `<CmsIcon>` and \
+  fall back to the designed icon when it is empty. UI-control icons (menu, close, \
+  chevrons, arrows, spinners, form affordances) stay in code and are never fields. \
+  Exception: contact-method icons stay heuristic when the contact service is `key_value`.
+- Repeater image/icon values must be https URLs, so a repeater `image` field seeds \
+  `""` and an `icon` field seeds `null`; an `image` service keeps the source asset path \
+  in `url`. Phase 4 uploads the design's artwork / icon SVG (or the matching Lucide \
+  icon) as the seed. An animated SVG component stays the in-code fallback instead.
+- `hint`, `surface` and `_hint` are allowed only on `image`/`icon` fields and image services.
+- Emit exactly ONE `theme` service: `service_key` `general_theme`, `page_name` \
+  `General`, `translatable: false`, flat `initial_content` seeded from the design: \
+  named palette colours, named surfaces (page light/dark, card, header, footer), fonts \
+  (`{"family", "source": "google", "weights": [only weights actually used], "italic": \
+  true only if used}`; `{"family", "source": "system"}` for system stacks AND for any \
+  non-Google font the site self-hosts, never `"upload"`: its files are uploaded in \
+  Phase 4; name the font files in `open_questions`), \
+  `body_font`, `heading_font`. Colours are lowercase `#rrggbb`. Theme colours are \
+  recommendations; they never drive the site palette.
 
 ## Hard rules — ALWAYS
 
 - Always emit a "General" section. Even minimal sites need one. Include the display \
   name (business name / portfolio person name) as a `text_block` with `service_key` \
   `general_brand_name`. If the source contains a logo image referenced from the \
-  `public/` folder, include it as an `image` service with `service_key` `general_logo`.
+  `public/` folder, include it as an `image` service with `service_key` `general_logo`. \
+  Also include the `general_theme` service (see "Theme, images and icons").
 - For services lists, menus, projects, experience entries, hobbies, etc.: examine \
   every per-item field and ensure the `item_schema` for the corresponding `repeater` \
   service has a field for each. A missing field is the most common bug — be \
@@ -80,7 +112,8 @@ Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/l
 - Navigation menu items / nav links
 - Page-level routes / `<title>` metadata
 - UI affordance copy ("Loading…", "Subscribe", form-field placeholders)
-- CSS class names, design tokens, animation config, breakpoints, theme files
+- CSS class names, design tokens, animation config, breakpoints, theme files (the \
+  palette and fonts go only into the `general_theme` service)
 - Test fixtures, mock data, storybook entries
 - The language-switcher control and its locale labels (chrome, not content)
 
@@ -119,7 +152,8 @@ include. Otherwise exclude.
   intent stays on the `email_config` path — booking is ONLY for scheduling. \
   When the intent is ambiguous, emit the `booking` block with `"detected": true` \
   and add an open question; the human review gate decides. Extract demo values for \
-  all fields where possible (business_name, brand colors, logo, services list with \
+  all fields where possible (business_name, brand colors (the same hex values as the \
+  `general_theme` palette), logo, services list with \
   duration_min AND price (EUR — always include a price per bookable service; the \
   customer sees it and the owner can edit it later), resource/staff names, opening \
   hours as weekday 0=Sun..6=Sat with \
@@ -154,11 +188,12 @@ Return only:
   "services": [
     {
       "service_key": "snake_case",
-      "service_type_slug": "one of the eight",
+      "service_type_slug": "one of the types above",
       "label": "Human-readable label shown in CMS dashboard",
       "display_order": 1,
       "page_name": "Home",
-      "item_schema": [{"key":"...","label":"...","type":"string|inline|richtext|url|tags"}],
+      "item_schema": [{"key":"...","label":"...","type":"string|inline|richtext|url|tags|image|icon", \
+"hint": {"width": 800, "height": 600}, "surface": "Card"}],
       "formats": {"<key_value entry>": "plain|inline|rich"},
       "initial_content": {},
       "translatable": true
@@ -191,7 +226,8 @@ Return only:
   ]
 }
 
-`item_schema` is required only for `repeater`; `formats` only for `key_value` (optional). `excluded` and `open_questions` are \
+`item_schema` is required only for `repeater`; `formats` only for `key_value` (optional). `hint` goes \
+only on `image`/`icon` fields and `surface` only on `icon` fields. `excluded` and `open_questions` are \
 arrays — empty if none.
 
 For `initial_content`: when only one locale is detected, use a flat object of field \
@@ -205,7 +241,9 @@ services such as logos, image URLs, and file-download URLs that should not be \
 duplicated per locale. A service marked `translatable: false` (locale-invariant \
 assets like logos, image/file URLs) always uses the flat single-locale \
 `initial_content` form even in a multi-locale manifest — it is seeded once for \
-the default locale and not duplicated per locale.
+the default locale and not duplicated per locale. The `general_theme` and every \
+`image` service are always `translatable: false` (themes, images and icons are never \
+translated).
 
 NO additional keys, NO markdown, NO commentary outside JSON."""
 

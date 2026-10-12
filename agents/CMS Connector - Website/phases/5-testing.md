@@ -57,6 +57,7 @@ Run **all** tests below. Never claim Phase 6 success while any 5a–5h test is r
 
 - [ ] Preview URL renders the expected layout
 - [ ] All sections from the report are editable from the CMS dashboard
+- [ ] Every image and content icon on the site is a CMS image/icon field with a size hint (only favicon/OG assets and UI-control icons in code); the dashboard shows the Theme editor with the seeded palette and fonts
 - [ ] Form submission test email received
 - [ ] Production URL is live and serves published content
 - [ ] No console errors in browser dev tools on either deploy
@@ -164,8 +165,15 @@ the owner relies on — never declare the integration done without it.**
 - Assert `getComputedStyle(strong).color` equals the site's `--cms-rich-strong` on that surface.
 - Then restore the byte-identical original, as the loop below does.
 
+**Theme, image and icon probe (ADR-0011):** run each in draft, assert on cms-preview AND localhost, then restore the byte-identical original (capture it in `cms-probe-originals-{slug}.json` like the loop below; skip a check only when the site has no such field, and say so):
+- Swap an image in draft → preview shows the new URL (`img[src]` of that slot).
+- Set an icon (Lucide pick) with a colour → preview shows a `.cms-icon` with that `background-color`.
+- Set `body_font` to a different Google font → computed `font-family` of `body` starts with it.
+- Save a title with a span colour (`<span style="color:#rrggbb">`) → the rendered span has that colour.
+- Empty an image and an icon → the fallback renders, no layout gap.
+
 **Per-service loop** (sample ≤~12 services covering all types — text_block, key_value,
-repeater, image, gallery — plus every service that backs the `site` namespace; log
+repeater, image, gallery; the theme is covered by the probe above — plus every service that backs the `site` namespace; log
 exactly which services/locales were sampled and which were skipped — never silently
 truncate):
 

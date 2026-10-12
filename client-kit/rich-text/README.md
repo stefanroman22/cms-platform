@@ -9,7 +9,7 @@ for the full design (stored format, the formats taxonomy, per-project rollout ga
 - Zero runtime dependencies beyond React ≥18. Framework-agnostic: Next.js App Router (server
   and client components), Vite SPA, vite-react-ssg.
 - **Never uses `dangerouslySetInnerHTML`, `DOMParser` or `innerHTML`.** `parse.ts` is a small
-  hand-written tokenizer that recognises only the allow-listed tags (`strong em u s a br` plus
+  hand-written tokenizer that recognises only the allow-listed tags (`strong em u s span a br` plus
   `p ul ol li h2 h3 h4 blockquote hr`, and a handful of synonyms — `b`→`strong`, `i`→`em`, `div`→`p`,
   etc.) and turns them into a plain node tree (`{ type: 'text' | tag, children, href? }`) that React
   renders as real elements. Everything else — script/style/iframe/svg content, unknown tags, stray
@@ -138,19 +138,51 @@ Tailwind preflight in both v3 (unlayered, `(0,0,1)`) and v4 (`@layer base`) — 
 block margins survive without extra work. The kit puts **no rules on the wrapper element itself**, so
 any `className` you pass to `<RichText>` always applies cleanly.
 
+## Theme, fonts and icons
+
+The project's theme (palette + fonts) and CMS-editable icons ship in the same kit (ADR-0011). Both
+components are hook-free, so they work in Next.js Server Components.
+
+```tsx
+import { readTheme, ThemeStyles, CmsIcon, readIcon, recommendIconColors } from "@/lib/cms-rich-text";
+
+// layout.tsx — `raw` is the theme service from the manifest
+const theme = readTheme(raw);          // null when absent or nothing valid
+<head><ThemeStyles theme={theme} /></head>   // preconnect + Google font links + @font-face + :root vars
+
+// anywhere
+<CmsIcon icon={readIcon(content.phone_icon)} size={20} label="Phone" fallback={<PhoneSvg />} />
+```
+
+- `ThemeStyles` defines `--cms-font-body` and `--cms-font-heading` on `:root` (only for fonts present
+  in the theme). Use them: `body { font-family: var(--cms-font-body, inherit) }`.
+- `CmsIcon` tints SVGs through a CSS mask (`color` empty means `currentColor`), and renders an `<img>`
+  for `mode: "original"` or non-SVG sources. Unsafe or missing icons render `fallback`.
+- `recommendIconColors(theme, surfaceName?)` ranks theme colours by WCAG contrast (>= 3:1 is `ok`)
+  against a named surface, or against every surface when the name is absent or unknown.
+
 ## 6. Formats
 
 - **`plain`** — a bare string, no markup. Machine values: URLs, phone numbers, tags, IDs.
-- **`inline`** — HTML fragment restricted to `strong em u s a br` (plus synonyms). Produced by the
+- **`inline`** — HTML fragment restricted to `strong em u s span a br` (plus synonyms). Produced by the
   dashboard's inline editor for one-line/short fields (titles, labels, short descriptions).
 - **`rich`** — inline tags plus block tags `p ul ol li h2 h3 h4 blockquote hr`. Produced by the
   dashboard's rich editor for multi-paragraph prose (body copy, long descriptions). A `rich` value
   with no tags at all is legacy plain text and is converted with the same Markdown-lite rules as the
   one-time server-side migration (`*bold*`, single/double newlines → paragraphs, `- ` lists).
 
-The only attribute either format ever carries is `a[href]`, restricted to `http://`, `https://`,
-`mailto:`, `tel:`, `#…`, and `/…` (not `//…`, not `/\…`) — invalid or dangerous hrefs are dropped
-(the link renders as a `<span>`/plain wrapper instead), matching the backend's save-time sanitisation.
+The only attributes either format ever carries are `a[href]` and `span[style]`. `href` is restricted
+to `http://`, `https://`, `mailto:`, `tel:`, `#…`, and `/…` (not `//…`, not `/\…`) — invalid or
+dangerous hrefs are dropped (the link renders as a `<span>`/plain wrapper instead), matching the
+backend's save-time sanitisation.
+
+`span[style]` (ADR-0011, kit `1.1.0`+) keeps only `color` (`#rrggbb`; `#rgb`/`rgb()` input is
+converted), `font-family` (one family name, single-quoted, no fallback list) and `font-size` (`em`,
+0.5–4), in that order: `<span style="color:#1e5aa8;font-family:'Open Sans';font-size:1.25em">`.
+Anything else in `style` is dropped and a span left with no valid declaration is unwrapped
+(`canonicalStyle`/`parseStyle` are exported). `RichText` renders it as
+`<span class="cms-rich-style">` with the family falling back to `var(--cms-font-body, sans-serif)`.
+Kit `1.0.x` unwraps spans and keeps their text, so a site that has not re-synced shows them unstyled.
 
 ## 7. Known limits
 

@@ -64,7 +64,7 @@ viewport is a plain `<meta>`; head tags are React 19 hoisted. Set `themeColor`, 
 
 ### Images — use img with srcset, never next/image
 
-Use `<img>` with `srcset`/`sizes` (or a small `<Image>` wrapper). NEVER `next/image`. Always include `alt`, `width`, `height`, and `sizes`.
+Use `<img>` with `srcset`/`sizes` (or a small `<Image>` wrapper). NEVER `next/image`. Always include `alt`, `width`, `height`, and `sizes`. Every image's `src` comes from its CMS image field (fallback: the `public/images/` mock), and `width`/`height` match the field's `hint` (ADR-0011).
 
 **Rationale:** Performance (CLS, LCP) and a11y. The Vite/React 19 SSG stack has no `next/image` — it is a Next.js-specific component.
 **Established:** initial setup
@@ -208,8 +208,16 @@ Default to stale-while-revalidate with in-flight de-duplication and content-tier
 
 ### CMS — rich text via the kit
 
-Always vendor `client-kit/rich-text` into `src/lib/cms-rich-text/` with its sync script, import `cms-rich.css` once, and define `--cms-rich-*` on `:root`, the dark selector and every inverted surface (accent only where contrast is at least 4.5:1). Render human-prose CMS text with `<RichText>` (or `splitRichWords` for per-word animation); use `plainText` for metadata, JSON-LD, `alt`, keys and `tel:`/`mailto:`. Never `dangerouslySetInnerHTML` (except JSON-LD), never `react-markdown`, never put rich values inside `<p>`, and never put colours in CMS content.
+Always vendor `client-kit/rich-text` into `src/lib/cms-rich-text/` with its sync script, import `cms-rich.css` once, and define `--cms-rich-*` on `:root`, the dark selector and every inverted surface (accent only where contrast is at least 4.5:1). Render human-prose CMS text with `<RichText>` (or `splitRichWords` for per-word animation); use `plainText` for metadata, JSON-LD, `alt`, keys and `tel:`/`mailto:`. Never `dangerouslySetInnerHTML` (except JSON-LD), never `react-markdown`, never put rich values inside `<p>`. Content may carry span colours/fonts/sizes chosen by the client (kit ≥ 1.1.0 renders them; never strip `style` yourself); themes keep `--cms-rich-*` for marks; check AA contrast of the theme palette against its surfaces.
 
 **Rationale:** CMS text is canonical allow-listed HTML; the kit renders it without innerHTML and lets each site's theme decide how emphasis looks.
-**Established:** 2026-09-27
-**Source:** ADR-0010
+**Established:** 2026-09-27 (styled spans: 2026-10-11)
+**Source:** ADR-0010, ADR-0011
+
+### CMS — theme, images and icons
+
+Every image and illustration is a CMS image field with a `hint: {width, height}` at 2× the slot's rendered size (banner 1600×600, card 800×600, avatar 400×400); the design's artwork is the seed, or the in-code fallback when it is an animated SVG component. Every content icon (on services, features, items, contact methods and the like) is a CMS icon field with a `surface`, rendered with `<CmsIcon icon={readIcon(v)} fallback={<DesignedIcon/>} />`; UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code. Every project gets a `general_theme` service; render `<ThemeStyles theme={readTheme(...)} />` in the root layout and use `var(--cms-font-body, <@fontsource family>)` / `var(--cms-font-heading, …)` for font tokens. Theme colours are recommendations; never drive the site palette from them. Only favicon/OG generator assets stay in code.
+
+**Rationale:** Clients swap images, icons and fonts themselves; the bundled assets keep the site intact when a field is empty or the CMS is unreachable.
+**Established:** 2026-10-11
+**Source:** ADR-0011

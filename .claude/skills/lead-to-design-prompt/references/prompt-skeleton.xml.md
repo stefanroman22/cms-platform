@@ -96,22 +96,31 @@ Treat <user_override> as the highest-priority signal. When <user_override> confl
       --ring: {{oklch value}};
     </semantic_pairs>
     <dark_mode>{{required | optional | not-applicable, with rationale}}</dark_mode>
+    <cms_theme_palette>
+      Colours: {{named palette in hex, e.g. "Primary #1e5aa8, Accent #c2410c, Ink #1c1917"}}
+      Surfaces: {{named backgrounds in hex: Page light, Page dark (if dark mode), Card, Header, Footer}}
+      These seed the client's CMS theme (rich-text colour swatches, icon tints); keep them identical
+      to the tokens above. Text and icon colours must reach WCAG AA against each surface they sit on.
+    </cms_theme_palette>
   </color>
 
   <typography>
     <philosophy>{{2-3 sentence type rationale tied to the archetype}}</philosophy>
     <display_font>
       family: {{e.g. "Fraunces", "Cormorant Garamond", "GT Sectra", "Söhne Breit"}}
-      source: {{Google Fonts | Adobe Fonts | self-hosted}}
-      weights: {{e.g. 400, 600, 800}}
-      use: headlines, large display copy
+      source: {{Google Fonts (default) | self-hosted woff2 (only when the brief names a non-Google font)}}
+      weights: {{only the weights actually used, e.g. 400, 600, 800}}
+      italic: {{yes | no — yes only if the design uses italics}}
+      use: headlines, large display copy (the CMS theme's heading_font)
     </display_font>
     <body_font>
       family: {{e.g. "Söhne", "GT America", "Inter Tight", "Switzer", "Manrope"}}
       source: {{...}}
-      weights: {{e.g. 400, 500, 600}}
-      use: body, UI, labels
+      weights: {{only the weights actually used, e.g. 400, 500, 600}}
+      italic: {{yes | no}}
+      use: body, UI, labels (the CMS theme's body_font)
     </body_font>
+    <cms_fonts>The client can switch either font later from their CMS theme; the chosen families are the seed and the bundled fallback, so use Google Fonts families wherever the archetype allows.</cms_fonts>
     <mono_font_optional>{{e.g. "JetBrains Mono" — only if needed for prices/codes}}</mono_font_optional>
     <scale>
       12 / 14 / 16 / 18 / 20 / 24 / 30 / 36 / 48 / 60 / 72 / 96
@@ -681,6 +690,20 @@ Treat <user_override> as the highest-priority signal. When <user_override> confl
   <treatment>{{color grading, contrast, grain, vignette guidance}}</treatment>
   <sourcing>{{e.g. "Use the business's Google Maps photos at {{source_url}} as seed references. Replace with commissioned photography before launch."}}</sourcing>
   <avoid>{{e.g. "AI-generated abstract gradient blobs, decorative SVG illustrations of food, generic Unsplash 'restaurant interior'"}}</avoid>
+  <image_slots>
+    Every image and illustration is a client-replaceable CMS image slot. List each slot as:
+    {{page / section — subject + art direction — pixel size at 2× the rendered slot (e.g. full-width banner 1600×600, card 800×600, avatar 400×400)}}.
+    Design each slot to hold any photo the owner uploads at that aspect (object-fit cover, no text
+    baked into the image). Placeholder art is fine as the seed; the owner replaces it. Only the
+    favicon and the generated OG images are fixed.
+  </image_slots>
+  <icons>
+    Use ONE consistent icon set (Lucide or a matching line set) as separate single-colour SVG
+    elements. Every content icon (on services, features, items, contact methods and the like) is
+    a client-replaceable, recolourable CMS icon slot; note the surface (Page light, Card, Header,
+    …) each one sits on. UI-control icons (menu, close, chevrons, arrows, spinners, form
+    affordances) stay fixed in code. No icons baked into images, no icon fonts.
+  </icons>
 </imagery_direction>
 
 <deliverables>
@@ -699,7 +722,7 @@ Treat <user_override> as the highest-priority signal. When <user_override> confl
       - Footers, hours tables, and price tables reflow/stack below `sm` — never clipped.
       - Sibling cards/rows are equal-height with internal elements aligned on shared baselines regardless of text length.
       - Include a dev-only responsive-preview control (viewport toggle: 375 / 768 / 1024 / full) in the build so the owner can verify responsiveness without browser devtools.
-  11. **Performance budget**: hero image ≤ 200 KB (WebP/AVIF), total initial page weight ≤ 1 MB, Core Web Vitals green (LCP < 2.5s, CLS < 0.1, INP < 200ms).
+  11. **Performance budget**: hero image ≤ 200 KB (WebP/AVIF), total initial page weight ≤ 1 MB, Core Web Vitals green (LCP < 2.5s, CLS < 0.1, INP < 200ms). Every image slot has fixed `width`/`height` at its `<image_slots>` size, so a replaced image never shifts layout.
   12. **GDPR cookie banner** (EU-required) if any analytics/tracking is added — basic accept/reject, not a wall.
   13. **Global UX chrome** implementing `<universal_ux_requirements>` verbatim:
       - **First-visit splash loader** — THREE coordinating pieces (this architecture is locked):
@@ -733,6 +756,7 @@ Treat <user_override> as the highest-priority signal. When <user_override> confl
       All of the above are mounted/configured in the locale layout ONCE, not per-page.
   14. **Language switcher** — ONLY if `<languages switcher="yes">`. A `LocaleSwitcher` mounted in the primary nav/header, rendered at EVERY breakpoint (desktop / laptop / tablet / mobile — including inside the mobile menu/drawer). Styled entirely from design tokens (display/body font, `--accent`, `--radius`, `--motion-*`) so it reads as site chrome — NEVER a browser-default `<select>`. Switches locale via the `next-intl` `[locale]` route segment, preserves the current path, marks the active locale, and keeps `hreflang` + `<html lang>` in sync. If the site is single-language (`switcher="no"`), OMIT this entirely.
   15. **Commerce & forms defaults** implementing `<commerce_and_forms>` verbatim — ONLY if the site has services/a catalogue or any booking/contact form: a CMS-editable price on every service/menu item; email-required + phone-optional on every form; desktop multi-step flows where the step content scrolls but the primary action stays visible (prefer a sticky summary/action column); a Motion submit→success morph (spinner → green check → fade, `motion/react`); and mobile multi-step flows showing one section at a time with fade/slide transitions, a Back control, and a sticky action bar.
+  16. **CMS-ready look** — every image and illustration is a slot from `<image_slots>` at its stated size (only the favicon and OG images are fixed); every content icon a separate single-colour SVG from one set (`<icons>`; UI-control icons stay fixed); fonts load from Google Fonts with only the weights used; README.md lists the `<cms_theme_palette>` colours and surfaces and the display/body fonts so they seed the client's CMS theme. Rich text may later carry client-chosen colours, fonts and sizes, so body and heading styles must not depend on one exact colour or size to stay legible.
 </deliverables>
 
 <anti_patterns>

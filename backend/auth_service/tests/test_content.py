@@ -296,6 +296,50 @@ def test_locale_content_exposes_rich_text_version(mock_supabase, client):
     assert res.json()["rich_text_version"] == 1
 
 
+def test_locale_content_falls_back_to_default_theme_row(mock_supabase, client):
+    theme = {
+        "colors": [{"name": "Brand", "value": "#1e5aa8"}],
+        "surfaces": [],
+        "fonts": [],
+        "body_font": "",
+        "heading_font": "",
+    }
+    mock_supabase.execute.side_effect = [
+        MagicMock(
+            data={
+                "id": "p1",
+                "slug": "demo",
+                "name": "Demo",
+                "is_active": True,
+                "default_locale": "en",
+                "locales": ["en", "nl"],
+            }
+        ),
+        MagicMock(
+            data=[
+                {
+                    "service_key": "general_theme",
+                    "label": "Theme",
+                    "display_order": 0,
+                    "service_type_slug": "theme",
+                    "content_entries": [
+                        {"locale": "en", "published_content": theme, "draft_content": theme}
+                    ],
+                }
+            ]
+        ),
+    ]
+
+    res = client.get("/content/demo/nl")
+
+    assert res.status_code == 200
+    assert res.json()["content"]["general_theme"] == {
+        "_type": "theme",
+        "_label": "Theme",
+        **theme,
+    }
+
+
 def test_types_endpoint_declares_rich_html_aliases_and_text_block_leaf_typing(
     mock_supabase, client
 ):
@@ -317,4 +361,33 @@ def test_types_endpoint_declares_rich_html_aliases_and_text_block_leaf_typing(
     assert (
         'hero: { _type: "text_block"; _label: string; title?: InlineHtml; body?: RichHtml };'
         in body
+    )
+
+
+def test_types_endpoint_declares_theme_icon_and_media_hints(mock_supabase, client):
+    mock_supabase.execute.side_effect = [
+        MagicMock(data={"id": "p1", "slug": "demo", "name": "Demo", "is_active": True}),
+        MagicMock(
+            data=[
+                {"service_key": "general_theme", "service_type_slug": "theme", "label": "Theme"},
+                {"service_key": "list", "service_type_slug": "repeater", "label": "List"},
+                {"service_key": "banner", "service_type_slug": "image", "label": "Banner"},
+            ]
+        ),
+    ]
+
+    body = client.get("/content/demo/types").text
+
+    assert (
+        "export interface CmsIconValue { src: string; "
+        'mode: "tint" | "original"; color: string; name: string }' in body
+    )
+    assert 'general_theme: { _type: "theme"; _label: string; colors?: ' in body
+    assert 'source: "upload"; files: { url: string; weight: number; ' in body
+    assert "body_font?: string; heading_font?: string };" in body
+    assert '"image" | "icon"' in body
+    assert "hint?: { width: number; height: number }; surface?: string" in body
+    assert (
+        'banner: { _type: "image"; _label: string; url?: string; alt?: string; '
+        "_hint?: { width: number; height: number } };" in body
     )

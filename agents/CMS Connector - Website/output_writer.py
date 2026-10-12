@@ -18,6 +18,26 @@ from pathlib import Path
 BOOKING_CONTRACT_VERSION = "1.0.0"
 BOOKING_REQUIRED_FIELDS = ["service_id", "start_utc", "customer.name", "customer.email"]
 
+MEDIA_FIELD_TYPES = ("image", "icon")
+
+
+def _service_entry(svc: dict) -> dict:
+    """One cms.config.json service entry. Records the ADR-0011 media metadata:
+    repeater image/icon fields (with `hint`/`surface`) and an image service's `_hint`."""
+    entry: dict = {"type": svc["service_type_slug"], "page": svc.get("page_name", "General")}
+    media = {}
+    for field in svc.get("item_schema") or []:
+        if field.get("type") in MEDIA_FIELD_TYPES:
+            media[field["key"]] = {
+                k: field[k] for k in ("type", "hint", "surface") if field.get(k) is not None
+            }
+    if media:
+        entry["media"] = media
+    initial = svc.get("initial_content")
+    if svc["service_type_slug"] == "image" and isinstance(initial, dict) and initial.get("_hint"):
+        entry["hint"] = initial["_hint"]
+    return entry
+
 
 def write_outputs(manifest: dict, out_dir: str | Path) -> tuple[Path, Path]:
     """
@@ -28,13 +48,7 @@ def write_outputs(manifest: dict, out_dir: str | Path) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # ── cms.config.json ──────────────────────────────────────────────────────
-    services_map = {
-        svc["service_key"]: {
-            "type": svc["service_type_slug"],
-            "page": svc.get("page_name", "General"),
-        }
-        for svc in manifest.get("services", [])
-    }
+    services_map = {svc["service_key"]: _service_entry(svc) for svc in manifest.get("services", [])}
 
     cms_endpoint = manifest.get("cms_endpoint", "https://cms-backend-roman.vercel.app/content")
     cms_endpoint_base = cms_endpoint.rstrip("/").rsplit("/content", 1)[0]

@@ -1,13 +1,17 @@
-// Vendored from CMS client-kit/rich-text v1.0.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead.
+import { STYLE_RE, canonicalStyle } from "./style";
+
 export type RichNode = string | RichElement;
 export interface RichElement {
   tag: string;
   href?: string | null;
+  /** Canonical span declarations (canonicalStyle), else null. */
+  style?: string | null;
   children: RichNode[];
 }
 
-export const MARK_TAGS = new Set(["strong", "em", "u", "s"]);
-export const INLINE_TAGS = new Set(["strong", "em", "u", "s", "a", "br"]);
+export const MARK_TAGS = new Set(["strong", "em", "u", "s", "span"]);
+export const INLINE_TAGS = new Set(["strong", "em", "u", "s", "span", "a", "br"]);
 export const HEADING_TAGS = new Set(["h2", "h3", "h4"]);
 export const BLOCK_TAGS = new Set(["p", "ul", "ol", "li", "blockquote", "hr", "h2", "h3", "h4"]);
 const RICH_TAGS = new Set([...INLINE_TAGS, ...BLOCK_TAGS]);
@@ -73,6 +77,9 @@ export function parse(html: string): RichElement {
     if (tag === "a") {
       const h = HREF_RE.exec(attrs);
       node = { tag, href: h ? decodeEntities(h[1] ?? h[2] ?? h[3] ?? "") : null, children: [] };
+    } else if (tag === "span") {
+      const m = STYLE_RE.exec(attrs);
+      node = { tag, style: m ? canonicalStyle(decodeEntities(m[1] ?? m[2] ?? m[3] ?? "")) : null, children: [] };
     } else {
       node = { tag, children: [] };
     }

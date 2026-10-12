@@ -61,6 +61,17 @@ describe("MAX_MARK_DEPTH idempotence across block contexts", () => {
   }
 });
 
+describe("styled spans count toward MAX_MARK_DEPTH", () => {
+  const input = '<span style="color:#000">'.repeat(40) + "x" + "</span>".repeat(40);
+  for (const fmt of ["inline", "rich"] as Fmt[]) {
+    it(`40 nested spans (${fmt}) are capped at 32 and idempotent`, () => {
+      const once = canonical(input, fmt);
+      expect((once.match(/<span /g) ?? []).length).toBe(32);
+      expect(canonical(once, fmt)).toBe(once);
+    });
+  }
+});
+
 describe("randomized cross-check against the Python backend", () => {
   type Vec = { name: string; fmt: Fmt; input: string; expected: string };
   for (const v of randomCases as Vec[]) {

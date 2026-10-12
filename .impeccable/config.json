@@ -11,6 +11,18 @@
         ],
         "createdAt": "2026-10-11T10:05:55.752Z",
         "reason": "Agent: remove-review icon is text-zinc-400 on a neutral zinc-50 card at rest; the red-50 background only appears on hover together with text-red-600, so gray never sits on color. Pre-existing line, not changed by this branch."
+      },
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-10-11T20:12:09.978Z",
+        "reason": "Claude: test fixture simulating a Google Docs paste, not UI styling"
+      },
+      {
+        "rule": "overused-font",
+        "value": "open sans",
+        "createdAt": "2026-10-11T20:12:10.986Z",
+        "reason": "Claude: client it-global-services explicitly requested Open Sans (Site modif.pdf item 7); also test fixture values"
       }
     ]
   }

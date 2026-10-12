@@ -15,7 +15,7 @@ from typing import Literal
 Format = Literal["plain", "inline", "rich"]
 FORMATS: tuple[str, ...] = ("plain", "inline", "rich")
 
-MARK_TAGS = frozenset({"strong", "em", "u", "s"})
+MARK_TAGS = frozenset({"strong", "em", "u", "s", "span"})
 INLINE_TAGS = MARK_TAGS | {"a", "br"}
 HEADING_TAGS = frozenset({"h2", "h3", "h4"})
 BLOCK_TAGS = frozenset({"p", "ul", "ol", "li", "blockquote", "hr"}) | HEADING_TAGS
@@ -73,6 +73,22 @@ _RAW_TEXT = frozenset({"script", "style"})
 _TAG_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9:-]*)((?:[^>\"']|\"[^\"]*\"|'[^']*')*?)(/?)>")
 # Mirrors parse.ts's HREF_RE exactly.
 _HREF_RE = re.compile(r"(?:^|\s)href\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s\"'=<>`]+))", re.I)
+# Mirrors client-kit/rich-text/src/style.ts (ADR-0011): the only declarations a
+# span[style] keeps. Explicit ASCII classes (no \s, \d or re.I, whose Unicode
+# behaviour differs between Python and JS, e.g. re.I folds "ſ" to "s") so both
+# ports agree on every input.
+_STYLE_RE = re.compile(
+    r"(?:^|[ \t\n\f\r])[sS][tT][yY][lL][eE][ \t\n\f\r]*=[ \t\n\f\r]*"
+    r"(?:\"([^\"]*)\"|'([^']*)'|([^ \t\n\f\r\"'=<>`]+))"
+)
+_HEX_RE = re.compile(r"#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})")
+_RGB_RE = re.compile(
+    r"rgb\([ \t\r\n\f]*([0-9]{1,3})[ \t\r\n\f]*,[ \t\r\n\f]*([0-9]{1,3})[ \t\r\n\f]*,"
+    r"[ \t\r\n\f]*([0-9]{1,3})[ \t\r\n\f]*\)",
+    re.I,
+)
+_FONT_FAMILY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9 \-]{0,63}")
+_FONT_SIZE_RE = re.compile(r"([0-9]{1,2}(?:\.[0-9]{1,3})?)em", re.I)
 
 
 class RichTextTooLong(ValueError):
@@ -122,6 +138,63 @@ def safe_href(raw: str | None) -> str | None:
     return None
 
 
+def _style_color(v: str) -> str | None:
+    m = _HEX_RE.fullmatch(v)
+    if m:
+        h = m.group(1).lower()
+        return "#" + ("".join(c * 2 for c in h) if len(h) == 3 else h)
+    m = _RGB_RE.fullmatch(v)
+    if m:
+        rgb = [int(g) for g in m.groups()]
+        if all(c <= 255 for c in rgb):
+            return "#" + "".join(f"{c:02x}" for c in rgb)
+    return None
+
+
+def _style_font_family(v: str) -> str | None:
+    name = v.split(",", 1)[0].strip()
+    if len(name) >= 2 and name[0] == name[-1] and name[0] in "'\"":
+        name = name[1:-1].strip()
+    name = _WS_RE.sub(" ", name)
+    return f"'{name}'" if _FONT_FAMILY_RE.fullmatch(name) else None
+
+
+def _style_font_size(v: str) -> str | None:
+    m = _FONT_SIZE_RE.fullmatch(v)
+    if not m:
+        return None
+    size = float(m.group(1))
+    if not 0.5 <= size <= 4:
+        return None
+    return format(size, ".3f").rstrip("0").rstrip(".") + "em"
+
+
+# Canonical declaration order (ADR-0011): color, font-family, font-size.
+_STYLE_PROPS = {
+    "color": _style_color,
+    "font-family": _style_font_family,
+    "font-size": _style_font_size,
+}
+
+
+def canonical_style(raw: str) -> str | None:
+    """Canonical `span[style]` declarations (ADR-0011), or None if none is valid.
+
+    Every other property, and any invalid value, is dropped; a later valid
+    declaration of the same property wins (an invalid one is ignored, as in CSS)."""
+    kept: dict[str, str] = {}
+    for decl in raw.split(";"):
+        prop, sep, value = decl.partition(":")
+        if not sep:
+            continue
+        check = _STYLE_PROPS.get(prop.strip().lower())
+        canon = check(value.strip()) if check else None
+        if canon is not None:
+            kept[prop.strip().lower()] = canon
+    out = ";".join(f"{p}:{kept[p]}" for p in _STYLE_PROPS if p in kept)
+    return out or None
+
+
 def escape_text(s: str) -> str:
     return (
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\xa0", "&nbsp;")
@@ -136,12 +209,19 @@ def escape_attr(s: str) -> str:
 
 
 class _Node:
-    __slots__ = ("tag", "href", "children")
+    __slots__ = ("tag", "href", "children", "style")
 
-    def __init__(self, tag: str, href: str | None = None, children: list | None = None) -> None:
+    def __init__(
+        self,
+        tag: str,
+        href: str | None = None,
+        children: list | None = None,
+        style: str | None = None,
+    ) -> None:
         self.tag = tag
         self.href = href
         self.children: list[_Node | str] = children if children is not None else []
+        self.style = style  # canonical span declarations (canonical_style), else None
 
 
 def _br() -> _Node:
@@ -179,7 +259,7 @@ def _parse(value: str) -> _Node:  # one function by design, see below
     identified as text, are appended straight to the tree.
 
     Deliberate difference from parse.ts, per an explicit controller ruling:
-    entities (in text runs and in `href` values) are decoded with Python's
+    entities (in text runs and in `href`/`style` values) are decoded with Python's
     `html.unescape` (the full HTML5 named-entity table) rather than a port
     of the kit's small `decodeEntities` (amp/lt/gt/quot/apos/nbsp only) —
     better fidelity for DeepL-translated output. Canonical output only ever
@@ -236,7 +316,17 @@ def _parse(value: str) -> _Node:  # one function by design, see below
                 if raw_href is None:
                     raw_href = m.group(3)
                 href = unescape(raw_href if raw_href is not None else "")
-        node = _Node(tag, href)
+        style = None
+        if tag == "span":
+            m = _STYLE_RE.search(attrs)
+            if m:
+                raw_style = m.group(1)
+                if raw_style is None:
+                    raw_style = m.group(2)
+                if raw_style is None:
+                    raw_style = m.group(3)
+                style = canonical_style(unescape(raw_style if raw_style is not None else ""))
+        node = _Node(tag, href, style=style)
         stack[-1].children.append(node)
         stack.append(node)
 
@@ -360,7 +450,7 @@ def _ends_with_br(nodes: list) -> bool:
 
 
 def _inline(nodes: list, in_link: bool = False, mark_depth: int = 0) -> list:
-    """`mark_depth` counts the strong/em/u/s/a elements enclosing the current
+    """`mark_depth` counts the strong/em/u/s/span/a elements enclosing the current
     position (independent of any block wrapper): beyond MAX_MARK_DEPTH, a
     mark/link is unwrapped rather than nested further (its children are
     processed at the same depth). This is deliberately decoupled from block
@@ -396,13 +486,14 @@ def _inline(nodes: list, in_link: bool = False, mark_depth: int = 0) -> list:
         if tag == "br":
             push(_br())
         elif tag in MARK_TAGS:
-            if mark_depth >= MAX_MARK_DEPTH:
+            # A span with no valid style is unwrapped like a mark past the cap.
+            if mark_depth >= MAX_MARK_DEPTH or (tag == "span" and not n.style):
                 for item in _inline(n.children, in_link, mark_depth):
                     push(item)
                 continue
             kids = _inline(n.children, in_link, mark_depth + 1)
             if _has_content(kids):
-                push(_Node(tag, children=kids))
+                push(_Node(tag, children=kids, style=n.style))
         elif tag == "a":
             if mark_depth >= MAX_MARK_DEPTH:
                 for item in _inline(n.children, True, mark_depth):
@@ -595,6 +686,10 @@ def _serialize(nodes: list) -> str:
             parts.append(f"<{n.tag}>")
         elif n.tag == "a":
             parts.append(f'<a href="{escape_attr(n.href or "")}">{_serialize(n.children)}</a>')
+        elif n.tag == "span":
+            parts.append(
+                f'<span style="{escape_attr(n.style or "")}">{_serialize(n.children)}</span>'
+            )
         else:
             parts.append(f"<{n.tag}>{_serialize(n.children)}</{n.tag}>")
     flush()
@@ -674,6 +769,8 @@ _REPEATER_TYPE_FORMAT: dict[str | None, str] = {
     "richtext": "rich",
     "url": "plain",
     "tags": "plain",
+    "image": "plain",
+    "icon": "plain",
 }
 _FIXED_FORMATS: dict[str, dict[str, str]] = {
     "text_block": {"title": "inline", "body": "rich"},

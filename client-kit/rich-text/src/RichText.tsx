@@ -3,6 +3,7 @@ import { isHtml } from "./detect";
 import { legacyToHtml } from "./legacy";
 import { normalizeInline, normalizeRich } from "./normalize";
 import { parse, type RichElement, type RichNode } from "./parse";
+import { styleCss } from "./style";
 
 export type RichFormat = "inline" | "rich";
 export type LinkTarget = "auto" | "self" | "blank";
@@ -60,6 +61,7 @@ function renderNode(n: RichNode, key: number, ctx: Ctx): ReactNode {
     case "br": return <br key={key} />;
     case "hr": return <hr key={key} />;
     case "a": return renderAnchor(n, key, kids, ctx);
+    case "span": return createElement("span", { key, className: "cms-rich-style", style: styleCss(n.style) }, ...kids);
     case "h2":
     case "h3":
     case "h4": {

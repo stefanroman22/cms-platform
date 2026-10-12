@@ -6,11 +6,17 @@ import { dashboardInputCn, dashboardFieldLabelCn, dashboardSectionCardCn } from 
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { InfoTooltip } from "@/components/dashboard/InfoTooltip";
 import { ContentField, type FieldFormat } from "@/components/dashboard/rich-text/ContentField";
+import { readIcon } from "@/lib/cms-rich-text";
+import { readHint } from "./ImageHint";
+import { RepeaterImageField } from "./RepeaterImageField";
+import { IconField } from "./IconField";
 
 interface SchemaField {
   key: string;
   label: string;
-  type: "string" | "inline" | "richtext" | "url" | "tags";
+  type: "string" | "inline" | "richtext" | "url" | "tags" | "image" | "icon";
+  hint?: { width: number; height: number };
+  surface?: string;
 }
 
 type ItemRecord = Record<string, unknown>;
@@ -52,13 +58,39 @@ function FieldInput({
   field,
   value,
   onChange,
+  onUpload,
   richText,
 }: {
   field: SchemaField;
   value: unknown;
   onChange: (val: unknown) => void;
+  onUpload?: (file: File) => Promise<string>;
   richText?: boolean;
 }) {
+  if (field.type === "image") {
+    return (
+      <div role="group" aria-label={field.label}>
+        <RepeaterImageField
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          onUpload={onUpload}
+          hint={readHint(field.hint)}
+        />
+      </div>
+    );
+  }
+  if (field.type === "icon") {
+    return (
+      <div role="group" aria-label={field.label}>
+        <IconField
+          value={readIcon(value)}
+          onChange={onChange}
+          onUpload={onUpload}
+          surface={field.surface}
+        />
+      </div>
+    );
+  }
   if (richText && field.type !== "tags") {
     const format: FieldFormat =
       field.type === "inline" ? "inline" : field.type === "richtext" ? "rich" : "plain";
@@ -104,7 +136,7 @@ function FieldInput({
   );
 }
 
-export function RepeaterEditor({ initialContent, onChange, richText }: EditorProps) {
+export function RepeaterEditor({ initialContent, onChange, onUpload, richText }: EditorProps) {
   const schema = parseSchema(initialContent._schema);
   const [rows, setRows] = useState<Row[]>(() => toRows(parseItems(initialContent.items)));
 
@@ -119,7 +151,7 @@ export function RepeaterEditor({ initialContent, onChange, richText }: EditorPro
   function addItem() {
     const blank: ItemRecord = {};
     schema.forEach((f) => {
-      blank[f.key] = f.type === "tags" ? [] : "";
+      blank[f.key] = f.type === "tags" ? [] : f.type === "icon" ? null : "";
     });
     emit([...rows, { key: newKey(), item: blank }]);
   }
@@ -220,6 +252,7 @@ export function RepeaterEditor({ initialContent, onChange, richText }: EditorPro
                   field={field}
                   value={row.item[field.key]}
                   onChange={(val) => updateField(itemIndex, field.key, val)}
+                  onUpload={onUpload}
                   richText={richText}
                 />
               </div>

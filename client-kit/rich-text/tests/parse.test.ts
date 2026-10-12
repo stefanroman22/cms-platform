@@ -29,7 +29,7 @@ describe("parse", () => {
       }
     };
     walk(parse('<div><img src=x onerror=1><iframe src=x></iframe><table><tr><td>a</td></tr></table><span>b</span></div>'));
-    const allowed = ["#root", "p", "br", "hr", "strong", "em", "u", "s", "a", "ul", "ol", "li", "h2", "h3", "h4", "blockquote"];
+    const allowed = ["#root", "p", "br", "hr", "strong", "em", "u", "s", "span", "a", "ul", "ol", "li", "h2", "h3", "h4", "blockquote"];
     expect(tags.every((t) => allowed.includes(t))).toBe(true);
   });
 });

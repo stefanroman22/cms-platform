@@ -1,11 +1,11 @@
-// Vendored from CMS client-kit/rich-text v1.0.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead.
 // src/normalize.ts — 1:1 port of the canonical transform in backend services/rich_text.py.
 import { BLOCK_TAGS, HEADING_TAGS, INLINE_TAGS, MARK_TAGS, type RichElement, type RichNode } from "./parse";
 import { safeHref } from "./href";
 import { pyStrip } from "./whitespace";
 
 export const MAX_LIST_DEPTH = 4;
-// Counts strong/em/u/s/a elements enclosing the current position (independent
+// Counts strong/em/u/s/span/a elements enclosing the current position (independent
 // of any block wrapper): beyond this, a mark/link is unwrapped rather than
 // nested further. Deliberately decoupled from block structure (p/li/ul/
 // blockquote) so re-parsing a canonical value never sees a different mark
@@ -63,12 +63,13 @@ function inline(nodes: RichNode[], inLink = false, markDepth = 0): RichNode[] {
     if (tag === "br") {
       push(br());
     } else if (MARK_TAGS.has(tag)) {
-      if (markDepth >= MAX_MARK_DEPTH) {
+      // A span with no valid style is unwrapped like a mark past the cap.
+      if (markDepth >= MAX_MARK_DEPTH || (tag === "span" && !n.style)) {
         for (const item of inline(n.children, inLink, markDepth)) push(item);
         continue;
       }
       const kids = inline(n.children, inLink, markDepth + 1);
-      if (hasContent(kids)) push(el(tag, kids));
+      if (hasContent(kids)) push(tag === "span" ? { tag, style: n.style, children: kids } : el(tag, kids));
     } else if (tag === "a") {
       if (markDepth >= MAX_MARK_DEPTH) {
         for (const item of inline(n.children, true, markDepth)) push(item);

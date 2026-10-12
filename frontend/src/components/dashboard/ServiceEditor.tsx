@@ -9,6 +9,7 @@ import * as cache from "@/lib/cache";
 import { ServiceIcon } from "@/components/dashboard/ServiceIcon";
 import { EDITOR_MAP } from "@/components/dashboard/editors";
 import { LocaleTabs } from "@/components/dashboard/LocaleTabs";
+import { themeKey } from "@/components/dashboard/theme/ProjectThemeContext";
 import {
   type ServiceDetail,
   fetchServiceDetail,
@@ -175,6 +176,8 @@ export function ServiceEditor({
       cache.set(cacheKey, saved);
       cache.invalidate(servicesListKey(projectSlug));
       cache.invalidate(projectStatusKey(projectSlug));
+      // The project theme context (fonts, rich-text swatches) reads this service.
+      if (service.service_type_slug === "theme") cache.invalidate(themeKey(projectSlug));
       setSaveSuccess(true);
       if (changeSeqRef.current === seqAtStart) setDraft(null);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -256,11 +259,22 @@ export function ServiceEditor({
     }
   }
 
+  // A theme is project-wide and never translated (ADR-0011): no language tabs,
+  // no translation banner, and it is always edited in the default locale.
+  const isTheme = service?.service_type_slug === "theme";
+  useEffect(() => {
+    if (!isTheme || !localeParam) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("locale");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [isTheme, localeParam, searchParams, router, pathname]);
+
   const reduce = useReducedMotion();
   const activeLocale = service?.locale ?? service?.default_locale ?? "";
   const defaultLocale = service?.default_locale ?? "";
   const locales = service?.locales ?? [];
-  const isNonDefault = !!activeLocale && !!defaultLocale && activeLocale !== defaultLocale;
+  const isNonDefault =
+    !isTheme && !!activeLocale && !!defaultLocale && activeLocale !== defaultLocale;
   const status = service?.translation_status ?? null;
   const reviewCount = status ? Object.values(status).filter((s) => s === "stale").length : 0;
   const manualCount = status ? Object.values(status).filter((s) => s === "manual").length : 0;
@@ -327,7 +341,7 @@ export function ServiceEditor({
       </div>
 
       {/* Locale tabs */}
-      {service && locales.length > 1 && (
+      {service && !isTheme && locales.length > 1 && (
         <LocaleTabs
           locales={locales}
           activeLocale={activeLocale}

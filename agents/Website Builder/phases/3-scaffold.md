@@ -7,7 +7,8 @@
 - Install runtime deps: `react-router-dom`, `react-i18next`, `i18next`,
   `i18next-browser-languagedetector`, `@tanstack/react-query`,
   `@tanstack/react-query-persist-client`, `@tanstack/query-sync-storage-persister`, `zustand`,
-  `motion`, `lucide-react`.
+  `motion`, `lucide-react` (UI-control icons, and the designed fallbacks of content icons, which
+  render through the kit's `<CmsIcon>`).
 - Install build/SSG + SEO-gen dev deps: `vite-react-ssg`, `satori`, `@resvg/resvg-js`, `sharp`,
   `@playwright/test`, `@axe-core/cli`, `tailwindcss`, `@tailwindcss/vite`.
 - Wire react-i18next: create `src/i18n/config.ts` (init with resources, fallbackLng, supportedLngs)
@@ -21,6 +22,9 @@
   `createSyncStoragePersister({ storage: window.localStorage })`) and `src/lib/store.ts`
   (Zustand stores with `persist` middleware: `useLocaleStore`, `useBookingStore`, `useUiStore`).
 - Fonts via `@fontsource*` / `@fontsource-variable` packages; `@import` them in `src/index.css`.
+  They are the bundled fallback behind the CMS theme: define the font tokens as
+  `--font-body: var(--cms-font-body, "<Body Family>"), <generic>;` and
+  `--font-heading: var(--cms-font-heading, "<Display Family>"), <generic>;`.
   Tailwind v4 via `@tailwindcss/vite` plugin in `vite.config.ts` (NOT PostCSS);
   `@import "tailwindcss";` in `src/index.css`.
 - Add the translation-resilience shim as the FIRST inline `<script>` in `index.html` (before
@@ -39,8 +43,17 @@
   on `:root`, on the dark-theme selector if any, and on EVERY inverted or coloured surface the design
   has (hero, dark sections, header, footer). Contrast rule: use an accent for `--cms-rich-strong`,
   `--cms-rich-link` etc. only if it reaches WCAG AA (4.5:1) on that surface; otherwise leave it
-  text-coloured and let weight carry the emphasis.
-- Copy the design's mock images to `public/images/<section>/<filename>`.
+  text-coloured and let weight carry the emphasis. Rich text may contain styled spans
+  (ADR-0011): the kit (≥ 1.1.0) renders them; never strip `style` yourself. Check AA contrast of
+  the theme palette against its surfaces.
+- Wire the CMS theme, images and icons (ADR-0011, principles in `AGENTS.md`): render
+  `<ThemeStyles theme={readTheme(<general_theme content>)} />` once in the root layout component
+  (React 19 hoists its font `<link>`s; with no theme it renders nothing and the `@fontsource`
+  fallback applies). `src/lib/cms-site.ts` exposes the theme, an image accessor per slot (CMS URL,
+  else the `public/images/` mock) and the icon values (`readIcon`). Theme colours are
+  recommendations; do not drive the site palette from them.
+- Copy the design's mock images to `public/images/<section>/<filename>`; each keeps the `hint`
+  recorded in `_design-manifest.json` (its CMS image field seed and fallback).
 - Copy `agents/Website Builder/learnings-template/*` into the new project's `.learnings/`.
 - If `ui-ux-pro-max` is installed, run its design-system generator and reconcile with the
   manifest tokens — the design wins on direct conflicts; ui-ux-pro-max fills gaps.
@@ -48,6 +61,6 @@
 **Gate:** `npm run dev` boots (Vite dev server); `/` redirects to `/<default-locale>` via
 React Router; `.learnings/` has all three template files; mock images are in place;
 `src/lib/query.ts` and `src/lib/store.ts` exist; `index.html` first `<script>` is the
-translation shim; `src/lib/cms-rich-text/` exists and `cms-rich.css` is imported in `main.tsx`; `--cms-rich-strong` is defined in `src/index.css` for every surface.
+translation shim; `src/lib/cms-rich-text/` exists and `cms-rich.css` is imported in `main.tsx`; `--cms-rich-strong` is defined in `src/index.css` for every surface; `<ThemeStyles>` is in the root layout and the font tokens read `var(--cms-font-body, …)` / `var(--cms-font-heading, …)`.
 
 **Token tactics:** don't echo full `npm create vite` output; summarize success/failure.

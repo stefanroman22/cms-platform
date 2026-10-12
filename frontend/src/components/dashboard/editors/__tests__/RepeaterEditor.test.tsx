@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RepeaterEditor } from "../RepeaterEditor";
 
@@ -41,6 +41,65 @@ describe("RepeaterEditor rich fields", () => {
     expect(onChange).toHaveBeenLastCalledWith({
       _schema: content._schema,
       items: [{ body: "<p>second</p>" }, { body: "<p>first</p>" }],
+    });
+  });
+});
+
+describe("RepeaterEditor media fields", () => {
+  const imageSchema = [
+    { key: "banner", type: "image", label: "Banner", hint: { width: 1600, height: 600 } },
+  ];
+
+  it("uploads an image field's file and emits its URL", async () => {
+    const onChange = vi.fn();
+    const onUpload = vi.fn().mockResolvedValue("https://cdn.example.com/banner.jpg");
+    const { container } = render(
+      <RepeaterEditor
+        initialContent={{ _schema: imageSchema, items: [{ banner: "" }] }}
+        onChange={onChange}
+        onUpload={onUpload}
+        richText
+      />
+    );
+    expect(screen.getByText(/1600 × 600 px \(landscape 8:3\)/)).toBeInTheDocument();
+    const file = new File(["x"], "banner.jpg", { type: "image/jpeg" });
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await userEvent.upload(input, file);
+    expect(onUpload).toHaveBeenCalledWith(file);
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith({
+        _schema: imageSchema,
+        items: [{ banner: "https://cdn.example.com/banner.jpg" }],
+      })
+    );
+  });
+
+  it("renders an icon field with the icon controls", () => {
+    render(
+      <RepeaterEditor
+        initialContent={{
+          _schema: [{ key: "icon", type: "icon", label: "Icon", surface: "Page" }],
+          items: [{ icon: null }],
+        }}
+        onChange={() => {}}
+        richText
+      />
+    );
+    expect(screen.getByRole("button", { name: "Choose icon" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Upload SVG/PNG" })).toBeInTheDocument();
+  });
+
+  it("adds items with an empty image and no icon", async () => {
+    const onChange = vi.fn();
+    const schema = [
+      { key: "banner", type: "image", label: "Banner" },
+      { key: "icon", type: "icon", label: "Icon" },
+    ];
+    render(<RepeaterEditor initialContent={{ _schema: schema, items: [] }} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "Add item" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      _schema: schema,
+      items: [{ banner: "", icon: null }],
     });
   });
 });

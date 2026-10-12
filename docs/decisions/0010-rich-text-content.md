@@ -1,6 +1,7 @@
 # ADR-0010: Rich text is canonical HTML, gated per project
 
-Status: Accepted
+Status: Accepted, amended by ADR-0011 (styled `span` marks; the colour/font/size prohibitions
+below no longer apply to `span[style]` in the form ADR-0011 defines)
 Date: 2026-09-27
 
 ## Context

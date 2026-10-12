@@ -5,6 +5,7 @@ import type { EditorProps } from "./index";
 import { dashboardInputCn, dashboardFieldLabelCn, dashboardSectionCardCn } from "@/lib/styles";
 import { ImageIcon, Upload, X } from "lucide-react";
 import { InfoTooltip } from "@/components/dashboard/InfoTooltip";
+import { ImageHint, measureImage, readHint, type ImageSize } from "./ImageHint";
 
 interface ImageEditorProps extends EditorProps {
   label?: string;
@@ -20,10 +21,14 @@ export function ImageEditor({
   const [alt, setAlt] = useState(String(initialContent.alt ?? ""));
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [measured, setMeasured] = useState<ImageSize>();
+  const [bytes, setBytes] = useState<number>();
   const fileRef = useRef<HTMLInputElement>(null);
+  const hint = readHint(initialContent._hint);
 
   function emit(next: { url: string; alt: string }) {
-    onChange(next);
+    // `_hint` is structural (ADR-0011): pass it through unchanged.
+    onChange("_hint" in initialContent ? { ...next, _hint: initialContent._hint } : next);
   }
 
   async function handleFile(file: File) {
@@ -31,8 +36,12 @@ export function ImageEditor({
     setUploading(true);
     setUploadError("");
     try {
+      setMeasured(undefined);
+      const measuring = measureImage(file);
       const uploaded = await onUpload(file);
       setUrl(uploaded);
+      setBytes(file.size);
+      measuring.then((size) => setMeasured(size ?? undefined));
       emit({ url: uploaded, alt });
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed.");
@@ -98,6 +107,11 @@ export function ImageEditor({
           <Upload className="h-4 w-4" />
           {uploading ? "Uploading…" : "Choose file"}
         </button>
+        <ImageHint
+          hint={hint}
+          measured={previewUrl ? measured : undefined}
+          bytes={previewUrl ? bytes : undefined}
+        />
         {uploadError && (
           <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
         )}

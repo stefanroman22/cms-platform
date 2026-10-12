@@ -10,7 +10,8 @@ const { version } = JSON.parse(readFileSync(join(kitRoot, "package.json"), "utf8
 // Every file in src/ that index.ts transitively imports (no test-only files live in src/).
 const FILES = [
   "parse.ts", "href.ts", "whitespace.ts", "detect.ts", "normalize.ts", "serialize.ts", "legacy.ts",
-  "plainText.ts", "RichText.tsx", "splitRichWords.tsx", "index.ts", "cms-rich.css",
+  "style.ts", "plainText.ts", "RichText.tsx", "splitRichWords.tsx",
+  "theme.ts", "ThemeStyles.tsx", "CmsIcon.tsx", "index.ts", "cms-rich.css",
 ];
 const [target, flag] = process.argv.slice(2);
 if (!target) {

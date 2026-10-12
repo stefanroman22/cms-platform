@@ -108,6 +108,8 @@ Use `references/design-tokens-cheatsheet.md` to build a complete token set in sh
 7. **Breakpoints** — sm 640 / md 768 / lg 1024 / xl 1280 / 2xl 1536
 8. **Dark mode** — required for cafes, salons, professional services; optional for venues; off by default for traditional restaurants unless the archetype calls for it
 
+These tokens also seed the client's CMS theme (ADR-0011), so fill `<cms_theme_palette>` with the named palette colours and named surfaces (page light/dark, card, header, footer) in hex, and give each font its source (Google Fonts by default), only the weights actually used, and italic only if used. Theme colours are recommendations for the client; they do not replace the site palette.
+
 ### 6. Plan page architecture
 
 Use the page list from the category playbook. Order matters. For each page, specify the section sequence (e.g., Home: hero → social-proof → featured-menu → about-strip → testimonials → location → footer).
@@ -140,6 +142,8 @@ Write placeholder headlines, subheads, About paragraph, primary CTA — in the b
 
 Specify photographic style notes, sourcing guidance, and image-treatment direction (e.g., for restaurants: "dark moody overhead shots on linen, natural-light close-ups of plated dishes, no stock photography, no people in chef coats holding food"). If `source_url` (Google Maps) is present, note it as the seed image source.
 
+Every image and illustration becomes a client-replaceable CMS image field and every content icon (on services, features, items, contact methods and the like) a recolourable CMS icon field (ADR-0011). Fill `<image_slots>` with one line per slot (page/section, subject + art direction, pixel size at 2× the rendered slot, e.g. banner 1600×600, card 800×600, avatar 400×400) and `<icons>` with one consistent icon set and the surface each content icon sits on. Only the favicon, OG images and UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) are fixed.
+
 ### 10. Lock the anti-patterns block
 
 Embed the full content of `references/ai-slop-anti-patterns.md` **verbatim** in the prompt's `<anti_patterns>` section. Add any category-specific bans from the playbook.
@@ -160,6 +164,8 @@ Tick every box. If any fails, fix and re-check. Do not emit a partial prompt.
 - [ ] Exactly one aesthetic archetype chosen (not a mix)
 - [ ] At least 2 reference brands named (from `references/reference-brands-by-category.md`)
 - [ ] All 8 design-token families present
+- [ ] `<cms_theme_palette>` names the palette and surfaces; each font has source, used weights and italic
+- [ ] `<image_slots>` lists every image slot with a pixel size; `<icons>` names one icon set; deliverable 16 is present
 - [ ] No banned font (Inter, Roboto, Arial, Open Sans, Lato, Space Grotesk, system-ui as primary)
 - [ ] No purple/indigo gradient unless lead explicitly requested it
 - [ ] Every required page from the playbook is present

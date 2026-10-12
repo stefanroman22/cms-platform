@@ -13,6 +13,7 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
    `npm install -D vite@^7 @vitejs/plugin-react@^4`
 4. Install runtime deps:
    `npm i react-router-dom react-i18next i18next i18next-browser-languagedetector @tanstack/react-query @tanstack/react-query-persist-client @tanstack/query-sync-storage-persister zustand motion lucide-react`
+   (`lucide-react` supplies UI-control icons and the designed fallbacks of content icons; content icons render through the kit's `<CmsIcon>`.)
 5. Create `.npmrc` in the project root with `legacy-peer-deps=true` (makes `npm ci` sticky for CI; required because vite-react-ssg 0.9.0 declares `react-router-dom@^6.14.1` as peerOptional, conflicting with RR v7):
    ```
    legacy-peer-deps=true
@@ -24,7 +25,7 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
    Then add `"postinstall": "patch-package"` to `package.json` scripts.
 8. Tailwind v4: `npm i -D tailwindcss @tailwindcss/vite` and add the plugin to `vite.config.ts` (NOT a PostCSS config). Import `tailwindcss` in `src/index.css` via `@import "tailwindcss";`.
 6. shadcn/ui (Vite mode): `npx shadcn@latest init` then add primitives as needed (`npx shadcn@latest add button ...`). Components vendor into `src/components/ui/`.
-7. Fonts: install the chosen families via `@fontsource`/`@fontsource-variable` (e.g. `npm i @fontsource-variable/fraunces`) and `import` them in `src/index.css`. NEVER `next/font`.
+7. Fonts: install the chosen families via `@fontsource`/`@fontsource-variable` (e.g. `npm i @fontsource-variable/fraunces`) and `import` them in `src/index.css`. NEVER `next/font`. They are the bundled fallback behind the CMS theme fonts: `--font-body: var(--cms-font-body, "<Body Family>"), <generic>;` and `--font-heading: var(--cms-font-heading, "<Display Family>"), <generic>;` (ADR-0011).
 
 ## package.json scripts
 
@@ -42,7 +43,7 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
   vite.config.ts                 # React plugin, vite-react-ssg, manualChunks, alias @/*
   src/
     main.tsx                     # ssg entry (createRoot/hydrate via vite-react-ssg); imports ./lib/cms-rich-text/cms-rich.css
-    routes.tsx                   # React Router v7 route table (locale-prefixed, React.lazy)
+    routes.tsx                   # React Router v7 route table (locale-prefixed, React.lazy); root layout renders <ThemeStyles>
     i18n/
       config.ts                  # react-i18next init, resources, fallbackLng
       messages/<locale>.json     # namespaced t() keys (CMS merges over these — UNCHANGED shape)
@@ -52,7 +53,7 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
     lib/
       config.ts                  # SITE_URL, SUPPORTED_LOCALES, DEFAULT_LOCALE
       cms-content.ts             # build-time + client merge of CMS payload over messages
-      cms-site.ts                # resolveSite() — UNCHANGED contract
+      cms-site.ts                # resolveSite() — UNCHANGED contract; also theme, image and icon accessors (CMS value → designed fallback)
       query.ts                   # QueryClient + localStorage persister
       store.ts                   # Zustand stores (persist): locale, booking, ui
       head.ts                    # per-route×locale head builder (React 19 hoisted tags)
@@ -61,7 +62,7 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
       sitemap.gen.ts             # prebuild → public/sitemap.xml
       robots.gen.ts              # prebuild → public/robots.txt
       og.gen.ts                  # prebuild → public/og/*.png (satori + sharp)
-  public/images/<section>/       # mock images, copied as-is (UNCHANGED rule)
+  public/images/<section>/       # mock images, copied as-is (UNCHANGED rule); fallbacks/seeds of CMS image fields
   .learnings/                    # per-build corrections (UNCHANGED)
   package.json                   # vite, react@19, react-router, react-i18next, @tanstack/*, zustand, motion, tailwind, playwright
 ```
@@ -69,6 +70,13 @@ description: Set up a new Vite 7 + React 19 SPA with build-time SSG pre-renderin
 ## Rich-text kit
 
 Vendor with `node "<cms-repo>/client-kit/rich-text/scripts/sync-rich-text-kit.mjs" src/lib/cms-rich-text` and import `./lib/cms-rich-text/cms-rich.css` in `src/main.tsx`. Define `--cms-rich-*` in `src/index.css` per surface. The kit has no dependencies, so **no `manualChunks` change is needed**.
+
+The same kit (≥ 1.1.0) carries the theme and icon helpers (ADR-0011, kit README "Theme, fonts and icons"):
+
+- Render `<ThemeStyles theme={readTheme(<general_theme content>)} />` once in the root layout component. React 19 hoists its Google Fonts `<link>`s into `<head>`; with no theme it renders nothing and the `@fontsource` fonts apply.
+- Every image and illustration reads its CMS image field (fallback: the `public/images/` mock, or an animated SVG component kept in code), sized by the field's `hint`. Only favicon/OG generator assets stay in code.
+- Every content icon (on services, features, items, contact methods and the like) renders `<CmsIcon icon={readIcon(value)} size={…} label={…} fallback={<DesignedIcon />} />`. UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code.
+- Theme colours are recommendations; do not drive the site palette from them. Rich text may contain styled spans; `<RichText>` renders them, never strip `style` yourself.
 
 ## vite.config.ts (shape)
 
@@ -168,7 +176,7 @@ persistent `node_modules/.vite` cache (do not delete between builds).
 
 ## Mock image organization
 
-Files copied from the design go into `public/images/<section>/`. The section name should match the section in `_design-manifest.json`. Always reference via `<img>` with `srcset`/`sizes` (or a small `<Image>` wrapper component). NEVER `next/image`.
+Files copied from the design go into `public/images/<section>/`. The section name should match the section in `_design-manifest.json`. Always reference via `<img>` with `srcset`/`sizes` (or a small `<Image>` wrapper component). NEVER `next/image`. Each one is the fallback of its CMS image field (the connector uploads it as the seed): components take the URL from `resolveSite` and set `width`/`height` from the field's `hint`, never a hard-coded `/images/…` path.
 
 ## Common scaffolding pitfalls to avoid
 

@@ -1,8 +1,32 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Editor } from "@tiptap/react";
+import type { CmsTheme } from "@/lib/cms-rich-text";
 import { RichTextEditor } from "../RichTextEditor";
+import { toStored } from "../serialize";
+
+const themeState = vi.hoisted(() => ({ theme: null as CmsTheme | null }));
+vi.mock("../../theme/ProjectThemeContext", () => ({
+  useProjectTheme: () => ({ theme: themeState.theme, serviceKey: null, refresh: () => {} }),
+}));
+afterEach(() => {
+  themeState.theme = null;
+});
+
+const THEME: CmsTheme = {
+  colors: [
+    { name: "Brand", value: "#1e5aa8" },
+    { name: "Accent", value: "#f5a623" },
+  ],
+  surfaces: [{ name: "Page", value: "#ffffff" }],
+  fonts: [
+    { family: "Open Sans", source: "google", weights: [400], italic: false },
+    { family: "Lora", source: "system" },
+  ],
+  body_font: "Open Sans",
+  heading_font: "Lora",
+};
 
 beforeAll(() => {
   // ProseMirror layout APIs jsdom lacks.
@@ -115,10 +139,41 @@ describe("RichTextEditor", () => {
     const { editor, onChange } = await setup();
     act(() => {
       editor.view.pasteHTML(
-        '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1"><span style="font-weight:700;color:#ff0000">Bold</span><span style="font-weight:400;color:#00ff00"> plain</span></b>'
+        '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1"><span style="font-weight:700;color:#ff0000;font-family:Arial;font-size:20px">Bold</span><span style="font-weight:400;color:#00ff00"> plain</span></b>'
       );
     });
     expect(onChange).toHaveBeenLastCalledWith("<p><strong>Bold</strong> plain</p>");
+    expect(editor.getHTML()).not.toMatch(/style=/);
+  });
+
+  it("paste drops a font shorthand (Word list markers) too", async () => {
+    const { editor, onChange } = await setup();
+    act(() => {
+      editor.view.pasteHTML(`<p><span style='font:7pt "Times New Roman"'>x</span> y</p>`);
+    });
+    expect(onChange).toHaveBeenLastCalledWith("<p>x y</p>");
+  });
+
+  it("paste from the editor's own clipboard (data-pm-slice) keeps styled spans", async () => {
+    const { editor, onChange } = await setup();
+    act(() => {
+      editor.view.pasteHTML(
+        '<p data-pm-slice="1 1 []"><span style="color:#1e5aa8;font-size:1.25em">x</span> y</p>'
+      );
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      '<p><span style="color:#1e5aa8;font-size:1.25em">x</span> y</p>'
+    );
+  });
+
+  it("inline paste drops colour, font and size styles too", async () => {
+    const { editor, onChange } = await setup({ mode: "inline", label: "Title" });
+    act(() => {
+      editor.view.pasteHTML(
+        '<span style="color:#ff0000;font-family:Arial;font-size:2em">red</span> text'
+      );
+    });
+    expect(onChange).toHaveBeenLastCalledWith("red text");
   });
 
   it("inline paste of several paragraphs becomes line breaks", async () => {
@@ -343,6 +398,163 @@ describe("RichTextEditor", () => {
     expect(input).toHaveFocus();
     await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");
     expect(input).toHaveFocus();
+  });
+});
+
+describe("RichTextEditor theme styling (ADR-0011)", () => {
+  it("shows no font/size/colour controls when the project has no theme", async () => {
+    const { editor } = await setup({ value: "<p>x</p>" });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    expect(screen.getByRole("button", { name: "Bold" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Font")).toBeNull();
+    expect(screen.queryByLabelText("Size")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Colour" })).toBeNull();
+  });
+
+  it("size 125% wraps the selection in a canonical font-size span", async () => {
+    themeState.theme = THEME;
+    const { editor, onChange } = await setup({ value: "<p>word</p>" });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    await userEvent.click(screen.getByLabelText("Size"));
+    await userEvent.click(screen.getByRole("option", { name: "125%" }));
+    expect(onChange).toHaveBeenLastCalledWith('<p><span style="font-size:1.25em">word</span></p>');
+    await waitFor(() => expect(screen.getByLabelText("Size")).toHaveTextContent("125%"));
+  });
+
+  it("font picker lists the theme fonts in their own font and sets/unsets the family", async () => {
+    themeState.theme = THEME;
+    const { editor, onChange } = await setup({ value: "<p>word</p>" });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    await userEvent.click(screen.getByLabelText("Font"));
+    const option = screen.getByRole("option", { name: "Open Sans" });
+    expect(option.style.fontFamily).toContain("Open Sans");
+    await userEvent.click(option);
+    expect(onChange).toHaveBeenLastCalledWith(
+      "<p><span style=\"font-family:'Open Sans'\">word</span></p>"
+    );
+    await waitFor(() => expect(screen.getByLabelText("Font")).toHaveTextContent("Open Sans"));
+    await userEvent.click(screen.getByLabelText("Font"));
+    await userEvent.click(screen.getByRole("option", { name: "Default" }));
+    expect(onChange).toHaveBeenLastCalledWith("<p>word</p>");
+  });
+
+  it("round-trips a stored styled span unchanged", async () => {
+    themeState.theme = THEME;
+    const value = "<p><span style=\"color:#1e5aa8;font-family:'Open Sans'\">x</span> y</p>";
+    const { editor } = await setup({ value });
+    expect(toStored(editor.getHTML(), "rich")).toBe(value);
+  });
+
+  it("inline mode: a title gets a theme colour span from the swatch grid", async () => {
+    themeState.theme = THEME;
+    const { editor, onChange } = await setup({ mode: "inline", value: "Title", label: "Title" });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Colour" }));
+    const dialog = screen.getByRole("dialog", { name: "Text colour" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Brand" }));
+    expect(onChange).toHaveBeenLastCalledWith('<span style="color:#1e5aa8">Title</span>');
+    expect(screen.queryByRole("dialog", { name: "Text colour" })).toBeNull();
+  });
+
+  it("colour trigger announces its dialog and toggles it on repeated clicks", async () => {
+    themeState.theme = THEME;
+    const { editor } = await setup({ value: "<p>word</p>" });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    const trigger = screen.getByRole("button", { name: "Colour" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Text colour" })).toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(trigger);
+    expect(screen.queryByRole("dialog", { name: "Text colour" })).toBeNull();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("swatches compare canonical colours (uppercase and #rgb theme values show as pressed)", async () => {
+    themeState.theme = {
+      ...THEME,
+      colors: [
+        { name: "Upper", value: "#1E5AA8" },
+        { name: "Short", value: "#abc" },
+      ],
+    };
+    const { editor } = await setup({ value: '<p><span style="color:#1e5aa8">a</span> b</p>' });
+    act(() => {
+      editor.commands.setTextSelection({ from: 1, to: 2 });
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Colour" }));
+    let dialog = screen.getByRole("dialog", { name: "Text colour" });
+    expect(within(dialog).getByRole("button", { name: "Upper" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Short" }));
+    act(() => {
+      editor.commands.setTextSelection({ from: 1, to: 2 });
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Colour" }));
+    dialog = screen.getByRole("dialog", { name: "Text colour" });
+    expect(within(dialog).getByRole("button", { name: "Short" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("custom colour input and Default set and unset the colour", async () => {
+    themeState.theme = THEME;
+    const { editor, onChange } = await setup({ value: "<p>word</p>" });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Colour" }));
+    fireEvent.change(screen.getByLabelText("Custom colour"), { target: { value: "#00aa00" } });
+    expect(onChange).toHaveBeenLastCalledWith('<p><span style="color:#00aa00">word</span></p>');
+    const dialog = screen.getByRole("dialog", { name: "Text colour" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Default" }));
+    expect(onChange).toHaveBeenLastCalledWith("<p>word</p>");
+  });
+
+  it("clear formatting removes styled spans", async () => {
+    themeState.theme = THEME;
+    const { editor, onChange } = await setup({
+      value: '<p><span style="color:#1e5aa8;font-size:2em">word</span></p>',
+    });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Clear formatting" }));
+    expect(onChange).toHaveBeenLastCalledWith("<p>word</p>");
+  });
+
+  it("the style controls join the toolbar's roving tabindex", async () => {
+    themeState.theme = THEME;
+    const { editor } = await setup({ value: "<p>x</p>" });
+    act(() => {
+      editor.commands.selectAll();
+    });
+    const toolbar = screen.getByRole("toolbar");
+    for (const el of [
+      within(toolbar).getByLabelText("Font"),
+      within(toolbar).getByLabelText("Size"),
+      within(toolbar).getByRole("button", { name: "Colour" }),
+    ]) {
+      el.focus();
+      const enabled = within(toolbar)
+        .getAllByRole("button")
+        .filter((b) => !b.hasAttribute("disabled"));
+      expect(enabled.filter((b) => b.tabIndex === 0)).toEqual([el]);
+    }
   });
 });
 

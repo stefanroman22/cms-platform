@@ -17,6 +17,13 @@
   container-stagger rule, the `first:pl-0` underline gotcha, 3D dual-trigger mount +
   `frameloop="demand"`, SWR `useQuery`), copy from `learnings-template/frontend-patterns.md`.
 - All UI strings via react-i18next `useTranslation()` + `t("ns.key")` — never hardcoded.
+- Every image and illustration reads its CMS image field through `resolveSite` (fallback: the
+  `public/images/` mock, or an animated SVG component kept in code), rendered at its `hint` size
+  (`width`/`height`, `object-fit: cover`); an empty image renders the fallback or nothing, never an
+  empty box. Every content icon (on services, features, items, contact methods and the like)
+  renders `<CmsIcon icon={readIcon(value)} size=… label=… fallback={<DesignedIcon/>} />` (the
+  designed or matching Lucide icon is the fallback and the seed). Only favicon/OG generator assets
+  and UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code.
 - CMS text rendering (kit: `src/lib/cms-rich-text/`, rules in `client-kit/rich-text/README.md`):
   | Use | How |
   |---|---|
@@ -28,9 +35,10 @@
   | Headings inside cards | `headingOffset={1}` |
   CMS prose is rendered with `<RichText>`, never `dangerouslySetInnerHTML`, never inside `<p>`
   (rich values are block-level; use `<RichText as="div" className=...>`; inline values may sit in
-  `<p>`/`<h*>`). react-i18next values are read as raw strings (see `i18n-setup`). No colours in
-  content: emphasis is themed by `--cms-rich-*`, never by inline styles or colour classes in CMS text.
+  `<p>`/`<h*>`). react-i18next values are read as raw strings (see `i18n-setup`). Content may
+  carry span colours/fonts/sizes chosen by the client (ADR-0011, kit ≥ 1.1.0 renders them; never
+  strip `style` yourself); the site's own emphasis stays themed by `--cms-rich-*`.
 - Mobile-first Tailwind (default = mobile; `md:`/`lg:`/`xl:` upscale).
 
 **Gate:** Check off a `BUILD_PLAN.md` item ONLY after the section renders correctly for ALL
-locales. Run the motion-animations grep: zero `framer-motion` matches. Every CMS text render site uses `<RichText>`/`plainText`/`splitRichWords`.
+locales. Run the motion-animations grep: zero `framer-motion` matches. Every CMS text render site uses `<RichText>`/`plainText`/`splitRichWords`. Every image and content icon in the section has a CMS field behind it.

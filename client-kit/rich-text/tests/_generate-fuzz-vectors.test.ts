@@ -45,7 +45,8 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-// Fragments exercise: every RICH_TAGS member and every SYNONYMS source tag,
+// Fragments exercise: every RICH_TAGS member (incl. styled spans: valid,
+// entity-quoted, unquoted and invalid style) and every SYNONYMS source tag,
 // unknown/DROP_WITH_CONTENT tags (incl. script/style raw-text), attributes
 // with double/single/unquoted/missing values, self-closing tags, comments
 // (terminated and unterminated), <!DOCTYPE>, <?pi?>, <![CDATA[...]]> and a
@@ -66,6 +67,10 @@ const FRAGMENTS: string[] = [
   "<p>a</p><p>b</p>",
   "<div>d</div>",
   "<span>s</span>",
+  '<span style="color:#1E5AA8;font-size:1.5em">st</span>',
+  "<span style='font-family: &quot;Open Sans&quot;, serif'>sf</span>",
+  "<span style=color:rgb(1,2,3)>su</span>",
+  '<span style="position:fixed">sp</span>',
   "<strong>b</strong>",
   "<b>b2</b>",
   "<em>i</em>",

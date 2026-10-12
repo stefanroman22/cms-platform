@@ -7,9 +7,11 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
 from starlette.concurrency import run_in_threadpool
+from storage3.exceptions import StorageApiError
 
 from ..core import pg_rate_limit
 from ..core.limiter import limiter
@@ -34,14 +36,22 @@ from ..models.schemas import (
 )
 from ..services.auth_service import hash_password
 from ..services.content_locale import pick_locale_entry
-from ..services.content_structure import VALID_REPEATER_TYPES, StructureError, apply_structure_rules
+from ..services.content_structure import (
+    VALID_REPEATER_TYPES,
+    StructureError,
+    _validate_schema,
+    apply_structure_rules,
+    normalize_media_fields,
+)
 from ..services.password_changed_email import send_password_changed_email
 from ..services.rich_text import RichTextFieldError, field_formats, normalize_content
 from ..services.segments import segments_of, src_hash
 from ..services.service_types import SERVICE_TYPES
 from ..services.sessions import revoke_all_for_user
 from ..services.supabase_client import get_supabase_admin
+from ..services.svg_sanitize import SvgRejected, sanitize_svg
 from ..services.test_data import is_test_email, is_test_slug
+from ..services.theme import ThemeError, normalize_theme
 from ..services.welcome_email import send_welcome_email
 from ..translation import get_provider
 from ..translation.sync import sync_locale_draft
@@ -66,26 +76,34 @@ _ALLOWED_MIME: dict[str, str | None] = {
     "gallery": "image/",
     "video": "video/",
     "file_download": None,
+    "repeater": "image/",
+    "theme": None,  # validated by extension (_FONT_EXT_TO_MIME)
 }
 
-# Explicit deny — INFRA-004. Even though the type prefix matches
-# (image/* for SVG), the file is XML and can carry inline <script>,
-# making any public-URL render a stored-XSS sink. Reject at upload.
-# If a client genuinely needs SVG support, configure the bucket to
-# serve it with `Content-Disposition: attachment` AND a CSP that
-# blocks scripts on the bucket origin first.
+# Explicit deny — INFRA-004. These types render as active documents from
+# a public URL, making them a stored-XSS sink. SVG (also XML that can
+# carry inline <script>) is no longer denied: every SVG upload is
+# rewritten by services/svg_sanitize.py first (ADR-0011).
 _DENIED_MIME: frozenset[str] = frozenset(
     {
-        "image/svg+xml",
         "text/html",
         "application/xhtml+xml",
         "application/x-shockwave-flash",
     }
 )
 
+# Theme uploads are font files. Browsers send odd MIME types for fonts,
+# so the extension decides and the stored content-type is set from it.
+_FONT_EXT_TO_MIME: dict[str, str] = {
+    ".woff2": "font/woff2",
+    ".woff": "font/woff",
+    ".ttf": "font/ttf",
+    ".otf": "font/otf",
+}
+MAX_FONT_SIZE = 5 * 1024 * 1024  # 5 MB
+
 # Fallback extensions when the uploaded filename has none.
-# Note: no entry for image/svg+xml — it is denied at the MIME check
-# above before this map is consulted.
+# Note: no entry for image/svg+xml — sanitised SVGs always get ".svg".
 _MIME_TO_EXT: dict[str, str] = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -231,6 +249,47 @@ async def get_service(
     return _service_detail(project, user, service_key, loc)
 
 
+@router.get("/projects/{project_slug}/theme")
+async def get_project_theme(project_slug: str, request: Request):
+    """The project's draft theme (default locale) for the dashboard's rich-text
+    font/colour controls, or nulls when the project has no theme service."""
+    user = await require_user(request)
+    project = require_project_access(project_slug, user)
+    default_locale = project.get("default_locale") or "en"
+    result = (
+        get_supabase_admin()
+        .table("project_services")
+        .select("service_key, content_entries(locale, draft_content, published_content)")
+        .eq("project_id", project["id"])
+        .eq("service_type_slug", "theme")
+        .in_("content_entries.locale", [default_locale])
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return {"theme": None, "service_key": None}
+    svc = result.data[0]
+    entry = pick_locale_entry(svc.get("content_entries"), default_locale, default_locale)
+    theme = None
+    if entry:
+        theme = entry.get("draft_content")
+        if theme is None:
+            theme = entry.get("published_content")
+    return {"theme": theme, "service_key": svc["service_key"]}
+
+
+def _storage_prefix(project_slug: str) -> str:
+    """Public URL prefix of the project's storage folder, built the same way
+    `upload_file` builds its URLs, so every file uploaded to the project starts
+    with it: `https://<ref>.supabase.co/storage/v1/object/public/cms-files/<slug>/`."""
+    url = get_supabase_admin().storage.from_(STORAGE_BUCKET).get_public_url(f"{project_slug}/")
+    parts = urlsplit(url)
+    # Anchor on the end: a slug such as "public" also occurs earlier in the path.
+    if not parts.path.endswith(f"/{STORAGE_BUCKET}/{project_slug}/"):
+        raise RuntimeError(f"unexpected storage public URL for project {project_slug!r}")
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
 @router.put("/projects/{project_slug}/services/{service_key}", response_model=ServiceDetailOut)
 async def save_service(
     project_slug: str,
@@ -278,6 +337,12 @@ async def save_service(
     svc_id = svc_result.data["id"]
     service_type = svc_result.data["service_type_slug"]
     now = datetime.now(UTC).isoformat()
+    # A theme is project-wide and never translated (ADR-0011): every save goes
+    # through the default locale and syncs to the others, whatever `?locale=` says.
+    # The response still describes the requested locale (the dashboard caches it there).
+    requested_loc = loc
+    if service_type == "theme":
+        loc = default_locale
 
     # Load all existing per-locale rows for this service.
     rows = (
@@ -295,6 +360,8 @@ async def save_service(
     # override diff, and every per-locale upsert all carry it. When the
     # project is rich-text-enabled, every inline/rich leaf is canonicalised
     # (sanitised + limit-checked) before it is ever persisted or translated.
+    # Theme content and repeater image/icon values are validated on every save,
+    # whatever the rich-text version (ADR-0011).
     version = int(project.get("rich_text_version") or 0)
     d = by_locale.get(default_locale) or {}
     t = by_locale.get(loc) or {}
@@ -310,9 +377,17 @@ async def save_service(
                 t.get("published_content"),
             ),
         )
+        if service_type == "theme":
+            content_in = normalize_theme(content_in, storage_prefix=_storage_prefix(project_slug))
+        elif service_type == "repeater":
+            content_in = normalize_media_fields(content_in)
         if version >= 1:
             content_in = normalize_content(service_type, content_in)
     except StructureError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    except ThemeError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
@@ -398,7 +473,7 @@ async def save_service(
 
     # Return fresh state for the edited locale. Auth and project are already
     # resolved above; re-running them would cost two more Supabase calls.
-    return _service_detail(project, user, service_key, loc)
+    return _service_detail(project, user, service_key, requested_loc)
 
 
 @router.post("/projects/{project_slug}/services/{service_key}/upload")
@@ -434,6 +509,20 @@ async def upload_file(
 
     # MIME type validation
     mime = file.content_type or "application/octet-stream"
+    original_suffix = Path(file.filename or "").suffix.lower()
+    if service_type == "theme":
+        font_mime = _FONT_EXT_TO_MIME.get(original_suffix)
+        if font_mime is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Theme uploads accept font files (.woff2, .woff, .ttf, .otf)",
+            )
+        mime = font_mime
+    # Compare the bare type: "IMAGE/SVG+XML; charset=utf-8" must not skip sanitising.
+    bare_mime = mime.split(";", 1)[0].strip().lower()
+    is_svg = bare_mime == "image/svg+xml" or original_suffix == ".svg"
+    if is_svg:
+        mime = "image/svg+xml"
     if mime in _DENIED_MIME:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -453,19 +542,41 @@ async def upload_file(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="File exceeds the 50 MB limit.",
         )
+    if service_type == "theme" and len(content) > MAX_FONT_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Font file exceeds the 5 MB limit.",
+        )
+    if is_svg:
+        try:
+            content = sanitize_svg(content)
+        except SvgRejected as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"SVG rejected: {exc}",
+            ) from exc
 
     # Build storage path: {project_slug}/{service_key}/{uuid}.{ext}
-    original_suffix = Path(file.filename or "").suffix.lower()
-    ext = original_suffix if original_suffix else _MIME_TO_EXT.get(mime, "")
+    if is_svg:
+        ext = ".svg"
+    else:
+        ext = original_suffix if original_suffix else _MIME_TO_EXT.get(mime, "")
     storage_path = f"{project_slug}/{service_key}/{uuid.uuid4()}{ext}"
 
     # Upload via service role client (bypasses RLS)
     sb_admin = get_supabase_admin()
-    sb_admin.storage.from_(STORAGE_BUCKET).upload(
-        path=storage_path,
-        file=content,
-        file_options={"content-type": mime, "upsert": "false"},
-    )
+    try:
+        sb_admin.storage.from_(STORAGE_BUCKET).upload(
+            path=storage_path,
+            file=content,
+            file_options={"content-type": mime, "upsert": "false"},
+        )
+    except StorageApiError as exc:
+        # The bucket's own allow-list (mime types, size) has the last word.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Storage rejected this file type ({exc.message})",
+        ) from exc
 
     public_url = sb_admin.storage.from_(STORAGE_BUCKET).get_public_url(storage_path)
 
@@ -515,6 +626,28 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail=f"item_schema field type '{field.type}' is invalid. Must be one of: {', '.join(sorted(valid_field_types))}",
                 )
+        try:
+            _validate_schema([f.model_dump(exclude_none=True) for f in body.item_schema])
+        except StructureError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
+
+    # At most one theme service per project (ADR-0011).
+    if body.service_type_slug == "theme":
+        existing_theme = (
+            sb.table("project_services")
+            .select("id")
+            .eq("project_id", project["id"])
+            .eq("service_type_slug", "theme")
+            .limit(1)
+            .execute()
+        )
+        if existing_theme.data:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Project already has a theme service",
+            )
 
     sb.table("project_services").insert(
         {
@@ -538,7 +671,7 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
             .execute()
         )
         if svc_result.data:
-            schema_payload = [f.model_dump() for f in body.item_schema]
+            schema_payload = [f.model_dump(exclude_none=True) for f in body.item_schema]
             default_locale = project.get("default_locale") or "en"
             sb.table("content_entries").insert(
                 {
@@ -571,6 +704,36 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
                     "locale": default_locale,
                     "published_content": {"entries": {}, "_formats": body.formats},
                     "draft_content": {"entries": {}, "_formats": body.formats},
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "updated_by": user.id,
+                }
+            ).execute()
+
+    # For theme: seed an empty theme so the service starts in the validated shape.
+    if body.service_type_slug == "theme":
+        svc_result = (
+            sb.table("project_services")
+            .select("id")
+            .eq("project_id", project["id"])
+            .eq("service_key", body.service_key)
+            .single()
+            .execute()
+        )
+        if svc_result.data:
+            empty_theme = {
+                "colors": [],
+                "surfaces": [],
+                "fonts": [],
+                "body_font": "",
+                "heading_font": "",
+            }
+            default_locale = project.get("default_locale") or "en"
+            sb.table("content_entries").insert(
+                {
+                    "project_service_id": svc_result.data["id"],
+                    "locale": default_locale,
+                    "published_content": empty_theme,
+                    "draft_content": empty_theme,
                     "updated_at": datetime.now(UTC).isoformat(),
                     "updated_by": user.id,
                 }

@@ -1,4 +1,4 @@
-/* Vendored from CMS client-kit/rich-text v1.0.0 — do not edit; re-sync instead. */
+/* Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead. */
 /* CMS rich text base styles (ADR-0010). Theme ONLY through the --cms-rich-* variables:
    define them on :root, on your dark-theme selector and on every inverted surface.
    Selectors are ".cms-rich <el>" (specificity (0,1,1)); the universal spacing rules below

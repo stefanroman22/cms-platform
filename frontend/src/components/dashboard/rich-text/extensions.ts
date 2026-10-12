@@ -1,11 +1,13 @@
 import { Extension } from "@tiptap/core";
 import Document from "@tiptap/extension-document";
+import { Color, FontFamily, FontSize, TextStyle } from "@tiptap/extension-text-style";
 import StarterKit from "@tiptap/starter-kit";
 import { Placeholder } from "@tiptap/extensions";
 import { safeHref } from "@/lib/cms-rich-text";
 
-// Colours, fonts, sizes and highlights are intentionally NOT loaded (ADR-0010): pasted
-// styling vanishes while style-based bold/italic (Google Docs) is still recognised.
+// Colour, font and size marks (ADR-0011) are stored as one canonical span via toStored.
+const textStyle = [TextStyle, Color, FontFamily, FontSize];
+
 const link = {
   openOnClick: false,
   autolink: true,
@@ -19,6 +21,7 @@ const link = {
 export function richExtensions(placeholder = "") {
   return [
     StarterKit.configure({ heading: { levels: [2, 3, 4] }, code: false, codeBlock: false, link }),
+    ...textStyle,
     Placeholder.configure({ placeholder }),
   ];
 }
@@ -49,6 +52,7 @@ export function inlineExtensions(placeholder = "") {
       trailingNode: false,
       link,
     }),
+    ...textStyle,
     InlineDocument,
     InlineEnter,
     Placeholder.configure({ placeholder }),

@@ -39,6 +39,14 @@
    These complement — do not repeat — the `<universal_ux_requirements>` block
    (`<intro_loader>`/`<themed_scrollbar>`/`<page_transitions>`), which stays mandatory verbatim.
 
+   ## CMS editability standards (every build — paste verbatim)
+
+   The owner edits the site's look from the CMS (ADR-0011). Require:
+   - **Every image and illustration is a CMS image slot** with a stated pixel size at 2× the rendered slot (full-width banner 1600×600, card 800×600, avatar 400×400) and an art-direction note. Placeholder art is the seed; the owner replaces it. Only the favicon and OG images are fixed.
+   - **Every content icon is a recolourable CMS icon slot** (icons on services, features, items, contact methods and the like) from ONE consistent set (Lucide or a matching line set), a separate single-colour SVG; name the surface it sits on. UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code.
+   - **A named palette and named surfaces** (page light/dark, card, header, footer) in hex, and **Google Fonts** families with only the weights used (italic only if used). They seed the client's CMS theme; the client can change the fonts later.
+   - **Rich text may carry client-chosen colours, fonts and sizes**, so text must stay legible on every surface (WCAG AA).
+
    ## Research insights for this category
 
    <copy "Common patterns observed" block from research/<bucket>.md
@@ -106,6 +114,10 @@
    - If either is missing → echo: *"Phase 5: lead has `<N>` languages but the prompt has no language switcher. The skill must emit a theme-matched locale switcher in the nav (deliverable 14). Retry / save-as-is / abort?"* Halt for answer.
    - On retry, re-invoke the skill once. If still missing, default to **abort**.
 
+6c. **CMS editability check.** Grep the extracted XML for `<cms_theme_palette>`, `<image_slots>` and `<icons>`.
+   - If any is missing → echo: *"Phase 5: extracted XML is missing `<tagname>` (CMS theme, image slots, icons — ADR-0011). Retry / save-as-is / abort?"* Halt for answer.
+   - On retry, re-invoke the skill once. If still missing, default to **abort**.
+
 7. Echo: *"Phase 5: generated `<N>` chars of XML."*
 
 ## Outputs
@@ -120,6 +132,7 @@
 | No fenced xml block in output | "Phase 5: model output has no `\`\`\`xml` block. First 500 chars: `<excerpt>`. Retry / save-as-is / abort?" Halt. |
 | Missing universal UX block | "Phase 5: extracted XML is missing `<tagname>`. The skill must emit `<universal_ux_requirements>` literally from `references/prompt-skeleton.xml.md`. Retry / save-as-is / abort?" Retry once → on second miss, default abort. |
 | Missing switcher on multilingual lead | "Phase 5: lead has `<N>` languages but no language switcher in the prompt (deliverable 14). Retry / save-as-is / abort?" Retry once → on second miss, default abort. |
+| Missing CMS editability block | "Phase 5: extracted XML is missing `<tagname>` (CMS theme, image slots, icons — ADR-0011). Retry / save-as-is / abort?" Retry once → on second miss, default abort. |
 | `reuse_from_lead` references a missing prompt | "Lead `<X>` has no `design_prompt`. Pick a different reference, or proceed without?" |
 
 ## Self-improvement hook

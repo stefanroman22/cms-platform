@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.0.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead.
 // Python's `str.strip()` (no args) trims by `str.isspace()`, whose character
 // set differs from JS's `String.prototype.trim()`: JS treats U+FEFF (BOM /
 // zero-width no-break space) as whitespace, Python does not; Python treats

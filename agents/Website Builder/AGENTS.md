@@ -35,7 +35,8 @@ SSG pre-rendering in a sibling folder under `C:\Users\stefa\.gemini\antigravity\
 | Hosting target | Static `dist/` (Vercel static or nginx Docker) |
 | CMS coupling | Standalone marketing sites |
 | Output folder | Sibling to "CMS - websites" at `scratch\<business-name>\` |
-| Mock images | Copied from design into `public/images/<section>/`, never replaced with stock |
+| Mock images | Copied from design into `public/images/<section>/`, never replaced with stock; each one is the fallback/seed of a CMS image field with a size hint |
+| CMS look | `general_theme` service (palette, surfaces, fonts) + CMS image/icon fields (ADR-0011) |
 | Skill location | Bundled in `.claude/skills/`; externals in `~/.claude/plugins/` |
 | Runtime learnings template | `agents/Website Builder/learnings-template/` |
 
@@ -79,7 +80,9 @@ SSG pre-rendering in a sibling folder under `C:\Users\stefa\.gemini\antigravity\
 - **Typography**: avoid Inter/Roboto/Arial/system-ui for the display font (reads as "AI
   default"). Pair a distinctive display font with a refined body via `@fontsource*` + CSS
   `@import` (e.g. Fraunces, Instrument Serif, Cabinet Grotesk + Inter, Geist Sans, IBM Plex
-  Sans). NEVER `next/font`.
+  Sans). NEVER `next/font`. Prefer Google Fonts families: they seed the `general_theme`
+  fonts, and the bundled `@fontsource` copy is the fallback behind
+  `var(--cms-font-heading, …)` / `var(--cms-font-body, …)`.
 - **Color**: a dominant color with sharp accents beats timid, evenly-distributed palettes.
   Avoid purple-gradient-on-white.
 - **Motion**: high-impact moments > scattered micro-interactions.
@@ -159,7 +162,7 @@ Operate at maximum thoroughness (xhigh effort): multi-pass self-review each phas
 
    Ask ONE question at a time. Do not stack multiple questions. Do not ask trivial questions (e.g. "should I use TypeScript?" — yes, always). Make small judgment calls silently and surface them in the final summary.
 
-2. **Mock images stay mock.** The design contains placeholder images. **Copy them as-is** into `public/images/` in the new project — never fetch external stock photos, never try to "improve" them. The user will swap them later. The same applies to placeholder copy unless it's clearly Lorem ipsum.
+2. **Mock images stay mock.** The design contains placeholder images. **Copy them as-is** into `public/images/` in the new project — never fetch external stock photos, never try to "improve" them. The user will swap them later. The same applies to placeholder copy unless it's clearly Lorem ipsum. Each copied image is the fallback of a CMS image field (and the connector uploads it as the seed), so record its slot size hint in `_design-manifest.json`.
 
 3. **Translation is structural, not semantic.** When scaffolding multilingual support: scaffold the locale routing + messages structure, build the messages JSON files, generate hreflang and `<html lang>` correctly — use the design's original copy verbatim in the default locale, and mirror those same values into non-default locale seed files (no `[XX]`/`[NL]` placeholders). The CMS auto-translates once connected.
 
@@ -171,11 +174,17 @@ Operate at maximum thoroughness (xhigh effort): multi-pass self-review each phas
    - Build tool is **Vite 7 + React 19**, pre-rendered by **`vite-react-ssg`**. NEVER Next.js, `app/` router, `next.config`, `middleware.ts`.
    - Routing is **React Router v7 (library mode)**, locale-prefixed `/:locale/...`. Every page nests under the locale segment, even single-locale sites.
    - Head/SEO via **React 19 hoisted `<title>/<meta>/<link>`** + `lib/head.ts`; sitemap/robots/OG are **prebuild scripts** → `public/`. NEVER `generateMetadata`, `app/sitemap.ts`, `next/og`.
-   - Fonts via `@fontsource*` + CSS `@import`. NEVER `next/font`. Images via `<img srcset>`/an `<Image>` wrapper. NEVER `next/image`.
+   - Fonts via `@fontsource*` + CSS `@import`, used through `var(--cms-font-body, <@fontsource family>)` / `var(--cms-font-heading, …)`. NEVER `next/font`. Images via `<img srcset>`/an `<Image>` wrapper. NEVER `next/image`.
    - **localStorage is first-class:** data cache = TanStack Query persisted to localStorage (`lib/query.ts`); app/UI state = Zustand `persist` (`lib/store.ts`). (This REPLACES the old "never use localStorage" rule.)
    - All clickable elements have accessible names; all images have `alt`; all forms have labels. Mobile-first; verify 375/768/1024/1440 before done.
    - Ship the **browser-translation resilience shim** as the first inline `<script>` in `index.html` (patch `Node.prototype.removeChild`/`insertBefore` when `child.parentNode !== this`; never patch `replaceChild`). Add `suppressHydrationWarning` on `<html>` (covers translator mutation; relevant on the SSG-hydrated path).
-   - **CMS rich text via the kit:** vendor `client-kit/rich-text` into `src/lib/cms-rich-text/` (sync script, never hand-edit), import `cms-rich.css`, and define `--cms-rich-*` per surface (light, dark, every inverted surface) with the AA contrast rule. Render human-prose CMS text with `<RichText>` / `splitRichWords`; use `plainText` for metadata, JSON-LD, alt and keys. Content carries no colours.
+   - **CMS rich text via the kit:** vendor `client-kit/rich-text` into `src/lib/cms-rich-text/` (sync script, never hand-edit), import `cms-rich.css`, and define `--cms-rich-*` per surface (light, dark, every inverted surface) with the AA contrast rule. Render human-prose CMS text with `<RichText>` / `splitRichWords`; use `plainText` for metadata, JSON-LD, alt and keys.
+   - **CMS theme, images and icons (ADR-0011) — the same five principles as the connector's "Theme, images and icons contract":**
+     1. **Every image and illustration is a CMS image field** (standalone `image` service or a repeater `image` field) with a `hint: {width, height}` matching the slot's rendered aspect at 2× density (e.g. full-width banner 1600×600, card 800×600, avatar 400×400). The design's artwork is uploaded as the seed value (or kept as the in-code fallback when it is an animated SVG component). Only the favicon/OG generator assets stay in code.
+     2. **Every content icon is a CMS icon field** (icons on services, features, items, contact methods and the like; `icon` repeater field, value `{src, mode, color, name}`) with `surface` set to the theme surface it sits on; rendered via the kit's `<CmsIcon>`; the design's icon (or a matching Lucide icon) is the seed; when empty, sites fall back to their designed icon. UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code. Contact-method icons stay heuristic only where the contact service is `key_value`.
+     3. **Every project gets a `general_theme` service** (`theme` type, page General) seeded from the design: palette colours (named), surfaces (page light/dark, card, header, footer), fonts (Google by default, weights actually used, italic only if used), `body_font`, `heading_font`. Sites render `<ThemeStyles theme>` in the root layout/head and use `var(--cms-font-body, <bundled default>)` / `var(--cms-font-heading, …)` for font tokens; the bundled default (`@fontsource` for Vite sites) stays as fallback. Theme colours are recommendations; do not drive the site palette from them.
+     4. **Rich text may contain styled spans** (ADR-0011): sites render through the kit `<RichText>` (kit ≥ 1.1.0), never strip `style` themselves. Content may carry span colours/fonts/sizes chosen by the client; themes keep `--cms-rich-*` for marks; check AA contrast of the theme palette against its surfaces.
+     5. **Test matrix additions** (phase 8): swap an image in draft → preview shows the new URL; set an icon (Lucide pick) with a colour → preview shows a `.cms-icon` with that `background-color`; set `body_font` to a different Google font → computed `font-family` of `body` starts with it; save a title with a span colour → rendered span has that colour; empty image/icon → fallback renders, no layout gap.
    - **CMS prose is rendered with `<RichText>`, never `dangerouslySetInnerHTML` (except JSON-LD), never `react-markdown`, never inside `<p>`.**
    - Booking/selection UI: the week-paginated 7-day picker, per-card cross-fade select, responsive icon-only pill, and no-scroll success screen behave exactly as before (framework-agnostic component patterns).
    - Inter-page route loader is first-class: a themed full-screen splash as the React Router Suspense `fallback` (`components/RouteLoader.tsx`) with a dedicated localized `loader.routeLoading` key; z-index above header + mobile menu; respect reduced-motion.
@@ -251,6 +260,7 @@ Under `/ralph-loop`, emit the completion promise string (e.g. `<promise>SITE_COM
 - Skip the locale URL segment — every page must nest under `/:locale/`, even if only one locale is active.
 - Hand-translate into placeholder files. Seeds mirror the default locale; the CMS translates after connection.
 - Fetch external stock images to "replace" mock ones.
+- Hard-code an image, illustration or content icon with no CMS field behind it (only favicon/OG generator assets and UI-control icons stay in code), or drive the site palette from the theme colours.
 - Skip clarifying questions when genuinely ambiguous.
 - Mark a `BUILD_PLAN.md` item complete if you didn't actually implement it.
 - Delete or overwrite `.learnings/` files; only append.

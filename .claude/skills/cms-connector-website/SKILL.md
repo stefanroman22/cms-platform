@@ -96,6 +96,7 @@ LEARNINGS.md is **append-only** — never delete or rewrite existing rules.
 - User says "abort" / "stop" — halt cleanly, do not delete the report (user keeps for reference).
 - A credential error halts the current phase only. Other phases may resume after fix.
 - Rich text (ADR-0010): Phase 2 classifies every field as plain/inline/rich (repeater `inline`/`richtext`, key_value `formats`); Phase 4 §4.1.6 point 6 vendors the kit and renders via `<RichText>` (rules in `client-kit/rich-text/README.md`); Phase 5 5i includes the rich-text probe (`.cms-rich strong`/`a[href]`/`li` present, no literal tags, `strong` colour equals `--cms-rich-strong`). Never `react-markdown`.
+- Theme, images and icons (ADR-0011): every image and illustration is a CMS image field with a size hint, every content icon a CMS icon field with a `surface` (rendered via `<CmsIcon>`; UI-control icons stay in code), every project gets a `general_theme` service, and rich text may carry styled spans (kit ≥ 1.1.0). Phase 2 lists them, Phase 4 §4.1.6 point 7 wires them, Phase 5 5i runs the theme/image/icon probe. The five principles live in `AGENTS.md` → "Theme, images and icons contract".
 - Test matrix failure in Phase 5 — fix, re-test, learn. Never claim Phase 6 success while any 5a–5h test is red.
 
 ## End-of-run cleanup

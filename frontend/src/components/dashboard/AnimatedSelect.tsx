@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { dashboardInputLgCn } from "@/lib/styles";
@@ -21,7 +21,8 @@ export function AnimatedSelect({
 }: {
   value: string;
   onChange: (v: string) => void;
-  options: readonly { value: string; label: string }[];
+  /** `style` renders an option in its own look (e.g. a font in that font). */
+  options: readonly { value: string; label: string; style?: CSSProperties }[];
   ariaLabel: string;
   initialChevron?: "up" | "down";
   /** Toolbar-sized trigger and a min-width list (default is the full-width form input). */
@@ -136,6 +137,7 @@ export function AnimatedSelect({
                   key={opt.value}
                   role="option"
                   aria-selected={isSelected}
+                  style={opt.style}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.18, ease: "easeOut", delay: i * 0.03 }}

@@ -146,6 +146,15 @@ console.log("robots.txt written");
 
 OG images are generated at build time (1200×630) by `satori` + `@resvg/resvg-js`/`sharp`. No
 `next/og` `ImageResponse`. Per-locale variants are generated when locales differ significantly.
+The OG generator and its assets are the one image path that stays in code (every other image is a
+CMS image field, ADR-0011).
+
+**OG font from the CMS theme:** when the published content has a `general_theme` service, the title
+font is its `heading_font` (`readTheme` from `../lib/cms-rich-text/theme`, fetched at build time from
+`VITE_CMS_ENDPOINT`, never throwing). For a `google` font, fetch `googleFontsHref(font)` WITHOUT a
+browser User-Agent (Google then serves TTF, which satori reads; it cannot read woff2) and download
+the first `src: url(...)`; for an `upload` font, use a `.ttf`/`.otf`/`.woff` file URL. On any
+failure, or with no theme, use the bundled `@fontsource` file as below.
 
 ```ts
 // src/seo/og.gen.ts
@@ -153,13 +162,35 @@ import satori from "satori";
 import sharp from "sharp";
 import { readFileSync, mkdirSync } from "node:fs";
 import { SITE_URL, SUPPORTED_LOCALES } from "../lib/config";
+import { googleFontsHref, readTheme } from "../lib/cms-rich-text/theme";
 
 const pages = ["home", "about", "contact"];
+
+// Theme heading font (ADR-0011) → TTF/OTF/WOFF bytes, or null (never throws).
+async function themeFont(): Promise<{ name: string; data: Buffer } | null> {
+  try {
+    const res = await fetch(process.env.VITE_CMS_ENDPOINT!);
+    const theme = readTheme((await res.json())?.content?.general_theme);
+    const font = theme?.fonts.find((f) => f.family === theme.heading_font);
+    let url: string | undefined;
+    if (font?.source === "google") {
+      const css = await (await fetch(googleFontsHref(font))).text(); // no browser UA → TTF
+      url = css.match(/src:\s*url\(([^)]+)\)/)?.[1];
+    } else if (font?.source === "upload") {
+      url = font.files.find((f) => /\.(ttf|otf|woff)$/i.test(f.url))?.url;
+    }
+    if (!font || !url) return null;
+    return { name: font.family, data: Buffer.from(await (await fetch(url)).arrayBuffer()) };
+  } catch {
+    return null;
+  }
+}
 
 // Load font for satori — if a custom font breaks satori, fall back to Playwright screenshot:
 // const browser = await chromium.launch(); const page = await browser.newPage();
 // await page.goto(`${SITE_URL}/og-template/${route}?locale=${locale}`);
 // await page.screenshot({ path: `public/og/${locale}/${route}.png`, clip: { x:0,y:0,width:1200,height:630 } });
+let fontName = "Inter";
 let fontData: Buffer | undefined;
 try {
   fontData = readFileSync("node_modules/@fontsource/inter/files/inter-latin-400-normal.woff");
@@ -187,12 +218,14 @@ async function generateOg(route: string, locale: string, title: string) {
         ],
       },
     },
-    { width: 1200, height: 630, fonts: fontData ? [{ name: "Inter", data: fontData, weight: 400, style: "normal" }] : [] }
+    { width: 1200, height: 630, fonts: fontData ? [{ name: fontName, data: fontData, weight: 400, style: "normal" }] : [] }
   );
   await sharp(Buffer.from(svg)).png().toFile(`public/og/${locale}/${route}.png`);
 }
 
 (async () => {
+  const cmsFont = await themeFont(); // theme heading_font wins over the bundled fallback
+  if (cmsFont) ({ name: fontName, data: fontData } = cmsFont);
   for (const locale of SUPPORTED_LOCALES) {
     for (const route of pages) {
       await generateOg(route, locale, `<Business> — ${route}`);

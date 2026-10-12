@@ -41,6 +41,10 @@ From the CSS (inline or external):
 - **Spacing** — common spacing values (margin/padding patterns).
 - **Border radii** — what radius values appear.
 - **Shadows** — extract box-shadow definitions verbatim.
+- **Theme seed** (ADR-0011) — the CMS `general_theme` service is seeded from these: the named
+  palette, the named surfaces (page light/dark, card, header, footer: the backgrounds icons and
+  text sit on), and each font family with its source (Google by default), the weights actually
+  used and whether italic is used. Pick `body_font` and `heading_font`.
 
 ### 4. Identify pages and sections
 
@@ -57,8 +61,16 @@ Catalog every image, font, and SVG. For each:
 - Source path in the design
 - Intended destination: `public/images/<section>/<name>.<ext>` (or `public/fonts/`, `public/svg/`)
 - Kind: logo, hero image, content image, icon, decorative
+- For every image and illustration: the `hint: {width, height}` of its CMS image field, matching
+  the slot's rendered aspect at 2× density (e.g. full-width banner 1600×600, card 800×600, avatar
+  400×400). An animated SVG component is noted as the in-code fallback.
+- For every content icon (on services, features, items, contact methods and the like): its name
+  (or the matching Lucide icon) and the `surface` it sits on.
 
-**Do not modify or replace assets.** Just plan their placement.
+Every image and illustration becomes a CMS image field and every content icon a CMS icon field
+(ADR-0011); the design's asset is the seed and the fallback. Only the favicon and OG generator
+assets and UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in
+code. **Do not modify or replace assets.** Just plan their placement.
 
 ### 6. Identify locale hints
 
@@ -128,7 +140,15 @@ Write `_design-manifest.json` in the new project root:
       "inverted": { "strong": "#...", "em": "#...", "link": "#...", "linkHover": "#...", "marker": "#...", "heading": "#...", "quoteBorder": "#...", "rule": "#..." }
     },
     "radii": ["0.25rem", "0.5rem", "1rem"],
-    "shadows": ["0 1px 3px rgba(0,0,0,0.1)", "..."]
+    "shadows": ["0 1px 3px rgba(0,0,0,0.1)", "..."],
+    "theme": {
+      "colors":   [{ "name": "Primary", "value": "#rrggbb" }, { "name": "Accent", "value": "#rrggbb" }],
+      "surfaces": [{ "name": "Page light", "value": "#rrggbb" }, { "name": "Page dark", "value": "#rrggbb" },
+                   { "name": "Card", "value": "#rrggbb" }, { "name": "Header", "value": "#rrggbb" }, { "name": "Footer", "value": "#rrggbb" }],
+      "fonts":    [{ "family": "Font Name", "source": "google", "weights": [400, 600], "italic": false }],
+      "body_font": "Font Name",
+      "heading_font": "Font Name"
+    }
   },
   "pages": [
     {
@@ -145,7 +165,8 @@ Write `_design-manifest.json` in the new project root:
     }
   ],
   "assets": [
-    { "src": "...", "dest": "public/images/hero/photo.jpg", "kind": "image" }
+    { "src": "...", "dest": "public/images/hero/photo.jpg", "kind": "image", "hint": { "width": 1600, "height": 600 } },
+    { "src": "...", "dest": "public/svg/services/cloud.svg", "kind": "icon", "icon": "Cloud", "surface": "Card" }
   ],
   "responsive_gaps": [
     "Pricing comparison table uses fixed widths; needs horizontal scroll wrapper on mobile",
@@ -161,6 +182,20 @@ Write `_design-manifest.json` in the new project root:
 ### `tokens.richText`
 
 Per-surface colours for CMS rich text (`light`, `dark`, `inverted`; omit a surface the design lacks), mapped to the `--cms-rich-*` variables in phase 3. Contrast rule: an accent may be used for a slot only if it reaches WCAG AA (4.5:1) against that surface's background; otherwise set the slot to the surface's text colour and let font weight carry emphasis. If the design gives no values, leave `richText` out and phase 3 derives them from `tokens.colors` by this rule.
+
+### `tokens.theme` and asset hints
+
+`tokens.theme` is the seed of the project's `general_theme` service (ADR-0011), in the service's
+own shape: named `colors`, named `surfaces` (page light/dark, card, header, footer; omit one the
+design lacks), `fonts` (`source: "google"` by default with only the weights actually used and
+`italic` only if used; `"system"` for a system stack), `body_font`, `heading_font`. A non-Google
+face the site self-hosts is recorded as `{"family", "source": "self-hosted", "files": [{"path",
+"weight", "style"}]}` with its local file paths. It is never written as an `upload` font without
+files: the connector seeds it as `"system"` (the site's bundled `@font-face` resolves it), uploads
+the files, then switches it to `"upload"`. Colours are lowercase `#rrggbb`. Theme colours are
+recommendations; the site palette still comes from `tokens.colors`. Check AA contrast of the
+palette against its surfaces. Each image asset carries the `hint` of its CMS image field; each
+content-icon asset carries its icon name and the `surface` it sits on.
 
 ## When done
 

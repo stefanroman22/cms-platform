@@ -18,6 +18,12 @@ lines (the empty scaffold is skipped to save tokens).
 
 <!-- Append below. Newest at the top. -->
 
+## 2026-10-11 — Images, icons and fonts are CMS fields; bundled fonts are only the fallback
+
+**Build:** CMS theme + media rollout (ADR-0011), no site build
+**Lesson:** Clients now swap every image and content icon and pick the site font themselves. Every image and illustration is a CMS image field with a size hint, every content icon (services, features, items, contact methods) a CMS icon field (`<CmsIcon>`), UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code, and each project has a `general_theme` service whose `body_font`/`heading_font` reach the site as `--cms-font-body`/`--cms-font-heading` through `<ThemeStyles>`. Rich text may carry styled spans (kit ≥ 1.1.0). This supersedes the 2026-05-22 "self-host with `next/font/local`" note: the builder is Vite, so a font the brief names that is not on Google Fonts is bundled from `@fontsource` when it exists there, else self-hosted as woff2 under `public/fonts/` with `@font-face`; either way it is the fallback behind `var(--cms-font-*, …)`. `_design-manifest.json` records it as `"source": "self-hosted"` with its file paths; the connector seeds the theme with it as `source: "system"` (the bundled `@font-face` resolves it), uploads the files, then switches it to `source: "upload"` with those files. Still never substitute a "close enough" Google font.
+**Apply:** Phase 1 records size hints, icon surfaces and the theme seed in `_design-manifest.json`; phase 3 wires `<ThemeStyles>` and the font tokens; phase 4 reads every image and content icon through its CMS field with the designed asset as fallback; phase 8 greps for `<ThemeStyles`/`var(--cms-font-body` (and `<CmsIcon` when content icons are listed) and runs the ADR-0011 Playwright checks.
+
 ## 2026-09-27 — Generated sites vendor the rich-text kit and theme `--cms-rich-*`
 
 **Build:** CMS rich-text rollout (ADR-0010), no site build

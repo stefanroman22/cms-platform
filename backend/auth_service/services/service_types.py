@@ -14,5 +14,6 @@ SERVICE_TYPES: dict[str, tuple[str, str]] = {
     "key_value": ("Key-Value Store", "Hash"),
     "repeater": ("Repeater", "List"),
     "text_block": ("Text Block", "FileText"),
+    "theme": ("Theme", "Palette"),
     "video": ("Video", "Video"),
 }

@@ -212,7 +212,11 @@ Equivalent to next-intl's `t.raw("services.items")`.
 
 ### CMS rich values
 
-CMS values that flow through react-i18next are `inline`/`rich` HTML. Read them as raw strings (`t("key")` with `interpolation.escapeValue: false`, or `returnObjects: true` for repeater objects) and render with `<RichText value={...} format="inline" />` (or `"rich"`) from `@/lib/cms-rich-text`. Never interpolate a rich value into another translation string and never concatenate it; use `plainText()` if a plain form is needed (title, alt, meta).
+CMS values that flow through react-i18next are `inline`/`rich` HTML. Read them as raw strings (`t("key")` with `interpolation.escapeValue: false`, or `returnObjects: true` for repeater objects) and render with `<RichText value={...} format="inline" />` (or `"rich"`) from `@/lib/cms-rich-text`. Never interpolate a rich value into another translation string and never concatenate it; use `plainText()` if a plain form is needed (title, alt, meta). Rich values may contain styled spans (ADR-0011); `<RichText>` (kit ≥ 1.1.0) renders them, so never strip `style` yourself.
+
+### CMS image, icon and theme values
+
+Image URLs, icon objects (`{src, mode, color, name}`) and the `general_theme` service are values, not messages (ADR-0011): they are never translated and never go through `t()` or an interpolation. Read them through the CMS accessors (`resolveSite(...)` image/icon/theme fields, the kit's `readIcon`/`readTheme`); repeater items read with `returnObjects: true` keep their image/icon fields as-is.
 
 ### Locale-aware internal links
 

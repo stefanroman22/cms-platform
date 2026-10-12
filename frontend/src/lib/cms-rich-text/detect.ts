@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.0.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead.
 // Mirrors backend rich_text.is_html exactly (see its docstring): the original
 // `<(?:p|...)\b[^>]*>` backtracks quadratically on an unterminated tag-open run
 // like "<b" * 50000, because the `[^>]*>` tail always succeeds from a match of

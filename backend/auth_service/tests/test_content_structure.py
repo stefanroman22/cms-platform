@@ -61,6 +61,31 @@ def test_admin_invalid_repeater_type_rejected():
         )
 
 
+def test_admin_image_and_icon_repeater_types_accepted():
+    schema = [
+        {"key": "pic", "label": "Pic", "type": "image", "hint": {"width": 800, "height": 600}},
+        {"key": "ico", "label": "Ico", "type": "icon", "surface": "Light"},
+    ]
+    out = apply_structure_rules(
+        "repeater", {"_schema": schema, "items": []}, is_admin=True, stored=()
+    )
+    assert out["_schema"] == schema
+
+
+def test_admin_hint_on_non_media_field_rejected():
+    with pytest.raises(StructureError):
+        apply_structure_rules(
+            "repeater",
+            {
+                "_schema": [
+                    {"key": "t", "label": "T", "type": "url", "hint": {"width": 16, "height": 16}}
+                ]
+            },
+            is_admin=True,
+            stored=(),
+        )
+
+
 def test_client_cannot_change_formats_and_cannot_inject_them():
     out = apply_structure_rules(
         "key_value",

@@ -15,6 +15,7 @@ import { visibleSections, type SectionKey } from "@/components/dashboard/section
 import { useProjectView } from "@/components/dashboard/hooks/useProjectView";
 import { setLastProjectSlug } from "@/lib/lastProject";
 import { getSettings as getBookingSettings } from "@/components/dashboard/booking/api";
+import { ProjectThemeProvider } from "@/components/dashboard/theme/ProjectThemeContext";
 
 interface ProjectInfo {
   name: string;
@@ -87,47 +88,49 @@ export default function ProjectWorkspacePage({
   );
 
   return (
-    <div className="p-4 md:p-8">
-      <PreviewPublishBar projectSlug={projectSlug} projectName={project?.name ?? projectSlug} />
+    <ProjectThemeProvider projectSlug={projectSlug}>
+      <div className="p-4 md:p-8">
+        <PreviewPublishBar projectSlug={projectSlug} projectName={project?.name ?? projectSlug} />
 
-      {/* Project header — the name is the page's anchor, written big. */}
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 md:text-3xl dark:text-zinc-50">
-          {projectName}
-        </h1>
-        <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-          Manage content and settings for this project.
-        </p>
+        {/* Project header — the name is the page's anchor, written big. */}
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 md:text-3xl dark:text-zinc-50">
+            {projectName}
+          </h1>
+          <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+            Manage content and settings for this project.
+          </p>
+        </div>
+
+        {/* ── Horizontal section tabs + animated panel below ──────────────── */}
+        <SectionRail sections={sections} activeView={activeView} onSelect={handleSelectView} />
+
+        <div className="mt-6">
+          <SectionPanel activeView={activeView}>
+            {activeView === "dashboard" && (
+              <DashboardSection
+                projectSlug={projectSlug}
+                isAdmin={isAdmin}
+                onGoToCms={() => setView("cms")}
+              />
+            )}
+            {activeView === "cms" && (
+              <CmsSection
+                projectSlug={projectSlug}
+                isAdmin={isAdmin}
+                onEditorDirtyChange={handleEditorDirtyChange}
+              />
+            )}
+            {activeView === "bookings" && (
+              <BookingsSection projectSlug={projectSlug} isAdmin={isAdmin} />
+            )}
+            {activeView === "seo" && <SeoSection />}
+            {activeView === "settings" && isAdmin && (
+              <ProjectSettingsSection projectSlug={projectSlug} />
+            )}
+          </SectionPanel>
+        </div>
       </div>
-
-      {/* ── Horizontal section tabs + animated panel below ──────────────── */}
-      <SectionRail sections={sections} activeView={activeView} onSelect={handleSelectView} />
-
-      <div className="mt-6">
-        <SectionPanel activeView={activeView}>
-          {activeView === "dashboard" && (
-            <DashboardSection
-              projectSlug={projectSlug}
-              isAdmin={isAdmin}
-              onGoToCms={() => setView("cms")}
-            />
-          )}
-          {activeView === "cms" && (
-            <CmsSection
-              projectSlug={projectSlug}
-              isAdmin={isAdmin}
-              onEditorDirtyChange={handleEditorDirtyChange}
-            />
-          )}
-          {activeView === "bookings" && (
-            <BookingsSection projectSlug={projectSlug} isAdmin={isAdmin} />
-          )}
-          {activeView === "seo" && <SeoSection />}
-          {activeView === "settings" && isAdmin && (
-            <ProjectSettingsSection projectSlug={projectSlug} />
-          )}
-        </SectionPanel>
-      </div>
-    </div>
+    </ProjectThemeProvider>
   );
 }

@@ -7,6 +7,7 @@ import {
   Video,
   Download,
   Hash,
+  Palette,
   Box,
   type LucideProps,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   Video,
   Download,
   Hash,
+  Palette,
 };
 
 interface ServiceIconProps extends LucideProps {

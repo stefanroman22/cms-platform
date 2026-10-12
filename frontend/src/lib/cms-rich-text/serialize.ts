@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.0.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.1.0 — do not edit; re-sync instead.
 import type { RichNode } from "./parse";
 
 const WS = /[ \t\r\n\f]+/g;
@@ -20,6 +20,7 @@ export function serialize(nodes: RichNode[]): string {
     flush();
     if (n.tag === "br" || n.tag === "hr") out += `<${n.tag}>`;
     else if (n.tag === "a") out += `<a href="${escapeAttr(n.href ?? "")}">${serialize(n.children)}</a>`;
+    else if (n.tag === "span") out += `<span style="${escapeAttr(n.style ?? "")}">${serialize(n.children)}</span>`;
     else out += `<${n.tag}>${serialize(n.children)}</${n.tag}>`;
   }
   flush();
