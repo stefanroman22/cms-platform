@@ -2,7 +2,7 @@
 
 _Best-practice notes and accepted-by-design observations._
 
-**12** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
+**13** finding(s) (+1 new 2026-10-15). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-15.
 
 ---
 
@@ -535,3 +535,25 @@ Verifier confirmed via live execute_sql that the seo_* tables have RLS enabled w
 Optional defense-in-depth (not required while RLS stays enabled): add an explicit `revoke all on table public.seo_* from anon, authenticated;` to the SEO migration, and consider `ALTER DEFAULT PRIVILEGES ... REVOKE ALL ON TABLES FROM anon, authenticated` so future tables do not silently inherit the broad grant. Makes the fail-closed posture independent of the RLS toggle, matching the SEC-013/slack_processed_events pattern.
 
 ---
+
+---
+
+<a id="sec-093"></a>
+
+## SEC-093 — Preview tier uses credentialed CORS that also reflects plain-HTTP localhost/LAN origins on a publicly-deployed, prod-DB-backed deployment
+
+| | |
+|---|---|
+| **Severity** | info | **Status** | open | **Dimension** | secrets-config |
+| **Location** | `backend/auth_service/main.py:69-88` · confirmed-partial · first seen 2026-10-15 |
+
+For `ENVIRONMENT != "production"` (the preview tier is not `IS_PROD`), the CORS middleware takes the permissive branch:
+
+```python
+"allow_origin_regex": (
+    r"http://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?"
+    r"|https://[a-zA-Z0-9.-]+\.vercel\.app"
+)
+```
+
+with `allow_credentials=True`. The publicly-reachable preview backend runs against the **prod** Supabase DB, yet reflects `Access-Control-Allow-Credentials: true` to any `*.vercel.app` origin (as SEC-039) **and** any `http://localhost`/`127.0.0.1`/`192.168.x.x` origin. **Partial / inert:** the preview session cookie is `SameSite=lax` (`auth.py`: `samesite='strict' if IS_PROD else 'lax'`), so the browser does not attach it to the attacker's cross-site fetch/XHR; the credentialed request runs effectively anonymous and can read only already-public `/content/*` data. Over-broad-trust/defense-in-depth gap on a prod-data surface; distinct from SEC-039 by tier and origin set. **Fix:** treat preview like production for CORS (explicit allowlist + `*.vercel.app`, drop the `http://` localhost/LAN branch), or gate that branch to `ENVIRONMENT == "development"` only.

@@ -5,23 +5,22 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-20** (remediation in progress)
+## Status snapshot — last full review **2026-10-15** (remediation needed — 2 HIGH open)
 
 | Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **13** | **38** | **12** | **68** | 16 |
+| **1** | **6** | **20** | **51** | **13** | **91** | 17 |
 
-The 2026-06-07 baseline's headline criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) are **fixed**.
-The 2026-06-20 review found **no new critical/high**; it added **12** lower-severity findings (all `open`) and flipped
-`SEC-050`→fixed and `SEC-007`/`SEC-023`/`SEC-025`/`SEC-026`→obsolete. See the 2026-06-20 note + the full table in
-[`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+_(Confirmed total is all-time, incl. fixed/obsolete.)_ The 2026-06-07 baseline's criticals/highs are all `fixed`. The **2026-10-15 review added 23 findings (0 critical, 2 HIGH, 7 medium, 13 low, 1 info), all `open`** — the first open high/medium since the 2026-10-03 status-only run — and flipped `SEC-024`/`SEC-027`/`SEC-046`→**fixed**, `SEC-067`→**obsolete**, `SEC-051`→**false-positive**. The two highs are both in the **agent + guardrail layer** (connector codegen injection; a trivially bypassable `guard.mjs`), not the internet-facing edges, which remain fail-closed. **MCP gap:** the Supabase and Vercel MCP servers were absent in this headless run — DB/advisor + Vercel posture were covered by code review only. See the 2026-10-15 note in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
 
-### The next things to fix (2026-06-20 remediation order)
-1. **`SEC-058` + `SEC-059` (medium)** — move the unauthenticated **booking write paths** and the **marketing `/forms/contact`** endpoint onto the shared Postgres rate limiter; they still use the per-instance in-memory limiter (Resend cost/DoS amplification). Mechanical — the pattern already exists in-repo (`pg_rate_limit`).
-2. **`SEC-057` (medium)** — route the tenant `accent` through the `safe_hex` allowlist in `booking_email._cta_block` (the one email sink the `SEC-045` hardening missed).
-3. **`SEC-029` (low) + `SEC-060` (low)** — expire/invalidate cancelled-booking manage tokens for reads; stop using tenant copy overrides as a `str.format` format string.
-4. **`SEC-006` (medium)** — deny `Write`/`Edit` to `package.json`/lockfiles/`*.sh` during the untrusted Solver step (package-poisoning RCE), or run lint/test from the orchestrator after the agent exits against a clean tree.
-5. **Hygiene:** `SEC-066` (enforce admin-key `scopes`), `SEC-063`/`SEC-064`/`SEC-065` (pin the Solver CLI + actions, verify the gitleaks binary), `SEC-068` (login-lockout fail-open brake). The **Saturday Solver routine** now drains this queue automatically.
+### The next things to fix (2026-10-15 remediation order)
+1. **`SEC-071` (HIGH)** — in the CMS Connector, validate `project_slug`/`public_slug` against a strict charset at manifest-load and emit `SLUG` via `json.dumps` (not an f-string), so a scan-derived value can't inject code into the generated/deployed `lib/booking.ts`.
+2. **`SEC-072` (HIGH)** — fix `guard.mjs` command resolution as a unit: `path.basename(cmd)`, recurse past `env`/wrapper prefixes, treat subshell/command-substitution as segment starts, detect `pnpm`/`yarn`/`bunx vercel`. Closes **SEC-073** (`-c alias`), **SEC-074** (`GIT_CONFIG_*`) and **SEC-081** (shell writes to applied migrations) at the same time.
+3. **`SEC-077` (medium)** — split the promote gate (untrusted dev `npm ci`/build) from the privileged promote push into separate jobs so a planted pre-push hook can't steal `PROMOTE_TOKEN`; harden the gate with **SEC-078** (hashed ruff) and **SEC-079** (gitleaks config from a trusted ref).
+4. **`SEC-076` (medium)** — mirror the hardened `workspace.upload_file` in `booking_admin.upload_logo`: normalise the bare MIME, route SVG through `sanitize_svg`, store the normalised content-type.
+5. **`SEC-075` (medium)** — re-validate the booking window (lead time / max-advance / past) in the public `_create_core`, exactly as `manage_reschedule` already does.
+6. **`SEC-085` / `SEC-086` (medium, agent prompts)** — parameterise the Design-Prompt SQL writeback; fence the Website-Builder README and add a diff gate. Design/prompt changes with no unit-testable seam — **defer to a human**.
+7. **Hygiene:** `SEC-083`/`SEC-084` (rate-limit + stream-size the upload sinks), `SEC-087` (bind the dashboard auth cookie), `SEC-088`/`SEC-089` (share the hardened SSRF fetch helper, pin the resolved IP), `SEC-090` (tighten CSP `connect-src`/`img-src`), `SEC-091` (REVOKE grants on `google_import_usage`), plus the still-open `SEC-066`/`SEC-068`/`SEC-065`.
 
 ## How to read this folder
 
