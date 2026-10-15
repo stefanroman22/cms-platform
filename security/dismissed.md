@@ -180,3 +180,14 @@ The finding's own recommendation ("take the RIGHTMOST entry") would be actively 
 Caveat (separate, pre-existing, not this finding): both limiters are in-memory/per-process — slowapi default storage and bearer_limiter.py's documented process-local Bucket — so on serverless the counters fragment per warm instance. That weakens absolute throttle ceilings but is acknowledged in bearer_limiter.py's docstring and is unrelated to the XFF-spoofing claim under review.
 
 ---
+
+## D-15 — image/svg+xml added to the PUBLIC cms-files bucket allowed MIME types (claimed stored-XSS surface)
+
+- **Claimed severity:** medium · **Dimension:** supabase-db / xss-html · **Verdict:** false_positive
+- **Location:** `backend/migrations/2026_10_11_cms_files_bucket_svg_fonts.sql:5-11`
+
+**Why dismissed (2026-10-15):** The migration does add `image/svg+xml` to the public `cms-files` bucket with no bucket-level `file_size_limit`, but the claimed harm is refuted by the control the finding itself names. Every SVG upload on the `workspace.upload_file` path is passed through `sanitize_svg()` (`routers/workspace.py:582-584`), and `is_svg` triggers on the normalized MIME **or** the `.svg` extension (`:560`), so neither a mislabeled MIME nor a mislabeled extension bypasses it. `services/svg_sanitize.py` is a rewrite-from-parsed-tree allow-list (not a regex filter): `ALLOWED_ELEMENTS` excludes `script`/`a`/`style`/`animate`/`foreignObject`; `ALLOWED_ATTRS` excludes all `on*` handlers and `style`; `href`/`xlink:href` must start with `#`; `_value_allowed` drops any value containing `data:`, `javascript:`, or a backslash CSS-escape; DOCTYPE/ENTITY are rejected by a dedicated expat pass before any expansion; output is re-serialized from the cleaned tree. Depth (100), element (10k) and byte (512 KB) caps bound XML-bomb/DoS. The finding identifies no concrete gap in the sanitizer — its scenario ("any gap … is live XSS") is true of every sanitizer and is not itself a defect. The missing bucket `file_size_limit` is immaterial because the app enforces `MAX_FILE_SIZE`/`MAX_SVG_BYTES`/`MAX_FONT_SIZE` before upload.
+
+**Note:** this dismissal applies only to the sanitized `workspace.upload_file` path. The sibling `booking_admin.upload_logo` path does **not** call `sanitize_svg` and is bypassable — tracked as the live finding **SEC-076** (medium).
+
+---

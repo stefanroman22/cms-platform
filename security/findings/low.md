@@ -2,7 +2,7 @@
 
 _Hardening / defense-in-depth. Address opportunistically._
 
-**38** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
+**51** finding(s) (+13 new 2026-10-15). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-15.
 
 ---
 
@@ -1735,3 +1735,191 @@ Verifier confirmed pg_rate_limit.over_limit returns False on any DB exception (f
 Keep fail-open for availability but add a durable, instance-independent secondary brake on the failure path (e.g. enforce a low fixed slowapi cap PLUS exponential argon2-cost backoff, or fail-closed specifically for the lockout check after N consecutive RPC errors). At minimum, alert on sustained rate_limit_over exceptions so a DB-down brute-force window is detected.
 
 ---
+
+---
+
+<a id="sec-078"></a>
+
+## SEC-078 — `pip install ruff` in the promote gate is unpinned and unhashed, defeating the `--require-hashes` hardening in the same step
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | ci-workflows |
+| **Location** | `.github/workflows/promote.yml:62-68` · confirmed · first seen 2026-10-15 |
+
+The backend gate installs deps with `pip install --require-hashes -r requirements.lock` for supply-chain integrity, then immediately `pip install ruff` with no version pin and no hash, then `ruff check .`:
+
+```yaml
+pip install --require-hashes -r requirements.lock
+pip install ruff
+ruff check .
+```
+
+A compromised `ruff` release (or any unhashed transitive dep), or a PyPI/index/account compromise, runs arbitrary code inside the promote-gate runner — the sole path to production — in the same workspace as the subsequent fast-forward push and deploy hooks. The name is spelled correctly (no typosquat), so the real exposure is upstream compromise. **Fix:** pin ruff to an exact hashed version (dedicated hashed lockfile installed with `--require-hashes`) or pre-install it from the already-hashed dev requirements; do not mix an unhashed install into a `--require-hashes` step.
+
+---
+
+<a id="sec-079"></a>
+
+## SEC-079 — The only secret-scan gate reads its config/allowlist (`.gitleaks.toml`) from the same untrusted `dev` branch it is gating
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | ci-workflows |
+| **Location** | `.github/workflows/promote.yml:40-43` · confirmed · first seen 2026-10-15 |
+
+The promote job checks out `dev` and runs `gitleaks detect --source . --no-git --config .gitleaks.toml` with the config resolved from that same dev checkout. Because the gate config and its allowlist are part of the content being gated, one dev push can both introduce a hardcoded secret and add an `.gitleaks.toml` allowlist/stopword/path exclusion that suppresses it (the config already carries broad path exclusions: `tests/`, `docs/`, `docs/superpowers/plans/`, even `.*\.gitleaks\.toml`). With `--no-git` (history unscanned) and this being the only pre-prod secret gate, the gate can be silently neutered by the branch it protects. **Fix:** pin `.gitleaks.toml` to a trusted ref (read from a protected location / `main`) rather than the dev checkout, and/or fail the promote when the config differs from a trusted baseline.
+
+---
+
+<a id="sec-080"></a>
+
+## SEC-080 — CMS Connector invokes the `claude` CLI on an untrusted-content-laden prompt with no tool/permission restriction
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | agents |
+| **Location** | `agents/CMS Connector - Website/scan.py:270-286` · confirmed · first seen 2026-10-15 |
+
+`combined` = system prompt + `build_user_message()`, which embeds verbatim, unfenced contents of an untrusted client repo (up to 60 files, delimited only by weak `--- FILE: ... ---` text markers). The sub-invocation passes no `--allowedTools`/`--disallowedTools`, no `--permission-mode`, and no sandbox:
+
+```python
+result = subprocess.run([claude_bin, "-p", "--output-format", "text", "--model", model, "--effort", "max"], input=combined, ...)
+```
+
+The agent host holds `VERCEL_TOKEN`, `CMS_ADMIN_API_KEY` (`cmsk_`) in `.env` and a logged-in `gh` CLI. A prompt-injection payload in a scanned file that triggers any enabled read/fetch tool could read and exfiltrate those secrets; even with no tool access, the injection controls the manifest that drives privileged admin/Vercel/GitHub calls in later phases (see SEC-071). Distinct from SEC-016 (concat-into-prompt): this is the no-sandbox delta. **Fix:** invoke the scan CLI with an explicit minimal tool policy (`--disallowedTools` Bash/Write/Edit/WebFetch or empty `--allowedTools`) and a restrictive `--permission-mode`; fence file contents as untrusted data.
+
+---
+
+<a id="sec-081"></a>
+
+## SEC-081 — H3 applied-migration protection is only wired to Edit/Write/MultiEdit; shell writes to migration files are unguarded
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | agent-guardrails |
+| **Location** | `.claude/hooks/guard.mjs:264-266` · confirmed · first seen 2026-10-15 |
+
+```js
+if (tool === "Bash") checkBash(String(input.command ?? ""), cwd);
+else if (tool === "Edit" || tool === "Write" || tool === "MultiEdit") checkMigrationEdit(input, cwd);
+```
+
+`checkMigrationEdit` (H3: never edit an already-applied migration) runs only for Edit/Write/MultiEdit. `checkBash` has no detection of writes to `backend/migrations/*.sql`, and the `segments()` tokenizer does not model `>`/`>>` redirects, so `sed -i backend/migrations/<applied>.sql`, `cat >> ...`, `tee`, or `echo >` mutate an already-applied migration with no H3 "ask" prompt. H3 is an "ask" guard, so impact is defeating a confirmation, not an automatic destructive action. **Fix:** in `checkBash`, detect in-place edits/redirections targeting `backend/migrations/*.sql` and emit the same H3 "ask" decision.
+
+---
+
+<a id="sec-082"></a>
+
+## SEC-082 — CMS Connector agent `requirements.lock` hashes are never enforced at install (cosmetic hash-pinning)
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | deps-supplychain |
+| **Location** | `Makefile:30` · confirmed · first seen 2026-10-15 |
+
+The agent ships a hash-pinned `requirements.lock` whose header claims "CI installs from requirements.lock … using `--require-hashes`", but no install path uses it: `make install` runs a plain `pip install -r "agents/CMS Connector - Website/requirements.txt" -r ...requirements-dev.txt` (no `--require-hashes`, no lock); the promote gate installs only the backend lock; `scripts/check_requirements_lock.py` merely string-compares top-level `==` versions and never installs. So the agent's hashes provide zero supply-chain protection for the environment that runs the connector (which concatenates untrusted client files into an LLM prompt, SEC-016/SEC-080). **Fix:** install the agent via `pip install --require-hashes -r requirements.lock`, or drop the misleading `--require-hashes` claim from the agent requirements headers.
+
+---
+
+<a id="sec-083"></a>
+
+## SEC-083 — `booking_admin.upload_logo` has no rate limit and buffers the whole body before the size check
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/booking_admin.py:792-808` · confirmed · first seen 2026-10-15 |
+
+`upload_logo` is authenticated via `_tenant` → `require_project_access` but carries no `@limiter.limit` and no `pg_rate_limit.enforce` (the router imports neither limiter module). An authenticated owner (or hijacked session) can upload unbounded 5 MB logos into the shared public `cms-files` bucket with no per-user/per-project cap (service-role bypasses storage quotas). `content = await file.read()` (`:797`) buffers the entire body before the `_LOGO_MAX` check (`:798`). Sibling variant of SEC-084; distinct path/caller/cap/prefix. **Fix:** apply the shared Postgres rate limit and stream-validate size (Content-Length / chunked read) before buffering.
+
+---
+
+<a id="sec-084"></a>
+
+## SEC-084 — `workspace.upload_file` has no rate limit and buffers the whole body before the size check (public `cms-files` bucket DoS / cost amplification)
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/workspace.py:505-576` · confirmed-partial · first seen 2026-10-15 |
+
+Unlike the sibling write paths (content save gates DeepL cost with `pg_rate_limit.enforce`; `google_import` caps 20/hour; booking/forms carry both slowapi and pg limits), `upload_file` carries no rate limit. An authenticated project owner/admin can loop allowed-MIME uploads up to 50 MB each into the shared public bucket (service-role bypasses quota), and `content = await file.read()` (`:571`) buffers the full body before the `MAX_FILE_SIZE` check (`:572`). **Partial:** reach requires authenticated owner/admin, and MIME/ext/size validation + SVG sanitization + uuid `upsert:false` paths are all present; Starlette spools `UploadFile` to a temp file and Vercel imposes a request-body limit, blunting the memory angle. Conditional cost/DoS vector rather than an unprivileged vuln. **Fix:** add a per-user/per-project `pg_rate_limit.enforce` gate and enforce the byte cap while streaming.
+
+---
+
+<a id="sec-087"></a>
+
+## SEC-087 — Dashboard auth gate in Next middleware trusts a client-forgeable constant cookie (`auth_verified=1`), not a bound session proof
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | authn-session |
+| **Location** | `frontend/src/middleware.ts:85-97` · confirmed-partial · first seen 2026-10-15 |
+
+The `/dashboard` gate short-circuits to `NextResponse.next()` whenever both a `sid` cookie and the `auth_verified` cookie are present, skipping the `/auth/me` validation. `auth_verified` is set server-side as the constant `"1"` with no HMAC/signature and no binding to `sid` or the user; HttpOnly does not stop a client sending an arbitrary `Cookie:` header. So `Cookie: sid=anything; auth_verified=1` serves `/dashboard` routes (and redirects `/log-in`→`/dashboard`) without consulting the backend. **Partial — no data/privilege leak today:** all dashboard pages are client components, layouts are pass-throughs, and the real auth boundary is the `/api/[...path]` proxy, which forwards the cookie to FastAPI where the forged `sid` fails session validation, so a bypassing client gets only an empty shell. Also up to a 60s staleness window after logout/reset. Becomes exploitable if any future server component under `/dashboard` reads `cookies()`/does SSR while trusting this gate. **Fix:** always call `isAuthenticated()` for `/dashboard`, or make the cache an HMAC-signed, sid-bound, short-TTL value; clear/rotate it on logout and password change.
+
+---
+
+<a id="sec-088"></a>
+
+## SEC-088 — `expand_short_link` follows redirects on Google-shortener links with no SSRF guard
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | ssrf |
+| **Location** | `backend/auth_service/services/google_places/resolve.py:68-75,90` · confirmed-partial · first seen 2026-10-15 |
+
+`resolve()` gates the host to `goo.gl`/`maps.app.goo.gl`/`g.page`/`g.co`, but `expand_short_link` calls `client._urlopen` (plain `urllib.request.urlopen`), whose default `HTTPRedirectHandler` follows 301/302/307 to ANY target with no host/scheme/IP re-check — unlike `website_enrich.py`, which wraps `_SafeRedirects` + `assert_public_http_url`. **Partial:** the entry point is admin-gated; `expand_short_link` only fires when Google's own `resolve_maps_url` returns None; new `goo.gl` links can no longer be minted (disabled 2019, deactivated 2025) and the other three shorteners redirect only to Google destinations, so an attacker-controlled internal redirect is not practically achievable; it is a blind SSRF (only `resp.geturl()` is read) and IMDS is largely unreachable on serverless. Real code-level inconsistency worth fixing for defense-in-depth. **Fix:** route `expand_short_link` (and `client.fetch_bytes`) through the same `assert_public_http_url` + `_SafeRedirects` as `website_enrich`; share one hardened fetch helper across `client.py`/`resolve.py`/`website_enrich.py`.
+
+---
+
+<a id="sec-089"></a>
+
+## SEC-089 — `website_enrich` SSRF guard validates IPs by hostname resolution, then reconnects by hostname (DNS-rebinding/TOCTOU window)
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | ssrf |
+| **Location** | `backend/auth_service/services/google_places/website_enrich.py:129-166` · confirmed-partial · first seen 2026-10-15 |
+
+`assert_public_http_url` resolves the hostname with `getaddrinfo` and rejects non-public addresses, but `_open` then hands the original hostname (not a pinned IP) to `urllib`, which performs its own independent DNS resolution before connecting; the same applies to `_SafeRedirects.redirect_request`. An attacker controlling DNS for a hostname reaching `fetch_html` (most realistically a redirect target) can answer the check with a public IP and the connect with a private/metadata IP. **Partial:** `fetch_html` rejects any non-HTML Content-Type, so metadata/JSON endpoints are never read; only extracted social/email/description are surfaced; needs attacker-controlled DNS. Residual hardening gap. **Fix:** resolve once, pick an allowed address, and connect to that pinned IP while sending the original Host header; re-validate/re-pin on each redirect; cap redirects.
+
+---
+
+<a id="sec-090"></a>
+
+## SEC-090 — Frontend CSP allows exfiltration to any https origin (`connect-src`/`img-src`), undermining CSP as an XSS mitigation
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | secrets-config |
+| **Location** | `frontend/next.config.ts:47-52` · confirmed-partial · first seen 2026-10-15 |
+
+`connect-src 'self' https:` and `img-src 'self' data: https:` permit fetch/XHR and image beacons to ANY https origin; the inline comment "Same-origin fetch only" is factually wrong. Given any XSS sink, an attacker could exfiltrate admin session data / CMS content to an arbitrary https endpoint. Directive-distinct from SEC-040 (`script-src 'unsafe-inline' 'unsafe-eval'`, line 44). **Partial:** pure defense-in-depth, no demonstrated XSS sink, and because the same CSP already permits `unsafe-inline`/`unsafe-eval`, tightening `connect-src` alone is marginal; applies to the admin dashboard, not public client sites. **Fix:** restrict `connect-src` to `'self'` + the FastAPI origin and `img-src` to `'self' data:` + the Supabase storage host; correct the misleading comment. Track alongside SEC-040.
+
+---
+
+<a id="sec-091"></a>
+
+## SEC-091 — `google_import_usage` keeps default anon/authenticated grants (RLS-only); its SECURITY DEFINER functions use `search_path = public`
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | supabase-db |
+| **Location** | `backend/migrations/2026_10_11_lead_google_import.sql:34-46` · confirmed-partial · first seen 2026-10-15 |
+
+The migration creates `public.google_import_usage` and enables RLS (good) but never `REVOKE`s the default anon/authenticated table grants, unlike the project's established pattern (`2026_06_08_rate_limits.sql:21` revokes `rate_limits` grants; the anon-surface migration revokes `slack_processed_events`). The two SECURITY DEFINER functions use `set search_path = public` whereas the other hardened definer functions use `set search_path = ''` with schema-qualified refs. **Partial / not exploitable today:** RLS is enabled, anon/authenticated lack BYPASSRLS, and with no policy PostgREST returns zero rows and rejects writes, so the lingering grants are inert; the function access is correctly revoked to service_role only, and a fixed `search_path=public` already satisfies the mutable-search_path advisor (style drift). Becomes a real exposure if a permissive policy is ever added or RLS toggled off. Genuinely new object (seo_* tables dropped), not SEC-067. **Fix:** add `revoke all on table public.google_import_usage from anon, authenticated;` after enabling RLS; re-declare the functions with `set search_path = ''`.
+
+---
+
+<a id="sec-092"></a>
+
+## SEC-092 — Production backend installs unhashed, transitive-unpinned `requirements.txt`; hash verification only runs in the promote gate against a different install path
+
+| | |
+|---|---|
+| **Severity** | low | **Status** | open | **Dimension** | deps-supplychain |
+| **Location** | `backend/requirements.txt:9-10` · confirmed-partial · first seen 2026-10-15 |
+
+Vercel's `@vercel/python` builder installs `backend/requirements.txt`, which pins only ~11 top-level packages with `==` and leaves every transitive dependency unpinned and unhashed. The only hash-verified install (`promote.yml:65`, `pip install --require-hashes -r requirements.lock`) runs in the promote gate against a different file and never ships to the serverless runtime. Because Vercel re-resolves the transitive tree fresh per deploy, a compromised/typosquatted new patch release of any transitive dep is pulled into prod even though the gate passed. Distinct from the now-fixed SEC-027 (stale legacy `auth_service/requirements.txt`, removed). **Partial:** requires an upstream supply-chain precondition; no app-input path. **Fix:** have the promote gate validate the exact tree Vercel will install (resolve `requirements.txt` in isolation and diff against the hashed lock, failing on drift), or move the Vercel build to install the hashed lock.

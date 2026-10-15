@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-**13** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
+**20** finding(s) (+7 new 2026-10-15). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-15.
 
 ---
 
@@ -757,3 +757,248 @@ the now-removed exemption — rewritten to assert availability 429s alongside `/
 suite: 4640 passed, 5 skipped.
 
 ---
+
+---
+
+<a id="sec-073"></a>
+
+## SEC-073 — `git -c alias.*=` renames the subcommand, bypassing the H1 push-to-main and H4 `--no-verify` guards
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Guardrail bypass |
+| **Dimension** | agent-guardrails |
+| **Location** | `.claude/hooks/guard.mjs:88-102` |
+| **Reviewer confidence** | high · **Verifier verdict** confirmed (medium) · **First seen** 2026-10-15 |
+
+**Description**
+
+`checkGit` classifies the subcommand as the first non-dash token (`sub = args[i]`) and only inspects `-c` values for `core.hooksPath=`. Git's `-c alias.<name>=<cmd>` expands a non-command token into an arbitrary subcommand, so the guard's `sub` never matches `push`/`commit`:
+
+```js
+} else if (a === "-c") {
+  if (/^core\.hookspath=/i.test(args[i + 1] ?? ""))
+    decide("deny", "Guardrail H4: overriding core.hooksPath skips the pre-commit secret scan.");
+  i += 2;
+} else i += 1;
+```
+
+`git -c alias.yolo=push yolo origin <prod-branch>` → `sub="yolo"` (H1 push-to-main block skipped, push to prod proceeds). `git -c alias.c='commit --no-verify' c -m x` → `sub="c"` (H4 skipped, gitleaks pre-commit scan bypassed). A committed alias in `.git/config` reproduces it with no `-c` flag.
+
+**Adversarial verification**
+
+Confirmed; `-c alias.*=` is a documented git feature and the `-c` value filter inspects only `core.hooksPath`. Nullifies the git-subcommand guard layer. Medium (not high) because it requires an atypical invocation; combine the fix with SEC-072.
+
+**Recommendation**
+
+Expand/deny `git -c alias.*=` definitions (and configured aliases) before classifying the subcommand; inspect all `-c` keys (`core.hooksPath`, `core.fsmonitor`, …), not just `core.hooksPath`.
+
+---
+
+<a id="sec-074"></a>
+
+## SEC-074 — Leading env-var assignments are stripped and never inspected, so `GIT_CONFIG_*` disables the pre-commit hook without `--no-verify`
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Guardrail bypass |
+| **Dimension** | agent-guardrails |
+| **Location** | `.claude/hooks/guard.mjs:173` |
+| **Reviewer confidence** | high · **Verifier verdict** confirmed (medium) · **First seen** 2026-10-15 |
+
+**Description**
+
+H4 assumes the only ways to skip the pre-commit hook are `--no-verify`/`-n`/`-c core.hooksPath=`. But git (≥2.31) honors `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n` as the exact equivalent of `-c key=value`, and the guard strips every leading `NAME=` token without inspecting it:
+
+```js
+while (seg.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(seg[0])) seg = seg.slice(1);
+```
+
+`GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x` resolves to `cmd="git" sub="commit"` with no bypass flag visible, so H4 allows it while hooks are disabled and the gitleaks pre-commit scan never runs. `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM`/`GIT_CONFIG_PARAMETERS` are equivalent uninspected vectors.
+
+**Adversarial verification**
+
+Confirmed; the stripped assignments are examined nowhere in the hook. Medium — defeats the specific control H4 enforces.
+
+**Recommendation**
+
+Before discarding leading `NAME=VALUE` tokens, scan them for hook-disabling settings (`GIT_CONFIG_COUNT`/`KEY_n`/`VALUE_n` setting `core.hooksPath`, plus `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM`/`GIT_DIR`, `HUSKY=0`) and deny when present.
+
+---
+
+<a id="sec-075"></a>
+
+## SEC-075 — Public booking create path does not re-validate the booking window (lead time, max-advance, past dates)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Public endpoint / missing server-side validation |
+| **Dimension** | public-tokens |
+| **Location** | `backend/auth_service/routers/booking.py` `_create_core` (~:483-492) |
+| **Reviewer confidence** | high · **Verifier verdict** confirmed (medium) · **First seen** 2026-10-15 |
+
+**Description**
+
+`POST /booking/{slug}` is unauthenticated (honeypot field + per-IP `_public_write_limit`, 5/hour). `_create_core` computes `now` and passes `now_utc=now` to `_free_resource_for`, but `free_resource_ids_at` only checks open-hours candidacy and guard-interval overlap — it never applies `lead_time_min`, `max_advance_days`, or a "start must be in the future" filter, and `_create_core` adds none. By contrast the reschedule handler explicitly re-validates the window server-side (`booking.py:735`: reject `new_start < now + lead_time` or `new_start > now + max_advance_days` → `422 "Outside booking window"`).
+
+```python
+# reschedule (present):            # create (absent): no lead_time/max_advance/past check
+if new_start < now + timedelta(minutes=service["lead_time_min"]) or new_start > now + timedelta(
+    days=service["max_advance_days"]):
+    raise HTTPException(status_code=422, detail="Outside booking window")
+```
+
+**Attack scenario**
+
+Any widget user / scripted client edits the posted `start_utc` to a granularity-aligned, in-business-hours, not-already-booked instant that is in the past, inside the configured lead time (e.g. 1 minute out when the business requires 24h), or beyond `max_advance_days`. Each accepted create inserts a confirmed booking and fires host + customer confirmation emails and (where wired) a calendar event, and lets bookings be stacked arbitrarily far into the future the availability read path would never offer.
+
+**Adversarial verification**
+
+Confirmed: create has no window guard while reschedule does; `now_utc` is effectively unused for validation in the write path. Unauthenticated, in-scope abuse of a public write path → medium.
+
+**Recommendation**
+
+In `_create_core`, after parsing `start`, re-validate exactly as `manage_reschedule` does (reject `start < now + lead_time_min` or `start > now + max_advance_days`, which also rejects past starts) before `_free_resource_for`; or push the window filter into `free_resource_ids_at`.
+
+---
+
+<a id="sec-076"></a>
+
+## SEC-076 — Booking logo upload: SVG/MIME denylist bypassable via content-type parameters, and no SVG sanitization (stored XSS)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Stored XSS / content-type confusion |
+| **Dimension** | xss-html |
+| **Location** | `backend/auth_service/routers/booking_admin.py:788-808` |
+| **Reviewer confidence** | high · **Verifier verdict** confirmed (adjusted: medium) · **First seen** 2026-10-15 |
+
+**Description**
+
+`upload_logo` is the second upload sink into the public `cms-files` bucket and, unlike the hardened `workspace.upload_file` (which normalizes `bare = mime.split(";",1)[0]...`, treats a `.svg` extension as SVG, and runs `sanitize_svg` before storage), it trusts the raw client `file.content_type` and compares it with an **exact-match** denylist:
+
+```python
+_LOGO_DENY = {"image/svg+xml", "text/html", "application/xhtml+xml"}
+mime = file.content_type or ""
+if not mime.startswith("image/") or mime in _LOGO_DENY:
+    raise HTTPException(status_code=415, detail="Logo must be a PNG/JPG/WebP image")
+...
+sb.storage.from_("cms-files").upload(path=path, file=content, file_options={"content-type": mime, ...})
+```
+
+`image/svg+xml; charset=utf-8` (or a trailing space) passes `startswith("image/")` and is **not** `== "image/svg+xml"`, so the 415 is not raised. The SVG is stored verbatim — **no `sanitize_svg` call anywhere in this path** — with that content-type under a `.svg` path in the public bucket.
+
+**Attack scenario**
+
+An authenticated project owner (via `_tenant` → `require_project_access`) uploads an SVG containing `<script>`/`onload` with content-type `image/svg+xml; charset=utf-8`. Opening the returned public logo URL directly serves it as `image/svg+xml` and executes the script in the Supabase storage origin = stored XSS. The explicit intent to block SVG is defeated by a trivial content-type mutation.
+
+**Adversarial verification**
+
+Confirmed; the sibling `workspace.upload_file` proves the hardened pattern this path omits. Adjusted high→medium: trigger requires an authenticated project owner; script executes only in the shared storage public-bucket origin (holding already-public files, no session material), and `<img src>` embeds do not execute SVG script — execution needs direct navigation / `<object>`/`<iframe>`/inline-SVG.
+
+**Recommendation**
+
+Mirror `workspace.upload_file`: normalize `bare = (file.content_type or "").split(";",1)[0].strip().lower()`, derive `is_svg` from the normalized MIME and the `.svg` extension, route SVG through `sanitize_svg` (or reject by content inspection), set the stored content-type from `bare` not the raw string, and wrap the upload in `try/except StorageApiError`.
+
+---
+
+<a id="sec-077"></a>
+
+## SEC-077 — Untrusted dev-branch build/install scripts run in the same job as the privileged promote push, enabling PROMOTE_TOKEN / deploy-hook exfiltration
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | CI secret exfiltration |
+| **Dimension** | ci-workflows |
+| **Location** | `.github/workflows/promote.yml:54-76` |
+| **Reviewer confidence** | high · **Verifier verdict** confirmed (medium) · **First seen** 2026-10-15 |
+
+**Description**
+
+The single `promote` job checks out `dev` (pushed to freely, no CI) and runs `npm ci && npm run lint && npm run build` and `pip install ... && ruff check .` from that checkout **before** the privileged fast-forward push step (which embeds `PROMOTE_TOKEN` in the push URL). `npm ci` executes arbitrary dependency/`package.json` postinstall lifecycle scripts from dev-branch code. `PROMOTE_TOKEN` and the deploy-hook secrets are correctly step-scoped, but a postinstall script can plant `../.git/hooks/pre-push` (default `core.hooksPath`) while keeping lint/build green. When the later step runs the push to the bare token-embedding URL, git invokes the planted pre-push hook and passes it the remote URL (containing the live `PROMOTE_TOKEN`) as an argument → exfiltration; the next step's deploy-hook URLs can be captured similarly.
+
+**Attack scenario**
+
+A write-access collaborator (who per design can push to `dev` but should not read repo secrets or promote) lands a benign-looking postinstall script. When the owner clicks "Run workflow", the script plants the hook during `npm ci`; the token is stolen at push time. `PROMOTE_TOKEN` is a contents:write PAT → persistent direct pushes to the production branch, permanently bypassing the gate.
+
+**Adversarial verification**
+
+Confirmed verbatim; step-scoping protects the env but not a planted pre-push hook. `persist-credentials: false` and the gitleaks file scan do not cover benign-looking JS that plants a hook.
+
+**Recommendation**
+
+Separate the gate (install/lint/build of untrusted dev code) from the privileged promote/deploy into different jobs so secrets never share a runner with untrusted build scripts; or run the push in a fresh clean checkout with no install, set `core.hooksPath` to an empty dir for the push, and use an ephemeral GitHub App token minted only for the push step. Avoid embedding the token in the push URL where pre-push hook argv exposes it.
+
+---
+
+<a id="sec-085"></a>
+
+## SEC-085 — Design Prompt Creator Phase 6 embeds untrusted lead-derived XML in a fixed-tag `$$` dollar-quoted raw SQL UPDATE run via Supabase MCP (SQL injection)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | SQL injection (agent instruction) |
+| **Dimension** | agents |
+| **Location** | `agents/Design Prompt creator/phases/6-writeback.md:35-41` |
+| **Reviewer confidence** | medium · **Verifier verdict** confirmed-partial (medium, conditional) · **First seen** 2026-10-15 |
+
+**Description**
+
+Phase 6 instructs the agent to persist the generated design prompt with a fixed-tag dollar-quoted raw UPDATE run through `mcp__supabase__execute_sql` (service-role, RLS bypassed):
+
+```sql
+UPDATE leads SET design_prompt = $$<wrapped XML>$$ WHERE id = '<lead_id>';
+```
+
+Step 1 escapes only `& < >` → entities; the `$` character is not escaped. The wrapped XML is derived from third-party Google Business lead data (business_name/reviews/description/notes). Any `$$` appearing in the content terminates the dollar-quoted literal and the remainder is executed as SQL with full project privileges.
+
+**Attack scenario**
+
+An attacker controlling an imported Google listing crafts content that survives the lead-to-design-prompt LLM transformation into the emitted XML (business_name is echoed verbatim into hero/footer/schema.org) and contains `$$; <arbitrary SQL>; --`, yielding cross-tenant DB writes/reads.
+
+**Adversarial verification**
+
+The structural gap is real: fixed `$$` tagging is unsafe for content that may itself contain `$$`, and entity-escaping does not neutralize it. Downgraded from a clean injection to conditional: (1) the claimed `price_level` → `$$` trigger is wrong (price_level is an enum mapped to words, never printed raw); (2) untrusted reviews are mined for adjectives by the LLM skill, not copied verbatim, so a byte-exact payload surviving into the SQL is probabilistic. The reliable effect of stray `$$` is a malformed query; clean arbitrary cross-tenant SQL is possible but conditional. This is an agent-instruction prompt, not shipped app code.
+
+**Recommendation**
+
+Never build this UPDATE by string interpolation — bind `design_prompt` and `id` as parameters. If a raw statement is unavoidable, use a random collision-checked dollar-quote tag (e.g. `$dp<random>$`) verified absent from the body.
+
+---
+
+<a id="sec-086"></a>
+
+## SEC-086 — Website Builder treats an untrusted design-export README as "highest-priority source of intent" driving autonomous file/git/npm actions with no instruction/data fencing
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Indirect prompt injection |
+| **Dimension** | agents |
+| **Location** | `agents/Website Builder/phases/1-ingest.md:6-7` |
+| **Reviewer confidence** | medium · **Verifier verdict** confirmed-partial (medium, conditional) · **First seen** 2026-10-15 |
+
+**Description**
+
+Phase 1 reads/`WebFetch`es a Claude Design export and elevates its `README.md` to the agent's "highest-priority source of intent", then feeds it into an agent that runs at xhigh with Bash/Write/git/npm authority across 8 phases (wrappable in `/ralph-loop` for repeated autonomous invocation). There is no data/instruction fence around the README and no diff/approval gate before the scaffold/implement phases write files and run commands, so injected directives (e.g. "also add this postinstall script", "fetch and run this setup") can steer privileged actions on the build host.
+
+**Adversarial verification**
+
+Cited lines and privilege/autonomy claims all confirmed; no fence and no diff gate between ingest and the write/run phases. The direct leg (a `WebFetch`ed URL or supplied folder is untrusted and drives actions unfenced) is solid; the lead-data→design_prompt→Claude Design→README multi-hop leg may not preserve an injected imperative verbatim, so conditional. Harm is build-host command execution, not a DB-authZ path. Normal operation points at the operator's own Claude Design output, so not remotely triggerable by default.
+
+**Recommendation**
+
+Fence ingested export content as untrusted data (quote/delimit, state it is reference material, not instructions) and require an explicit human diff-approval gate before Phase 3/4 file writes and any npm/npx/git command the README influenced.
