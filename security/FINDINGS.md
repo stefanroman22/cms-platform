@@ -170,6 +170,17 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-067](findings/info.md#sec-067) | info | New `seo_*` tables inherit full anon/authenticated DML grants from Supabase default ACLs; safe only because RLS is enabled (no explicit REVOKE) | `backend/migrations/2026_06_14_seo_geo.sql:159-167` | supabase-db | open |
 | [SEC-068](findings/low.md#sec-068) | low | Per-account login lockout fails open on any Postgres error, leaving only per-instance in-memory throttling | `backend/auth_service/core/pg_rate_limit.py:40-55; routers/auth.py:79-96` | authn-session | open |
 | [SEC-070](findings/medium.md#sec-070) | medium | Public booking `/{slug}/availability` omits the shared rate limiter; URL-keyed edge cache is trivially cache-busted → DB + external-calendar amplification DoS | `backend/auth_service/routers/booking.py:436-445,239-317` | ratelimit-dos | ✅ fixed (PR `security/fix-SEC-070-2026-10-10` → dev — `/{slug}/availability` now carries `Depends(_public_read_limit)` like every sibling public read; regression test added) |
+| [SEC-071](findings/high.md#sec-071) | high | CMS Connector writes the scan-derived `public_slug` into generated `lib/booking.ts` via a raw f-string → code injection into the committed/deployed client site | `agents/CMS Connector - Website/scan.py:469-471` | agents | ✅ fixed (PR `security/fix-SEC-071-2026-10-17` → dev — `_safe_slug()` validates/slugifies the manifest `public_slug` at the single derivation point, and `_write_booking_ts` emits `SLUG` via `json.dumps`; regression tests added) |
+
+> **⚠ Saturday Solver 2026-10-17 — provenance of SEC-071…093 fixes.** SEC-071…093 are findings
+> from the **2026-10-15 weekly review**, whose authoritative tracker lives on the unmerged
+> `origin/security/weekly-review-2026-10-15` branch, not this dev tracker (still at the 2026-06-20
+> header). The `✅ fixed` / `in-progress` rows this run adds here record Saturday-Solver fix status
+> so it is not lost; a human reconciling the trackers should keep both the authoritative
+> review-branch rows and these fix-status rows. **Left for a human this run:** SEC-077 (promote.yml
+> — CI workflow/token change, never auto-modified), SEC-085 & SEC-086 (agent-prompt changes, no
+> unit-testable seam). Remaining 2026-10-15 lows/info (SEC-078…093) are below this routine's
+> C/H/M fix threshold.
 
 > **⚠ Saturday Solver 2026-10-10 — note on SEC-069/070 provenance.** SEC-069 and SEC-070 are
 > findings from the **2026-10-08 weekly review**, which lives on the unmerged
