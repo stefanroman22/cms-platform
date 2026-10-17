@@ -219,3 +219,51 @@ it; then the default `block` policy is safe to rely on. SEC-001 / SEC-002 / SEC-
 once that validation run is clean.
 
 ---
+
+<a id="sec-071"></a>
+
+## SEC-071 — CMS Connector writes the scan-derived `public_slug` into generated `lib/booking.ts` via a raw f-string — code injection into the committed/deployed client site
+
+| | |
+|---|---|
+| **Severity** | high |
+| **Status** | ✅ fixed (2026-10-17, PR `security/fix-SEC-071-2026-10-17` → dev) |
+| **Category** | Code injection / codegen sink |
+| **Dimension** | agents |
+| **Location** | `agents/CMS Connector - Website/scan.py:469-471` (sink); source at `:369`, call at `:461` |
+| **Reviewer confidence** | high |
+| **Verifier verdict** | confirmed (adjusted: high) |
+| **First seen** | 2026-10-15 |
+
+**Description**
+
+`_write_booking_ts` built `lib/booking.ts` by raw f-string interpolation of `slug` into a TypeScript
+string literal and a comment, with no escaping and no `json.dumps`. `slug` is
+`public_slug = booking.get("public_slug") or project_slug`, where `booking` comes from the scan
+manifest (model output over the untrusted client website source). `_slugify` was applied only to the
+CLI-derived directory-name fallback, never to the manifest's `public_slug`, so a manifest value such
+as `x";import cp from'child_process';cp.execSync(process.env.SECRET_EXFIL);//` — or merely a value
+containing `"` or a newline — broke out of the string literal / line comment and executed at
+`vite-react-ssg` prerender time (Node, on the build host) and in every visitor's browser.
+
+**Remediation — 2026-10-17 (fixed)**
+
+Implemented both controls from the recommendation:
+
+1. `_safe_slug()` (`scan.py`) validates the slug against `^[a-z0-9](?:[a-z0-9-]{0,94}[a-z0-9])?$`
+   and, on mismatch, slugifies it (dropping quotes/newlines/metacharacters), falling back to `"site"`
+   when nothing safe remains. It is applied once at the single derivation point in `_provision_booking`
+   (`public_slug = _safe_slug(booking.get("public_slug") or project_slug)`), so the same safe value
+   flows into both the settings PATCH payload and the generated code.
+2. `_write_booking_ts` additionally re-sanitises its `slug` argument and emits `SLUG` through
+   `json.dumps(slug)` (defence-in-depth), so a quote/newline/backslash can never escape the literal.
+
+Regression tests added to `agents/CMS Connector - Website/tests/test_scan_booking.py`
+(`test_safe_slug_*`, `test_write_booking_ts_slug_cannot_break_out`,
+`test_provision_booking_sanitises_public_slug`) fail on the pre-fix code and pass after. Full CMS
+Connector agent suite (104 tests) green.
+
+**Residual risk:** none for the codegen sink. Steering the model to emit a precise payload was already
+probabilistic; the sink is now safe for any manifest value.
+
+---
