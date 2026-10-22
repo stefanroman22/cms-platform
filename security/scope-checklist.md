@@ -17,13 +17,17 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `booking.py` — **public** create/availability (unauth surface)
 - [ ] `booking_admin.py` — tenant-scoped admin of bookings/services/hours
 - [ ] `forms.py` — **public** form submission → HTML email build (XSS sink)
-- [ ] `admin_leads.py` / `admin_conversions.py` — admin-only gating
+- [ ] `admin_leads.py` / `admin_conversions.py` — admin-only gating; **`admin_leads` Google-import endpoints** (ADR-0012) trigger the server-side website fetch (SSRF, SEC-072)
+- [ ] `workspace.py` / `content.py` **upload paths** (ADR-0011) — MIME/extension/content-type validation on image/icon/SVG/font uploads, stored-file key path traversal, public-bucket active-content serving, per-project volume (D-17)
 
 ### Services (`services/`)
 - [ ] `supabase_client.py` — service-role usage, query builder, anon fallback
 - [ ] `sessions.py` · `auth_service.py` · `admin_keys.py` — token entropy, constant-time compare
 - [ ] `booking_*` (repo, admin_repo, availability, tenant, stats, i18n, email, manage_email, reminder_email) — tenant resolution + IDOR + email injection
 - [ ] `calendar_provider.py` · `google_calendar.py` — outbound + token handling
+- [ ] `google_places/` (ADR-0012 lead import) — `website_enrich.py` **(server-side fetch of lead-supplied URL → SSRF; the `assert_public_http_url` guard must pin the validated IP, SEC-072)**, `client.py`/`photos.py`/`resolve.py` (outbound Google API + short-link expansion), `importer.py`/`mapper.py` (untrusted Google response → DB write; raw `website_uri`/`googleMapsUri` → admin render, SEC-062), `quota.py`
+- [ ] `svg_sanitize.py` (ADR-0011) — allow-list rewriter for **every uploaded SVG** before it reaches the public `cms-files` bucket; probe for script/event-handler/`xlink:href`/`foreignObject`/DOCTYPE-entity/CSS-url bypass
+- [ ] `theme.py` · `rich_text.py` · `content_structure.py` · `slug.py` (ADR-0011) — tenant theme/colour/font + rich text serialised to HTML/CSS on **public client sites**; untrusted → style/HTML escaping, font-URL/@font-face injection, `str.format`/regex-DoS in slug/repeater
 - [ ] `content_locale.py` · `segments.py` · `translation/` (provider, deepl, null, protect, sync) — outbound DeepL, untrusted content handling
 - [ ] `html_sanitizer.py` — and **whether the email builders actually call it**
 - [ ] `email_layout.py` · `*_email.py` — HTML email template injection
@@ -40,13 +44,15 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] RLS enabled + policy correctness on every PostgREST-exposed table
 - [ ] `tenant_rls_status` SECURITY DEFINER view
 - [ ] Function `search_path` pinning
+- [ ] **Storage buckets** — the `cms-files` bucket (`2026_10_11_cms_files_bucket_svg_fonts.sql`): public/private flag + `storage.objects` RLS policies (can anon upload/overwrite/list other tenants' files?), allowed MIME types for SVG/fonts
 
 ## Frontend — Next.js (`frontend/src/`)
 - [ ] `app/layout.tsx` — `dangerouslySetInnerHTML` (JSON-LD?) sink
 - [ ] `components/admin/leads/sections/DesignPromptSection.tsx` — `dangerouslySetInnerHTML` sink
 - [ ] `app/embed.js/` + `app/(widget)/` — the embeddable booking widget (cross-origin, postMessage, injected into client pages)
 - [ ] `app/[locale]/(marketing)/manage/` — public booking manage page (token in URL)
-- [ ] `components/admin/leads/**` — admin rendering of lead data (stored XSS)
+- [ ] `components/admin/leads/**` — admin rendering of lead data (stored XSS); anchor `href` scheme allowlist on `website_url`/`source_url` (SEC-062)
+- [ ] `lib/cms-rich-text/*` (ADR-0011) — `href.ts` (javascript:/data: href filtering), `RichText.tsx` / `ThemeStyles.tsx` / `CmsIcon.tsx` rendering tenant rich text + theme on **public client sites**; `components/dashboard/rich-text/` + `theme/` + `editors/` (dashboard-side serialisation)
 - [ ] auth/session cookie usage, API base URL, any token in localStorage
 - [ ] `next.config.ts` — headers, redirects, image domains, CSP
 
@@ -55,7 +61,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `codeql.yml` — secret exposure, `${{ }}` injection
 
 ## Agent guardrails (`.claude/`)
-- [ ] `settings.json` + `hooks/guard.mjs` — PreToolUse hooks that block pushes to `main`, `--no-verify` and prod deploys, and ask before prod SQL/migrations: can a command shape bypass them?
+- [ ] `settings.json` + `hooks/guard.mjs` — PreToolUse hooks that block pushes to `main`, `--no-verify` and prod deploys, and ask before prod SQL/migrations: can a command shape bypass them? **(SEC-073: the guard only inspects the first token of each segment, so `bash -c '…'` / `env …` / `$(…)` wrappers defeat every rule — re-check any shell/exec-wrapper's inner command.)**
 
 ## Agents (`agents/`)
 - [ ] `CMS Connector - Website/` — imports **client websites** to GitHub; URL/repo validation, prompt injection, output path traversal

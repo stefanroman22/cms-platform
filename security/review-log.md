@@ -5,6 +5,59 @@ changed* over time, independent of the per-finding tracker.
 
 ---
 
+## 2026-10-22 — Weekly full review (multi-agent, find → adversarial verify → reconcile)
+
+- **Method:** Workflow tool, ultra effort. **20 agents** — 8 parallel finders (one per dimension cluster),
+  each confirmed finding independently re-read by a skeptical adversarial verifier (default false-positive),
+  + 3 parallel reconciliation agents re-verifying the standing open findings against the current tree.
+  9 candidates surfaced → **6 confirmed, 3 dismissed**; the 6 confirmed collapse to **3 distinct findings**
+  (four independent finders hit the same `website_enrich` SSRF).
+- **Since last recorded activity (2026-10-10):** the high-yield new surface was **ADR-0011** (project theme,
+  styled rich text, CMS image/icon fields, SVG + font uploads to a public `cms-files` bucket — commits
+  `ba613a1`/`ad00f45`/`87e5eba`, 2026-10-12) and **ADR-0012** (Google Maps lead import — `services/google_places/*`,
+  commit `d8d0ec7`, 2026-10-11). Both got their first security review.
+- **New findings (3, all medium, all open):**
+  - **SEC-071** — public booking **create** path (`POST /booking/{slug}`) never re-validates the booking window;
+    `free_resource_ids_at` checks only opening-hours alignment + busy-overlap, so past / beyond-`max_advance` /
+    `lead_time`-violating start times are accepted. The reschedule path validates the same window (and says
+    "client is not trusted"); create does not. Integrity/availability abuse, bounded by the 5/h per-IP write cap.
+  - **SEC-072** — ADR-0012 website-enrichment SSRF guard is **check-then-connect (DNS-rebinding TOCTOU)**:
+    `assert_public_http_url` resolves + validates the host, discards the IP, then `urllib` re-resolves
+    independently at connect. Reachable via `POST /admin/leads/google-import` on an attacker-owned Google
+    listing. Bounded by admin-only trigger, the HTML-only Content-Type gate (drops the IMDS text/plain target),
+    and the Vercel/Lambda runtime where IMDS-over-HTTP is generally unreachable. Verifiers split low/medium →
+    recorded **medium (leaning low)**.
+  - **SEC-073** — `.claude/hooks/guard.mjs` PreToolUse guard (the control CLAUDE.md designates for the
+    non-negotiable no-push-to-main / no-prod-SQL / no-`--no-verify` rules) only inspects the first token of each
+    command segment, so a one-layer wrapper (`bash -c '…'`, `env …`, `$(…)`) defeats all of them and the hook
+    fails open (silent). No test coverage for the hook.
+- **Dismissed (3, adversarially — D-15/16/17):** `patch_service` missing `service_id` ownership check (writes only
+  self-tenant orphan junction rows; no cross-tenant impact); `resolve.expand_short_link` SSRF (initial hop pinned
+  to Google-controlled shortener hosts — same chokepoint reasoning as D-07); `upload_file` no rate limit
+  (authenticated-owner self-scoped storage cost, ceilinged by Supabase quota — not a trust-boundary crossing).
+- **Status reconciliation (20 findings re-verified):** `SEC-046` → **fixed** (Bearer path wrapped in `UserOut`);
+  `SEC-024` → **obsolete** (solver/scraper workflows gone, all actions SHA-pinned); `SEC-027` → **obsolete**
+  (legacy requirements.txt deleted); `SEC-067` → **obsolete** (seo_* tables dropped CASCADE 2026-09-27);
+  `SEC-048` → **partially-fixed** (enumeration route now rate-limited). Re-confirmed still-open: SEC-015, 016, 029,
+  039, 040, 047, 051, 055, 060, 061, 062, 065, 066, 068. Note: SEC-062's scraper source was removed but the
+  ADR-0012 importer (`mapper.py`) reintroduces the same raw-`website_url` → unsanitised-admin-render chain —
+  finding kept open with updated location.
+- **DB layer:** no new RLS/grant gap. `2026_10_11_cms_files_bucket_svg_fonts.sql`, `2026_10_11_theme_service_type.sql`,
+  `2026_10_11_lead_google_import.sql` reviewed statically; SVG uploads are rewritten by the allow-list
+  `svg_sanitize.sanitize_svg()` before storage (finders probed it for script/XXE/xlink/foreignObject bypass and
+  did not confirm one this run).
+- **MCP gaps:** **Supabase and Vercel MCP servers were NOT attached to this cloud run** — `get_advisors`
+  (security + performance), `list_tables`/`execute_sql`, and `get_project` could not be pulled. The DB/RLS/grant
+  posture was reviewed statically from the migration SQL only; live advisor state should be re-pulled on the next
+  run that has the plugins (or by a human) to confirm no drift on the new `cms-files` bucket policies.
+- **Headline + top risks:** No new critical/high; the internet-facing edges held again. The live class-of-risk this
+  week is **new-code hardening on ADR-0011/0012**: a reachable (if preconditioned) SSRF-guard bypass on the Google
+  import (SEC-072) and a booking-policy write bypass (SEC-071), plus the agent-guardrail wrapper bypass (SEC-073)
+  that matters specifically for the autonomous Connector/Website-Builder pipelines. Remediation order:
+  SEC-072 → SEC-073 → SEC-071 → standing low/info queue.
+
+---
+
 ## 2026-06-20 — Weekly full review (multi-agent, 14 dimensions)
 
 - **Method:** ultra-effort Workflow — one finder agent per dimension → independent adversarial verification (default false-positive) → synthesis/reconciliation against `FINDINGS.md`. **43 agents**; 28 candidates, **26 survived verification, 2 dismissed**.

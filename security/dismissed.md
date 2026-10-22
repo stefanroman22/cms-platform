@@ -180,3 +180,66 @@ The finding's own recommendation ("take the RIGHTMOST entry") would be actively 
 Caveat (separate, pre-existing, not this finding): both limiters are in-memory/per-process — slowapi default storage and bearer_limiter.py's documented process-local Bucket — so on serverless the counters fragment per warm instance. That weakens absolute throttle ceilings but is acknowledged in bearer_limiter.py's docstring and is unrelated to the XFF-spoofing claim under review.
 
 ---
+
+## D-15 — patch_service does not verify service_id ownership before writing service-resource links
+
+- **Claimed severity:** low · **Dimension:** authz-idor-cross-tenant · **Verdict:** false_positive
+- **Location:** `backend/auth_service/routers/booking_admin.py:209-218 (patch_service)`; `services/booking_admin_repo.py:181-192 (set_service_resources)`
+- **First raised:** 2026-10-22 weekly review
+
+**Why dismissed:** The code observation is accurate — `patch_service` validates `body.resource_ids` via
+`_validate_resource_ids` (the SEC-022 mitigation) but does **not** validate that the path param `service_id`
+belongs to the caller's tenant before `set_service_resources(tenant_id, service_id, resource_ids)` inserts
+junction rows. But it is not exploitable. The inserted `booking_service_resources` rows are tagged with the
+**caller's own** `tenant_id` and reference the caller's own (SEC-022-validated) resource_ids. Every consuming
+query scopes the junction by the querying tenant's `tenant_id` (`booking_repo.load_eligible_resources`,
+`list_service_resource_links`), so the rows are only ever visible under the attacker's own tenant, reference
+only their own resources, and attach to no service in their own listing (`update_service` is tenant-scoped and
+no-ops the foreign `service_id`). No cross-tenant read/write, no priv-esc. A unique-constraint DoS against the
+victim is impossible because resource UUIDs are globally unique. Net: self-tenant orphan junction rows — a
+minor data-integrity nit, adjusted to **info**, not a reachable security vulnerability. (Adding a `service_id`
+ownership check mirroring `_validate_resource_ids` is reasonable tidy-up, but it is defense-in-depth.)
+
+---
+
+## D-16 — resolve.expand_short_link follows redirects with no SSRF guard (unlike its sibling website_enrich)
+
+- **Claimed severity:** low · **Dimension:** ssrf-outbound · **Verdict:** false_positive
+- **Location:** `backend/auth_service/services/google_places/resolve.py:68-75 (expand_short_link)`
+- **First raised:** 2026-10-22 weekly review
+
+**Why dismissed:** True that `expand_short_link` issues a redirect-following GET via `client._urlopen` with no
+`assert_public_http_url`/redirect re-check, unlike the SSRF-guarded `website_enrich.fetch_html` — a real
+inconsistency. But not reachable as an SSRF: `expand_short_link` is called only from `resolve()` and only when
+`_SHORTENER_HOST_RE.match(host)` is true, i.e. the host is exactly `goo.gl` / `maps.app.goo.gl` / `g.page` /
+`g.co` (and the input must first have classified as `maps_url`). So the **initial** outbound hop is always to a
+Google-controlled shortener, never an attacker-chosen host (an arbitrary internal URL classifies as `text` and
+goes to `text_search`, never here). To exploit, the attacker would need a Google shortener link that redirects
+to an internal address of their choosing, which they cannot mint (goo.gl creation disabled since 2019, g.co is
+Google-internal, g.page/maps.app.goo.gl resolve only to Google Maps destinations). This is the same
+chokepoint-allowlist reasoning used to dismiss D-07. The endpoint is also admin-gated. Remaining value is pure
+defense-in-depth: route it through `assert_public_http_url` + the redirect guard to match its sibling. Adjusted
+to **info**.
+
+---
+
+## D-17 — Project file-upload endpoint has no rate/volume limit on a paid public-storage path
+
+- **Claimed severity:** low · **Dimension:** ratelimit-dos · **Verdict:** false_positive
+- **Location:** `backend/auth_service/routers/workspace.py:505-620 (upload_file)`
+- **First raised:** 2026-10-22 weekly review
+
+**Why dismissed:** The facts are accurate — `upload_file` has no `@limiter.limit`/`pg_rate_limit.enforce`, accepts
+up to 50 MB (5 MB for fonts), and writes each file under a fresh uuid (`upsert="false"`) into the public
+`cms-files` bucket, so objects accumulate. But no trust/security boundary is crossed. The endpoint is gated by
+`require_user` + `require_project_access` (enforces `project.user_id == user.id OR user.is_admin`) and the storage
+path is namespaced to `{project_slug}/{service_key}/`, so the only actor who can reach the sink is the
+**authenticated owner of that very project** (or trusted admin/Connector automation) writing into their **own**
+namespace. An owner uploading at volume into their own storage is self-scoped cost, not an exploit — no
+cross-tenant write, no data exposure, no priv-esc. The `save_service`(DeepL)/`google_import` rate-limit comparison
+is inapt: those gate per-call **external paid-API spend** (marginal money per request with no legitimate
+high-cadence use); file uploads are legitimate owner content already bounded by a per-file size cap + MIME/SVG
+validation, and total volume is ceilinged by Supabase's own project storage/egress quota. A per-project cumulative
+cap is reasonable hardening (adjusted to **info**), not a reachable vulnerability.
+
+---

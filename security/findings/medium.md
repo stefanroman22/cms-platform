@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-**13** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
+See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-22 (3 new mediums added this run: SEC-071 booking-window bypass, SEC-072 website-enrich DNS-rebinding SSRF, SEC-073 PreToolUse guard wrapper bypass).
 
 ---
 
@@ -755,5 +755,203 @@ on a normal in-cap range). Updated `tests/test_booking_availability_cache.py` (t
 still asserted; the former `test_availability_not_rate_limited_while_config_still_is` — which pinned
 the now-removed exemption — rewritten to assert availability 429s alongside `/config`). Full backend
 suite: 4640 passed, 5 skipped.
+
+---
+
+<a id="sec-071"></a>
+
+## SEC-071 — Public booking create path never re-validates the booking window (past dates, beyond max_advance, and lead_time all accepted)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Public endpoint / booking-policy integrity bypass |
+| **Dimension** | public-tokens / booking |
+| **Location** | `backend/auth_service/routers/booking.py:446-492 (_create_core, ~line 484)`; `backend/auth_service/services/booking_availability.py:138-163 (free_resource_ids_at)` |
+| **First seen** | 2026-10-22 (weekly review) |
+
+**Description**
+
+The unauthenticated `POST /booking/{slug}` create handler (`_create_core`) parses the attacker-supplied
+`start_utc` and passes it straight to `_free_resource_for` → `booking_availability.free_resource_ids_at`
+with **no server-side booking-window validation**:
+
+```python
+start = datetime.fromisoformat(body.start_utc).astimezone(_UTC)
+now = datetime.now(UTC)
+resource_id = _free_resource_for(
+    cfg=cfg, service=service, start_utc=start, now_utc=now,
+    prefer_resource_id=body.resource_id.strip() or None,
+)
+```
+
+`free_resource_ids_at` only checks that `start_utc` lands on a granularity-aligned slot inside the
+tenant's opening-hours windows for that weekday and that no busy guard interval overlaps. Unlike
+`available_starts` (same file, lines 104-135) it applies **none** of: the `day < today or day >
+today+max_advance_days` bound, the `earliest = now + lead_time_min` floor, or the horizon filter. The
+`now_utc` argument threaded into `_free_resource_for` is never used for a window check. The create path
+therefore accepts (1) start times in the **past**, (2) start times **beyond** `max_advance_days`, and
+(3) start times that violate `lead_time_min`.
+
+This contradicts the system's own stated policy: the reschedule handler explicitly re-validates the same
+window server-side at `booking.py:734-738` ("Re-validate the service booking window server-side (client
+is not trusted)") with a 422, but the create handler has no equivalent. The `/availability` read path
+clamps the span and the engine filters by window, so the gap is only on the **write** (create) path.
+
+**Attack scenario**
+
+An anonymous attacker obtains a tenant's `public_slug` (trivially — `embed.js`/the widget call
+`GET /booking/{slug}/config`), its open hours / slot granularity / `service_id`
+(`GET /booking/{slug}/availability` + `/config`), then POSTs crafted `start_utc` values that fall on an
+open aligned slot but are in the past, years in the future, or minutes away despite a 24 h lead policy.
+Each accepted booking inserts a row occupying the resource's guard interval (btree_gist exclusion), writes
+an audit row, and fires a host-notification + customer-confirmation email with a manage link. The most
+impactful vector is booking genuinely-bookable near-future open slots while violating lead time, denying
+those slots to real customers — an integrity/availability degradation of the booking surface. No data
+leak, no cross-tenant access.
+
+**Adversarial verification** — confirmed (independent verifier reproduced all three payloads; the
+`now_utc` arg is genuinely unused by the sink). Severity held at **medium**: real integrity/availability
+impact, but no confidentiality or cross-tenant impact and the 5/hour per-IP write limit
+(`_public_write_limit`, SEC-058) bounds the blast radius (amplifiable across IPs).
+
+**Remediation**
+
+In `_create_core`, after parsing `start`, apply the same window re-validation the reschedule path already
+uses (`booking.py:735-738`): reject with 422 if `start < now + timedelta(minutes=service['lead_time_min'])`
+or `start > now + timedelta(days=service['max_advance_days'])`, and reject any past start. Alternatively
+have `free_resource_ids_at` accept `now_utc`/`lead_time_min`/`max_advance_days` and apply the same
+`earliest <= s <= horizon` and `day >= today` filters `available_starts` already enforces, so the write
+path can never offer a slot the read path would never show.
+
+---
+
+<a id="sec-072"></a>
+
+## SEC-072 — Website-enrichment SSRF guard is check-then-connect (DNS-rebinding TOCTOU): the IP allow-list check and the fetch resolve DNS independently
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | SSRF / outbound request (CWE-367 TOCTOU + SSRF via DNS rebinding) |
+| **Dimension** | ssrf-outbound |
+| **Location** | `backend/auth_service/services/google_places/website_enrich.py:129-151 (assert_public_http_url), 160-166 (_open), 169-181 (fetch_html), 154-157 (_SafeRedirects.redirect_request)`; reached from `services/google_places/importer.py:155-156` via `routers/admin_leads.py:199-245` |
+| **First seen** | 2026-10-22 (weekly review — ADR-0012 Google Maps lead import) |
+
+**Description**
+
+The lead Google-import flow (ADR-0012) fetches the business's own website server-side to scrape social
+links / meta description. The SSRF guard `assert_public_http_url()` resolves the host once with
+`socket.getaddrinfo(p.hostname, port, ...)` and rejects the URL if any resolved IP is
+non-global/private/loopback/link-local/reserved/multicast/unspecified. **But the validated IPs are
+discarded** — `fetch_html()` then calls `_open(url)` → `urllib.request.build_opener(...).open(req)`, which
+performs its **own, independent** DNS resolution of the same hostname at TCP-connect time. Nothing pins the
+validated address to the socket:
+
+```python
+def fetch_html(url, *, timeout=8, max_bytes=1_000_000):
+    assert_public_http_url(url)      # DNS lookup #1 (validated, then thrown away)
+    with _open(url, timeout) as resp:  # DNS lookup #2 (unvalidated connect)
+        ...
+def _open(url, timeout):
+    opener = urllib.request.build_opener(_SafeRedirects())
+    req = urllib.request.Request(url, headers={...})
+    return opener.open(req, timeout=timeout)
+```
+
+A hostname served with TTL 0 by an attacker-controlled authoritative resolver can return a public IP for
+lookup #1 (passes the guard) and a private/internal IP (127.0.0.1, RFC1918, 169.254.169.254) for lookup #2
+(the real connect) — the textbook DNS-rebinding TOCTOU. `_SafeRedirects.redirect_request` has the identical
+gap on every redirect hop, so the docstring's "redirects re-checked" guarantee is not enforced at the layer
+that matters. Ports are not restricted.
+
+**Attack scenario**
+
+An attacker owns/seeds a Google Business Profile whose stored `websiteUri` is a hostname they control
+backed by a rebinding DNS record. `importer._fetch_and_map` passes `mapped.website_uri` unmodified into
+`enrich_from_website` → `fetch_html` whenever `web_presence == 'has_website'`. When an **admin** imports
+that place via `POST /admin/leads/google-import` (confused-deputy — attacker controls only the URL, not the
+trigger), `assert_public_http_url` sees the public decoy IP and passes, then `urllib` reconnects to the
+internal address. Parsed `<meta description>`, JSON-LD `sameAs` links and `mailto:` are stored on the lead
+row, giving a limited read-back channel on internal **HTML** endpoints; non-HTML targets yield blind SSRF.
+
+**Adversarial verification** — confirmed independently by **four** finder agents and multiple skeptical
+verifiers; no missed guard neutralises it, the test suite (`test_google_places_website_enrich.py`) mocks
+`getaddrinfo` globally so it structurally cannot catch the TOCTOU, and this is **not** the dismissed CLI
+scraper SSRF (SEC-049, a different file). Severity set to **medium (leaning low)**: the SSRF primitive is
+genuine and reachable, but impact is bounded by (a) the admin-only trigger + attacker needing to own the
+imported listing's domain/DNS, (b) `fetch_html` rejecting non-`html` Content-Type (so the headline
+`169.254.169.254` metadata endpoint, which returns text/plain, is dropped — only internal HTML services
+yield stored read-back), and (c) the Vercel/AWS-Lambda runtime where IMDS-over-HTTP is generally not
+reachable from the function.
+
+**Remediation**
+
+Resolve the host once, enforce the public-IP allow-list on the resolved address, and connect to **that
+pinned IP** (custom opener / `HTTPConnection` that connects by address while sending the original Host
+header / SNI) — for the initial fetch **and** every redirect hop. Re-reject if a redirect's pinned IP
+changes. Additionally restrict the destination port to 80/443. The existing `assert_public_http_url`
+logic is fine; the defect is that its result is discarded before the real socket connect.
+
+---
+
+<a id="sec-073"></a>
+
+## SEC-073 — PreToolUse agent guard (push-to-main / prod-SQL / --no-verify) is bypassable via a shell-interpreter wrapper or command substitution
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Agent guardrail bypass (fails open) |
+| **Dimension** | agent-guardrails |
+| **Location** | `.claude/hooks/guard.mjs:170-211 (checkBash / segments), ~line 174 (prefix strip)` |
+| **First seen** | 2026-10-22 (weekly review) |
+
+**Description**
+
+`checkBash()` tokenises a command with `segments()` (splits only on `&& || ; |` and newlines, honouring
+quotes) and inspects **only the first word** of each segment, after stripping the literal prefixes
+`sudo`/`command`/`exec` and `VAR=` assignments. It never recurses into a shell interpreter's `-c` string,
+into `eval`, into `env`/`xargs`/`timeout` wrappers, or into a command substitution. So every guardrail the
+hook enforces is defeated by wrapping the real command one layer deep:
+
+```
+bash -c 'git push origin main'                                  # H1  → cmd="bash", no match
+bash -c 'python scripts/apply_supabase_migration.py drop.sql'   # H2  → $-anchored regex misses inner token
+bash -c 'git commit --no-verify'                                # H4
+env git push origin main                                        # env not stripped
+echo $(git push origin main)                                    # "$(git" != "git"
+```
+
+CLAUDE.md designates this hook as the control that enforces the **non-negotiable** rules: no push to prod
+`main` (H1), no SQL/migration against the single shared prod DB (H2), no `--no-verify` secret-scan bypass
+(H4). The hook emits no decision on a no-match and defers to the normal permission flow — so a one-token
+wrapper removes all of them. H2 and H4 have no secondary server-side control.
+
+**Attack scenario**
+
+A prompt-injection payload reaching the Connector/Website-Builder agent (via scanned client-site content
+or lead data) induces it to run `bash -c 'python scripts/apply_supabase_migration.py drop.sql'` or
+`bash -c 'git push origin main'`. The guard sees `cmd="bash"`, fires no decision, and the destructive
+action proceeds against production despite H1/H2/H4 being "non-negotiable". The only extra precondition is
+that Bash is auto-approved in the non-interactive agent run, which the threat model assumes.
+
+**Adversarial verification** — confirmed. The verifier independently traced the tokenizer, reproduced every
+cited bypass (including that the H2 `apply_supabase_migration.py` check uses a `$`-anchored regex against the
+opaque inner token and that `cmd="bash"` misses psql/supabase/git/vercel entirely), confirmed the hook is
+wired as the PreToolUse guard in `.claude/settings.json` and fails open (silent) on a no-match, and found no
+test coverage for `guard.mjs`. Severity **medium**: full defeat of the control, but exploitation still
+requires the agent to be induced to emit the wrapped command in an auto-approving Bash environment.
+
+**Remediation**
+
+When the leading token is a known shell/exec wrapper (`bash`, `sh`, `zsh`, `dash`, `env`, `eval`, `xargs`,
+`timeout`, `nice`, `setsid`, `ssh`, …), parse the wrapped command string (the token after `-c`, or the
+remaining argv for `env`/`xargs`) and re-run the same checks on it; treat `$(...)`/backticks as additional
+segments to inspect. Fail **closed** on parse ambiguity. Add unit tests for `guard.mjs` covering each
+wrapper shape.
 
 ---

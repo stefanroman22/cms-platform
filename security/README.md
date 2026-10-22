@@ -5,23 +5,27 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-20** (remediation in progress)
+## Status snapshot — last full review **2026-10-22** (remediation in progress)
 
 | Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **13** | **38** | **12** | **68** | 16 |
+| **1** | **4** | **16** | **38** | **12** | **71** | 19 |
 
 The 2026-06-07 baseline's headline criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) are **fixed**.
-The 2026-06-20 review found **no new critical/high**; it added **12** lower-severity findings (all `open`) and flipped
-`SEC-050`→fixed and `SEC-007`/`SEC-023`/`SEC-025`/`SEC-026`→obsolete. See the 2026-06-20 note + the full table in
-[`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+The **2026-10-22** review found **no new critical/high** — it added **3 medium** findings (all `open`) on the new
+ADR-0011/0012 code and dismissed 3 candidates. It flipped `SEC-046`→**fixed** and `SEC-024`/`SEC-027`/`SEC-067`→**obsolete**,
+and marked `SEC-048`→partially-fixed. (Counts above are confirmed-historical totals and do not decrement on fixed/obsolete.)
+See the 2026-10-22 note + the full table in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
 
-### The next things to fix (2026-06-20 remediation order)
-1. **`SEC-058` + `SEC-059` (medium)** — move the unauthenticated **booking write paths** and the **marketing `/forms/contact`** endpoint onto the shared Postgres rate limiter; they still use the per-instance in-memory limiter (Resend cost/DoS amplification). Mechanical — the pattern already exists in-repo (`pg_rate_limit`).
-2. **`SEC-057` (medium)** — route the tenant `accent` through the `safe_hex` allowlist in `booking_email._cta_block` (the one email sink the `SEC-045` hardening missed).
-3. **`SEC-029` (low) + `SEC-060` (low)** — expire/invalidate cancelled-booking manage tokens for reads; stop using tenant copy overrides as a `str.format` format string.
-4. **`SEC-006` (medium)** — deny `Write`/`Edit` to `package.json`/lockfiles/`*.sh` during the untrusted Solver step (package-poisoning RCE), or run lint/test from the orchestrator after the agent exits against a clean tree.
-5. **Hygiene:** `SEC-066` (enforce admin-key `scopes`), `SEC-063`/`SEC-064`/`SEC-065` (pin the Solver CLI + actions, verify the gitleaks binary), `SEC-068` (login-lockout fail-open brake). The **Saturday Solver routine** now drains this queue automatically.
+> **MCP gap (2026-10-22):** this cloud run had **no Supabase or Vercel MCP** attached, so live advisor / table / project
+> state was **not** pulled — the DB layer was reviewed statically from migration SQL. Re-pull `get_advisors` +
+> `list_tables` and confirm the new `cms-files` bucket policies on the next run that has the plugins.
+
+### The next things to fix (2026-10-22 remediation order)
+1. **`SEC-072` (medium)** — pin the validated IP into the socket connect in `google_places/website_enrich.py` (resolve once, connect by address with the original Host/SNI), on the initial fetch **and** every redirect hop, and restrict the port to 80/443. Closes the DNS-rebinding SSRF-guard bypass.
+2. **`SEC-073` (medium)** — make `.claude/hooks/guard.mjs` recurse into shell/exec-wrapper inner commands (`bash -c`, `env`, `xargs`, `$(…)`, backticks) and fail **closed** on parse ambiguity; add unit tests. Restores the non-negotiable push-to-main / prod-SQL / `--no-verify` guards for the agent pipelines.
+3. **`SEC-071` (medium)** — re-validate the booking window server-side in the public `POST /booking/{slug}` create path, mirroring the reschedule handler (reject past / beyond-`max_advance` / `lead_time`-violating starts with 422).
+4. **Standing low/info queue:** `SEC-066` (enforce admin-key `scopes`), `SEC-065` (verify the gitleaks binary checksum), `SEC-068` (login-lockout fail-open brake), `SEC-060` (tenant copy as `str.format` string), `SEC-029` (expire cancelled-booking manage tokens), `SEC-062` (href scheme allowlist — now fed by the ADR-0012 importer), `SEC-039` (credentialed-CORS `*.vercel.app` — needs-decision), `SEC-040` (frontend CSP).
 
 ## How to read this folder
 
