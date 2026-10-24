@@ -167,47 +167,203 @@ function checkGit(args, dir) {
     );
 }
 
-function checkBash(command, cwd) {
-  let dir = cwd;
-  for (let seg of segments(command)) {
-    while (seg.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(seg[0])) seg = seg.slice(1);
-    if (seg[0] === "sudo" || seg[0] === "command" || seg[0] === "exec") seg = seg.slice(1);
-    const [cmd, ...args] = seg;
-    if (!cmd) continue;
-    if (cmd === "cd" || cmd === "pushd") {
-      if (args[0]) dir = path.resolve(dir, args[0].replace(/^~(?=$|\/)/, process.env.HOME ?? "~"));
+// Guardrails must survive a one-layer wrapper (SEC-073): a shell interpreter's -c
+// string, an `env`/`timeout`/`xargs`/… prefix, `eval`, and `$(…)`/backtick command
+// substitution all hide the real command from a first-token-only scan. We unwrap each
+// and re-run the same checks on the inner command. Depth-bounded; fail closed if the
+// nesting is too deep to analyse.
+const MAX_DEPTH = 8;
+const SHELL_INTERPRETERS = new Set(["bash", "sh", "zsh", "dash", "ksh", "ash"]);
+const STRIP_PREFIXES = new Set(["sudo", "command", "exec", "nohup"]);
+// Wrappers whose trailing argv (after their own options) is itself a command to run.
+// `valueOpts` are the short/long options that consume the following token; `positionals`
+// is the count of non-option positional args to skip before the command (timeout DURATION).
+const ARGV_WRAPPERS = {
+  env: { valueOpts: new Set(["-u", "--unset", "-C", "--chdir", "-S", "--split-string"]), positionals: 0 },
+  nice: { valueOpts: new Set(["-n", "--adjustment"]), positionals: 0 },
+  setsid: { valueOpts: new Set(), positionals: 0 },
+  stdbuf: { valueOpts: new Set(["-i", "--input", "-o", "--output", "-e", "--error"]), positionals: 0 },
+  ionice: { valueOpts: new Set(["-c", "--class", "-n", "--classdata", "-p", "--pid"]), positionals: 0 },
+  timeout: { valueOpts: new Set(["-s", "--signal", "-k", "--kill-after"]), positionals: 1 },
+  xargs: {
+    valueOpts: new Set([
+      "-n", "--max-args", "-P", "--max-procs", "-I", "-i", "--replace", "-d", "--delimiter",
+      "-E", "-e", "--eof", "-L", "-l", "--max-lines", "-s", "--max-chars", "-a", "--arg-file",
+    ]),
+    positionals: 0,
+  },
+};
+
+function innerArgvOf(name, args) {
+  const cfg = ARGV_WRAPPERS[name];
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (a === "--") {
+      i++;
+      break;
+    }
+    if (a.startsWith("-") && a !== "-") {
+      i += !a.includes("=") && cfg.valueOpts.has(a) ? 2 : 1;
       continue;
     }
-    if (cmd === "git") checkGit(args, dir);
+    break;
+  }
+  return args.slice(i + cfg.positionals);
+}
 
-    // H1: no production deploy from a laptop; `vercel rollback` stays allowed for incidents.
-    const vercelArgs =
-      cmd === "vercel" ? args : cmd === "npx" ? args.slice(args.findIndex((a) => a === "vercel") + 1) : null;
-    if (vercelArgs && (cmd === "vercel" || args.includes("vercel"))) {
-      const prodFlag = vercelArgs.some(
-        (a, j) => a === "--prod" || a === "--prod=true" || a === "--target=production" ||
-          (a === "--target" && vercelArgs[j + 1] === "production"),
-      );
-      if (prodFlag && isProdRepo(dir))
-        decide(
-          "deny",
-          "Guardrail H1: no production deploys from the CLI. Production changes only through the " +
-            "'Promote dev → main' action. (vercel rollback is still allowed for incidents.)",
-        );
+// Best-effort: the remote command after an ssh destination (so `ssh host 'git push …'`
+// is still inspected). Over-matching here only ever adds a conservative ask/deny.
+function sshRemoteCommand(args) {
+  const valueOpts = new Set([
+    "-b", "-c", "-D", "-E", "-e", "-F", "-I", "-i", "-J", "-L", "-l",
+    "-m", "-O", "-o", "-p", "-Q", "-R", "-S", "-W", "-w",
+  ]);
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i];
+    if (a === "--") {
+      i++;
+      break;
     }
+    if (a.startsWith("-")) {
+      i += a.length === 2 && valueOpts.has(a) ? 2 : 1;
+      continue;
+    }
+    break;
+  }
+  const rest = args.slice(i + 1); // +1 skips the destination (user@host)
+  return rest.length ? rest.join(" ") : null;
+}
 
-    // H2: one Supabase database serves local, preview and prod — writes hit production.
-    const tail = seg.join(" ");
-    if (
-      cmd === "psql" ||
-      (cmd === "supabase" && /\b(db (push|reset)|migration up)\b/.test(tail)) ||
-      seg.some((a) => /apply_supabase_migration\.py$/.test(a))
-    )
+// Command substitutions — $(…) and `…` — honouring quoting: single quotes suppress
+// substitution, double quotes do not. Arithmetic $((…)) is not a command.
+function commandSubstitutions(str) {
+  const found = [];
+  let quote = null;
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (quote === "'") {
+      if (c === "'") quote = null;
+      continue;
+    }
+    if (c === "\\" && quote !== "'") {
+      i++;
+      continue;
+    }
+    if (quote === '"') {
+      if (c === '"') quote = null;
+      else if (c === "`") i = grabBacktick(str, i, found);
+      else if (c === "$" && str[i + 1] === "(" && str[i + 2] !== "(") i = grabParen(str, i + 1, found);
+      continue;
+    }
+    if (c === "'" || c === '"') quote = c;
+    else if (c === "`") i = grabBacktick(str, i, found);
+    else if (c === "$" && str[i + 1] === "(" && str[i + 2] !== "(") i = grabParen(str, i + 1, found);
+  }
+  return found;
+}
+
+function grabParen(str, open, found) {
+  let depth = 0;
+  for (let i = open; i < str.length; i++) {
+    if (str[i] === "(") depth++;
+    else if (str[i] === ")" && --depth === 0) {
+      found.push(str.slice(open + 1, i));
+      return i;
+    }
+  }
+  found.push(str.slice(open + 1)); // unbalanced — inspect what we have
+  return str.length;
+}
+
+function grabBacktick(str, open, found) {
+  const close = str.indexOf("`", open + 1);
+  const end = close === -1 ? str.length : close;
+  found.push(str.slice(open + 1, end));
+  return end;
+}
+
+function inspectSegment(seg, dir, depth) {
+  while (seg.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(seg[0])) seg = seg.slice(1);
+  while (seg.length && STRIP_PREFIXES.has(seg[0])) seg = seg.slice(1);
+  const [cmd, ...args] = seg;
+  if (!cmd) return dir;
+
+  if (depth < MAX_DEPTH) {
+    // Shell interpreter: re-check the -c string (also -lc, -ic, … bundles ending in c).
+    if (SHELL_INTERPRETERS.has(cmd)) {
+      const ci = args.findIndex((a) => /^-[A-Za-z]*c$/.test(a));
+      if (ci !== -1 && args[ci + 1] != null) checkBash(args[ci + 1], dir, depth + 1);
+      return dir;
+    }
+    // eval: its arguments are concatenated and re-parsed as a command.
+    if (cmd === "eval") {
+      checkBash(args.join(" "), dir, depth + 1);
+      return dir;
+    }
+    // env/timeout/xargs/nice/…: the trailing argv is the real command — re-peel it.
+    if (Object.hasOwn(ARGV_WRAPPERS, cmd)) {
+      const inner = innerArgvOf(cmd, args);
+      if (inner.length) inspectSegment(inner, dir, depth + 1);
+      return dir;
+    }
+    if (cmd === "ssh") {
+      const remote = sshRemoteCommand(args);
+      if (remote) checkBash(remote, dir, depth + 1);
+      return dir;
+    }
+  }
+
+  if (cmd === "cd" || cmd === "pushd") {
+    if (args[0]) dir = path.resolve(dir, args[0].replace(/^~(?=$|\/)/, process.env.HOME ?? "~"));
+    return dir;
+  }
+  if (cmd === "git") checkGit(args, dir);
+
+  // H1: no production deploy from a laptop; `vercel rollback` stays allowed for incidents.
+  const vercelArgs =
+    cmd === "vercel" ? args : cmd === "npx" ? args.slice(args.findIndex((a) => a === "vercel") + 1) : null;
+  if (vercelArgs && (cmd === "vercel" || args.includes("vercel"))) {
+    const prodFlag = vercelArgs.some(
+      (a, j) => a === "--prod" || a === "--prod=true" || a === "--target=production" ||
+        (a === "--target" && vercelArgs[j + 1] === "production"),
+    );
+    if (prodFlag && isProdRepo(dir))
       decide(
-        "ask",
-        "Guardrail H2: this runs SQL against the one shared Supabase database, which IS production.",
+        "deny",
+        "Guardrail H1: no production deploys from the CLI. Production changes only through the " +
+          "'Promote dev → main' action. (vercel rollback is still allowed for incidents.)",
       );
   }
+
+  // H2: one Supabase database serves local, preview and prod — writes hit production.
+  const tail = seg.join(" ");
+  if (
+    cmd === "psql" ||
+    (cmd === "supabase" && /\b(db (push|reset)|migration up)\b/.test(tail)) ||
+    seg.some((a) => /apply_supabase_migration\.py$/.test(a))
+  )
+    decide(
+      "ask",
+      "Guardrail H2: this runs SQL against the one shared Supabase database, which IS production.",
+    );
+  return dir;
+}
+
+function checkBash(command, cwd, depth = 0) {
+  if (depth > MAX_DEPTH) {
+    decide(
+      "ask",
+      "Guardrail: this command is nested/obfuscated too deeply to analyse for the H1–H5 rules. " +
+        "Please review it by hand before approving.",
+    );
+    return;
+  }
+  // A command substitution runs a command of its own — inspect each before the segments.
+  for (const sub of commandSubstitutions(command)) checkBash(sub, cwd, depth + 1);
+  let dir = cwd;
+  for (const seg of segments(command)) dir = inspectSegment(seg, dir, depth);
 }
 
 // H2: execute_sql is allowed without asking only when it is clearly read-only.
