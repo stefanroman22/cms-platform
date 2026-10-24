@@ -27,6 +27,24 @@
 > migration SQL (no new RLS/grant gap found; `2026_10_11_cms_files_bucket_svg_fonts.sql` reviewed). See
 > [`review-log.md`](./review-log.md).
 
+> **✅ Saturday Solver 2026-10-24 — shipped fixes for all three open mediums from the 2026-10-22 review.**
+> Remediation order followed (SEC-072 → SEC-073 → SEC-071); each fix is an independent, tested, dev-merged PR:
+> **SEC-072 → fixed** (PR #88 — SSRF guard now connects to the IP it validated via `_Pinned{HTTP,HTTPS}Connection`
+> on the initial fetch and every redirect; ports limited to 80/443; DNS-rebinding TOCTOU closed; +3 tests;
+> full backend suite 5149 green); **SEC-073 → fixed** (PR #89 — `guard.mjs checkBash` unwraps shell `-c`,
+> `env`/`timeout`/`xargs`/`nice`/`setsid`/`stdbuf`/`ionice`/`eval`/`ssh` wrappers and `$(…)`/backtick
+> substitution, re-running H1–H5 on the inner command, fail-closed on deep nesting; new `guard.test.mjs`,
+> 20/20 green); **SEC-071 → fixed** (PR #90 — `_create_core` re-validates the booking window server-side
+> before any resource hold/write, mirroring reschedule; +parametrized tests; existing year-2099 create tests
+> updated to in-window dates; full backend suite 5152 green). All three auto-merged to **dev only** (gates met:
+> not a migration/config, no auth/session/CORS/token change, no CI-workflow change; dev runs no CI, local
+> suites are the gate). No criticals/highs were open; no needs-decision findings were touched.
+> **⚠ Human action still required:** the long-standing **ID collision** — this 2026-10-22 review's
+> SEC-071/072/073 vs. the *separate* `dev` tracker lineage (2026-10-15 review) where SEC-071 = public_slug
+> codegen and SEC-072/073 don't exist — remains unresolved. The three fix PRs deliberately did **not** mutate
+> the dev tracker to avoid worsening the collision; this status update lives on the 2026-10-22 review branch.
+> The two trackers still need a single renumbering pass. See [`review-log.md`](./review-log.md).
+
 This table is the **source of truth for status**. Detail for each finding lives in [`findings/`](./findings/) by severity. IDs are stable and never reused (see [`methodology.md`](./methodology.md) §5–6). Status: `open` · `in-progress` · `fixed` · `accepted-risk` · `false-positive` · `wont-fix`.
 
 > **Note 2026-08-26 — Feature removals.** The auto-fix pipeline (issues API + Slack S1/S1.5 +
@@ -197,9 +215,9 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-067](findings/info.md#sec-067) | info | New `seo_*` tables inherit full anon/authenticated DML grants from Supabase default ACLs; safe only because RLS is enabled (no explicit REVOKE) | `backend/migrations/2026_06_14_seo_geo.sql:159-167` | supabase-db | obsolete (2026-10-22: all nine seo_* tables dropped CASCADE — `2026_09_27_drop_seo_email_configs_add_gc_jobs.sql`) |
 | [SEC-068](findings/low.md#sec-068) | low | Per-account login lockout fails open on any Postgres error, leaving only per-instance in-memory throttling | `backend/auth_service/core/pg_rate_limit.py:40-55; routers/auth.py:79-96` | authn-session | open |
 | [SEC-070](findings/medium.md#sec-070) | medium | Public booking `/{slug}/availability` omits the shared rate limiter; URL-keyed edge cache is trivially cache-busted → DB + external-calendar amplification DoS | `backend/auth_service/routers/booking.py:436-445,239-317` | ratelimit-dos | ✅ fixed (PR `security/fix-SEC-070-2026-10-10` → dev — `/{slug}/availability` now carries `Depends(_public_read_limit)` like every sibling public read; regression test added) |
-| [SEC-071](findings/medium.md#sec-071) | medium | Public booking **create** path never re-validates the booking window — past/far-future/lead-time-violating bookings accepted (reschedule validates, create does not) | `backend/auth_service/routers/booking.py:446-492; services/booking_availability.py:138-163` | public-tokens | open |
-| [SEC-072](findings/medium.md#sec-072) | medium | ADR-0012 website-enrichment SSRF guard is check-then-connect (**DNS-rebinding TOCTOU**): `assert_public_http_url` validates one DNS resolution, `urllib` re-resolves independently at connect | `backend/auth_service/services/google_places/website_enrich.py:129-181` | ssrf-outbound | open |
-| [SEC-073](findings/medium.md#sec-073) | medium | `.claude/hooks/guard.mjs` PreToolUse guard (no push-to-main / no prod-SQL / no `--no-verify`) bypassable via a one-layer shell wrapper (`bash -c`, `env`, `$(…)`) — only the first token of each segment is inspected | `.claude/hooks/guard.mjs:170-211` | agent-guardrails | open |
+| [SEC-071](findings/medium.md#sec-071) | medium | Public booking **create** path never re-validates the booking window — past/far-future/lead-time-violating bookings accepted (reschedule validates, create does not) | `backend/auth_service/routers/booking.py:446-492; services/booking_availability.py:138-163` | public-tokens | ✅ fixed (PR #90 `security/fix-SEC-071-2026-10-24` → dev — `_create_core` now re-validates `start` against `lead_time_min`/`max_advance_days` before any resource hold/write, mirroring the reschedule path; regression tests added) |
+| [SEC-072](findings/medium.md#sec-072) | medium | ADR-0012 website-enrichment SSRF guard is check-then-connect (**DNS-rebinding TOCTOU**): `assert_public_http_url` validates one DNS resolution, `urllib` re-resolves independently at connect | `backend/auth_service/services/google_places/website_enrich.py:129-181` | ssrf-outbound | ✅ fixed (PR #88 `security/fix-SEC-072-2026-10-24` → dev — connections pin to the validated IP via `_Pinned{HTTP,HTTPS}Connection` for the initial fetch and every redirect; ports restricted to 80/443; regression tests added) |
+| [SEC-073](findings/medium.md#sec-073) | medium | `.claude/hooks/guard.mjs` PreToolUse guard (no push-to-main / no prod-SQL / no `--no-verify`) bypassable via a one-layer shell wrapper (`bash -c`, `env`, `$(…)`) — only the first token of each segment is inspected | `.claude/hooks/guard.mjs:170-211` | agent-guardrails | ✅ fixed (PR #89 `security/fix-SEC-073-2026-10-24` → dev — `checkBash` now unwraps shell `-c`, `env`/`timeout`/`xargs`/… wrappers, `eval`, ssh and `$(…)`/backtick substitution and re-runs H1–H5 on the inner command, fail-closed on deep nesting; `guard.test.mjs` added) |
 
 > **⚠ Saturday Solver 2026-10-10 — note on SEC-069/070 provenance.** SEC-069 and SEC-070 are
 > findings from the **2026-10-08 weekly review**, which lives on the unmerged

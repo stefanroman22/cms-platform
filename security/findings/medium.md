@@ -765,7 +765,7 @@ suite: 4640 passed, 5 skipped.
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (PR #90 → dev, 2026-10-24) |
 | **Category** | Public endpoint / booking-policy integrity bypass |
 | **Dimension** | public-tokens / booking |
 | **Location** | `backend/auth_service/routers/booking.py:446-492 (_create_core, ~line 484)`; `backend/auth_service/services/booking_availability.py:138-163 (free_resource_ids_at)` |
@@ -834,7 +834,7 @@ path can never offer a slot the read path would never show.
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (PR #88 → dev, 2026-10-24) |
 | **Category** | SSRF / outbound request (CWE-367 TOCTOU + SSRF via DNS rebinding) |
 | **Dimension** | ssrf-outbound |
 | **Location** | `backend/auth_service/services/google_places/website_enrich.py:129-151 (assert_public_http_url), 160-166 (_open), 169-181 (fetch_html), 154-157 (_SafeRedirects.redirect_request)`; reached from `services/google_places/importer.py:155-156` via `routers/admin_leads.py:199-245` |
@@ -904,7 +904,7 @@ logic is fine; the defect is that its result is discarded before the real socket
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (PR #89 → dev, 2026-10-24) |
 | **Category** | Agent guardrail bypass (fails open) |
 | **Dimension** | agent-guardrails |
 | **Location** | `.claude/hooks/guard.mjs:170-211 (checkBash / segments), ~line 174 (prefix strip)` |
