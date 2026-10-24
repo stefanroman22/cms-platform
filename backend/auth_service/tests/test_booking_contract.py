@@ -1,6 +1,7 @@
 """Tests for the create-booking contract: field-level validation errors on
 `POST /booking/{slug}`, and behavior preservation for already-valid payloads."""
 
+from datetime import datetime, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -12,6 +13,12 @@ from auth_service.main import app
 from auth_service.services.booking_tenant import TenantConfig
 
 UTC = ZoneInfo("UTC")
+
+
+def _in_window_start() -> str:
+    """An ISO start inside SERVICE's lead_time_min/max_advance_days window (SEC-071)."""
+    return (datetime.now(UTC) + timedelta(days=2)).isoformat()
+
 
 TENANT = TenantConfig(
     tenant_id="t1",
@@ -136,7 +143,7 @@ def test_create_valid_payload_still_succeeds(client, monkeypatch):
             "/booking/acme",
             json={
                 "service_id": "s1",
-                "start_utc": "2099-06-10T06:00:00+00:00",
+                "start_utc": _in_window_start(),
                 "customer": {"name": "Jane", "email": "jane@acme.com", "tz": "Europe/London"},
             },
             headers=_ip(4),

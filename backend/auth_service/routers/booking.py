@@ -481,6 +481,17 @@ def _create_core(cfg: TenantConfig, body: CreateIn) -> JSONResponse:
         ) from exc
 
     now = datetime.now(UTC)
+    # Re-validate the service booking window server-side (client is not trusted) — the
+    # reschedule path does the same at _reschedule_core. Without this the create path
+    # accepts past, far-future (> max_advance_days) and lead-time-violating starts that
+    # land on an open, aligned slot (SEC-071).
+    if start < now + timedelta(minutes=service["lead_time_min"]) or start > now + timedelta(
+        days=service["max_advance_days"]
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "start_utc", "message": "start_utc is outside the booking window"},
+        )
     resource_id = _free_resource_for(
         cfg=cfg,
         service=service,
