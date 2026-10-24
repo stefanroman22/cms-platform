@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -9,6 +10,12 @@ from auth_service.main import app
 from auth_service.services.booking_tenant import TenantConfig
 
 UTC = ZoneInfo("UTC")
+
+
+def _in_window_start() -> str:
+    """An ISO start that satisfies SERVICE's lead_time_min/max_advance_days window."""
+    return (datetime.now(UTC) + timedelta(days=2)).isoformat()
+
 
 TENANT = TenantConfig(
     tenant_id="t1",
@@ -85,7 +92,7 @@ def test_create_happy_path(client, monkeypatch):
             "/booking/acme",
             json={
                 "service_id": "s1",
-                "start_utc": "2099-06-10T06:00:00+00:00",
+                "start_utc": _in_window_start(),
                 "customer": {"name": "Jane", "email": "jane@acme.com", "tz": "Europe/London"},
             },
         )
@@ -120,11 +127,48 @@ def test_create_conflict_returns_409(client, monkeypatch):
             "/booking/acme",
             json={
                 "service_id": "s1",
-                "start_utc": "2099-06-10T06:00:00+00:00",
+                "start_utc": _in_window_start(),
                 "customer": {"name": "Jane", "email": "jane@acme.com", "tz": "Europe/London"},
             },
         )
     assert r.status_code == 409
+
+
+@pytest.mark.parametrize(
+    "start_utc,label",
+    [
+        ((datetime.now(UTC) - timedelta(days=1)).isoformat(), "past"),
+        ((datetime.now(UTC) + timedelta(days=200)).isoformat(), "beyond max_advance_days"),
+        ((datetime.now(UTC) + timedelta(minutes=10)).isoformat(), "inside lead_time_min"),
+    ],
+)
+def test_create_rejects_out_of_window_start(client, start_utc, label):
+    """SEC-071: the create path re-validates the booking window server-side. Past,
+    far-future (> max_advance_days) and lead-time-violating starts are rejected with a
+    422 before any resource is held or booking row is written."""
+    insert = patch("auth_service.routers.booking.booking_repo.insert_booking")
+    free = patch("auth_service.routers.booking._free_resource_for", return_value="r1")
+    with (
+        patch(
+            "auth_service.routers.booking.booking_tenant.load_tenant_by_slug", return_value=TENANT
+        ),
+        patch("auth_service.routers.booking.booking_repo.load_service", return_value=SERVICE),
+        free as free_mock,
+        insert as insert_mock,
+    ):
+        r = client.post(
+            "/booking/acme",
+            json={
+                "service_id": "s1",
+                "start_utc": start_utc,
+                "customer": {"name": "Jane", "email": "jane@acme.com", "tz": "Europe/London"},
+            },
+        )
+    assert r.status_code == 422, f"{label}: {r.text}"
+    assert r.json()["detail"]["field"] == "start_utc"
+    # Rejected before the resource was selected or the row written.
+    free_mock.assert_not_called()
+    insert_mock.assert_not_called()
 
 
 def test_create_shared_rate_limit_returns_429(client):
