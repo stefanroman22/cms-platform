@@ -5,6 +5,7 @@ and 8 s, and every failure is reported, never raised, from enrich_from_website()
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import json
 import re
@@ -14,6 +15,8 @@ import urllib.request
 from html.parser import HTMLParser
 
 USER_AGENT = "roman-technologies-cms-backend/1.0"
+# Only plain web ports are reachable; everything else is an SSRF smell.
+_ALLOWED_PORTS = frozenset({80, 443})
 
 SOCIAL_HOSTS: dict[str, tuple[str, ...]] = {
     "facebook": ("facebook.com", "fb.com", "fb.me"),
@@ -126,29 +129,45 @@ class UnsafeUrl(ValueError):
     pass
 
 
+def _reject_if_not_public(host: str, ip_str: str) -> None:
+    ip = ipaddress.ip_address(ip_str)
+    if (
+        not ip.is_global
+        or ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    ):
+        raise UnsafeUrl(f"{host} resolves to a non-public address")
+
+
+def _resolve_validated_ip(host: str, port: int) -> str:
+    """Resolve ``host``, reject unless EVERY resolved address is public and ``port`` is a
+    plain web port, and return the first resolved address so the caller can connect to
+    *that exact IP*. Connecting by the already-resolved address (instead of letting the
+    socket layer re-resolve the hostname) closes the check-then-connect DNS-rebinding
+    TOCTOU (SEC-072): the address validated here is the address connected to."""
+    if port not in _ALLOWED_PORTS:
+        raise UnsafeUrl(f"{host}: port {port} not allowed (only 80/443)")
+    try:
+        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as e:
+        raise UnsafeUrl(f"cannot resolve {host}") from e
+    if not infos:
+        raise UnsafeUrl(f"cannot resolve {host}")
+    for info in infos:
+        _reject_if_not_public(host, info[4][0])
+    return infos[0][4][0]
+
+
 def assert_public_http_url(url: str) -> None:
     p, _ = _host_of(url)
     if p is None:
         raise UnsafeUrl("only http(s) URLs with a host are allowed")
     port = p.port or (443 if p.scheme == "https" else 80)
-    try:
-        infos = socket.getaddrinfo(p.hostname, port, proto=socket.IPPROTO_TCP)
-    except socket.gaierror as e:
-        raise UnsafeUrl(f"cannot resolve {p.hostname}") from e
-    if not infos:
-        raise UnsafeUrl(f"cannot resolve {p.hostname}")
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if (
-            not ip.is_global
-            or ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
-            raise UnsafeUrl(f"{p.hostname} resolves to a non-public address")
+    _resolve_validated_ip(p.hostname, port)
 
 
 class _SafeRedirects(urllib.request.HTTPRedirectHandler):
@@ -157,9 +176,43 @@ class _SafeRedirects(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    """Connect to a freshly-validated public IP instead of letting the socket layer
+    re-resolve the hostname. Runs for the initial request *and* every redirect hop, so
+    a rebinding record that flips to a private IP after the pre-check is caught here."""
+
+    def connect(self):
+        ip = _resolve_validated_ip(self.host, self.port)
+        self.sock = socket.create_connection((ip, self.port), self.timeout, self.source_address)
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def connect(self):
+        ip = _resolve_validated_ip(self.host, self.port)
+        sock = socket.create_connection((ip, self.port), self.timeout, self.source_address)
+        # Keep SNI + cert-hostname verification bound to the real hostname, not the IP.
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _PinnedHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_PinnedHTTPConnection, req)
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_PinnedHTTPSConnection, req)
+
+
 def _open(url: str, timeout: int):
-    """Single seam for tests."""
-    opener = urllib.request.build_opener(_SafeRedirects())
+    """Single seam for tests. The IP-pinning handlers are the authoritative SSRF guard;
+    an empty ProxyHandler ignores any ambient proxy env so pinning cannot be bypassed."""
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        _PinnedHTTPHandler,
+        _PinnedHTTPSHandler,
+        _SafeRedirects(),
+    )
     req = urllib.request.Request(
         url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,*/*;q=0.5"}
     )
