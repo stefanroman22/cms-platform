@@ -534,4 +534,154 @@ Verifier confirmed via live execute_sql that the seo_* tables have RLS enabled w
 
 Optional defense-in-depth (not required while RLS stays enabled): add an explicit `revoke all on table public.seo_* from anon, authenticated;` to the SEO migration, and consider `ALTER DEFAULT PRIVILEGES ... REVOKE ALL ON TABLES FROM anon, authenticated` so future tables do not silently inherit the broad grant. Makes the fail-closed posture independent of the RLS toggle, matching the SEC-013/slack_processed_events pattern.
 
+**Update 2026-10-29 (re-scope — the finding CLASS persists at a new location).** The original `seo_*`
+instance is now moot: `backend/migrations/2026_09_27_drop_seo_email_configs_add_gc_jobs.sql` (APPLIED)
+CASCADE-drops all nine `seo_*` tables and the `projects.seo_*` columns, and no `seo_*` reference remains
+in app code. **But the identical pattern has a live successor:** `public.google_import_usage`
+(`backend/migrations/2026_10_11_lead_google_import.sql:34-38`) is created in the PostgREST-exposed
+`public` schema with `enable row level security` and **no** explicit `revoke all … from anon,
+authenticated` (only the two SECURITY DEFINER functions are REVOKE'd, lines 75-78). It is safe today
+(RLS with zero policies fails closed; the backend reaches the counter only via the service-role key),
+so the risk is unchanged: a future `… DISABLE ROW LEVEL SECURITY` would expose the quota counter to
+anon read/reset. SEC-067 therefore stays **open (info)**, re-scoped to `google_import_usage`; the same
+explicit-REVOKE / `ALTER DEFAULT PRIVILEGES` remedy applies. Could not re-confirm live grants this run
+(no Supabase MCP in the headless cloud run).
+
+---
+
+<a id="sec-074"></a>
+
+## SEC-074 — `resolve.expand_short_link` follows HTTP redirects with no SSRF guard and never re-validates the resolved host (inconsistent with the hardened `website_enrich` fetch)
+
+| | |
+|---|---|
+| **Severity** | info (finder raised low; downgraded on verification) |
+| **Status** | open |
+| **Category** | SSRF (defense-in-depth inconsistency) |
+| **Dimension** | ssrf-outbound |
+| **Location** | `backend/auth_service/services/google_places/resolve.py:68-75, 90` |
+| **First seen** | 2026-10-29 |
+
+**Description**
+
+`expand_short_link` issues a GET via `client._urlopen` (plain `urllib.request.urlopen`), which follows
+**all** redirects with the default handler and performs no host/scheme/IP validation on any redirect
+target — unlike `website_enrich.fetch_html`, which wraps every hop in `assert_public_http_url` via
+`_SafeRedirects`:
+
+```python
+def expand_short_link(url: str) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": client.USER_AGENT}, method="GET")
+    try:
+        with client._urlopen(req, 8) as resp:
+            return resp.geturl() or url
+    except Exception:
+        return url
+...
+expanded = expand_short_link(value) if _SHORTENER_HOST_RE.match(_hostname(value)) else value
+```
+
+**Exploitability (adversarially verified; downgraded low→info)**
+
+No realistic attack path reaches an internal target today: (1) the sole caller chain is admin-gated
+(`resolve()` → `importer` → `admin_leads.py` google-import, behind `admin_user_via_bearer_or_sid` + a
+per-user limit); (2) `expand_short_link` only runs when the input host already matches
+`_SHORTENER_HOST_RE` (`goo.gl`/`maps.app.goo.gl`/`g.page`/`g.co` — Google-controlled shorteners that are
+not open redirectors and only redirect to Google destinations), so the redirect cannot be steered to
+`169.254.169.254` or an internal host; (3) the resolved URL is only regex-parsed for a place id /
+name+coords and never re-fetched (blind GET only). Carries over the info verdict of the removed-scraper
+SEC-049/SEC-052 (genuinely new location, same reasoning).
+
+**Remediation**
+
+Route `expand_short_link` through the same guard as `fetch_html` (build the opener with `_SafeRedirects`
+and call `assert_public_http_url` on the initial URL and every redirect hop), so the Google-shortener
+assumption is enforced rather than trusted.
+
+---
+
+<a id="sec-077"></a>
+
+## SEC-077 — Sessions are renewed to a full 30/60-day lifetime on every use with no absolute cap, so an issued (or stolen) session token is effectively eternal
+
+| | |
+|---|---|
+| **Severity** | info |
+| **Status** | open |
+| **Category** | Session lifetime / hardening |
+| **Dimension** | authn-session |
+| **Location** | `backend/auth_service/services/sessions.py:91-100` |
+| **First seen** | 2026-10-29 |
+
+**Description**
+
+`validate_session()` runs on every authenticated backend request. Once a session is older than
+`RENEWAL_WINDOW` (5 min), each use resets `expires_at` to `now + full_lifetime` (30 days, or 60 for
+remember-me). There is no `issued_at`/`created_at` **absolute** cap (`created_at` is read only for the
+5-session LRU cap in `create_session`), so any session touched at least once every ~30/60 days never
+self-expires:
+
+```python
+remaining = expires_at - now
+full_lifetime = timedelta(days=REMEMBER_ME_DAYS if row.get("remember_me") else DEFAULT_DAYS)
+if remaining < full_lifetime - RENEWAL_WINDOW:
+    new_expires = now + full_lifetime
+    sb.table("sessions").update({"expires_at": new_expires.isoformat(), "last_used_at": now.isoformat()}).eq("id", row["id"]).execute()
+```
+
+**Exploitability (adversarially verified; info)**
+
+Purely a hardening observation — no impact without a separate token-theft vuln, and the primary theft
+vector is blocked: the cookie is HttpOnly (and Secure in prod), so XSS cannot exfiltrate it; the
+realistic path is a shared/compromised device. The token is independently retired server-side by logout
+(`revoke_session`), password change (`revoke_all_for_user`), deactivation (`is_active` gate), and the
+5-session cap — just never by expiry alone. The only residual is that a leaked-and-still-used cookie
+persists indefinitely until manual/password revocation, and renewal re-grants the full lifetime rather
+than a short rolling window.
+
+**Remediation**
+
+Add an absolute session lifetime cap: store `issued_at` (or cap on `created_at`) and in
+`validate_session()` return `None` once `now - created_at` exceeds an absolute maximum (e.g. 30 days
+normal, 90 remember-me), independent of the sliding `expires_at`. Optionally renew into a shorter rolling
+window rather than the full lifetime so a stale token retires sooner.
+
+---
+
+<a id="sec-078"></a>
+
+## SEC-078 — Authenticated file-upload endpoints have per-file size caps but no per-user upload frequency limit
+
+| | |
+|---|---|
+| **Severity** | info |
+| **Status** | open |
+| **Category** | Rate limiting / cost (storage) |
+| **Dimension** | ratelimit-dos |
+| **Location** | `backend/auth_service/routers/workspace.py:505-512 (upload_file); backend/auth_service/routers/booking_admin.py:792 (upload_logo)` |
+| **First seen** | 2026-10-29 |
+
+**Description**
+
+`upload_file` and `upload_logo` both read the body into memory (`content = await file.read()`) and
+enforce only a per-file size cap (`MAX_FILE_SIZE=50MB` / `MAX_FONT_SIZE=5MB` / `_LOGO_MAX=5MB`) with no
+per-user/per-project frequency limiter (`save_service` at `workspace.py:341` carries a
+`pg_rate_limit.enforce`, these do not). An authenticated project owner can loop valid uploads to
+accumulate objects in the `cms-files` bucket, consuming storage/egress quota.
+
+**Exploitability (adversarially verified; info)**
+
+Fully authenticated and tenant-scoped (`require_user` + `require_project_access` / `_tenant`) — this is
+self-inflicted abuse of the attacker's own tenant, not a cross-tenant IDOR and not an unauth surface.
+`services/storage_gc.py` reclaims orphans, and Vercel's serverless request-body limit (~4.5MB) caps the
+real per-request payload well below the 50MB in-code limit, neutering the single-request
+memory-exhaustion angle. No paid third-party API is involved. The single realistic consequence is
+Supabase storage/egress cost.
+
+**Remediation**
+
+Add a modest shared Postgres per-project upload-frequency limit to `upload_file` and `upload_logo` (e.g.
+N uploads/min keyed on `project_id`), matching the `save_service` pattern, as defense-in-depth against
+storage-fill cost abuse.
+
 ---

@@ -1,8 +1,42 @@
 # Security Findings — Live Tracker
 
-**Last full review:** 2026-06-20 · **Reviewer:** multi-agent workflow (14 dimensions, adversarial verification) · **Supabase:** xeluydwpgiddbamysgyu · **Confirmed:** 68 · **Dismissed (false-positive):** 16
+**Last full review:** 2026-10-29 · **Reviewer:** multi-agent workflow (13 finders + reconciliation, adversarial verification; 31 agents) · **Supabase:** xeluydwpgiddbamysgyu (live MCP UNAVAILABLE this run — code-only) · **Confirmed:** 76 · **Dismissed (false-positive):** 16
 
 This table is the **source of truth for status**. Detail for each finding lives in [`findings/`](./findings/) by severity. IDs are stable and never reused (see [`methodology.md`](./methodology.md) §5–6). Status: `open` · `in-progress` · `fixed` · `accepted-risk` · `false-positive` · `wont-fix`.
+
+> **2026-10-29 — Weekly full review (multi-agent, 13 finders + reconciliation, 31 agents).** **No new critical/high.**
+> +8 new findings (**1 medium, 4 low, 3 info**), all `open`; 7 verifier "dismissals" were all dedup
+> re-confirmations of already-tracked findings (not new false positives). This review's **highest-yield new
+> surfaces** — file uploads (SVG/font + MIME allow/deny), rich text (ADR-0010/0011), project theme/CSS, and
+> the Google Places lead-import pipeline (ADR-0012) — were deeply audited and found **sound** (allow-list
+> SVG sanitizer, default-deny rich-text canonicalizer, charset-restricted theme, tenant-derived upload keys
+> on the isolated storage origin). The live risk theme shifted from the internet-facing edges (which held)
+> to the **agent/automation guardrail layer**:
+> - **SEC-071 (medium, new)** — the `guard.mjs` PreToolUse hooks never cover GitHub MCP write tools, so
+>   H1 "never push to `main`" is unenforced for `mcp__github__push_files/create_or_update_file/merge_pull_request`
+>   (while Bash `git push origin main` is blocked), and `main` has no server-side branch protection (ADR-0007).
+>   Reachable by chaining the open `SEC-016` prompt-injection surface in the CMS Connector agent.
+> - **SEC-072/073/075/076 (low, new)** — `upload_logo` SVG-sanitizer bypass (isolated-origin stored XSS);
+>   `website_enrich` SSRF TOCTOU/DNS-rebind (admin-gated); `guard.mjs` command-reshaping bypass; Design-Prompt
+>   Phase 6 dollar-quote SQL-breakout (human-approval gated).
+> - **SEC-074/077/078 (info, new)** — `expand_short_link` redirect without re-validation; sessions renew to
+>   full lifetime with no absolute cap; upload endpoints have no per-user frequency limit.
+>
+> **Status changes this run:** `SEC-024` → **fixed** (unpinned `gitleaks-action@v2` gone; promote.yml now
+> fetches the binary via curl — that residual is `SEC-065`); `SEC-027` → **obsolete** (stale duplicate
+> `requirements.txt` deleted); `SEC-046` → **fixed** (bearer dict normalized to `UserOut` at `deps.py:67`);
+> `SEC-034` → **partial/reopened** (the rate limit landed on `save_service` only; `retranslate_service`
+> and `set_project_locales` remain uncapped — owner/admin-gated and DeepL dormant in prod, so low/info);
+> `SEC-067` → stays **open**, **re-scoped** to `public.google_import_usage` (the `seo_*` tables were dropped
+> 2026-09-27, but the same default-ACL-without-REVOKE pattern recurs in `2026_10_11_lead_google_import.sql`);
+> `SEC-051` → **cannot-verify** this run (shallow clone; the cited history commit is absent — rotation needs
+> out-of-band confirmation). `SEC-028` re-confirmed fixed (`_SORTABLE_COLUMNS` allowlist present). All other
+> open low/info rows re-read and **re-confirmed still present**, unchanged.
+> **MCP gap:** this was a headless cloud run — the Supabase (`get_advisors`, `execute_sql`) and Vercel
+> (`get_project`) MCP servers were **not available**, so live DB advisor/RLS/GRANT state and Vercel env
+> posture could not be pulled; the DB dimension was reviewed code-only (migrations). Items needing live
+> confirmation are flagged in [`review-log.md`](./review-log.md).
+> **Remediation order:** SEC-071 → SEC-072 → SEC-073 → SEC-075 → SEC-076 → SEC-034(finish) → SEC-029 → SEC-060 → SEC-068 → SEC-067.
 
 > **Note 2026-08-26 — Feature removals.** The auto-fix pipeline (issues API + Slack S1/S1.5 +
 > Solver Agent + `solver-agent.yml`) and the lead scraper (`scraper/` + `admin_scrape_jobs`) were
@@ -90,7 +124,9 @@ This table is the **source of truth for status**. Detail for each finding lives 
 
 | Critical | High | Medium | Low | Info | Total |
 |---|---|---|---|---|---|
-| 1 | 4 | 13 | 38 | 12 | 68 |
+| 1 | 4 | 14 | 42 | 15 | 76 |
+
+_2026-10-29: +8 confirmed (SEC-071 medium; SEC-072/073/075/076 low; SEC-074/077/078 info) vs. the 68 baseline. No critical/high added._
 
 _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS). The 2026-06-20 review added **12 new findings** (all open), flipped **SEC-050 → fixed** and **SEC-007/023/025/026 → obsolete** (infra removed), and re-confirmed the remaining open items still present. Remediation ongoing — the **Saturday Solver routine** now drains open critical/high/medium automatically via tested PRs._
 
@@ -125,17 +161,17 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-021](findings/low.md#sec-021) | low | Session cookie missing Secure flag and uses SameSite=lax on HTTPS preview deployments | `backend/auth_service/routers/auth.py` (Secure on prod+preview) | authn-session | ✅ fixed |
 | [SEC-022](findings/low.md#sec-022) | low | Owner can link another tenant's resource into their own service (cross-tenant association write) via unvalidated resource_ids | `backend/auth_service/routers/booking_admin.py` (_validate_resource_ids) | authz-idor | ✅ fixed |
 | [SEC-023](findings/low.md#sec-023) | low | Auto-rollback pushes a revert to protected master using GITHUB_TOKEN and opens issues from operator-influenced commit subjects | `.github/workflows/post-deploy-smoke.yml:32-34,118-145,148-171` | ci-workflows | obsolete |
-| [SEC-024](findings/low.md#sec-024) | low | Two workflows use unpinned (mutable-tag) third-party actions while the rest are SHA-pinned | `.github/workflows/solver-agent.yml:29,31; .github/workflows/scraper-ci…` | ci-workflows | open |
+| [SEC-024](findings/low.md#sec-024) | low | Two workflows use unpinned (mutable-tag) third-party actions while the rest are SHA-pinned | `.github/workflows/promote.yml (was solver/scraper, removed)` | ci-workflows | ✅ fixed (2026-10-29 — unpinned `gitleaks-action@v2` remnant gone; promote.yml SHA-pins all actions; the curl-fetched gitleaks binary residual is now SEC-065) |
 | [SEC-025](findings/low.md#sec-025) | low | Dependabot does not cover the scraper or the Solver agent (no automated security PRs) | `.github/dependabot.yml:8-66; scraper/pyproject.toml; agents/Solver - I…` | deps-supplychain | obsolete |
 | [SEC-026](findings/low.md#sec-026) | low | Dependabot patch/minor PRs auto-approve + auto-merge with no human review, chaining into auto-merge dev→master to prod | `.github/workflows/dependabot-auto-merge.yml:36-50` | deps-supplychain | obsolete |
-| [SEC-027](findings/low.md#sec-027) | low | Stale, unpinned legacy backend/auth_service/requirements.txt drifted far behind the deployed manifest | `backend/auth_service/requirements.txt:1-13` | deps-supplychain | open |
+| [SEC-027](findings/low.md#sec-027) | low | Stale, unpinned legacy backend/auth_service/requirements.txt drifted far behind the deployed manifest | `backend/auth_service/requirements.txt (deleted)` | deps-supplychain | obsolete (2026-10-29 — stale duplicate manifest deleted; no drift remnant) |
 | [SEC-028](findings/low.md#sec-028) | low | Unsanitized user-controlled `sort` column passed to PostgREST `.order()` (filter/column injection) | `backend/auth_service/routers/admin_leads.py` (_SORTABLE_COLUMNS) | injection | ✅ fixed |
 | [SEC-029](findings/low.md#sec-029) | low | Cancelled-booking manage token remains valid and continues to expose customer details indefinitely | `backend/auth_service/routers/booking.py:522-571` | public-tokens | open |
 | [SEC-030](findings/low.md#sec-030) | low | Public booking GET endpoints (manage/availability/config) have no rate limiting | `backend/auth_service/routers/booking.py (_public_read_limit)` | public-tokens | ✅ fixed |
 | [SEC-031](findings/low.md#sec-031) | low | Reminder cron endpoint uses non-constant-time secret comparison | `backend/auth_service/routers/booking.py` (hmac.compare_digest) | public-tokens | ✅ fixed |
 | [SEC-032](findings/low.md#sec-032) | low | Unvalidated user-controlled Reply-To on multi-tenant form email | `backend/auth_service/routers/forms.py` (_EMAIL_RE) | public-tokens | ✅ fixed |
 | [SEC-033](findings/low.md#sec-033) | low | slack_processed_events dedup table is anon-reachable (RLS disabled) — event suppression / poisoning surface | `migrations/2026_06_08_security_anon_surface_hardening.sql` | public-tokens | ✅ fixed |
-| [SEC-034](findings/low.md#sec-034) | low | Authenticated translation endpoints trigger paid DeepL work with no rate limit (cost/DoS amplification) | `backend/auth_service/routers/workspace.py (save_translate limit)` | ratelimit-dos | ✅ fixed |
+| [SEC-034](findings/low.md#sec-034) | low | Authenticated translation endpoints trigger paid DeepL work with no rate limit (cost/DoS amplification) | `backend/auth_service/routers/workspace.py:1166 (retranslate_service), :1108 (set_project_locales)` | ratelimit-dos | partial (2026-10-29 — reopened: limit landed on `save_service` only; `retranslate_service` + `set_project_locales` still uncapped; owner/admin-gated + DeepL dormant in prod → low/info) |
 | [SEC-035](findings/low.md#sec-035) | low | Public booking manage-token GET endpoint is unauthenticated and unlimited, enabling token-enumeration / scraping attempts | `backend/auth_service/routers/booking.py (_public_read_limit)` | ratelimit-dos | ✅ fixed |
 | [SEC-036](findings/low.md#sec-036) | low | Country-code path component in region loader allows directory traversal (operator-gated) | `scraper/src/scraper/regions/__init__.py:29-32 (load_country)` | scraper | obsolete |
 | [SEC-037](findings/low.md#sec-037) | low | Scraped third-party PII (business names, mobile phone numbers, addresses) committed to the git repository in scraper output dumps | `scraper/plumbers-nl.json, scraper/leads-dry-run.json, scraper/lead-sin…` | scraper | obsolete |
@@ -147,7 +183,7 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-043](findings/low.md#sec-043) | low | Design-prompt agent writeback bypasses the bleach sanitizer that protects the admin dangerouslySetInnerHTML sink | `frontend/.../DesignPromptSection.tsx` (DOMPurify on render) | xss-html | ✅ fixed |
 | [SEC-044](findings/low.md#sec-044) | low | Tenant email_copy overrides inserted unescaped into booking emails (headings/subtitles) | `backend/auth_service/services/booking_i18n.py` (tt html_escape) | xss-html | ✅ fixed |
 | [SEC-045](findings/low.md#sec-045) | low | Tenant-controlled booking brand fields (accent color, business_name, logo_url) interpolated raw into email HTML with no validation | `backend/auth_service/services/email_layout.py` (escape + hex accent) | xss-html | ✅ fixed |
-| [SEC-046](findings/info.md#sec-046) | info | Bearer auth path returns a plain dict while the rest of the codebase assumes a UserOut object, creating an authZ-shape fragility | `backend/auth_service/routers/deps.py:60-75,86-91; backend/auth_service…` | admin-priv | open |
+| [SEC-046](findings/info.md#sec-046) | info | Bearer auth path returns a plain dict while the rest of the codebase assumes a UserOut object, creating an authZ-shape fragility | `backend/auth_service/routers/deps.py:67` | admin-priv | ✅ fixed (2026-10-29 — `admin_user_via_bearer_or_sid` normalizes the verify dict to `UserOut`; no path receives the bare dict) |
 | [SEC-047](findings/info.md#sec-047) | info | Session cookie not rotated to a stronger lifetime on remember-me users after password change | `backend/auth_service/routers/auth.py:117-125` | authn-session | open |
 | [SEC-048](findings/info.md#sec-048) | info | Public booking slug allows tenant existence enumeration via config endpoint | `backend/auth_service/routers/booking.py:305-320` | public-tokens | open |
 | [SEC-049](findings/info.md#sec-049) | info | Short-link expansion follows redirects without re-validating the resolved host (limited SSRF surface) | `scraper/src/scraper/urls.py:84-95 (expand_if_short)` | scraper | obsolete |
@@ -167,9 +203,17 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-064](findings/low.md#sec-064) | low | `solver-agent.yml` pins `actions/checkout`/`actions/setup-python` to mutable major tags instead of commit SHAs | `.github/workflows/solver-agent.yml:64,66` | ci-workflows | obsolete |
 | [SEC-065](findings/low.md#sec-065) | low | `promote.yml` fetches the gitleaks secret-scanner binary without checksum/signature verification | `.github/workflows/promote.yml:42` | ci-workflows | open |
 | [SEC-066](findings/low.md#sec-066) | low | Admin API key `scopes` are stored but never enforced — every key is full-admin | `backend/auth_service/services/admin_keys.py:106; routers/deps.py:42-81` | admin-priv | open |
-| [SEC-067](findings/info.md#sec-067) | info | New `seo_*` tables inherit full anon/authenticated DML grants from Supabase default ACLs; safe only because RLS is enabled (no explicit REVOKE) | `backend/migrations/2026_06_14_seo_geo.sql:159-167` | supabase-db | open |
+| [SEC-067](findings/info.md#sec-067) | info | Public table inherits full anon/authenticated DML grants from Supabase default ACLs; safe only because RLS is enabled (no explicit REVOKE) | `backend/migrations/2026_10_11_lead_google_import.sql:34-38 (re-scoped to google_import_usage; seo_* dropped 2026-09-27)` | supabase-db | open (re-scoped 2026-10-29) |
 | [SEC-068](findings/low.md#sec-068) | low | Per-account login lockout fails open on any Postgres error, leaving only per-instance in-memory throttling | `backend/auth_service/core/pg_rate_limit.py:40-55; routers/auth.py:79-96` | authn-session | open |
 | [SEC-070](findings/medium.md#sec-070) | medium | Public booking `/{slug}/availability` omits the shared rate limiter; URL-keyed edge cache is trivially cache-busted → DB + external-calendar amplification DoS | `backend/auth_service/routers/booking.py:436-445,239-317` | ratelimit-dos | ✅ fixed (PR `security/fix-SEC-070-2026-10-10` → dev — `/{slug}/availability` now carries `Depends(_public_read_limit)` like every sibling public read; regression test added) |
+| [SEC-071](findings/medium.md#sec-071) | medium | PreToolUse guard hooks never run for GitHub MCP write tools, so H1 "never push to main" is unenforced for `mcp__github__push_files/create_or_update_file/merge_pull_request` (Bash `git push origin main` is blocked); no branch protection on `main` (ADR-0007) | `.claude/settings.json:3-33; .claude/hooks/guard.mjs` | agents-guardrails | open |
+| [SEC-072](findings/low.md#sec-072) | low | Booking `upload_logo` never sanitizes SVG and its deny-list is bypassable via content-type params/case → raw script-bearing SVG stored & served inline (isolated storage origin) | `backend/auth_service/routers/booking_admin.py:788-810` | uploads | open |
+| [SEC-073](findings/low.md#sec-073) | low | Website-enrichment SSRF guard is TOCTOU-bypassable (DNS rebinding): validates one DNS resolution, urllib re-resolves and connects on a second (admin-gated Google-import path) | `backend/auth_service/services/google_places/website_enrich.py:129-171` | ssrf-outbound | open |
+| [SEC-074](findings/info.md#sec-074) | info | `resolve.expand_short_link` follows redirects with no SSRF guard / no resolved-host re-validation (Google-shortener-gated, blind GET) | `backend/auth_service/services/google_places/resolve.py:68-75,90` | ssrf-outbound | open |
+| [SEC-075](findings/low.md#sec-075) | low | `guard.mjs` PreToolUse hook bypassable by command re-shaping (env prefix, absolute path, `$(...)`, `$VAR`) → defeats H1/H2/H4 (requires a prompt-injected agent, SEC-016) | `.claude/hooks/guard.mjs:58-84,127-153,170-211` | agents-guardrails | open |
+| [SEC-076](findings/low.md#sec-076) | low | Design-Prompt Phase 6 writes model/lead-derived content into a `$$…$$` UPDATE with only `&<>` escaped → dollar-quote breakout into service-role SQL (human-approval gated) | `agents/Design Prompt creator/phases/6-writeback.md:28-45` | agents-guardrails | open |
+| [SEC-077](findings/info.md#sec-077) | info | Sessions renewed to full 30/60-day lifetime on every use with no absolute cap → a touched (or leaked) session token never self-expires | `backend/auth_service/services/sessions.py:91-100` | authn-session | open |
+| [SEC-078](findings/info.md#sec-078) | info | Authenticated file-upload endpoints have per-file size caps but no per-user upload-frequency limit (storage-cost abuse within own tenant) | `backend/auth_service/routers/workspace.py:505; booking_admin.py:792` | ratelimit-dos | open |
 
 > **⚠ Saturday Solver 2026-10-10 — note on SEC-069/070 provenance.** SEC-069 and SEC-070 are
 > findings from the **2026-10-08 weekly review**, which lives on the unmerged

@@ -5,23 +5,29 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-20** (remediation in progress)
+## Status snapshot — last full review **2026-10-29** (remediation in progress)
 
 | Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **13** | **38** | **12** | **68** | 16 |
+| **1** | **4** | **14** | **42** | **15** | **76** | 16 |
 
-The 2026-06-07 baseline's headline criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) are **fixed**.
-The 2026-06-20 review found **no new critical/high**; it added **12** lower-severity findings (all `open`) and flipped
-`SEC-050`→fixed and `SEC-007`/`SEC-023`/`SEC-025`/`SEC-026`→obsolete. See the 2026-06-20 note + the full table in
-[`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+All historical criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) remain **fixed**, and the
+2026-06-20 medium cluster (`SEC-057`/`SEC-058`/`SEC-059`) plus `SEC-070` are fixed on dev.
+The **2026-10-29** review found **no new critical/high**; it added **8** findings (**1 medium, 4 low, 3 info**, all
+`open`), flipped `SEC-024`/`SEC-046`→fixed and `SEC-027`→obsolete, reopened `SEC-034` (partial), and re-scoped
+`SEC-067`. The highest-yield new surfaces (file uploads, rich text, theme/CSS, Google Places import) were audited and
+found **sound**; the live risk theme is now the **agent/automation guardrail layer**. See the 2026-10-29 note + the
+full table in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md). **This run was headless** — the
+Supabase/Vercel MCP servers were unavailable, so live DB/infra state could not be pulled (code-only DB review).
 
-### The next things to fix (2026-06-20 remediation order)
-1. **`SEC-058` + `SEC-059` (medium)** — move the unauthenticated **booking write paths** and the **marketing `/forms/contact`** endpoint onto the shared Postgres rate limiter; they still use the per-instance in-memory limiter (Resend cost/DoS amplification). Mechanical — the pattern already exists in-repo (`pg_rate_limit`).
-2. **`SEC-057` (medium)** — route the tenant `accent` through the `safe_hex` allowlist in `booking_email._cta_block` (the one email sink the `SEC-045` hardening missed).
-3. **`SEC-029` (low) + `SEC-060` (low)** — expire/invalidate cancelled-booking manage tokens for reads; stop using tenant copy overrides as a `str.format` format string.
-4. **`SEC-006` (medium)** — deny `Write`/`Edit` to `package.json`/lockfiles/`*.sh` during the untrusted Solver step (package-poisoning RCE), or run lint/test from the orchestrator after the agent exits against a clean tree.
-5. **Hygiene:** `SEC-066` (enforce admin-key `scopes`), `SEC-063`/`SEC-064`/`SEC-065` (pin the Solver CLI + actions, verify the gitleaks binary), `SEC-068` (login-lockout fail-open brake). The **Saturday Solver routine** now drains this queue automatically.
+### The next things to fix (2026-10-29 remediation order)
+1. **`SEC-071` (medium)** — add a PreToolUse matcher + `checkGithubMcp()` so the `guard.mjs` H1 "never push to `main`" rule covers the GitHub MCP write tools (`push_files`/`create_or_update_file`/`merge_pull_request`/…), not just Bash; and/or enable real GitHub branch protection on `main`. Closes a direct-to-prod agent write path.
+2. **`SEC-072` (low)** — harden `booking_admin.upload_logo` to mirror `upload_file`: bare-type MIME normalization + route SVGs through `svg_sanitize` (or reject SVG logos) + store a server-chosen content-type.
+3. **`SEC-073` (low)** — pin the validated IP in `website_enrich` (resolve-once-then-connect-to-that-IP, re-pin on redirect) to close the DNS-rebind TOCTOU; route `expand_short_link` through the same guard (`SEC-074`).
+4. **`SEC-075` (low)** — replace the `guard.mjs` denylist tokenizer with binary-normalization + default-deny on unresolved shell-expansion metacharacters.
+5. **`SEC-076` (low)** — parameterize the Design-Prompt Phase 6 writeback (or random-tagged dollar quote); treat model output as untrusted data.
+6. **Finish `SEC-034`** — add the shared limiter to `retranslate_service` + `set_project_locales` (the two uncapped DeepL paths) before the DeepL rollout.
+7. **Hygiene:** `SEC-029` (expire cancelled-booking manage tokens), `SEC-060` (stop `str.format` on tenant copy), `SEC-068` (login-lockout fail-open brake), `SEC-066` (enforce admin-key `scopes`), `SEC-065` (verify the gitleaks binary), `SEC-067` (explicit REVOKE on `google_import_usage`), `SEC-078` (upload frequency limit), `SEC-077` (absolute session cap).
 
 ## How to read this folder
 

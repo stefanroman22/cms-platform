@@ -757,3 +757,69 @@ the now-removed exemption — rewritten to assert availability 429s alongside `/
 suite: 4640 passed, 5 skipped.
 
 ---
+
+<a id="sec-071"></a>
+
+## SEC-071 — The PreToolUse guard hooks never run for GitHub MCP write tools, so H1 "never push to main" is entirely unenforced for `mcp__github__*` writes (while the equivalent Bash `git push origin main` is blocked)
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | open |
+| **Category** | Agent guardrail bypass / missing enforcement coverage |
+| **Dimension** | agents-guardrails |
+| **Location** | `.claude/settings.json:3-33` (PreToolUse matchers) + `.claude/hooks/guard.mjs` (dispatch) |
+| **First seen** | 2026-10-29 |
+
+**Description**
+
+`CLAUDE.md` treats "Production is `main` … Never push to `main`" as non-negotiable, and per
+`docs/decisions/ADR-0007` the `guard.mjs` PreToolUse hook is the **only** automated enforcement of that
+rule (there is no GitHub-side branch protection on `main`). But the hook is wired to only three tool
+classes:
+
+```json
+"PreToolUse": [
+  { "matcher": "Bash", ... guard.mjs ... },
+  { "matcher": "Edit|Write|MultiEdit", ... guard.mjs ... },
+  { "matcher": "mcp__.*[Ss]upabase.*__(apply_migration|execute_sql|pause_project)", ... guard.mjs ... }
+]
+```
+
+The GitHub MCP write tools connected in this environment — `mcp__github__push_files`,
+`mcp__github__create_or_update_file`, `mcp__github__delete_file`, `mcp__github__merge_pull_request`,
+`mcp__github__update_pull_request_branch` — match **none** of these matchers, and `guard.mjs` itself
+only dispatches Bash→`checkBash`, Edit/Write→`checkMigrationEdit`, `/supabase/`→`checkSupabaseMcp`
+(every other tool is ignored). So an agent can commit directly to `cms-platform`'s `main`, or merge a
+PR into `main`, with a single MCP call that the guardrail is structurally blind to — while the Bash
+`git push origin main` form is denied by H1 (`guard.mjs` refspec loop).
+
+**Attack scenario / exploitability (adversarially verified; confirmed medium)**
+
+The CMS Connector agent runs inside the `cms-platform` session (so `guard.mjs` applies to its Bash) with
+a connected GitHub MCP and an owner-scoped GitHub token (`agents/CMS Connector - Website/phases/1-github.md`).
+`SEC-016` (open) injects untrusted client-website source into the scan prompt with no data/instruction
+fencing. A prompt-injection payload can direct the agent to call `mcp__github__create_or_update_file` /
+`push_files` on `owner/cms-platform` ref `main`, or `merge_pull_request` into `main`. Because (a) the
+hook never fires for `mcp__github__*`, and (b) ADR-0007 documents that `main` has **no** GitHub branch
+protection and the hook is the sole enforcement, the owner token writes `main` directly — bypassing the
+entire promote gate (gitleaks + lint + build + the human decision). With Vercel Production Branch =
+`main`, the poisoned `main` serves to the production backend/frontend on the next deploy.
+
+Discounted from high because exploitation requires chaining the `SEC-016` injection **and** a
+well-formed MCP call that names `cms-platform`/`main` (not the agent's normal client-repo target) **and**
+the agent's MCP token being in-scope for `cms-platform`. It is a genuine guardrail-coverage gap, not the
+ADR's separately-accepted "a human owner could push `main` out-of-band" residual: the hook clearly
+intends to constrain the *agent* (it guards the agent's Bash push, `vercel --prod`, and Supabase
+writes), and an equally-capable agent-accessible write path left uncovered defeats that intent.
+
+**Remediation**
+
+Add a PreToolUse matcher for the GitHub MCP write tools
+(`mcp__github__(push_files|create_or_update_file|delete_file|merge_pull_request|update_pull_request_branch|create_pull_request)`)
+and extend `guard.mjs` with a `checkGithubMcp()` that denies/asks when the target repo matches
+`cms-platform` and the branch/base is `main` (and enforces the unprotected-prod-branch rule for client
+repos). As defense in depth, scope the committed GitHub MCP permissions so the agent cannot write to the
+`cms-platform` repo at all, and/or finally enable real GitHub branch protection on `main`.
+
+---
