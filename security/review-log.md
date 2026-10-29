@@ -5,6 +5,48 @@ changed* over time, independent of the per-finding tracker.
 
 ---
 
+## 2026-10-29 — Weekly full review (multi-agent, 13 finders + reconciliation)
+
+- **Method:** ultra-effort Workflow — 13 dimension finders + 2 reconciliation agents scanning in parallel →
+  independent adversarial verification (default false-positive, re-reads cited code) → synthesis. **31 agents**,
+  ~2.4M subagent tokens, 399 tool calls, ~34 min. 16 candidates → **9 survived verification, 7 "dismissed"**
+  (all 7 were dedup re-confirmations of already-tracked findings, not new false positives). Reviewer also did an
+  independent manual deep-read of the highest-yield new surfaces before and after the workflow.
+- **Scope since 2026-06-20 (new code = highest-yield):** file uploads (SVG/font, MIME allow/deny — `workspace.upload_file`,
+  `booking_admin.upload_logo`, `svg_sanitize.py`, `storage_gc.py`, `cms-files` bucket migration); rich text
+  (ADR-0010/0011 — `rich_text.py`, `rich_text_legacy.py`, `rich_text_migration.py`); project theme/CSS (`theme.py`);
+  CMS image/icon fields + slug repeater; and the **Google Places lead-import pipeline** (ADR-0012 — `google_places/*`,
+  `admin_leads` import endpoints). Also re-swept all 14 dimensions across routers, services, migrations, workflows, agents.
+- **New findings (8):** SEC-071 (**medium** — GitHub MCP write tools outside the `guard.mjs` PreToolUse coverage;
+  H1 push-to-main unenforced for MCP, no branch protection on `main`), SEC-072 (low — `upload_logo` SVG-sanitizer
+  bypass, isolated-origin stored XSS), SEC-073 (low — `website_enrich` SSRF TOCTOU/DNS-rebind, admin-gated),
+  SEC-074 (info — `expand_short_link` redirect without re-validation), SEC-075 (low — `guard.mjs` command-reshaping
+  bypass), SEC-076 (low — Design-Prompt Phase 6 dollar-quote SQL breakout, human-approval gated), SEC-077 (info —
+  sessions renew to full lifetime, no absolute cap), SEC-078 (info — upload endpoints have no per-user frequency limit).
+- **Status changes:** SEC-024 open→**fixed** (unpinned action remnant gone), SEC-027 open→**obsolete** (stale
+  requirements.txt deleted), SEC-046 open→**fixed** (bearer dict → `UserOut` at `deps.py:67`), SEC-034 fixed→**partial**
+  (reopened — `retranslate_service` + `set_project_locales` still uncapped; DeepL dormant in prod), SEC-067
+  **re-scoped** open (seo_* dropped 2026-09-27 → successor `google_import_usage` carries the same default-ACL pattern),
+  SEC-051 → **cannot-verify** (shallow clone; rotation needs out-of-band confirmation). SEC-028 re-confirmed fixed.
+  All other open low/info rows (SEC-015/016/029/039/040/047/048/055/060/061/062/065/066/068) re-read and re-confirmed present.
+- **Headline + top risks:** **No new critical/high — the internet-facing edges and all the new content surfaces held.**
+  The SVG sanitizer, the default-deny rich-text canonicalizer (`safe_href` + `canonical_style` allow-list), the theme
+  validator (charset-restricted families, storage-prefixed font URLs), and the SSRF public-IP guard are all genuinely
+  robust; upload object keys are tenant-derived and served from the isolated `*.supabase.co` storage origin (no app
+  cookies). The live risk theme shifted to the **agent/automation guardrail layer**: `guard.mjs` coverage gaps
+  (SEC-071 medium, SEC-075 low) and injection chains (SEC-076, both gated behind the open SEC-016 prompt-injection
+  surface). Everything else is admin/owner-gated or defense-in-depth.
+- **MCP gaps (IMPORTANT):** this was a **headless cloud run** — the Supabase MCP (`get_advisors` security+performance,
+  `list_tables`, `execute_sql`) and Vercel MCP (`get_project`) servers were **NOT available**. Live DB advisor/RLS/GRANT
+  state and Vercel env/deployment-protection posture could **not** be pulled. The supabase-db dimension was reviewed
+  **code-only** (migrations). Items needing live confirmation: (a) `cms-files` bucket `public` flag + `storage.objects`
+  policies + inline Content-Type served for `image/svg+xml`; (b) `google_import_usage` live anon/authenticated GRANTs
+  (SEC-067); (c) that the 2026-09-27 seo_* drop + 2026-08-26 feature-table drops actually applied; (d) Vercel
+  `ENVIRONMENT=production` is set for `cms-backend-roman` (if unset, config.py defaults to dev → permissive CORS/docs/PNA).
+  Also: this clone is shallow, so SEC-051's cited history commit could not be checked and a history scrub could not be verified.
+
+---
+
 ## 2026-06-20 — Weekly full review (multi-agent, 14 dimensions)
 
 - **Method:** ultra-effort Workflow — one finder agent per dimension → independent adversarial verification (default false-positive) → synthesis/reconciliation against `FINDINGS.md`. **43 agents**; 28 candidates, **26 survived verification, 2 dismissed**.

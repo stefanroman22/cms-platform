@@ -1735,3 +1735,205 @@ Verifier confirmed pg_rate_limit.over_limit returns False on any DB exception (f
 Keep fail-open for availability but add a durable, instance-independent secondary brake on the failure path (e.g. enforce a low fixed slowapi cap PLUS exponential argon2-cost backoff, or fail-closed specifically for the lockout check after N consecutive RPC errors). At minimum, alert on sustained rate_limit_over exceptions so a DB-down brute-force window is detected.
 
 ---
+
+<a id="sec-072"></a>
+
+## SEC-072 — Booking logo upload (`upload_logo`) never sanitizes SVG and its SVG/HTML deny-list is bypassable via content-type parameters/case, so a raw script-bearing SVG can be stored and served inline
+
+| | |
+|---|---|
+| **Severity** | low (finder raised medium; downgraded on verification) |
+| **Status** | open |
+| **Category** | Stored XSS via unsanitized upload (isolated origin) |
+| **Dimension** | uploads |
+| **Location** | `backend/auth_service/routers/booking_admin.py:788-810` |
+| **First seen** | 2026-10-29 |
+
+**Description**
+
+Unlike the hardened `workspace.upload_file` path — which normalizes to the bare type
+(`mime.split(";",1)[0].strip().lower()`), denies any `+xml` except `image/svg+xml`, denies dangerous
+extensions, and routes **every** SVG through `services/svg_sanitize.sanitize_svg` — `upload_logo`
+checks the raw client content-type against an exact-string set and does **no** SVG sanitization:
+
+```python
+_LOGO_DENY = {"image/svg+xml", "text/html", "application/xhtml+xml"}
+...
+mime = file.content_type or ""
+if not mime.startswith("image/") or mime in _LOGO_DENY:
+    raise HTTPException(status_code=415, detail="Logo must be a PNG/JPG/WebP image")
+...
+sb.storage.from_("cms-files").upload(
+    path=path, file=content, file_options={"content-type": mime, "upsert": "false"}
+)
+```
+
+`mime in _LOGO_DENY` has no bare-type split, no parameter stripping, and no case folding, so
+`image/svg+xml; charset=utf-8`, `image/svg+xml ` (trailing space), or `image/svg+XML` all satisfy
+`startswith("image/")` and are **not** members of the deny-set — they pass. The raw SVG bytes are stored
+verbatim and the attacker-supplied content-type string is persisted as the object's Content-Type.
+
+**Attack scenario / exploitability (adversarially verified; downgraded medium→low)**
+
+Reachable by an authenticated project owner (gated by `_tenant` → `require_project_access`, same-tenant,
+no IDOR) POSTing a `<svg><script>…</script></svg>` with a crafted Content-Type. Severity is capped at
+**low** because: (1) `cms-files` public URLs are served from the isolated Supabase Storage origin
+(`xeluydwpgiddbamysgyu.supabase.co`), which holds none of the app's session cookies — execution yields
+no app-session theft/CSRF-token access; (2) in-app and email use of `logo_url` is via `<img>`, which does
+not execute SVG script, so execution requires socially engineering a victim to open the raw storage URL
+(phishing-grade, trading on the `supabase.co` domain's credibility); (3) the bucket
+`allowed_mime_types` allow-list (migration `2026_10_11`) is a backstop, though whether Supabase strips
+content-type parameters / folds case determines which variant it ultimately accepts. The
+application-layer control is defective regardless, and the project's own INFRA-004/ADR-0011 comment
+classifies exactly this (unsanitized SVG from a public URL) as a stored-XSS sink.
+
+**Remediation**
+
+Mirror the hardened `upload_file` path: compute `bare = (file.content_type or "").split(";",1)[0].strip().lower()`
+and test the deny-list/prefix against `bare`; treat `bare == "image/svg+xml"` (or a `.svg` extension) as
+SVG and either reject it for logos or run it through `services/svg_sanitize.sanitize_svg`; store a
+server-chosen safe content-type derived from the validated bare type rather than echoing the
+client-supplied `mime`; and derive `ext` from a fixed allow-map instead of the raw filename suffix.
+
+---
+
+<a id="sec-073"></a>
+
+## SEC-073 — Website-enrichment SSRF guard is TOCTOU-bypassable (DNS rebinding): the IP is validated against one DNS resolution, then urllib re-resolves and connects on a second
+
+| | |
+|---|---|
+| **Severity** | low (finder raised medium; downgraded on verification) |
+| **Status** | open |
+| **Category** | SSRF (DNS-rebinding / resolve-then-connect) |
+| **Dimension** | ssrf-outbound |
+| **Location** | `backend/auth_service/services/google_places/website_enrich.py:129-151 (assert_public_http_url), 160-166 (_open), 154-157 (_SafeRedirects), 169-171 (fetch_html)` |
+| **First seen** | 2026-10-29 |
+
+**Description**
+
+`fetch_html` calls `assert_public_http_url(url)`, which resolves the hostname with `socket.getaddrinfo`
+and rejects any non-global/private/loopback/link-local/reserved/multicast/unspecified IP. It then
+discards those IPs and calls `_open(url)`, where `urllib.request` performs its **own independent** DNS
+resolution of the same hostname at connect time. The validated address and the connected address are
+never pinned to be the same, and `_SafeRedirects.redirect_request` re-runs the same `assert` on redirect
+targets with the identical gap. A hostname whose DNS the attacker controls with a low TTL can answer the
+validation query with a public IP and the connect query with an internal one (169.254.169.254,
+127.0.0.1, 10.x, an internal admin panel).
+
+**Attack scenario / exploitability (adversarially verified; downgraded medium→low)**
+
+The fetched URL is `mapped.website_uri` (the business's `websiteUri` from Google Place Details),
+reached when an admin calls `POST /admin/leads/google-import` or `/{lead_id}/google-import`
+(`admin_leads.py`, both gated by `admin_user_via_bearer_or_sid`, plus a 20/hour per-user limit). So the
+attacker must (a) own a Google Business Profile whose listed website points at a domain whose DNS they
+control, and (b) get an admin to import that specific listing (ADR-0012 arbitrary-business import). The
+SSRF guard is the real trust boundary (the `website_uri` is untrusted by design); the admin gate guards
+the import action, not the URL's trustworthiness. Impact is limited: `fetch_html` rejects
+non-`text/html` Content-Type (lines 173-174), so AWS IMDS `text/plain` and GCP metadata JSON are dropped
+— no cloud-credential exfil. Remaining primitives are blind internal host/port probing (connect
+success/failure + timing) and harvesting a few HTML fields (social hrefs, one mailto, meta description)
+from any internal service that returns HTML, on a Vercel serverless runtime with limited internal pivot.
+
+**Remediation**
+
+Resolve the hostname once in `assert_public_http_url`, select a validated public IP, and connect to
+**that** IP while preserving the original Host header / SNI (pin the address so no second resolution
+occurs) — e.g. a custom `create_connection`/`HTTPConnection` that reuses the vetted IP. Re-validate and
+re-pin on every redirect hop.
+
+---
+
+<a id="sec-075"></a>
+
+## SEC-075 — `guard.mjs` PreToolUse hook is bypassable by trivial command re-shaping (env prefix, absolute path, command substitution, variable expansion), defeating the H1/H2/H4 "non-negotiable" guardrails
+
+| | |
+|---|---|
+| **Severity** | low (finder raised medium; downgraded on verification) |
+| **Status** | open |
+| **Category** | Agent guardrail bypass (static tokenizer vs. shell) |
+| **Dimension** | agents-guardrails |
+| **Location** | `.claude/hooks/guard.mjs:58-84 (segments tokenizer), 170-211 (checkBash dispatch), 127-153 (git refspec loop)` |
+| **First seen** | 2026-10-29 |
+
+**Description**
+
+`checkBash()` only recognizes a command when the first token of a segment equals the literal string
+`git`/`psql`/`vercel`. The `segments()` tokenizer splits only on space/tab/`;`/`|`/`&`/newline and gives
+`$`, `(`, `)` no meaning, so it cannot evaluate any shell expansion. This yields several one-line
+bypasses of CLAUDE.md's "non-negotiable" rules:
+
+- **ENV-PREFIX:** `env git push origin main` — line 173 strips only `NAME=value` tokens, line 174 strips
+  only `sudo`/`command`/`exec`, so `cmd === "env"` and `checkGit` never runs; bash executes the push.
+  Same for `env git commit --no-verify …` (H4) and `env psql …` / `env vercel --prod` (H2/H1).
+- **ABSOLUTE PATH:** `/usr/bin/git push origin main` — `cmd === "/usr/bin/git" !== "git"`, unchecked.
+- **COMMAND SUBSTITUTION:** `git push origin $(printf main)` — refspec tokens are `$(printf` and `main)`,
+  neither equals `main`, so the H1 refspec loop never blocks, yet bash expands it to `git push origin main`.
+- **VARIABLE EXPANSION:** `b=main; git push origin $b` — segment 1 is stripped to empty; segment 2's
+  refspec is the literal `$b`; bash sets `b` then pushes to `main`.
+
+**Attack scenario / exploitability (adversarially verified; downgraded medium→low)**
+
+The realistic path is not an external request — it requires the agent itself to run the attacker-chosen
+command string, i.e. a prompt-injected agent (`SEC-016`, open: the CMS Connector concatenates untrusted
+client-website source into the scan prompt). Absent that precondition the bypass yields nothing.
+Secondary barriers blunt each sink: the Supabase MCP `apply_migration`/`execute_sql` ask-path is a
+separate tool unaffected by shell reshaping; the `psql`/migration shell path needs prod DB creds;
+`--no-verify` pushed to `dev` is still caught by the promote-gate gitleaks before prod. (The push-to-`main`
+sink via Bash is only as strong as the hook — and `SEC-071` shows the MCP write path is uncovered too.)
+A trivially bypassable local guardrail is a real hardening gap, defense-in-depth only.
+
+**Remediation**
+
+Do not re-implement a shell parser for a security boundary. Normalize the invoked binary (basename,
+resolve absolute paths, treat `env`/`nice`/`timeout`/`xargs` as wrappers and recurse), and **refuse**
+(deny, not allow) any segment containing shell-expansion metacharacters the tokenizer cannot statically
+resolve (`$(…)`, backticks, `$VAR`, `${…}`) when the resolved command is a guarded binary. Prefer a
+default-deny allowlist posture for `git`/`psql`/`supabase`/`vercel` segments over the current denylist.
+
+---
+
+<a id="sec-076"></a>
+
+## SEC-076 — Design-Prompt-Creator Phase 6 writes untrusted lead-derived content into a Postgres dollar-quoted (`$$…$$`) UPDATE with only `&<>` escaped — a dollar-quote breakout could inject SQL run with the RLS-bypassing service-role key
+
+| | |
+|---|---|
+| **Severity** | low (finder raised medium; downgraded on verification) |
+| **Status** | open |
+| **Category** | SQL injection via agent spec (dollar-quote breakout) |
+| **Dimension** | agents-guardrails |
+| **Location** | `agents/Design Prompt creator/phases/6-writeback.md:28-45` |
+| **First seen** | 2026-10-29 |
+
+**Description**
+
+Phase 6 constructs `UPDATE leads SET design_prompt = $$<wrapped XML>$$ WHERE id = '<lead_id>';` where the
+value is model-generated design-prompt XML derived from untrusted lead fields (populated via the Google
+Places import, ADR-0012). The only mandated sanitization (step 1) HTML-escapes `&`, `<`, `>`; the `$`
+character and the `$$` sequence are **not** neutralized. Postgres dollar-quoting is terminated by the
+next matching `$$`, so a `$$` in the body closes the literal early and the remainder is parsed as SQL.
+The statement runs through `mcp__supabase__execute_sql`, which uses the service-role key that bypasses
+RLS — a successful breakout would be an arbitrary cross-tenant write.
+
+**Attack scenario / exploitability (adversarially verified; downgraded medium→low)**
+
+Three compounding limiters pull this to low: (1) the written value is **model-transformed creative
+output** (a design brief synthesized by the `lead-to-design-prompt` skill), not verbatim untrusted text,
+so forcing the model to reproduce an exact `…$$; <valid SQL>; --` control sequence is speculative; (2)
+the most likely real-world trigger is an accidental `$$`/`$$$` price indicator, which merely closes the
+literal early and makes the trailing XML invalid SQL → the UPDATE fails → Phase 6's documented file-save
+fallback runs (breakage, not injection); (3) `guard.mjs` (the `sqlIsReadOnly` write-regex) forces a human
+**ask** on every mutating `execute_sql`, showing the full query. A clean injection needs an
+attacker-imported malicious lead **and** verbatim model reproduction of a crafted breakout **and**
+operator approval of a syntactically-exact payload.
+
+**Remediation**
+
+Never string-interpolate untrusted content into a dollar-quoted literal. Pass `design_prompt` (and
+`lead_id`) as bound parameters, or use a random-tagged dollar quote (`$xml$…$xml$`) verified absent from
+the body and abort if the content contains that tag or any `$$`. Document in the phase that model output
+is untrusted data and must be parameterized, not inlined.
+
+---
