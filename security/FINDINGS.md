@@ -4,6 +4,24 @@
 
 This table is the **source of truth for status**. Detail for each finding lives in [`findings/`](./findings/) by severity. IDs are stable and never reused (see [`methodology.md`](./methodology.md) §5–6). Status: `open` · `in-progress` · `fixed` · `accepted-risk` · `false-positive` · `wont-fix`.
 
+> **⚠ Saturday Solver 2026-10-31 — SEC-071 (2026-10-29 review, medium) provenance + ID collision.**
+> The **2026-10-29 weekly review** (authoritative tracker on the unmerged
+> `origin/security/weekly-review-2026-10-29` branch) added a **medium, `agents-guardrails`** finding it
+> numbered **SEC-071**: the PreToolUse guard hooks never run for GitHub MCP write tools, so H1 "never push
+> to `main`" was unenforced for `mcp__github__push_files/create_or_update_file/delete_file/merge_pull_request`
+> (while Bash `git push origin main` was denied), and `main` has no server-side branch protection (ADR-0007).
+> **This `SEC-071` is a DIFFERENT finding from the `SEC-071` row already in the table below** (a high
+> `public_slug` code-injection from the 2026-10-15 review lineage, already fixed) — the recurring
+> cross-tracker ID collision. The row below is left untouched.
+> **This run** shipped the hook-coverage fix on branch `security/fix-SEC-071-2026-10-31` → PR to `dev`:
+> a new `settings.json` matcher + `checkGithubMcp()` that **denies** direct GitHub-MCP writes to
+> `cms-platform` `main` (branch `main` or omitted, since the default branch is `main`) and **asks** on
+> `merge_pull_request` (the PR base is not in the tool input), with 8 regression tests. Status:
+> **in-progress** — PR left **open for human review** because it modifies the sole automated main-protection
+> control. **Residual / human-only (not code-fixable):** enable real GitHub branch protection on `main`, and
+> scope the committed GitHub MCP token so agents cannot write `cms-platform` at all (both recommended by the
+> finding as defense-in-depth). A human reconciling trackers should renumber to end the collision.
+
 > **Note 2026-08-26 — Feature removals.** The auto-fix pipeline (issues API + Slack S1/S1.5 +
 > Solver Agent + `solver-agent.yml`) and the lead scraper (`scraper/` + `admin_scrape_jobs`) were
 > deleted entirely. This obsoletes **SEC-005, SEC-006, SEC-008, SEC-017, SEC-036, SEC-037,
