@@ -396,6 +396,34 @@ function checkSupabaseMcp(toolName, input) {
     decide("ask", "Guardrail H2: this SQL may write to the one shared Supabase database, which IS production.");
 }
 
+// H1: production is `main`. The GitHub MCP write tools are a second path that bypasses
+// the Bash `git push origin main` guard above, and `main` has no server-side branch
+// protection (ADR-0007), so this hook is the only enforcement (SEC-071). Only the
+// cms-platform production repo is constrained; client repos are left untouched.
+function checkGithubMcp(toolName, input) {
+  const action = toolName.split("__").pop();
+  if (!PROD_REPO.test(String(input.repo ?? ""))) return;
+  // The repo's default branch is `main`, so an omitted/empty branch also targets main.
+  const branch = String(input.branch ?? "").trim() || "main";
+  if (action === "push_files" || action === "create_or_update_file" || action === "delete_file") {
+    if (branch === "main")
+      decide(
+        "deny",
+        "Guardrail H1: never write main in cms-platform. Production changes only through the " +
+          "manual 'Promote dev → main' GitHub Action. Target the dev branch instead.",
+      );
+    return;
+  }
+  // merge_pull_request: the destination (the PR's base branch) is not in the tool input,
+  // so a merge into main cannot be ruled out here. Promotion to main is human-only, so ask.
+  if (action === "merge_pull_request")
+    decide(
+      "ask",
+      "Guardrail H1: merging a cms-platform PR may target main, which IS production (promotion is " +
+        "human-only via 'Promote dev → main'). Confirm the base branch is not main before approving.",
+    );
+}
+
 // H3: never edit a migration that has already been applied; add a new file instead.
 function checkMigrationEdit(input, cwd) {
   const files = [input.file_path, input.notebook_path, ...(input.edits ?? []).map((e) => e.file_path)].filter(Boolean);
@@ -420,6 +448,7 @@ try {
   if (tool === "Bash") checkBash(String(input.command ?? ""), cwd);
   else if (tool === "Edit" || tool === "Write" || tool === "MultiEdit") checkMigrationEdit(input, cwd);
   else if (/^mcp__.*supabase.*__/i.test(tool)) checkSupabaseMcp(tool, input);
+  else if (/^mcp__github__/i.test(tool)) checkGithubMcp(tool, input);
 } catch (err) {
   process.stderr.write(`guard.mjs: ${err?.message ?? err}\n`);
 }
