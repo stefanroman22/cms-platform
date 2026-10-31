@@ -82,3 +82,31 @@ test("push to dev stays silent", () => {
 test("a plain echo stays silent", () => {
   assert.equal(decide("echo hello world"), null);
 });
+
+// --- SEC-071: GitHub MCP write tools must honour H1 (never write main in cms-platform). ---
+const gh = (tool, input) => decide("", { tool: `mcp__github__${tool}`, input });
+
+test("H1 denies github push_files to main", () => {
+  assert.equal(gh("push_files", { owner: "stefanroman22", repo: "cms-platform", branch: "main", files: [] }), "deny");
+});
+test("H1 denies github create_or_update_file to main", () => {
+  assert.equal(gh("create_or_update_file", { repo: "cms-platform", branch: "main", path: "x" }), "deny");
+});
+test("H1 denies github create_or_update_file with no branch (default branch is main)", () => {
+  assert.equal(gh("create_or_update_file", { repo: "cms-platform", path: "x" }), "deny");
+});
+test("H1 denies github delete_file on main", () => {
+  assert.equal(gh("delete_file", { repo: "cms-platform", branch: "main", path: "x" }), "deny");
+});
+test("H1 asks on github merge_pull_request in cms-platform (base not in input)", () => {
+  assert.equal(gh("merge_pull_request", { repo: "cms-platform", pullNumber: 1 }), "ask");
+});
+test("github push_files to dev stays silent", () => {
+  assert.equal(gh("push_files", { repo: "cms-platform", branch: "dev", files: [] }), null);
+});
+test("github write to a client repo on main stays silent", () => {
+  assert.equal(gh("create_or_update_file", { repo: "client-site", branch: "main", path: "x" }), null);
+});
+test("github create_pull_request (base=main) is not constrained", () => {
+  assert.equal(gh("create_pull_request", { repo: "cms-platform", base: "main", head: "dev" }), null);
+});
