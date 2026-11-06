@@ -5,23 +5,28 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-20** (remediation in progress)
+## Status snapshot — last full review **2026-11-05** (remediation pending)
 
-| Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
+| Critical | High | Medium | Low | Info | Confirmed total (this dev-tracker seq) | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **13** | **38** | **12** | **68** | 16 |
+| **1** | **5** | **14** | **38** | **12** | **70** | 16 |
 
-The 2026-06-07 baseline's headline criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) are **fixed**.
-The 2026-06-20 review found **no new critical/high**; it added **12** lower-severity findings (all `open`) and flipped
-`SEC-050`→fixed and `SEC-007`/`SEC-023`/`SEC-025`/`SEC-026`→obsolete. See the 2026-06-20 note + the full table in
-[`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+_No open **critical** (SEC-001 fixed). The 2026-11-05 review was run against stale `main`, so it reconciled almost every candidate to the unmerged 2026-10-08…10-29 weekly-review branches (and `dev`'s fixes). **Net-new, verified present on `dev`: `SEC-094` (HIGH) + `SEC-095` (medium).** New surfaces (rich text, SVG/font uploads, theme, Google lead import) were found solidly defended. Counts are this tracker's own sequence; the review branches carry a parallel SEC-069…093 numbering a human must reconcile. Supabase/Vercel MCP were unavailable this run — DB reviewed from SQL. See the 2026-11-05 note in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md)._
 
-### The next things to fix (2026-06-20 remediation order)
+### The next things to fix (2026-11-05 remediation order)
+1. **`SEC-094` (HIGH)** — in the CMS Connector, force `manifest["project_slug"] = slug` (the operator `--slug`) after `_call_claude` and/or run it through `_safe_slug`, so an injected manifest slug can't aim admin-key provisioning at another tenant. One line; the `public_slug` half was already fixed as SEC-071.
+2. **`SEC-095` (medium)** — add the shared `_public_read_limit` to the public `/content/*` reads, mirroring `booking.py` (the one internet-facing edge still unlimited).
+3. **Carried-over (already tracked):** `SEC-074` leading-`GIT_CONFIG_*` hooksPath bypass + the `guard.mjs` residuals (`SELECT … INTO` classifier, `--no-verif` exact-match); `SEC-034` finish the DeepL cost cap on `retranslate`/`set_project_locales`; then `SEC-029`/`SEC-060`/`SEC-068`.
+
+<details><summary>Prior remediation order (2026-06-20)</summary>
+
 1. **`SEC-058` + `SEC-059` (medium)** — move the unauthenticated **booking write paths** and the **marketing `/forms/contact`** endpoint onto the shared Postgres rate limiter; they still use the per-instance in-memory limiter (Resend cost/DoS amplification). Mechanical — the pattern already exists in-repo (`pg_rate_limit`).
 2. **`SEC-057` (medium)** — route the tenant `accent` through the `safe_hex` allowlist in `booking_email._cta_block` (the one email sink the `SEC-045` hardening missed).
 3. **`SEC-029` (low) + `SEC-060` (low)** — expire/invalidate cancelled-booking manage tokens for reads; stop using tenant copy overrides as a `str.format` format string.
 4. **`SEC-006` (medium)** — deny `Write`/`Edit` to `package.json`/lockfiles/`*.sh` during the untrusted Solver step (package-poisoning RCE), or run lint/test from the orchestrator after the agent exits against a clean tree.
 5. **Hygiene:** `SEC-066` (enforce admin-key `scopes`), `SEC-063`/`SEC-064`/`SEC-065` (pin the Solver CLI + actions, verify the gitleaks binary), `SEC-068` (login-lockout fail-open brake). The **Saturday Solver routine** now drains this queue automatically.
+
+</details>
 
 ## How to read this folder
 
