@@ -1097,6 +1097,15 @@ def main(
 
         manifest = _call_claude(model, slug, files)
         manifest["cms_endpoint"] = endpoint
+        # SEC-094: the manifest is model output over the untrusted client-website
+        # source, so a prompt injection could make the model echo a different
+        # `project_slug`. Every downstream privileged call (_provision at :611,
+        # _vercel_setup at :785) builds admin/provisioning URLs from
+        # manifest["project_slug"] with the connector's admin bearer key, and the
+        # slug string alone selects the tenant (service-role key bypasses RLS).
+        # Pin it to the operator-supplied --slug, exactly as cms_endpoint is pinned,
+        # so the model can never redirect provisioning at another tenant.
+        manifest["project_slug"] = slug
         config_path, provision_path = write_outputs(manifest, output_path)
 
     click.echo("\n✅ Done!")
