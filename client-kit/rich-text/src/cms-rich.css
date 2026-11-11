@@ -51,3 +51,7 @@
   font-style: italic;
 }
 .cms-rich hr { border: 0; border-top: 1px solid var(--cms-rich-rule, currentColor); opacity: 0.4; }
+/* Client-chosen colours (styled spans, tinted icons; ADR-0011) are picked for the light theme.
+   On a dark theme each one switches to its own readable variant (--cms-color-dark, computed by
+   the kit). A site whose dark theme uses another selector repeats this rule with it. */
+:where([data-theme="dark"], .dark) :is(.cms-rich-style, .cms-icon) { --cms-color: var(--cms-color-dark); }

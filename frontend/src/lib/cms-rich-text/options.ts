@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.3.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.3.1 — do not edit; re-sync instead.
 // Display options (ADR-0013): toggle / select / color fields and the `options` service.
 import { contrastRatio } from "./theme";
 

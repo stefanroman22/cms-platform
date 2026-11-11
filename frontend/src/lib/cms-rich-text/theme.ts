@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.3.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.3.1 — do not edit; re-sync instead.
 export interface ThemeColor { name: string; value: string }
 export type ThemeFont =
   | { family: string; source: "google"; weights: number[]; italic: boolean }
@@ -125,6 +125,32 @@ export function contrastRatio(a: string, b: string): number {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+/** A typical dark-theme card (Tailwind gray-800). A colour made readable on it stays readable on every darker surface. */
+export const DARK_SURFACE = "#1f2937";
+
+/** `color` moved toward white (dark `surface`) or black (light one) just far enough to reach `ratio`
+ *  against it; unchanged when it already does, or when either is not a #rrggbb colour. */
+export function readableOn(color: string, surface: string = DARK_SURFACE, ratio = 4.5): string {
+  if (!HEX_RE.test(color) || !HEX_RE.test(surface) || contrastRatio(color, surface) >= ratio) return color;
+  const target = contrastRatio("#ffffff", surface) >= contrastRatio("#000000", surface) ? 255 : 0;
+  const rgb = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+  const mix = (t: number) => "#" + rgb.map((c) => Math.round(c + (target - c) * t).toString(16).padStart(2, "0")).join("");
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    if (contrastRatio(mix(mid), surface) >= ratio) hi = mid;
+    else lo = mid;
+  }
+  return mix(hi);
+}
+
+/** Inline style for a client-chosen colour (ADR-0011): `prop` is the stored colour, and
+ *  `--cms-color-dark` its readable variant, which cms-rich.css switches to on dark themes. */
+export function colorCss(prop: "color" | "backgroundColor", color: string): Record<string, string> {
+  return { "--cms-color-dark": readableOn(color), [prop]: `var(--cms-color, ${color})` };
+}
+
 export function recommendIconColors(
   theme: CmsTheme, surfaceName?: string,
 ): { color: ThemeColor; ok: boolean; ratio: number }[] {
@@ -138,6 +164,11 @@ export function recommendIconColors(
       return { color, ok: ratio >= 3, ratio };
     })
     .sort((a, b) => Number(b.ok) - Number(a.ok) || b.ratio - a.ratio);
+}
+
+/** `raw` lowercased when it is a #rrggbb colour, else "". */
+export function readColorHex(raw: unknown): string {
+  return typeof raw === "string" && HEX_RE.test(raw) ? raw.toLowerCase() : "";
 }
 
 export function readIcon(raw: unknown): CmsIconValue | null {

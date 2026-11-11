@@ -3,6 +3,7 @@
 // classes (no \s, \d or /i, whose Unicode behaviour differs between Python and
 // JS) so both ports agree on every input.
 import type { CSSProperties } from "react";
+import { colorCss } from "./theme";
 import { pyStrip } from "./whitespace";
 
 export const STYLE_RE =
@@ -83,11 +84,12 @@ export function parseStyle(canonical: string): { color?: string; fontFamily?: st
   return out;
 }
 
-/** React style for a span: the family falls back to the site's body font. */
+/** React style for a span: the colour carries its dark-theme variant (see colorCss); the family
+ *  falls back to the site's body font. */
 export function styleCss(style: string | null | undefined): CSSProperties {
   const s = parseStyle(style ?? "");
   const css: CSSProperties = {};
-  if (s.color) css.color = s.color;
+  if (s.color) Object.assign(css, colorCss("color", s.color));
   if (s.fontFamily) css.fontFamily = `'${s.fontFamily}', var(--cms-font-body, sans-serif)`;
   if (s.fontSize) css.fontSize = s.fontSize;
   return css;

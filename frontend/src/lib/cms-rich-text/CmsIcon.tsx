@@ -1,6 +1,6 @@
-// Vendored from CMS client-kit/rich-text v1.3.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.3.1 — do not edit; re-sync instead.
 import type { ReactNode } from "react";
-import type { CmsIconValue } from "./theme";
+import { colorCss, readColorHex, type CmsIconValue } from "./theme";
 
 export interface CmsIconProps {
   icon: CmsIconValue | null; size?: number | string; className?: string; label?: string; fallback?: ReactNode;
@@ -17,6 +17,7 @@ export function CmsIcon({ icon, size = "1em", className, label, fallback }: CmsI
     return <img src={icon.src} alt={label ?? ""} {...dims} className={className} loading="lazy" decoding="async" />;
   }
   const url = `url("${icon.src}")`;
+  const tint = readColorHex(icon.color);
   return (
     <span
       role={label ? "img" : undefined}
@@ -24,7 +25,8 @@ export function CmsIcon({ icon, size = "1em", className, label, fallback }: CmsI
       aria-hidden={label ? undefined : true}
       className={["cms-icon", className].filter(Boolean).join(" ")}
       style={{
-        display: "inline-block", width: size, height: size, backgroundColor: icon.color || "currentColor",
+        display: "inline-block", width: size, height: size,
+        ...(tint ? colorCss("backgroundColor", tint) : { backgroundColor: icon.color || "currentColor" }),
         WebkitMaskImage: url, maskImage: url, WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
         WebkitMaskPosition: "center", maskPosition: "center", WebkitMaskSize: "contain", maskSize: "contain",
       }}

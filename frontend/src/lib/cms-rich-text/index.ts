@@ -1,5 +1,5 @@
-// Vendored from CMS client-kit/rich-text v1.3.0 — do not edit; re-sync instead.
-export const RICH_TEXT_KIT_VERSION = "1.3.0";
+// Vendored from CMS client-kit/rich-text v1.3.1 — do not edit; re-sync instead.
+export const RICH_TEXT_KIT_VERSION = "1.3.1";
 export { parse, decodeEntities, MARK_TAGS, INLINE_TAGS, HEADING_TAGS, BLOCK_TAGS, type RichNode, type RichElement } from "./parse";
 export { safeHref, MAX_HREF_LENGTH } from "./href";
 export { isHtml } from "./detect";
@@ -12,7 +12,7 @@ export { RichText, richTree, renderRichNodes, type RichTextProps, type RichForma
 export { splitRichWords, RichWords, type RichWord, type RichWordsProps } from "./splitRichWords";
 export {
   FONT_FAMILY_RE, readTheme, googleFontsHref, fontStack, themeCss, relativeLuminance, contrastRatio,
-  recommendIconColors, readIcon, type ThemeColor, type ThemeFont, type CmsTheme, type CmsIconValue,
+  recommendIconColors, readIcon, readableOn, colorCss, DARK_SURFACE, type ThemeColor, type ThemeFont, type CmsTheme, type CmsIconValue,
 } from "./theme";
 export { ThemeStyles } from "./ThemeStyles";
 export { CmsIcon, type CmsIconProps } from "./CmsIcon";

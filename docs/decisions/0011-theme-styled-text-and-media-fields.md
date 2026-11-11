@@ -59,6 +59,11 @@ place, the same way rich text is.
   the chosen colour (or `currentColor`), so uploaded SVG markup is never inlined into a page;
   `original` mode renders it as an `<img>`. Icons picked from the dashboard's icon set are
   rendered to SVG and uploaded the same way, so sites need no icon library.
+- **Client colours stay readable on dark themes** (amended 2026-11-12, kit `1.3.1`). A span or icon
+  colour is chosen on the light theme and rendered as is there. The kit also writes a dark variant
+  (`--cms-color-dark`): the same colour moved toward white just far enough to reach 4.5:1 against
+  `#1f2937`, and `cms-rich.css` switches to it under `[data-theme="dark"]` / `.dark`. The stored value
+  never changes.
 - **Every image is a CMS field.** Generated sites read every image and illustration (including
   per-item images such as a service banner) from an image field with a size hint; the design's
   artwork is the seed/fallback, not a hard-coded asset.

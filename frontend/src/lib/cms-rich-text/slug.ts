@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.3.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.3.1 — do not edit; re-sync instead.
 // URL-safe slugs for repeater `slug` fields: a 1:1 port of the backend's
 // services/slug.py, pinned by fixtures/slug-vectors.json. Sites can compare
 // slugify(param) with a stored slug to match URLs tolerantly.

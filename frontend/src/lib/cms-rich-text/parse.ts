@@ -1,4 +1,4 @@
-// Vendored from CMS client-kit/rich-text v1.3.0 — do not edit; re-sync instead.
+// Vendored from CMS client-kit/rich-text v1.3.1 — do not edit; re-sync instead.
 import { STYLE_RE, canonicalStyle } from "./style";
 
 export type RichNode = string | RichElement;

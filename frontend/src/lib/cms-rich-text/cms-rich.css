@@ -1,4 +1,4 @@
-/* Vendored from CMS client-kit/rich-text v1.3.0 — do not edit; re-sync instead. */
+/* Vendored from CMS client-kit/rich-text v1.3.1 — do not edit; re-sync instead. */
 /* CMS rich text base styles (ADR-0010). Theme ONLY through the --cms-rich-* variables:
    define them on :root, on your dark-theme selector and on every inverted surface.
    Selectors are ".cms-rich <el>" (specificity (0,1,1)); the universal spacing rules below
@@ -52,3 +52,7 @@
   font-style: italic;
 }
 .cms-rich hr { border: 0; border-top: 1px solid var(--cms-rich-rule, currentColor); opacity: 0.4; }
+/* Client-chosen colours (styled spans, tinted icons; ADR-0011) are picked for the light theme.
+   On a dark theme each one switches to its own readable variant (--cms-color-dark, computed by
+   the kit). A site whose dark theme uses another selector repeats this rule with it. */
+:where([data-theme="dark"], .dark) :is(.cms-rich-style, .cms-icon) { --cms-color: var(--cms-color-dark); }

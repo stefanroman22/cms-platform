@@ -161,6 +161,21 @@ const theme = readTheme(raw);          // null when absent or nothing valid
 - `recommendIconColors(theme, surfaceName?)` ranks theme colours by WCAG contrast (>= 3:1 is `ok`)
   against a named surface, or against every surface when the name is absent or unknown.
 
+### Dark themes (kit `1.3.1`+)
+
+A colour the client picks (styled span, tinted icon) is chosen on the light theme. The kit renders it
+unchanged there, and also writes a dark variant: `readableOn(color)` moves the colour toward white just
+far enough to reach 4.5:1 against `DARK_SURFACE` (`#1f2937`), so it stays the same hue and is readable on
+that surface and every darker one. `cms-rich.css` switches to the variant under `[data-theme="dark"]` or
+`.dark`. A site whose dark theme uses another selector adds the same rule with it:
+
+```css
+.theme-dark :is(.cms-rich-style, .cms-icon) { --cms-color: var(--cms-color-dark); }
+```
+
+Use `readableOn(color, surface, ratio)` / `colorCss(prop, color)` for any other client colour a site
+renders as text on a dark theme.
+
 ## Slugs
 
 Repeater `slug` fields (kit `1.2.0`+) hold one URL path segment per locale, such as

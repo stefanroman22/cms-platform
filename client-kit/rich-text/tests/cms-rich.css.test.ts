@@ -45,3 +45,10 @@ describe("cms-rich.css", () => {
     expect(css).toMatch(/\.cms-rich blockquote\s*\{[^}]*margin-right:\s*0;/);
   });
 });
+
+describe("cms-rich.css dark-theme colours (kit 1.3.1)", () => {
+  it("switches client span/icon colours to their readable variant on dark themes", () => {
+    expect(css).toContain(
+      ':where([data-theme="dark"], .dark) :is(.cms-rich-style, .cms-icon) { --cms-color: var(--cms-color-dark); }');
+  });
+});
