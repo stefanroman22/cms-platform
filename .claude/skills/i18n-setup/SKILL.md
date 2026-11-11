@@ -216,7 +216,7 @@ CMS values that flow through react-i18next are `inline`/`rich` HTML. Read them a
 
 ### CMS image, icon and theme values
 
-Image URLs, icon objects (`{src, mode, color, name}`) and the `general_theme` service are values, not messages (ADR-0011): they are never translated and never go through `t()` or an interpolation. Read them through the CMS accessors (`resolveSite(...)` image/icon/theme fields, the kit's `readIcon`/`readTheme`); repeater items read with `returnObjects: true` keep their image/icon fields as-is.
+Image URLs, icon objects (`{src, mode, color, name}`) and the `general_theme` service are values, not messages (ADR-0011): they are never translated and never go through `t()` or an interpolation. Read them through the CMS accessors (`resolveSite(...)` image/icon/theme fields, the kit's `readIcon`/`readTheme`); repeater items read with `returnObjects: true` keep their image/icon fields as-is. Display options (`<page>_page_options` services and repeater `toggle`/`select`/`color` fields, ADR-0013) are values too: never translated, read with the kit's `readOptions`/`readToggle`/`readColor`.
 
 ### Locale-aware internal links
 

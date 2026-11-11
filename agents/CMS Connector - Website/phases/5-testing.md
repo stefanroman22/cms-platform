@@ -58,6 +58,7 @@ Run **all** tests below. Never claim Phase 6 success while any 5a–5h test is r
 - [ ] Preview URL renders the expected layout
 - [ ] All sections from the report are editable from the CMS dashboard
 - [ ] Every image and content icon on the site is a CMS image/icon field with a size hint (only favicon/OG assets and UI-control icons in code); the dashboard shows the Theme editor with the seeded palette and fonts
+- [ ] Each page whose code reads display options has a Display Options service in its dashboard page tab, seeded with the code defaults (ADR-0013)
 - [ ] Form submission test email received
 - [ ] Production URL is live and serves published content
 - [ ] No console errors in browser dev tools on either deploy
@@ -172,8 +173,14 @@ the owner relies on — never declare the integration done without it.**
 - Save a title with a span colour (`<span style="color:#rrggbb">`) → the rendered span has that colour.
 - Empty an image and an icon → the fallback renders, no layout gap.
 
+**Display options probe (ADR-0013):** for each `<page>_page_options` service (skip if the site has none, and say so), in draft, asserting on cms-preview AND localhost, then restore the byte-identical original:
+- Toggle an option (e.g. `show_map`) → the part appears/disappears; a hidden title keeps an `sr-only` heading.
+- Pick another `content_width` / layout `select` value → the text container width / arrangement changes, banner images keep their size.
+- Set `background` to a colour → the page wrapper's computed `background-color` is that colour and its text stays readable (≥ 4.5:1).
+- Restore → the page matches the designed look.
+
 **Per-service loop** (sample ≤~12 services covering all types — text_block, key_value,
-repeater, image, gallery; the theme is covered by the probe above — plus every service that backs the `site` namespace; log
+repeater, image, gallery; the theme and options services are covered by the probes above — plus every service that backs the `site` namespace; log
 exactly which services/locales were sampled and which were skipped — never silently
 truncate):
 

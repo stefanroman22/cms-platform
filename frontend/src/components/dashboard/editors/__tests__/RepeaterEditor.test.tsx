@@ -149,3 +149,90 @@ describe("RepeaterEditor media fields", () => {
     });
   });
 });
+
+describe("RepeaterEditor option fields", () => {
+  const optionSchema = [
+    { key: "show_title", label: "Show title", type: "toggle" },
+    {
+      key: "layout",
+      label: "Layout",
+      type: "select",
+      options: [
+        { value: "image_left", label: "Image left" },
+        { value: "image_top", label: "Image top" },
+      ],
+    },
+    { key: "accent", label: "Accent", type: "color" },
+  ];
+
+  it("renders toggle, select and colour fields and updates the item", async () => {
+    const onChange = vi.fn();
+    render(
+      <RepeaterEditor
+        initialContent={{
+          _schema: optionSchema,
+          items: [{ show_title: true, layout: "image_left", accent: "#112233" }],
+        }}
+        onChange={onChange}
+        richText
+      />
+    );
+    expect(screen.queryByTestId("rte")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("switch", { name: "Show title" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      _schema: optionSchema,
+      items: [{ show_title: false, layout: "image_left", accent: "#112233" }],
+    });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Layout" }), "image_top");
+    expect(onChange).toHaveBeenLastCalledWith({
+      _schema: optionSchema,
+      items: [{ show_title: false, layout: "image_top", accent: "#112233" }],
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      _schema: optionSchema,
+      items: [{ show_title: false, layout: "image_top", accent: "" }],
+    });
+  });
+
+  it("shows defaults for an older item that lacks the keys, without emitting", () => {
+    const onChange = vi.fn();
+    const schema = [
+      { ...optionSchema[0], default: true },
+      { ...optionSchema[1], default: "image_top" },
+      optionSchema[2],
+    ];
+    render(
+      <RepeaterEditor initialContent={{ _schema: schema, items: [{}] }} onChange={onChange} />
+    );
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("combobox")).toHaveValue("image_top");
+    expect(screen.getByLabelText("Accent hex")).toHaveValue("");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("seeds new items with each field's default", async () => {
+    const onChange = vi.fn();
+    const schema = [
+      ...optionSchema,
+      { key: "show_cta", label: "Show CTA", type: "toggle", default: true },
+      { ...optionSchema[1], key: "variant", default: "image_top" },
+      { key: "bg", label: "Background", type: "color", default: "#ABC" },
+    ];
+    render(<RepeaterEditor initialContent={{ _schema: schema, items: [] }} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "Add item" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      _schema: schema,
+      items: [
+        {
+          show_title: false,
+          layout: "",
+          accent: "",
+          show_cta: true,
+          variant: "image_top",
+          bg: "#aabbcc",
+        },
+      ],
+    });
+  });
+});

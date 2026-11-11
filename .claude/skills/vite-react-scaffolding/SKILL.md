@@ -77,6 +77,7 @@ The same kit (≥ 1.1.0) carries the theme and icon helpers (ADR-0011, kit READM
 - Every image and illustration reads its CMS image field (fallback: the `public/images/` mock, or an animated SVG component kept in code), sized by the field's `hint`. Only favicon/OG generator assets stay in code.
 - Every content icon (on services, features, items, contact methods and the like) renders `<CmsIcon icon={readIcon(value)} size={…} label={…} fallback={<DesignedIcon />} />`. UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code.
 - Theme colours are recommendations; do not drive the site palette from them. Rich text may contain styled spans; `<RichText>` renders them, never strip `style` yourself.
+- Kit ≥ 1.3.0 adds display options (ADR-0013, kit README "Display options"): every page reads its `<page>_page_options` with `readOptions(raw, defaults)` (defaults = the designed look; at least `background` and `content_width`), and text on a client background colour uses `inkOn`. Rules in `agents/Website Builder/AGENTS.md`.
 
 ## vite.config.ts (shape)
 

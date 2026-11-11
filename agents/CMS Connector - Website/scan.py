@@ -566,6 +566,10 @@ export async function cancel(token: string) {{ return (await fetch(`${{BASE}}/bo
     click.echo(f"  ✓ lib/booking.ts written ({env_prefix}BOOKING_API_BASE)")
 
 
+# Service types created with an `item_schema` whose content carries it as `_schema`.
+_SCHEMA_SERVICE_TYPES = ("repeater", "options")
+
+
 def _repeater_seed_content(svc: dict, content: object) -> object:
     """Fold a repeater's `item_schema` into the content being seeded.
 
@@ -576,6 +580,24 @@ def _repeater_seed_content(svc: dict, content: object) -> object:
     every seed. No-op for non-repeaters or when the content already has one."""
     if svc.get("service_type_slug") != "repeater" or not isinstance(content, dict):
         return content
+    item_schema = svc.get("item_schema")
+    if item_schema and not content.get("_schema"):
+        return {**content, "_schema": item_schema}
+    return content
+
+
+def _options_seed_content(svc: dict, content: object) -> object:
+    """Shape an options seed as `{_schema, values}` (ADR-0013), like
+    `_repeater_seed_content` does for repeaters. A flat `{key: value}` blob is
+    wrapped into `values` (the backend would drop its keys as unknown and reset
+    every option to its default). No-op for other types or non-dict content."""
+    if svc.get("service_type_slug") != "options" or not isinstance(content, dict):
+        return content
+    if "values" not in content:
+        content = {
+            "values": {k: v for k, v in content.items() if not k.startswith("_")},
+            **{k: v for k, v in content.items() if k.startswith("_")},
+        }
     item_schema = svc.get("item_schema")
     if item_schema and not content.get("_schema"):
         return {**content, "_schema": item_schema}
@@ -637,7 +659,7 @@ def _provision(
             "display_order": svc.get("display_order", 0),
             "page_name": svc.get("page_name", "General"),
         }
-        if svc["service_type_slug"] == "repeater" and svc.get("item_schema"):
+        if svc["service_type_slug"] in _SCHEMA_SERVICE_TYPES and svc.get("item_schema"):
             body["item_schema"] = svc["item_schema"]
         if svc["service_type_slug"] == "key_value" and svc.get("formats"):
             body["formats"] = svc["formats"]
@@ -681,6 +703,7 @@ def _provision(
         # Repeaters must carry their `_schema` so the seed PUT doesn't wipe it.
         default_content = _repeater_seed_content(svc, default_content)
         default_content = _key_value_seed_content(svc, default_content)
+        default_content = _options_seed_content(svc, default_content)
 
         put_url = f"{base}/projects/{slug}/services/{svc['service_key']}?seed=true"
         put_req = urllib.request.Request(
@@ -706,8 +729,9 @@ def _provision(
                 continue
             if svc["service_type_slug"] == "email_config":
                 continue
-            # Skip non-translatable services for per-locale seeding
-            if not svc.get("translatable", True):
+            # Skip non-translatable services for per-locale seeding; display
+            # options are never translated, whatever the manifest says (ADR-0013).
+            if not svc.get("translatable", True) or svc["service_type_slug"] == "options":
                 continue
             initial = svc.get("initial_content")
             if not initial or not isinstance(initial, dict):
@@ -1124,7 +1148,7 @@ def main(
         click.echo(f"   [{page}]")
         for svc in svcs:
             schema_note = ""
-            if svc["service_type_slug"] == "repeater" and svc.get("item_schema"):
+            if svc["service_type_slug"] in _SCHEMA_SERVICE_TYPES and svc.get("item_schema"):
                 fields = ", ".join(f["key"] for f in svc["item_schema"])
                 schema_note = f"  [{fields}]"
             click.echo(f"     • {svc['service_key']:25s} ({svc['service_type_slug']}){schema_note}")

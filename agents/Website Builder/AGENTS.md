@@ -37,6 +37,7 @@ SSG pre-rendering in a sibling folder under `C:\Users\stefa\.gemini\antigravity\
 | Output folder | Sibling to "CMS - websites" at `scratch\<business-name>\` |
 | Mock images | Copied from design into `public/images/<section>/`, never replaced with stock; each one is the fallback/seed of a CMS image field with a size hint |
 | CMS look | `general_theme` service (palette, surfaces, fonts) + CMS image/icon fields (ADR-0011) |
+| CMS layout choices | One `<page>_page_options` set per page, read with the kit's `readOptions` (ADR-0013) |
 | Skill location | Bundled in `.claude/skills/`; externals in `~/.claude/plugins/` |
 | Runtime learnings template | `agents/Website Builder/learnings-template/` |
 
@@ -185,6 +186,12 @@ Operate at maximum thoroughness (xhigh effort): multi-pass self-review each phas
      3. **Every project gets a `general_theme` service** (`theme` type, page General) seeded from the design: palette colours (named), surfaces (page light/dark, card, header, footer), fonts (Google by default, weights actually used, italic only if used), `body_font`, `heading_font`. Sites render `<ThemeStyles theme>` in the root layout/head and use `var(--cms-font-body, <bundled default>)` / `var(--cms-font-heading, …)` for font tokens; the bundled default (`@fontsource` for Vite sites) stays as fallback. Theme colours are recommendations; do not drive the site palette from them.
      4. **Rich text may contain styled spans** (ADR-0011): sites render through the kit `<RichText>` (kit ≥ 1.1.0), never strip `style` themselves. Content may carry span colours/fonts/sizes chosen by the client; themes keep `--cms-rich-*` for marks; check AA contrast of the theme palette against its surfaces.
      5. **Test matrix additions** (phase 8): swap an image in draft → preview shows the new URL; set an icon (Lucide pick) with a colour → preview shows a `.cms-icon` with that `background-color`; set `body_font` to a different Google font → computed `font-family` of `body` starts with it; save a title with a span colour → rendered span has that colour; empty image/icon → fallback renders, no layout gap.
+   - **CMS display options (ADR-0013, kit ≥ 1.3.0) — the connector's "Display options contract":**
+     1. **Every page reads a `<page>_page_options` set** via the kit's `readOptions(raw, defaults)`; the code defaults are the designed look, so the site renders as designed with no options service.
+     2. **At minimum** `background` (`color`) and `content_width` (`select`: `narrow` | `standard` | `wide` | `full`). An arrangement the design supports in more than one way is a `select` (e.g. `image_position`: `top` | `left` | `right` | `hidden`; `layout`); an optional part is a `toggle` (e.g. `show_map`; per-item `show_title` in a repeater). Keep the set per page small: each value is a branch to design and test.
+     3. **A client colour** is applied through a CSS variable on the page wrapper, to the light theme only when the site has a derived dark theme; text on it uses `inkOn` when the site's ink would fall below 4.5:1.
+     4. **`content_width` widens the text container only**; banner/hero images keep their designed size. A title hidden by a toggle keeps an `sr-only` heading (SEO/accessibility).
+     5. **Test matrix addition** (phase 8): every option value renders without layout breakage at mobile/tablet/desktop, light and dark.
    - **CMS prose is rendered with `<RichText>`, never `dangerouslySetInnerHTML` (except JSON-LD), never `react-markdown`, never inside `<p>`.**
    - Booking/selection UI: the week-paginated 7-day picker, per-card cross-fade select, responsive icon-only pill, and no-scroll success screen behave exactly as before (framework-agnostic component patterns).
    - Inter-page route loader is first-class: a themed full-screen splash as the React Router Suspense `fallback` (`components/RouteLoader.tsx`) with a dedicated localized `loader.routeLoading` key; z-index above header + mobile menu; respect reduced-motion.
@@ -261,6 +268,7 @@ Under `/ralph-loop`, emit the completion promise string (e.g. `<promise>SITE_COM
 - Hand-translate into placeholder files. Seeds mirror the default locale; the CMS translates after connection.
 - Fetch external stock images to "replace" mock ones.
 - Hard-code an image, illustration or content icon with no CMS field behind it (only favicon/OG generator assets and UI-control icons stay in code), or drive the site palette from the theme colours.
+- Apply a stored option value to CSS without the kit's readers, or answer a client layout request with a per-client code fork instead of an option (ADR-0013).
 - Skip clarifying questions when genuinely ambiguous.
 - Mark a `BUILD_PLAN.md` item complete if you didn't actually implement it.
 - Delete or overwrite `.learnings/` files; only append.

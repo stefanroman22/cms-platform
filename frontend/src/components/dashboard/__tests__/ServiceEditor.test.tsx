@@ -133,6 +133,35 @@ describe("ServiceEditor theme service", () => {
   });
 });
 
+describe("ServiceEditor display options service", () => {
+  it("shows no language tabs or translation banner and always edits the default locale", async () => {
+    mockSearch = "locale=en";
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ...DETAIL,
+        service_key: "home_page_options",
+        service_type_slug: "options",
+        service_type_name: "Display Options",
+        service_type_icon: "SlidersHorizontal",
+        content: {
+          _schema: [{ key: "show_title", label: "Show title", type: "toggle" }],
+          values: { show_title: true },
+        },
+        locale: "en",
+      }),
+    });
+    render(<ServiceEditor projectSlug="demo" serviceKey="home_page_options" onBack={() => {}} />);
+    expect(await screen.findByRole("switch", { name: "Show title" })).toBeInTheDocument();
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    expect(screen.queryByText(/auto-translated from/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /re-translate/i })).not.toBeInTheDocument();
+    await waitFor(() => expect(replaceSpy).toHaveBeenCalled());
+    expect(replaceSpy.mock.calls.at(-1)?.[0]).not.toContain("locale=");
+  });
+});
+
 describe("ServiceEditor save errors", () => {
   it("shows a string detail verbatim", async () => {
     mockFetch({

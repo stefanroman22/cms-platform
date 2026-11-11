@@ -23,7 +23,8 @@ MEDIA_FIELD_TYPES = ("image", "icon")
 
 def _service_entry(svc: dict) -> dict:
     """One cms.config.json service entry. Records the ADR-0011 media metadata:
-    repeater image/icon fields (with `hint`/`surface`) and an image service's `_hint`."""
+    repeater image/icon fields (with `hint`/`surface`) and an image service's `_hint`,
+    plus an options service's `schema` (`{key: field type}`, ADR-0013)."""
     entry: dict = {"type": svc["service_type_slug"], "page": svc.get("page_name", "General")}
     media = {}
     for field in svc.get("item_schema") or []:
@@ -36,6 +37,9 @@ def _service_entry(svc: dict) -> dict:
     initial = svc.get("initial_content")
     if svc["service_type_slug"] == "image" and isinstance(initial, dict) and initial.get("_hint"):
         entry["hint"] = initial["_hint"]
+    if svc["service_type_slug"] == "options" and svc.get("item_schema"):
+        # ADR-0013: record which option keys the site may read, with their types.
+        entry["schema"] = {f["key"]: f.get("type") for f in svc["item_schema"]}
     return entry
 
 

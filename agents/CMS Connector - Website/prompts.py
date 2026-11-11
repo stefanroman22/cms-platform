@@ -35,10 +35,11 @@ no code fences.
 | file_download | { url?, filename? } |
 | key_value | { entries: Record<string,string>, _formats?: Record<string,"plain"|"inline"|"rich"> } |
 | email_config | { destination_email: string } |
-| repeater | { _schema: [{key,label,type,hint?,surface?}], items: object[] } |
+| repeater | { _schema: [{key,label,type,hint?,surface?,options?,default?}], items: object[] } |
 | theme | { colors: [{name,value}], surfaces: [{name,value}], fonts: Font[], body_font, heading_font } |
+| options | { _schema: [{key,label,type: "toggle"|"select"|"color",options?,default?}], values: Record<string, boolean|string> } |
 
-Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/link/line breaks), `richtext` (full: paragraphs, headings h2-h4, lists, quotes, dividers), `url`, `tags`, `slug` (one URL path segment per item, e.g. the `<slug>` in `/services/<slug>`; stored lowercase a-z, 0-9 and hyphens, translated per locale), `image` (an https URL string, `""` for none), `icon` (`{src, mode: "tint"|"original", color: ""|"#rrggbb", name}` or null).
+Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/link/line breaks), `richtext` (full: paragraphs, headings h2-h4, lists, quotes, dividers), `url`, `tags`, `slug` (one URL path segment per item, e.g. the `<slug>` in `/services/<slug>`; stored lowercase a-z, 0-9 and hyphens, translated per locale), `image` (an https URL string, `""` for none), `icon` (`{src, mode: "tint"|"original", color: ""|"#rrggbb", name}` or null), and the option types (ADR-0013) `toggle` (`true`/`false`), `select` (one of the field's `options: [{value, label}]` values, or `""`), `color` (`""` or lowercase `#rrggbb`); each option type may carry a `default`, and option values are never translated.
 
 ## Field formats (rich text, ADR-0010)
 
@@ -78,6 +79,21 @@ Repeater field types: `string` (plain), `inline` (bold/italic/underline/strike/l
   Phase 4; name the font files in `open_questions`), \
   `body_font`, `heading_font`. Colours are lowercase `#rrggbb`. Theme colours are \
   recommendations; they never drive the site palette.
+
+## Display options (ADR-0013)
+
+- When the site code calls the kit's `readOptions(...)` (or reads a `<page>_page_options` \
+  service), emit one `options` service per options set the code reads: `service_key` as \
+  read in code (convention `<page>_page_options`), `page_name` = that page, \
+  `translatable: false`, and an `item_schema` that mirrors the keys, types, defaults and \
+  select choices found in code. Only `toggle`/`select`/`color` fields (1-40, keys \
+  `^[a-z0-9_]{1,40}$`); a `select` has 2-24 `options` `[{"value", "label"}]` with values \
+  `^[a-z0-9][a-z0-9_-]{0,39}$`; `default` = the code default. Its flat `initial_content` \
+  is `{"values": {<key>: <code default>}}`. Never emit an options service the code does \
+  not read, and never put text or images in one.
+- A per-item switch or choice the code reads from a repeater item (e.g. `show_title`) is a \
+  repeater `toggle`/`select`/`color` field with its `default`; seed each item's value.
+- `options` and `default` are allowed only on `toggle`/`select`/`color` fields.
 
 ## Hard rules — ALWAYS
 
@@ -193,8 +209,8 @@ Return only:
       "label": "Human-readable label shown in CMS dashboard",
       "display_order": 1,
       "page_name": "Home",
-      "item_schema": [{"key":"...","label":"...","type":"string|inline|richtext|url|tags|slug|image|icon", \
-"hint": {"width": 800, "height": 600}, "surface": "Card"}],
+      "item_schema": [{"key":"...","label":"...","type":"string|inline|richtext|url|tags|slug|image|icon|toggle|select|color", \
+"hint": {"width": 800, "height": 600}, "surface": "Card", "options": [{"value": "...", "label": "..."}], "default": "..."}],
       "formats": {"<key_value entry>": "plain|inline|rich"},
       "initial_content": {},
       "translatable": true
@@ -227,8 +243,9 @@ Return only:
   ]
 }
 
-`item_schema` is required only for `repeater`; `formats` only for `key_value` (optional). `hint` goes \
-only on `image`/`icon` fields and `surface` only on `icon` fields. `excluded` and `open_questions` are \
+`item_schema` is required only for `repeater` and `options`; `formats` only for `key_value` (optional). \
+`hint` goes only on `image`/`icon` fields, `surface` only on `icon` fields, `options` only on `select` \
+fields and `default` only on `toggle`/`select`/`color` fields. `excluded` and `open_questions` are \
 arrays — empty if none.
 
 For `initial_content`: when only one locale is detected, use a flat object of field \
@@ -242,9 +259,9 @@ services such as logos, image URLs, and file-download URLs that should not be \
 duplicated per locale. A service marked `translatable: false` (locale-invariant \
 assets like logos, image/file URLs) always uses the flat single-locale \
 `initial_content` form even in a multi-locale manifest — it is seeded once for \
-the default locale and not duplicated per locale. The `general_theme` and every \
-`image` service are always `translatable: false` (themes, images and icons are never \
-translated).
+the default locale and not duplicated per locale. The `general_theme`, every \
+`image` service and every `options` service are always `translatable: false` (themes, \
+images, icons and display options are never translated).
 
 NO additional keys, NO markdown, NO commentary outside JSON."""
 

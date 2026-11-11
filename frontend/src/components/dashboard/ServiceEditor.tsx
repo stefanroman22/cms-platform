@@ -259,22 +259,23 @@ export function ServiceEditor({
     }
   }
 
-  // A theme is project-wide and never translated (ADR-0011): no language tabs,
-  // no translation banner, and it is always edited in the default locale.
-  const isTheme = service?.service_type_slug === "theme";
+  // A theme (ADR-0011) and display options (ADR-0013) are never translated: no
+  // language tabs, no translation banner, and always edited in the default locale.
+  const untranslated =
+    service?.service_type_slug === "theme" || service?.service_type_slug === "options";
   useEffect(() => {
-    if (!isTheme || !localeParam) return;
+    if (!untranslated || !localeParam) return;
     const params = new URLSearchParams(searchParams.toString());
     params.delete("locale");
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [isTheme, localeParam, searchParams, router, pathname]);
+  }, [untranslated, localeParam, searchParams, router, pathname]);
 
   const reduce = useReducedMotion();
   const activeLocale = service?.locale ?? service?.default_locale ?? "";
   const defaultLocale = service?.default_locale ?? "";
   const locales = service?.locales ?? [];
   const isNonDefault =
-    !isTheme && !!activeLocale && !!defaultLocale && activeLocale !== defaultLocale;
+    !untranslated && !!activeLocale && !!defaultLocale && activeLocale !== defaultLocale;
   const status = service?.translation_status ?? null;
   const reviewCount = status ? Object.values(status).filter((s) => s === "stale").length : 0;
   const manualCount = status ? Object.values(status).filter((s) => s === "manual").length : 0;
@@ -341,7 +342,7 @@ export function ServiceEditor({
       </div>
 
       {/* Locale tabs */}
-      {service && !isTheme && locales.length > 1 && (
+      {service && !untranslated && locales.length > 1 && (
         <LocaleTabs
           locales={locales}
           activeLocale={activeLocale}
