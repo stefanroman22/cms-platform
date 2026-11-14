@@ -182,6 +182,38 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 > finding detail lives on the review branch and in [`findings/high.md`](./findings/high.md#sec-094) /
 > [`findings/medium.md`](./findings/medium.md#sec-095).
 
+> **Saturday Solver 2026-11-14 — no open critical/high/medium remain; status-only run.**
+> This run selected against the `open`/`in-progress` C/H/M fix threshold using the freshest review
+> source — `origin/security/weekly-review-2026-11-05` (PR #94), the most recent `weekly-review-*`
+> branch (no Friday review ran on 2026-11-13). That source carried exactly **two** open C/H/M
+> findings, **SEC-094 (high)** and **SEC-095 (medium)**, both net-new on the 2026-11-05 review.
+> Per the architecture-fact rule (*verify against actual dev code, don't trust the bare tracker row*),
+> both were re-verified against current `dev` (HEAD `7076795`) and are **already FIXED there** —
+> they were drained by last week's Saturday run:
+> - **SEC-094 → fixed** on `dev` (PR #95, commit `09c29d5`). Verified in
+>   `agents/CMS Connector - Website/scan.py`: the Claude-scan branch now executes
+>   `manifest["project_slug"] = slug` (pinned to the operator `--slug`, exactly as `cms_endpoint`
+>   is pinned) immediately after `_call_claude(...)`, and the pre-approved-manifest branch pins it
+>   via `setdefault(..., slug)`, so a prompt-injected model echo can no longer redirect the
+>   admin-key provisioning (`_provision` / `_vercel_setup`) at another tenant.
+> - **SEC-095 → fixed** on `dev` (PR #96, commit `d915c9e`). Verified in
+>   `backend/auth_service/routers/content.py`: the router is declared
+>   `APIRouter(prefix="/content", …, dependencies=[Depends(_public_read_limit)])`, and
+>   `_public_read_limit` enforces a shared (cross-instance) Postgres per-IP cap (120/60s) keyed on
+>   the non-spoofable edge client IP, mirroring `booking.py` / SEC-070.
+>
+> A grep of this tracker for `open`/`in-progress` critical/high/medium rows returns **none**, so no
+> fix PRs were shipped this run; this is a status-only PR so the verification is not lost.
+> **Still owed to a human (unchanged, below this routine's auto-fix threshold or requiring a human
+> decision):** (1) the cross-branch **ID-collision / tracker reconciliation** — this dev tracker is
+> still on the 2026-06-20 header while the unmerged `weekly-review-*` branches carry a parallel
+> `SEC-069…095` numbering; (2) the residual **`guard.mjs` hardening** the 2026-11-05 review flagged
+> as still present on `dev` (the `execute_sql` read-only classifier omits `SELECT … INTO` at
+> `guard.mjs:378`; the `--no-verify` block is exact-match so the `--no-verif` abbreviation slips at
+> `guard.mjs:105`; leading `GIT_CONFIG_*` strip / `core.hooksPath` bypass, SEC-074 2026-10-15) —
+> local-MCP-guard defense-in-depth, no tracker C/H/M row; (3) **SEC-039** (credentialed CORS) stays
+> `needs-decision`; **SEC-054** stays `accepted-risk`.
+
 > **⚠ Saturday Solver 2026-10-17 — provenance of SEC-071…093 fixes.** SEC-071…093 are findings
 > from the **2026-10-15 weekly review**, whose authoritative tracker lives on the unmerged
 > `origin/security/weekly-review-2026-10-15` branch, not this dev tracker (still at the 2026-06-20
