@@ -11,7 +11,7 @@
     outside the JSON-LD `<script>`.
   - REQUIRE (must return at least one match each): `react-i18next`, `vite-react-ssg`,
     `VITE_CMS_ENDPOINT`, `cms-rich-text` (an import of the vendored kit), `--cms-rich-strong`
-    defined in the site CSS, `<ThemeStyles`, and `var(--cms-font-body` in the site CSS; plus
+    defined in the site CSS, `<ThemeStyles`, `readOptions(`, and `var(--cms-font-body` in the site CSS; plus
     `<CmsIcon` when `_design-manifest.json` (or the connector report) lists content icons.
   - Zero raw `<img ` outside `src/seo/og.gen.ts` / `public/og/` (OG generation; raw `<img>` is
     correct there — do not flag it) and the vendored `src/lib/cms-rich-text/` (`CmsIcon`'s
@@ -31,6 +31,12 @@
   span colour → rendered span has that colour; empty image/icon → fallback renders, no layout gap.
   Before the site is connected, check the last one only (no theme → `@fontsource` fonts, mock
   images and designed icons render).
+- Playwright checks for display options (ADR-0013): every option value each page reads (every
+  `content_width`, every `select` choice, each `toggle` on and off, a custom `background`) renders
+  without layout breakage at 375/768/1440, in light and dark; a hidden title keeps an `sr-only`
+  heading; text on a custom background stays ≥ 4.5:1. Before the site is connected, feed each value
+  as a `{_schema, values}` fixture to the page's `readOptions` call; once connected, the connector's
+  5i probe repeats them against the draft.
 - If a build/test failure is hard to diagnose and `superpowers` is installed, use its debugging
   methodology (root-cause-first).
 - Append at least one generalizable lesson to `agents/Website Builder/LEARNINGS.md`. If the

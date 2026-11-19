@@ -16,7 +16,12 @@ changed* over time, independent of the per-finding tracker.
   styled rich text, CMS image/icon fields, SVG + font uploads to a public `cms-files` bucket — commits
   `ba613a1`/`ad00f45`/`87e5eba`, 2026-10-12) and **ADR-0012** (Google Maps lead import — `services/google_places/*`,
   commit `d8d0ec7`, 2026-10-11). Both got their first security review.
-- **New findings (3, all medium, all open):**
+- **Findings (3 medium) — on merge-up all proved to be already-filed, already-fixed duplicates.** The 2026-10-22
+  review independently surfaced the three mediums below, but when this branch was merged to current `dev`
+  (2026-11-19) each turned out to match a finding the **2026-10-15 review** had already filed, and all three were
+  **already fixed on dev**: SEC-096 → PR #90 (`03a7aee`), SEC-097 (= 2026-10-15 SEC-072) → PR #88 (`4f9e9ea`),
+  SEC-098 (= 2026-10-15 SEC-073) → PR #89 (`e06cf1f`). So this run's net-new open count is **zero**; the entries are
+  retained as independent corroboration. The three findings (as recorded):
   - **SEC-096** — public booking **create** path (`POST /booking/{slug}`) never re-validates the booking window;
     `free_resource_ids_at` checks only opening-hours alignment + busy-overlap, so past / beyond-`max_advance` /
     `lead_time`-violating start times are accepted. The reschedule path validates the same window (and says
@@ -50,11 +55,16 @@ changed* over time, independent of the per-finding tracker.
   (security + performance), `list_tables`/`execute_sql`, and `get_project` could not be pulled. The DB/RLS/grant
   posture was reviewed statically from the migration SQL only; live advisor state should be re-pulled on the next
   run that has the plugins (or by a human) to confirm no drift on the new `cms-files` bucket policies.
-- **Headline + top risks:** No new critical/high; the internet-facing edges held again. The live class-of-risk this
-  week is **new-code hardening on ADR-0011/0012**: a reachable (if preconditioned) SSRF-guard bypass on the Google
-  import (SEC-097) and a booking-policy write bypass (SEC-096), plus the agent-guardrail wrapper bypass (SEC-098)
-  that matters specifically for the autonomous Connector/Website-Builder pipelines. Remediation order:
-  SEC-097 → SEC-098 → SEC-096 → standing low/info queue.
+- **Headline + top risks:** No new critical/high, and **zero net-new open findings** — the three mediums the review
+  found on the new ADR-0011/0012 code were all independently caught by the 2026-10-15 review and already fixed on
+  dev (SSRF-guard DNS-rebinding bypass → #88, booking-window write bypass → #90, agent-guardrail wrapper bypass →
+  #89). The value of this run is the independent corroboration of those fixes plus the reconciliation (SEC-046
+  fixed; SEC-024/027/067 obsolete; SEC-048 partial) and the 3 adversarial dismissals. No remediation is outstanding
+  from this run beyond the standing low/info queue.
+- **Merge note (2026-11-19):** this branch was merged up to current `dev` before landing; its three findings were
+  renumbered SEC-071/072/073 → SEC-096/097/098 to avoid colliding with the 2026-10-15/11-05 review rows
+  (SEC-071…095) already on dev, and then marked fixed-duplicate once the dev fixes were confirmed present. The
+  cross-branch ID collapse remains a human task (as the tracker's standing notes say).
 
 ---
 

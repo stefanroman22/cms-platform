@@ -396,3 +396,38 @@ export function ServicesSection() {
 Tier `staleTime` by volatility: static content ≈ `Infinity`, semi-static `minutes/hours`, volatile short.
 Fire independent requests together (no waterfall). Global app state (locale choice, booking
 state, UI flags) lives in Zustand `persist` stores in `src/lib/store.ts`.
+
+---
+
+## 9. Display options — per-page `readOptions` (ADR-0013, kit ≥ 1.3.0)
+
+Defaults are the designed look; the site maps each value to its own classes / CSS variables. The
+client colour goes on the page wrapper (light theme only when the site has a derived dark theme),
+`content_width` sizes the text container only, and a hidden title keeps an `sr-only` heading.
+
+```tsx
+import { useTranslation } from "react-i18next";
+import { readOptions, inkOn, contrastRatio } from "@/lib/cms-rich-text";
+
+const SITE_INK = "#1c1917"; // the design's light-theme text colour
+const DEFAULTS = { background: "", content_width: "standard", show_title: true, show_map: true };
+const WIDTH = { narrow: "max-w-2xl", standard: "max-w-4xl", wide: "max-w-6xl", full: "max-w-none" };
+
+export function ContactPage({ raw }: { raw: unknown }) { // raw = site.options.contact_page_options
+  const { t } = useTranslation();
+  const o = readOptions(raw, DEFAULTS);
+  const ink = o.background && contrastRatio(o.background, SITE_INK) < 4.5 ? inkOn(o.background) : undefined;
+  const style = o.background
+    ? ({ "--page-bg": o.background, ...(ink && { "--page-ink": ink }) } as React.CSSProperties)
+    : undefined;
+  return (
+    <main className="page" style={style}>  {/* light theme: var(--page-bg, …) / var(--page-ink, …) */}
+      <Banner />                                         {/* keeps its designed size */}
+      <div className={`mx-auto ${WIDTH[o.content_width as keyof typeof WIDTH] ?? WIDTH.standard}`}>
+        <h1 className={o.show_title ? undefined : "sr-only"}>{t("contact.title")}</h1>
+        {o.show_map && <Map />}
+      </div>
+    </main>
+  );
+}
+```

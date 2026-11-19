@@ -12,6 +12,7 @@ SERVICE_TYPES: dict[str, tuple[str, str]] = {
     "gallery": ("Gallery", "Images"),
     "image": ("Image", "Image"),
     "key_value": ("Key-Value Store", "Hash"),
+    "options": ("Display Options", "SlidersHorizontal"),
     "repeater": ("Repeater", "List"),
     "text_block": ("Text Block", "FileText"),
     "theme": ("Theme", "Palette"),

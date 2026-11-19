@@ -270,7 +270,7 @@ def test_create_honors_resource_id(client, monkeypatch):
             json={
                 "service_id": "s1",
                 "resource_id": "staff-B",
-                "start_utc": "2099-06-10T08:00:00+00:00",
+                "start_utc": (datetime.now(UTC) + timedelta(days=2)).isoformat(),
                 "customer": {"name": "Jane", "email": "jane@acme.com", "tz": "Europe/London"},
             },
             headers=_ip(10),
@@ -294,7 +294,7 @@ def test_create_resource_taken_returns_409(client, monkeypatch):
             json={
                 "service_id": "s1",
                 "resource_id": "staff-B",
-                "start_utc": "2099-06-10T08:00:00+00:00",
+                "start_utc": (datetime.now(UTC) + timedelta(days=2)).isoformat(),
                 "customer": {"name": "Jane", "email": "jane@acme.com"},
             },
             headers=_ip(11),

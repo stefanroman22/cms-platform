@@ -14,6 +14,7 @@ Covers:
 from __future__ import annotations
 
 import json
+import re
 from unittest.mock import MagicMock, patch
 
 import scan
@@ -402,3 +403,80 @@ def test_provision_delegates_to_provision_booking_when_detected(tmp_path):
     assert args[0][0]["detected"] is True
     # Second positional arg: project slug
     assert args[0][1] == "acme"
+
+
+# ---------------------------------------------------------------------------
+# SEC-071: manifest-derived public_slug must not inject into generated code
+# ---------------------------------------------------------------------------
+
+_MALICIOUS_SLUG = "x\";import cp from'child_process';cp.execSync(process.env.SECRET_EXFIL);//"
+
+
+def test_safe_slug_passes_clean_slug():
+    assert scan._safe_slug("acme-salon") == "acme-salon"
+    assert scan._safe_slug("a1") == "a1"
+
+
+def test_safe_slug_neutralises_injection():
+    out = scan._safe_slug(_MALICIOUS_SLUG)
+    # Only lowercase/digits/dash, no quotes, semicolons, parens, slashes, newlines.
+    assert scan._SLUG_RE.match(out), f"sanitised slug is not a safe slug: {out!r}"
+    for bad in ('"', "'", ";", "(", ")", "/", "\n", "\\", " "):
+        assert bad not in out
+
+
+def test_safe_slug_empty_falls_back():
+    assert scan._safe_slug("") == "site"
+    assert scan._safe_slug("!!!") == "site"
+
+
+def test_write_booking_ts_slug_cannot_break_out(tmp_path):
+    """A slug with quotes/newlines must not escape the TS string literal/comment."""
+    scan._write_booking_ts('evil"\n;globalThis.x=1;//', "next", tmp_path)
+    content = (tmp_path / "lib" / "booking.ts").read_text(encoding="utf-8")
+    # The raw injection must never appear verbatim in the generated source.
+    assert ";globalThis.x=1" not in content
+    assert 'evil"' not in content
+    # The SLUG line must be exactly one safe JSON string literal of a safe slug.
+    slug_lines = [ln for ln in content.splitlines() if ln.startswith("const SLUG =")]
+    assert len(slug_lines) == 1
+    m = re.fullmatch(r'const SLUG = "([a-z0-9-]+)";', slug_lines[0])
+    assert m, f"SLUG line not a safe literal: {slug_lines[0]!r}"
+    assert scan._SLUG_RE.match(m.group(1))
+
+
+def test_provision_booking_sanitises_public_slug(tmp_path):
+    """_provision_booking must sanitise a malicious manifest public_slug before
+    it reaches the settings payload and lib/booking.ts (SEC-071)."""
+    manifest = _booking_manifest()
+    manifest["booking"]["public_slug"] = _MALICIOUS_SLUG
+    settings_body = {}
+
+    def fake_urlopen(req):
+        if "/bookings/resources" in req.get_full_url():
+            return _urlopen_resp(b'{"id": "res1"}')
+        if "/bookings/services" in req.get_full_url():
+            return _urlopen_resp(b'{"id": "svc1"}')
+        return _urlopen_resp(b"{}")
+
+    def fake_http(method, url, headers, body=None):
+        nonlocal settings_body
+        if "/bookings/settings" in url and body is not None:
+            settings_body = body
+        return {"updated": 1}
+
+    with (
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+        patch.object(scan, "_http", side_effect=fake_http),
+    ):
+        scan._provision_booking(
+            manifest["booking"], "acme", "http://localhost:8001", "tok", tmp_path, framework="next"
+        )
+
+    # Settings payload carries a safe slug, not the injection.
+    assert scan._SLUG_RE.match(settings_body["public_slug"])
+    assert "execSync" not in settings_body["public_slug"]
+    # Generated booking.ts is free of the payload.
+    content = (tmp_path / "lib" / "booking.ts").read_text(encoding="utf-8")
+    assert "execSync" not in content
+    assert "child_process" not in content

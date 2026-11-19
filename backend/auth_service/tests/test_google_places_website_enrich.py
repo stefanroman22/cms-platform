@@ -198,6 +198,53 @@ def test_redirect_to_private_ip_rejected(monkeypatch):
     assert "internal.local" in seen
 
 
+def test_fetch_html_connects_to_validated_ip_not_hostname(monkeypatch):
+    """Pinning: the socket is opened against the resolved IP literal, never the hostname
+    — so the kernel cannot perform a second, unvalidated DNS lookup at connect time."""
+    monkeypatch.setattr(socket, "getaddrinfo", _addr("93.184.216.34"))
+    seen = []
+
+    class _Stop(Exception):
+        pass
+
+    def fake_create_connection(address, *a, **k):
+        seen.append(address)
+        raise _Stop()
+
+    monkeypatch.setattr(socket, "create_connection", fake_create_connection)
+    with pytest.raises(_Stop):
+        we.fetch_html("https://samirkapsalon.nl/")
+    assert seen and seen[0] == ("93.184.216.34", 443)
+
+
+def test_fetch_html_rebinding_rejected_at_connect(monkeypatch):
+    """SEC-072 TOCTOU: getaddrinfo returns a public IP for the pre-check then a private
+    IP at connect (DNS rebinding). The connect-time re-validation must refuse, and no
+    socket may be opened to the unvalidated address."""
+    calls = []
+
+    def flipping(host, port, **kw):
+        calls.append(host)
+        ip = "93.184.216.34" if len(calls) == 1 else "10.0.0.5"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", flipping)
+    connected = []
+    monkeypatch.setattr(
+        socket, "create_connection", lambda address, *a, **k: connected.append(address)
+    )
+    with pytest.raises(we.UnsafeUrl):
+        we.fetch_html("https://rebind.example/")
+    assert connected == []  # refused before any socket was opened
+    assert len(calls) >= 2  # pre-check resolved, then connect re-resolved and caught the flip
+
+
+def test_assert_public_rejects_nonweb_port(monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", _addr("93.184.216.34"))
+    with pytest.raises(we.UnsafeUrl, match="port 22"):
+        we.assert_public_http_url("https://example.com:22/")
+
+
 def test_enrich_from_website_reports_error_instead_of_raising(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", _addr("93.184.216.34"))
 

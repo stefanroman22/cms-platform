@@ -161,6 +161,21 @@ const theme = readTheme(raw);          // null when absent or nothing valid
 - `recommendIconColors(theme, surfaceName?)` ranks theme colours by WCAG contrast (>= 3:1 is `ok`)
   against a named surface, or against every surface when the name is absent or unknown.
 
+### Dark themes (kit `1.3.1`+)
+
+A colour the client picks (styled span, tinted icon) is chosen on the light theme. The kit renders it
+unchanged there, and also writes a dark variant: `readableOn(color)` moves the colour toward white just
+far enough to reach 4.5:1 against `DARK_SURFACE` (`#1f2937`), so it stays the same hue and is readable on
+that surface and every darker one. `cms-rich.css` switches to the variant under `[data-theme="dark"]` or
+`.dark`. A site whose dark theme uses another selector adds the same rule with it:
+
+```css
+.theme-dark :is(.cms-rich-style, .cms-icon) { --cms-color: var(--cms-color-dark); }
+```
+
+Use `readableOn(color, surface, ratio)` / `colorCss(prop, color)` for any other client colour a site
+renders as text on a dark theme.
+
 ## Slugs
 
 Repeater `slug` fields (kit `1.2.0`+) hold one URL path segment per locale, such as
@@ -180,6 +195,30 @@ never from the title.
 
 Kit `1.2.1` fixes `slugify` so non-ASCII punctuation (en/em dashes, NBSP, `·`, emoji) separates
 words instead of joining them (`javítás–karbantartás` → `javitas-karbantartas`); re-sync sites on `1.2.0`.
+
+## Display options
+
+Kit `1.3.0`+ reads display options (ADR-0013): `toggle`, `select` and `color` fields, in an
+`options` service (one per page, keyed `<page>_page_options`) or in repeater items. An options
+service is `{_type: "options", _label, _schema: [field definitions], values: {key: value}}`; values
+are `true`/`false`, one of the field's `options[].value` (`""` = not chosen), or `""`/`#rrggbb`.
+
+```tsx
+import { readOptions, readToggle, inkOn } from "@/lib/cms-rich-text";
+const o = readOptions(content.home_page_options, { background: "", content_width: "normal" });
+<main style={o.background ? { background: o.background, color: inkOn(o.background) } : undefined}
+      className={o.content_width === "wide" ? "max-w-6xl" : "max-w-3xl"}>
+  {items.map((s) => readToggle(s.show_title, true) && <h2 key={s.slug}>{s.title}</h2>)}
+</main>
+```
+
+`readOptions` returns exactly the keys of your defaults, and a stored value only when the `_schema`
+declares that key with a type matching your default (boolean for `toggle`, string for `select` and
+`color`) and the value is valid for it; anything else falls back to your default, so a site with no
+options service renders as designed. Apply a stored colour to CSS only through these readers
+(`readOptions`, `readColor`), never from the raw value. Custom colours apply to the light theme only
+when the site has a derived dark theme; set text on them with `inkOn(bg)`, which picks the more
+readable of a dark and a light ink. `readOptionFields(schema)` lists the well-formed definitions.
 
 ## 6. Formats
 

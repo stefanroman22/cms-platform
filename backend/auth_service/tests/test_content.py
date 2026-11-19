@@ -391,3 +391,69 @@ def test_types_endpoint_declares_theme_icon_and_media_hints(mock_supabase, clien
         'banner: { _type: "image"; _label: string; url?: string; alt?: string; '
         "_hint?: { width: number; height: number } };" in body
     )
+
+
+def test_types_endpoint_declares_options_and_repeater_option_fields(mock_supabase, client):
+    mock_supabase.execute.side_effect = [
+        MagicMock(data={"id": "p1", "slug": "demo", "name": "Demo", "is_active": True}),
+        MagicMock(
+            data=[
+                {"service_key": "home_page_options", "service_type_slug": "options", "label": "O"},
+                {"service_key": "list", "service_type_slug": "repeater", "label": "List"},
+            ]
+        ),
+    ]
+
+    body = client.get("/content/demo/types").text
+
+    assert (
+        'home_page_options: { _type: "options"; _label: string; _schema?: Array<{ key: string; '
+        'label: string; type: "toggle" | "select" | "color"; '
+        "options?: { value: string; label: string }[]; default?: boolean | string }>; "
+        "values?: Record<string, boolean | string> };" in body
+    )
+    assert '"image" | "icon" | "toggle" | "select" | "color" */' in body
+    assert (
+        "surface?: string; options?: { value: string; label: string }[]; "
+        "default?: boolean | string }>; items?: Record<string, unknown>[] };" in body
+    )
+
+
+def test_locale_content_passes_options_service_through(mock_supabase, client):
+    options = {
+        "_schema": [
+            {"key": "show_title", "label": "Show title", "type": "toggle", "default": True},
+            {"key": "background", "label": "Background", "type": "color"},
+        ],
+        "values": {"show_title": False, "background": "#aabbcc"},
+    }
+    project = {
+        "id": "p1",
+        "slug": "demo",
+        "name": "Demo",
+        "is_active": True,
+        "default_locale": "en",
+        "locales": ["en", "nl"],
+    }
+    services = [
+        {
+            "service_key": "home_page_options",
+            "label": "Home page options",
+            "display_order": 0,
+            "service_type_slug": "options",
+            "content_entries": [
+                {"locale": "en", "published_content": options, "draft_content": options},
+                {
+                    "locale": "nl",
+                    "published_content": {**options, "values": {"show_title": True}},
+                    "draft_content": options,
+                },
+            ],
+        }
+    ]
+    expected = {"_type": "options", "_label": "Home page options", **options}
+    for path in ("/content/demo", "/content/demo/nl"):
+        mock_supabase.execute.side_effect = [MagicMock(data=project), MagicMock(data=services)]
+        res = client.get(path)
+        assert res.status_code == 200
+        assert res.json()["content"]["home_page_options"] == expected

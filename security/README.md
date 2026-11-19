@@ -12,20 +12,26 @@ reviewer (human or agent) exactly what to scan and how.
 | **1** | **4** | **16** | **38** | **12** | **71** | 19 |
 
 The 2026-06-07 baseline's headline criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) are **fixed**.
-The **2026-10-22** review found **no new critical/high** — it added **3 medium** findings (all `open`) on the new
-ADR-0011/0012 code and dismissed 3 candidates. It flipped `SEC-046`→**fixed** and `SEC-024`/`SEC-027`/`SEC-067`→**obsolete**,
-and marked `SEC-048`→partially-fixed. (Counts above are confirmed-historical totals and do not decrement on fixed/obsolete.)
+The **2026-10-22** review found **no new critical/high and zero net-new open findings**: the three mediums it
+surfaced on the new ADR-0011/0012 code all turned out — on merge-up — to duplicate the **2026-10-15** review's
+findings and are **already fixed on dev** (SEC-096 booking-window → PR #90; SEC-097 website-enrich DNS-rebinding
+SSRF → PR #88; SEC-098 guard.mjs wrapper bypass → PR #89). It also dismissed 3 candidates (D-15/16/17), flipped
+`SEC-046`→**fixed** and `SEC-024`/`SEC-027`/`SEC-067`→**obsolete**, and marked `SEC-048`→partially-fixed. (Counts
+above are the 2026-06-20 baseline + these 3 recorded-but-fixed duplicate mediums; the merged SEC-071…095 rows are
+not yet folded into the totals — a cross-branch recount is owed to a human.)
 See the 2026-10-22 note + the full table in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
 
 > **MCP gap (2026-10-22):** this cloud run had **no Supabase or Vercel MCP** attached, so live advisor / table / project
 > state was **not** pulled — the DB layer was reviewed statically from migration SQL. Re-pull `get_advisors` +
 > `list_tables` and confirm the new `cms-files` bucket policies on the next run that has the plugins.
 
-### The next things to fix (2026-10-22 remediation order)
-1. **`SEC-097` (medium)** — pin the validated IP into the socket connect in `google_places/website_enrich.py` (resolve once, connect by address with the original Host/SNI), on the initial fetch **and** every redirect hop, and restrict the port to 80/443. Closes the DNS-rebinding SSRF-guard bypass.
-2. **`SEC-098` (medium)** — make `.claude/hooks/guard.mjs` recurse into shell/exec-wrapper inner commands (`bash -c`, `env`, `xargs`, `$(…)`, backticks) and fail **closed** on parse ambiguity; add unit tests. Restores the non-negotiable push-to-main / prod-SQL / `--no-verify` guards for the agent pipelines.
-3. **`SEC-096` (medium)** — re-validate the booking window server-side in the public `POST /booking/{slug}` create path, mirroring the reschedule handler (reject past / beyond-`max_advance` / `lead_time`-violating starts with 422).
-4. **Standing low/info queue:** `SEC-066` (enforce admin-key `scopes`), `SEC-065` (verify the gitleaks binary checksum), `SEC-068` (login-lockout fail-open brake), `SEC-060` (tenant copy as `str.format` string), `SEC-029` (expire cancelled-booking manage tokens), `SEC-062` (href scheme allowlist — now fed by the ADR-0012 importer), `SEC-039` (credentialed-CORS `*.vercel.app` — needs-decision), `SEC-040` (frontend CSP).
+### The next things to fix (standing queue — nothing net-new from 2026-10-22)
+This review's three mediums are already fixed on dev. The remaining open work is the standing **low/info** queue:
+`SEC-066` (enforce admin-key `scopes`), `SEC-065` (verify the gitleaks binary checksum), `SEC-068` (login-lockout
+fail-open brake), `SEC-060` (tenant copy as `str.format` string), `SEC-029` (expire cancelled-booking manage tokens),
+`SEC-062` (href scheme allowlist — now fed by the ADR-0012 importer), `SEC-039` (credentialed-CORS `*.vercel.app` —
+needs-decision), `SEC-040` (frontend CSP). (Plus whatever the 2026-10-15/11-05 review rows SEC-071…095 leave open —
+pending the human reconciliation pass.)
 
 ## How to read this folder
 

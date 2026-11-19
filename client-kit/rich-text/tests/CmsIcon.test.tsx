@@ -20,7 +20,8 @@ describe("CmsIcon", () => {
   });
   it("uses the given colour and aria-hidden without label", () => {
     const el = root(<CmsIcon icon={icon({ color: "#112233" })} />).firstElementChild as HTMLElement;
-    expect(el.style.backgroundColor).toBe("rgb(17, 34, 51)");
+    expect(el.style.backgroundColor).toBe("var(--cms-color, #112233)");
+    expect(el.style.getPropertyValue("--cms-color-dark")).toMatch(/^#[0-9a-f]{6}$/);
     expect(el.getAttribute("aria-hidden")).toBe("true");
     expect(el.getAttribute("role")).toBeNull();
   });

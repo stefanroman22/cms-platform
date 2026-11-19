@@ -10,13 +10,27 @@ import { readIcon, slugify } from "@/lib/cms-rich-text";
 import { readHint } from "./ImageHint";
 import { RepeaterImageField } from "./RepeaterImageField";
 import { IconField } from "./IconField";
+import { OptionFieldInput, readOptionValue } from "./OptionFields";
 
 interface SchemaField {
   key: string;
   label: string;
-  type: "string" | "inline" | "richtext" | "url" | "tags" | "slug" | "image" | "icon";
+  type:
+    | "string"
+    | "inline"
+    | "richtext"
+    | "url"
+    | "tags"
+    | "slug"
+    | "image"
+    | "icon"
+    | "toggle"
+    | "select"
+    | "color";
   hint?: { width: number; height: number };
   surface?: string;
+  options?: { value: string; label: string }[];
+  default?: boolean | string;
 }
 
 type ItemRecord = Record<string, unknown>;
@@ -111,6 +125,11 @@ function FieldInput({
       </div>
     );
   }
+  if (field.type === "toggle" || field.type === "select" || field.type === "color") {
+    return (
+      <OptionFieldInput field={{ ...field, type: field.type }} value={value} onChange={onChange} />
+    );
+  }
   if (richText && field.type !== "tags") {
     const format: FieldFormat =
       field.type === "inline" ? "inline" : field.type === "richtext" ? "rich" : "plain";
@@ -171,7 +190,14 @@ export function RepeaterEditor({ initialContent, onChange, onUpload, richText }:
   function addItem() {
     const blank: ItemRecord = {};
     schema.forEach((f) => {
-      blank[f.key] = f.type === "tags" ? [] : f.type === "icon" ? null : "";
+      blank[f.key] =
+        f.type === "toggle" || f.type === "select" || f.type === "color"
+          ? readOptionValue({ ...f, type: f.type }, undefined)
+          : f.type === "tags"
+            ? []
+            : f.type === "icon"
+              ? null
+              : "";
     });
     emit([...rows, { key: newKey(), item: blank }]);
   }

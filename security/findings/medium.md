@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-22 (3 new mediums added this run: SEC-096 booking-window bypass, SEC-097 website-enrich DNS-rebinding SSRF, SEC-098 PreToolUse guard wrapper bypass).
+See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-22; the three mediums it recorded (SEC-096 booking-window, SEC-097 website-enrich DNS-rebinding SSRF, SEC-098 PreToolUse guard wrapper bypass) turned out to duplicate the 2026-10-15 review's findings and are all already **fixed** on dev (PRs #90/#88/#89) — kept as evidence of independent corroboration.
 
 ---
 
@@ -758,14 +758,78 @@ suite: 4640 passed, 5 skipped.
 
 ---
 
-<a id="sec-096"></a>
-
-## SEC-096 — Public booking create path never re-validates the booking window (past dates, beyond max_advance, and lead_time all accepted)
+## SEC-095 — Public `/content/*` read endpoints have no rate limiter (DB-amplification DoS against the shared prod Supabase)
 
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (PR `security/fix-SEC-095-2026-11-07` → dev) |
+| **Category** | Rate limiting / DoS |
+| **Dimension** | public-tokens / ratelimit-dos |
+| **Location** | `backend/auth_service/routers/content.py` (all public read routes) |
+| **First seen** | 2026-11-05 (weekly review) |
+
+**Description**
+
+The public client-site content API (`routers/content.py`) carried no rate limiting of any kind — it
+imported neither `slowapi`'s `limiter` nor `pg_rate_limit`, and no public read route had a limit
+dependency. Each request runs `_resolve_project` (1 service-role query) plus a `project_services` +
+nested `content_entries` fetch (1 query), and the response is `Cache-Control: no-cache` with the ETag
+computed **after** the queries, so neither the CDN nor the conditional-GET path short-circuits the DB
+work. This is the exact amplification class the project already rates medium and fixed on the booking
+side (SEC-070 added `Depends(_public_read_limit)` to `/booking/{slug}/availability`, and
+`booking.py`/`forms.py` enforce the shared Postgres limiter on every other public surface) — the
+content reads were simply left out.
+
+**Attack scenario**
+
+An unauthenticated attacker scripts repeated GETs across all known client slugs/locales. With no
+per-IP or shared cap, aggregate read load is unbounded, hitting the single Supabase instance that
+serves local, preview **and** prod for every tenant — degrading content APIs platform-wide.
+
+**Fix (this run)**
+
+Mirror the booking pattern exactly. Added a module-level `_public_read_limit(request)` to
+`content.py` that calls `pg_rate_limit.enforce(f"content_read:{client_ip(request)}", limit=120,
+window_seconds=60, …)`, and attached it as a **router-level** dependency
+(`APIRouter(prefix="/content", …, dependencies=[Depends(_public_read_limit)])`). Every route on this
+router is an unauthenticated read (`/{slug}`, `/{slug}/{locale}`, `/{slug}/types`, and the two
+preview-token `/draft` variants, which also resolve the project against the DB before validating the
+token), so a router-level dependency covers them all with one surgical change. Backed by the shared
+Postgres limiter (`rate_limit_*` RPCs already live in prod from SEC-010/070 — **no migration**), keyed
+on the non-spoofable Vercel edge client IP. Same 120/60s budget as the booking reads — generous for
+real client-site traffic. The limiter runs as a dependency, so it short-circuits with HTTP 429
+**before** any DB work when an IP is over its cap; it fails open on a transient limiter DB error.
+
+**Tests added**
+
+`backend/auth_service/tests/test_content_ratelimit.py` (5 tests): over-cap 429 short-circuit before
+any DB work on `/content/{slug}`, `/{slug}/{locale}` and `/{slug}/types`; a normal under-cap request
+still returns 200 end-to-end; and the fail-open contract. All FAIL on the pre-fix code and PASS after.
+
+**Dependents regression-tested**
+
+`content.py` is mounted in `main.py` and exercised by `test_content.py` and `test_content_structure.py`.
+Ran the **full backend suite: 5157 passed, 5 skipped** (5152 prior + 5 new) — existing content tests
+pass through the limiter unchanged (the limiter's `.rpc()` call is a distinct mock from the `.table()`
+query chain, so it does not perturb their stubbed responses). `ruff` + `black` clean.
+
+**Residual risk:** availability-only class; no data read/write beyond already-public content. The cap
+is per-IP via the edge client IP, consistent with every other public surface. If a distributed
+(many-IP) flood is a concern, that is a platform-wide edge/WAF control, out of scope for this finding.
+
+---
+
+<a id="sec-096"></a>
+
+## SEC-096 — Public booking create path never re-validates the booking window (past dates, beyond max_advance, and lead_time all accepted)
+
+> **Status 2026-11-19: FIXED (duplicate).** This is the same finding the 2026-10-15 review filed for the booking create path; it was fixed on dev by **PR #90 (`03a7aee`)** before this 2026-10-22 review branch merged up. `_create_core` now re-validates the window server-side (rejects `start < now + lead_time_min` or `start > now + max_advance_days` with a 422), mirroring the reschedule path. Recorded here under a fresh id because the dev fix commit labelled the booking-window finding "SEC-071", which already denotes the unrelated CMS-Connector `public_slug` codegen finding — a human should collapse the duplicate ids. The analysis below is the 2026-10-22 review's independent corroboration, retained as evidence.
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | ✅ fixed (duplicate — PR #90 `03a7aee`) |
 | **Category** | Public endpoint / booking-policy integrity bypass |
 | **Dimension** | public-tokens / booking |
 | **Location** | `backend/auth_service/routers/booking.py:446-492 (_create_core, ~line 484)`; `backend/auth_service/services/booking_availability.py:138-163 (free_resource_ids_at)` |
@@ -831,10 +895,12 @@ path can never offer a slot the read path would never show.
 
 ## SEC-097 — Website-enrichment SSRF guard is check-then-connect (DNS-rebinding TOCTOU): the IP allow-list check and the fetch resolve DNS independently
 
+> **Status 2026-11-19: FIXED (duplicate of the 2026-10-15 review's SEC-072).** Fixed on dev by **PR #88 (`4f9e9ea`)** before this branch merged up: `website_enrich._resolve_validated_ip` now resolves once, rejects unless every resolved address is public, restricts the port to 80/443, and connects to the *validated IP* (so the socket no longer re-resolves the hostname), closing the rebinding TOCTOU on the initial fetch and every redirect hop. The analysis below is the 2026-10-22 review's independent corroboration, retained as evidence.
+
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (duplicate of SEC-072 — PR #88 `4f9e9ea`) |
 | **Category** | SSRF / outbound request (CWE-367 TOCTOU + SSRF via DNS rebinding) |
 | **Dimension** | ssrf-outbound |
 | **Location** | `backend/auth_service/services/google_places/website_enrich.py:129-151 (assert_public_http_url), 160-166 (_open), 169-181 (fetch_html), 154-157 (_SafeRedirects.redirect_request)`; reached from `services/google_places/importer.py:155-156` via `routers/admin_leads.py:199-245` |
@@ -901,10 +967,12 @@ logic is fine; the defect is that its result is discarded before the real socket
 
 ## SEC-098 — PreToolUse agent guard (push-to-main / prod-SQL / --no-verify) is bypassable via a shell-interpreter wrapper or command substitution
 
+> **Status 2026-11-19: FIXED (duplicate of the 2026-10-15 review's SEC-073).** Fixed on dev by **PR #89 (`e06cf1f`)** before this branch merged up: `guard.mjs` now unwraps shell interpreters (`bash -c '…'`), `env`/`timeout`/`xargs`/`nice`/`setsid`/`ssh` wrappers, `eval`, and `$(…)`/backtick command substitution, re-running the same checks on the inner command and failing closed past a depth bound; `guard.test.mjs` was added. The analysis below is the 2026-10-22 review's independent corroboration, retained as evidence.
+
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (duplicate of SEC-073 — PR #89 `e06cf1f`) |
 | **Category** | Agent guardrail bypass (fails open) |
 | **Dimension** | agent-guardrails |
 | **Location** | `.claude/hooks/guard.mjs:170-211 (checkBash / segments), ~line 174 (prefix strip)` |

@@ -24,6 +24,15 @@
   renders `<CmsIcon icon={readIcon(value)} size=… label=… fallback={<DesignedIcon/>} />` (the
   designed or matching Lucide icon is the fallback and the seed). Only favicon/OG generator assets
   and UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code.
+- Display options (ADR-0013, kit ≥ 1.3.0): each page reads its `<page>_page_options` with
+  `readOptions(raw, defaults)` (defaults = the designed look): at least `background` (`color`) and
+  `content_width` (`select`: `narrow` | `standard` | `wide` | `full`). An arrangement the design
+  supports in more than one way is a `select` (e.g. `image_position`: `top` | `left` | `right` |
+  `hidden`; `layout`); an optional part is a `toggle` (e.g. `show_map`; per-item `show_title` in a
+  repeater). Apply a client colour through a CSS variable on the page wrapper, to the light theme
+  only when the site has a derived dark theme, with text from `inkOn` when the site's ink would
+  fall below 4.5:1. `content_width` widens the text container only; banner/hero images keep their
+  designed size. A title hidden by a toggle keeps an `sr-only` heading.
 - CMS text rendering (kit: `src/lib/cms-rich-text/`, rules in `client-kit/rich-text/README.md`):
   | Use | How |
   |---|---|
@@ -41,4 +50,4 @@
 - Mobile-first Tailwind (default = mobile; `md:`/`lg:`/`xl:` upscale).
 
 **Gate:** Check off a `BUILD_PLAN.md` item ONLY after the section renders correctly for ALL
-locales. Run the motion-animations grep: zero `framer-motion` matches. Every CMS text render site uses `<RichText>`/`plainText`/`splitRichWords`. Every image and content icon in the section has a CMS field behind it.
+locales. Run the motion-animations grep: zero `framer-motion` matches. Every CMS text render site uses `<RichText>`/`plainText`/`splitRichWords`. Every image and content icon in the section has a CMS field behind it. Every option the page reads renders each of its values.
