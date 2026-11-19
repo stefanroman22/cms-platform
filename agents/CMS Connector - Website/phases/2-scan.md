@@ -80,7 +80,7 @@ For each:
   - Suggested `service_key` (snake_case)
   - Suggested `service_type_slug`
   - Source location (`file_path:line` or component name)
-  - For repeaters: full `item_schema` (key, label, type; `hint` on image/icon fields, `surface` on icon fields)
+  - For repeaters and options services: full `item_schema` (key, label, type; `hint` on image/icon fields, `surface` on icon fields, `options`/`default` on option fields)
   - For every image/icon field: the source asset (path, or the icon component / Lucide name) that Phase 4 uploads as the seed, and the hint `{width, height}`
   - `initial_content`: extracted current values
 
@@ -91,7 +91,7 @@ The report MUST list each field's format. Classify like this:
 - Prose the client should be able to format -> `inline` (titles, labels, short lines) or `richtext` (bodies, descriptions, bios, anything that could hold a list).
 - Machine values stay `string`/`url`/plain: URLs, emails, phone numbers, addresses parsed by code, hours, prices used as numbers, alt text, anything feeding `href`/`tel:`/`mailto:`/`Number()`/regex.
 - A per-item URL slug field is type `slug`, never `string`. A `string` slug is machine-translated as prose (EN `laptop repairs and maintenance`, spaces and all); a `slug` field is translated per locale and always stored as lowercase `a-z`, `0-9` and hyphens.
-- Repeater `item_schema` types: `string` (plain), `inline`, `richtext`, `url`, `tags`, `slug`, plus the media types `image` and `icon` (see below).
+- Repeater `item_schema` types: `string` (plain), `inline`, `richtext`, `url`, `tags`, `slug`, plus the media types `image` and `icon` and the option types `toggle`, `select`, `color` (see below).
 - `key_value` entries get a per-entry `formats` map (`plain`/`inline`/`rich`, default `plain`).
 - `text_block` title/body need no config (always inline/rich).
 - Source rich text (Markdown, Portable Text, HTML in the old site) is emitted in `initial_content` as **canonical HTML** (allowed tags only), never Markdown.
@@ -107,6 +107,14 @@ The report MUST list every image, illustration and icon as a field, following th
 - **Every content icon is a CMS icon field** (icons on services, features, items, contact methods and the like; `icon` repeater field) with `surface` set to the theme surface it sits on. UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code. Contact-method icons stay heuristic only where the contact service is `key_value`.
 - Seeds: a repeater `image` field seeds `""` and an `icon` field `null` (stored values must be https URLs); the report names the source asset so Phase 4 uploads it. An animated SVG component stays the in-code fallback.
 - **Every project gets a `general_theme` service** (Section 1 above). Themes, images and icons are never translated.
+
+## Display options (ADR-0013)
+
+Follow the [contract in AGENTS.md](../AGENTS.md#display-options-contract-adr-0013):
+
+- Where the site code calls the kit's `readOptions(...)` (or reads `<page>_page_options`), list one `options` service per page (page tab = that page, `translatable: false`) with its `item_schema` (key, label, type `toggle`/`select`/`color`, `options` on selects, `default` = the code default) and `initial_content: {values: {...}}` equal to the code defaults.
+- A per-item switch or choice the code reads from a repeater item (e.g. `show_title`) is a repeater `toggle`/`select`/`color` field with its `default`.
+- Options are never translated and never hold text or images.
 
 ## Booking Service (only if `booking.detected` is true in the manifest)
 
@@ -184,6 +192,7 @@ User must reply "approved" before Phase 3.
 - One service per editable string, image, or list of items the client realistically maintains.
 - For services lists / menus: examine each item's structure carefully; ensure every per-item field has a corresponding repeater field. Missing a field is the most common Phase 2 bug.
 - Every image, illustration and content icon as an image/icon field with a hint (icons also a `surface`); UI-control icons stay in code.
+- One `<page>_page_options` options service per page whose code reads display options (ADR-0013).
 
 **Never include:**
 - Button / CTA labels

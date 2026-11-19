@@ -43,7 +43,10 @@ from ..services.content_structure import (
     _validate_schema,
     apply_structure_rules,
     normalize_media_fields,
+    normalize_option_fields,
+    normalize_options,
     normalize_slug_fields,
+    validate_options_schema,
 )
 from ..services.password_changed_email import send_password_changed_email
 from ..services.rich_text import RichTextFieldError, field_formats, normalize_content
@@ -70,6 +73,9 @@ STORAGE_BUCKET = "cms-files"
 # Upper bound on concurrent machine-translation calls in one save request.
 MAX_TRANSLATE_WORKERS = 8
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+# Service types whose content is never translated: every save goes through the
+# default locale and is copied to the others (theme: ADR-0011, options: ADR-0013).
+_UNTRANSLATED_TYPES = frozenset({"theme", "options"})
 
 # Which MIME prefix is allowed per service type. None = any type accepted.
 _ALLOWED_MIME: dict[str, str | None] = {
@@ -362,11 +368,12 @@ async def save_service(
     svc_id = svc_result.data["id"]
     service_type = svc_result.data["service_type_slug"]
     now = datetime.now(UTC).isoformat()
-    # A theme is project-wide and never translated (ADR-0011): every save goes
-    # through the default locale and syncs to the others, whatever `?locale=` says.
+    # A theme is project-wide and never translated (ADR-0011), nor are display
+    # options (ADR-0013): every save goes through the default locale and syncs to
+    # the others, whatever `?locale=` says.
     # The response still describes the requested locale (the dashboard caches it there).
     requested_loc = loc
-    if service_type == "theme":
+    if service_type in _UNTRANSLATED_TYPES:
         loc = default_locale
 
     # Load all existing per-locale rows for this service.
@@ -387,7 +394,8 @@ async def save_service(
     # (sanitised + limit-checked) before it is ever persisted or translated.
     # Theme content and repeater image/icon values are validated on every save,
     # whatever the rich-text version (ADR-0011); repeater slug values are stored
-    # slugified.
+    # slugified. Options content and repeater option values are validated too
+    # (ADR-0013).
     version = int(project.get("rich_text_version") or 0)
     d = by_locale.get(default_locale) or {}
     t = by_locale.get(loc) or {}
@@ -405,8 +413,12 @@ async def save_service(
         )
         if service_type == "theme":
             content_in = normalize_theme(content_in, storage_prefix=_storage_prefix(project_slug))
+        elif service_type == "options":
+            content_in = normalize_options(content_in)
         elif service_type == "repeater":
-            content_in = normalize_slug_fields(normalize_media_fields(content_in))
+            content_in = normalize_option_fields(
+                normalize_slug_fields(normalize_media_fields(content_in))
+            )
         if version >= 1:
             content_in = normalize_content(service_type, content_in)
     except StructureError as exc:
@@ -665,6 +677,20 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
             ) from exc
 
+    # An options service requires item_schema made of option fields only (ADR-0013).
+    if body.service_type_slug == "options":
+        if not body.item_schema:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="item_schema is required when creating an options service",
+            )
+        try:
+            validate_options_schema([f.model_dump(exclude_none=True) for f in body.item_schema])
+        except StructureError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
+
     # At most one theme service per project (ADR-0011).
     if body.service_type_slug == "theme":
         existing_theme = (
@@ -711,6 +737,32 @@ async def add_service(project_slug: str, body: ServiceCreateRequest, request: Re
                     "locale": default_locale,
                     "published_content": {"_schema": schema_payload, "items": []},
                     "draft_content": {"_schema": schema_payload, "items": []},
+                    "updated_at": datetime.now(UTC).isoformat(),
+                    "updated_by": user.id,
+                }
+            ).execute()
+
+    # For options: seed the content_entries row with _schema + every default value
+    if body.service_type_slug == "options" and body.item_schema:
+        svc_result = (
+            sb.table("project_services")
+            .select("id")
+            .eq("project_id", project["id"])
+            .eq("service_key", body.service_key)
+            .single()
+            .execute()
+        )
+        if svc_result.data:
+            options_content = normalize_options(
+                {"_schema": [f.model_dump(exclude_none=True) for f in body.item_schema]}
+            )
+            default_locale = project.get("default_locale") or "en"
+            sb.table("content_entries").insert(
+                {
+                    "project_service_id": svc_result.data["id"],
+                    "locale": default_locale,
+                    "published_content": options_content,
+                    "draft_content": options_content,
                     "updated_at": datetime.now(UTC).isoformat(),
                     "updated_by": user.id,
                 }

@@ -174,9 +174,13 @@ class ContentSaveRequest(BaseModel):
 class RepeaterItemField(BaseModel):
     key: str
     label: str
-    type: str  # "string" | "inline" | "richtext" | "url" | "tags" | "slug" | "image" | "icon"
+    # "string" | "inline" | "richtext" | "url" | "tags" | "slug" | "image" | "icon"
+    # | "toggle" | "select" | "color"
+    type: str
     hint: dict | None = None  # image/icon only: {width, height} (ADR-0011)
     surface: str | None = None  # image/icon only: theme surface name (ADR-0011)
+    options: list[dict] | None = None  # select only: [{value, label}] (ADR-0013)
+    default: bool | str | None = None  # toggle/select/color only (ADR-0013)
 
 
 class ServiceCreateRequest(BaseModel):

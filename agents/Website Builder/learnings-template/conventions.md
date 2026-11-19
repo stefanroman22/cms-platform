@@ -221,3 +221,11 @@ Every image and illustration is a CMS image field with a `hint: {width, height}`
 **Rationale:** Clients swap images, icons and fonts themselves; the bundled assets keep the site intact when a field is empty or the CMS is unreachable.
 **Established:** 2026-10-11
 **Source:** ADR-0011
+
+### CMS — display options
+
+Every page reads a `<page>_page_options` set with the kit's `readOptions(raw, defaults)` (kit ≥ 1.3.0); the code defaults are the designed look, so the site renders as designed with no options service. At minimum `background` (`color`) and `content_width` (`select`: `narrow` | `standard` | `wide` | `full`); an arrangement the design supports in more than one way is a `select` (e.g. `image_position`: `top` | `left` | `right` | `hidden`; `layout`), an optional part a `toggle` (e.g. `show_map`; per-item `show_title` in a repeater). Apply a client colour through a CSS variable on the page wrapper, to the light theme only when the site has a derived dark theme, with text from `inkOn` when the site's ink would fall below 4.5:1. `content_width` widens the text container only; banner/hero images keep their designed size. A title hidden by a toggle keeps an `sr-only` heading. Verify every value at mobile/tablet/desktop in light and dark.
+
+**Rationale:** Client layout and appearance requests become choices every site offers, not per-client code forks; the site still decides what each value means.
+**Established:** 2026-11-11
+**Source:** ADR-0013

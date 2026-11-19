@@ -2,14 +2,42 @@ import hashlib
 import hmac
 import json
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 
+from ..core import pg_rate_limit
+from ..core.limiter import client_ip
 from ..services.content_locale import pick_locale_entry
 from ..services.segments import apply_segments, segments_of
 from ..services.supabase_client import get_supabase_admin
 
-router = APIRouter(prefix="/content", tags=["content"])
+
+def _public_read_limit(request: Request) -> None:
+    """SEC-095: shared (cross-instance) per-IP limit on the unauthenticated public
+    content reads. Every route on this router is an unauthenticated read that runs
+    `_resolve_project` (1 service-role query) plus a `project_services` +
+    `content_entries` fetch (1 query), with `Cache-Control: no-cache` and an ETag
+    computed AFTER the queries — so neither the CDN nor the conditional-GET path
+    short-circuits the DB work. Without a cap, an attacker scripting GETs across all
+    known slugs/locales drives unbounded read load at the single shared Supabase
+    instance that serves every tenant (local, preview and prod).
+
+    Backed by the Postgres limiter so it holds across Vercel serverless instances,
+    keyed on the non-spoofable edge client IP. Mirrors booking.py `_public_read_limit`
+    (same 120/60s budget, generous for real client-site traffic) — this is the same
+    amplification class the project already rated medium and fixed for booking reads
+    (SEC-070), applied to the content surface that was left out.
+    """
+    pg_rate_limit.enforce(
+        f"content_read:{client_ip(request)}",
+        limit=120,
+        window_seconds=60,
+        detail="Too many requests. Please slow down and try again.",
+    )
+
+
+# Router-level dependency: every public content read carries the shared per-IP cap.
+router = APIRouter(prefix="/content", tags=["content"], dependencies=[Depends(_public_read_limit)])
 
 # Service types that must NEVER appear in the public response
 _PRIVATE_SERVICE_TYPES = {"email_config"}
@@ -23,8 +51,9 @@ _TS_TYPE_MAP: dict[str, str] = {
     "video": '{ _type: "video"; _label: string; url?: string; poster?: string }',
     "file_download": '{ _type: "file_download"; _label: string; url?: string; filename?: string }',
     "key_value": '{ _type: "key_value"; _label: string; entries?: Record<string, unknown>; _formats?: Record<string, "plain" | "inline" | "rich"> }',
-    "repeater": '{ _type: "repeater"; _label: string; _schema?: Array<{ key: string; label: string; type: string /* "string" | "inline" | "richtext" | "url" | "tags" | "slug" | "image" | "icon" */; hint?: { width: number; height: number }; surface?: string }>; items?: Record<string, unknown>[] }',
+    "repeater": '{ _type: "repeater"; _label: string; _schema?: Array<{ key: string; label: string; type: string /* "string" | "inline" | "richtext" | "url" | "tags" | "slug" | "image" | "icon" | "toggle" | "select" | "color" */; hint?: { width: number; height: number }; surface?: string; options?: { value: string; label: string }[]; default?: boolean | string }>; items?: Record<string, unknown>[] }',
     "theme": '{ _type: "theme"; _label: string; colors?: {name: string; value: string}[]; surfaces?: {name: string; value: string}[]; fonts?: Array<{ family: string; source: "google"; weights: number[]; italic: boolean } | { family: string; source: "upload"; files: { url: string; weight: number; style: "normal" | "italic" }[] } | { family: string; source: "system" }>; body_font?: string; heading_font?: string }',
+    "options": '{ _type: "options"; _label: string; _schema?: Array<{ key: string; label: string; type: "toggle" | "select" | "color"; options?: { value: string; label: string }[]; default?: boolean | string }>; values?: Record<string, boolean | string> }',
 }
 
 

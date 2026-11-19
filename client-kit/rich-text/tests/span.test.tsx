@@ -38,7 +38,7 @@ describe("styled spans in the renderer", () => {
     const { container } = render(
       <RichText value={'<span style="color:#1e5aa8;font-size:1.5em">Hi</span>'} format="inline" />);
     expect(container.innerHTML).toBe(
-      '<span class="cms-rich cms-rich--inline"><span class="cms-rich-style" style="color: rgb(30, 90, 168); font-size: 1.5em;">Hi</span></span>');
+      '<span class="cms-rich cms-rich--inline"><span class="cms-rich-style" style="--cms-color-dark: #6891c5; color: var(--cms-color, #1e5aa8); font-size: 1.5em;">Hi</span></span>');
   });
   it("font-family falls back to the site body font", () =>
     expect(renderToString(<RichText value={"<span style=\"font-family:'Open Sans'\">x</span>"} format="inline" />)).toContain(
@@ -53,7 +53,7 @@ describe("styled spans in the renderer", () => {
     expect(words.map((w) => w.text)).toEqual(["two", "words"]);
     const { container } = render(<>{words.map((w) => <i key={w.key}>{w.node}</i>)}</>);
     expect(container.innerHTML).toBe(
-      '<i><span class="cms-rich-style" style="color: rgb(30, 90, 168);">two</span></i>' +
-      '<i><span class="cms-rich-style" style="color: rgb(30, 90, 168);">words</span></i>');
+      '<i><span class="cms-rich-style" style="--cms-color-dark: #6891c5; color: var(--cms-color, #1e5aa8);">two</span></i>' +
+      '<i><span class="cms-rich-style" style="--cms-color-dark: #6891c5; color: var(--cms-color, #1e5aa8);">words</span></i>');
   });
 });

@@ -52,6 +52,11 @@
   fallback applies). `src/lib/cms-site.ts` exposes the theme, an image accessor per slot (CMS URL,
   else the `public/images/` mock) and the icon values (`readIcon`). Theme colours are
   recommendations; do not drive the site palette from them.
+- Wire display options (ADR-0013, kit ≥ 1.3.0, rules in `AGENTS.md`): `src/lib/cms-site.ts`
+  exposes each page's `<page>_page_options` set through `readOptions(raw, defaults)` with
+  defaults equal to the designed look, so the site renders as designed with no options service.
+  Give every page wrapper a CSS variable for its `background` option and a text-container class
+  per `content_width` value (`narrow` | `standard` | `wide` | `full`).
 - Copy the design's mock images to `public/images/<section>/<filename>`; each keeps the `hint`
   recorded in `_design-manifest.json` (its CMS image field seed and fallback).
 - Copy `agents/Website Builder/learnings-template/*` into the new project's `.learnings/`.
@@ -61,6 +66,6 @@
 **Gate:** `npm run dev` boots (Vite dev server); `/` redirects to `/<default-locale>` via
 React Router; `.learnings/` has all three template files; mock images are in place;
 `src/lib/query.ts` and `src/lib/store.ts` exist; `index.html` first `<script>` is the
-translation shim; `src/lib/cms-rich-text/` exists and `cms-rich.css` is imported in `main.tsx`; `--cms-rich-strong` is defined in `src/index.css` for every surface; `<ThemeStyles>` is in the root layout and the font tokens read `var(--cms-font-body, …)` / `var(--cms-font-heading, …)`.
+translation shim; `src/lib/cms-rich-text/` exists and `cms-rich.css` is imported in `main.tsx`; `--cms-rich-strong` is defined in `src/index.css` for every surface; `<ThemeStyles>` is in the root layout and the font tokens read `var(--cms-font-body, …)` / `var(--cms-font-heading, …)`; every page reads its options through `readOptions`.
 
 **Token tactics:** don't echo full `npm create vite` output; summarize success/failure.

@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-**14** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-11-05.
+**13** finding(s). See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-06-20.
 
 ---
 
@@ -758,67 +758,64 @@ suite: 4640 passed, 5 skipped.
 
 ---
 
-<a id="sec-095"></a>
-
 ## SEC-095 — Public `/content/*` read endpoints have no rate limiter (DB-amplification DoS against the shared prod Supabase)
 
 | | |
 |---|---|
 | **Severity** | medium |
-| **Status** | open |
+| **Status** | ✅ fixed (PR `security/fix-SEC-095-2026-11-07` → dev) |
 | **Category** | Rate limiting / DoS |
 | **Dimension** | public-tokens / ratelimit-dos |
-| **Location** | `backend/auth_service/routers/content.py` (no limiter on `/content/{slug}`, `/{slug}/{locale}`, `/{slug}/types`) |
-| **Reviewer confidence** | high |
-| **Verifier verdict** | confirmed (adjusted: medium) — verified present on current `dev`; not tracked by any prior review |
-| **First seen** | 2026-11-05 |
+| **Location** | `backend/auth_service/routers/content.py` (all public read routes) |
+| **First seen** | 2026-11-05 (weekly review) |
 
 **Description**
 
-The public client-site content API (`routers/content.py`) carries no rate limiting of any kind — it
-imports neither `slowapi`'s `limiter` nor `pg_rate_limit`, and no public read route has a
-`@limiter.limit` decorator, a `Depends(_public_read_limit)`, or a `pg_rate_limit.enforce` call. Each
-request runs `_resolve_project` (1 Supabase query) plus a `project_services` + nested `content_entries`
-fetch (1 query) on the service-role client, and the response is `Cache-Control: no-cache` with the ETag
+The public client-site content API (`routers/content.py`) carried no rate limiting of any kind — it
+imported neither `slowapi`'s `limiter` nor `pg_rate_limit`, and no public read route had a limit
+dependency. Each request runs `_resolve_project` (1 service-role query) plus a `project_services` +
+nested `content_entries` fetch (1 query), and the response is `Cache-Control: no-cache` with the ETag
 computed **after** the queries, so neither the CDN nor the conditional-GET path short-circuits the DB
 work. This is the exact amplification class the project already rates medium and fixed on the booking
-side: `SEC-070` added `Depends(_public_read_limit)` to `/booking/{slug}/availability`, and
-`booking.py`/`forms.py` enforce the shared Postgres limiter on every other public surface — the content
-reads were simply left out.
+side (SEC-070 added `Depends(_public_read_limit)` to `/booking/{slug}/availability`, and
+`booking.py`/`forms.py` enforce the shared Postgres limiter on every other public surface) — the
+content reads were simply left out.
 
 **Attack scenario**
 
-An unauthenticated attacker scripts repeated GETs across all known client slugs/locales. With no per-IP
-or shared cap, aggregate read load is unbounded, hitting the single Supabase instance that (per
-`CLAUDE.md`) serves local, preview **and** prod for every tenant — degrading content APIs platform-wide.
+An unauthenticated attacker scripts repeated GETs across all known client slugs/locales. With no
+per-IP or shared cap, aggregate read load is unbounded, hitting the single Supabase instance that
+serves local, preview **and** prod for every tenant — degrading content APIs platform-wide.
 
-**Evidence**
+**Fix (this run)**
 
-```python
-router = APIRouter(prefix="/content", tags=["content"])
-# ...
-@router.get("/{project_slug}")
-async def get_project_content(project_slug: str, request: Request):
-    project = _resolve_project(project_slug)      # no Depends(_public_read_limit), no enforce()
-```
+Mirror the booking pattern exactly. Added a module-level `_public_read_limit(request)` to
+`content.py` that calls `pg_rate_limit.enforce(f"content_read:{client_ip(request)}", limit=120,
+window_seconds=60, …)`, and attached it as a **router-level** dependency
+(`APIRouter(prefix="/content", …, dependencies=[Depends(_public_read_limit)])`). Every route on this
+router is an unauthenticated read (`/{slug}`, `/{slug}/{locale}`, `/{slug}/types`, and the two
+preview-token `/draft` variants, which also resolve the project against the DB before validating the
+token), so a router-level dependency covers them all with one surgical change. Backed by the shared
+Postgres limiter (`rate_limit_*` RPCs already live in prod from SEC-010/070 — **no migration**), keyed
+on the non-spoofable Vercel edge client IP. Same 120/60s budget as the booking reads — generous for
+real client-site traffic. The limiter runs as a dependency, so it short-circuits with HTTP 429
+**before** any DB work when an IP is over its cap; it fails open on a transient limiter DB error.
 
-**Adversarial verification**
+**Tests added**
 
-Verified on current `dev`: a grep for `limiter`/`pg_rate_limit`/`enforce` in `content.py` returns
-nothing; no public content route carries any limit; `core/limiter.py` builds the global limiter with no
-default limits and no middleware applies a global cap. Directly parallels the already-fixed SEC-070
-(same class, same rating). Confirmed **not** present on any prior weekly-review branch (2026-10-15 /
-2026-10-29 trackers have no content-read finding). The non-spoofable Vercel-edge client IP is the right
-limiter key.
+`backend/auth_service/tests/test_content_ratelimit.py` (5 tests): over-cap 429 short-circuit before
+any DB work on `/content/{slug}`, `/{slug}/{locale}` and `/{slug}/types`; a normal under-cap request
+still returns 200 end-to-end; and the fail-open contract. All FAIL on the pre-fix code and PASS after.
 
-**Exploitability:** Unauthenticated, any/all tenant slugs; availability-only impact (no data read/write
-beyond already-public content). Medium, consistent with the project's own SEC-070 rating of this class.
+**Dependents regression-tested**
 
-**Recommendation**
+`content.py` is mounted in `main.py` and exercised by `test_content.py` and `test_content_structure.py`.
+Ran the **full backend suite: 5157 passed, 5 skipped** (5152 prior + 5 new) — existing content tests
+pass through the limiter unchanged (the limiter's `.rpc()` call is a distinct mock from the `.table()`
+query chain, so it does not perturb their stubbed responses). `ruff` + `black` clean.
 
-Mirror `booking.py`: add the shared cross-instance limiter to every public content read — a
-router-level `dependencies=[Depends(_public_read_limit)]`, or a per-handler
-`pg_rate_limit.enforce(f"content_read:{client_ip(request)}", limit=120, window_seconds=60)`. Mechanical;
-the pattern already exists in-repo.
+**Residual risk:** availability-only class; no data read/write beyond already-public content. The cap
+is per-IP via the edge client IP, consistent with every other public surface. If a distributed
+(many-IP) flood is a concern, that is a platform-wide edge/WAF control, out of scope for this finding.
 
 ---

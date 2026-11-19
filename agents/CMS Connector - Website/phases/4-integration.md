@@ -35,6 +35,7 @@ Phase 6). Otherwise reuse the existing row.
       - **Self-hosted theme fonts:** the font files the report lists (.woff2/.woff/.ttf/.otf) to `general_theme`; then `PUT /projects/<slug>/services/general_theme` again with that font as `{"family", "source": "upload", "files": [{url, weight, style}]}`.
 
       Media fields and the theme are not translated, so one default-locale save per service plus a publish is enough.
+   f. **Options services (ADR-0013).** Each `options` service is created with its `item_schema` (required; the backend seeds `{_schema, values: <defaults>}`), then seeded once in the default locale with `{_schema, values}` (`scan.py` `_options_seed_content`); never per locale, whatever its `translatable` flag says.
 4. **Wire `email_config`** to Resend:
    - Set `destination_email` in the service's content.
    - Confirm backend env vars `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are set on the CMS backend Vercel project. If missing, **halt** and ask the user to set them — do not write `RESEND_API_KEY` from the agent.
@@ -110,7 +111,8 @@ non-text data (images, hours, contact, brand) from **static constants in
    - `image` → a `site.*` url string.
    - `gallery` → a `site.*` url array.
    - `theme` → `site.theme` (the raw `general_theme` content, read with the kit's `readTheme`).
-   - repeater `image`/`icon` fields stay on their items (URL string / icon object); they are
+   - `options` → `site.options.<service_key>` (the raw content, read with the kit's `readOptions`).
+   - repeater `image`/`icon`/`toggle`/`select`/`color` fields stay on their items; they are
      values, not messages, so never pass them through `t()` or translation.
    Inject the non-text services under a dedicated **`site`** namespace in the merged
    messages (brandName / contact / hours / heroImage / aboutImages / galleryImages /
@@ -203,6 +205,8 @@ non-text data (images, hours, contact, brand) from **static constants in
    - **Images:** every image and illustration reads its CMS image field (resolver fallback = the designed asset, or an animated SVG component kept in code). Only the favicon/OG generator assets stay in code.
    - **Icons:** every content icon renders `<CmsIcon icon={readIcon(value)} size=… label=… fallback={<DesignedIcon/>} />`; size it from the layout, colour comes from the icon value or `currentColor`. UI-control icons (menu, close, chevrons, arrows, spinners, form affordances) stay in code. Contact-method icons on a `key_value` contact service stay heuristic.
    - Next-site example pattern: it-global-services `src/app/[locale]/layout.tsx` (ThemeStyles + `next/font` fallback), `src/app/globals.css` (`--font-body: var(--cms-font-body, var(--font-open-sans)), …`), `src/components/ui/ServiceCard.tsx` (CmsIcon with an animated-scene fallback), `src/app/[locale]/services/[slug]/ServicePageContent.tsx` (banner image), `src/lib/cms.ts` (`theme()` accessor).
+
+8. **Display options (ADR-0013).** Follow the [contract in AGENTS.md](../AGENTS.md#display-options-contract-adr-0013): sync kit ≥ 1.3.0; each page reads its options with `readOptions(<page>_page_options content, defaults)` (defaults = the designed look) and maps each value to its own classes / CSS variables; a stored colour reaches CSS only through `readOptions`/`readColor`, with text colour from `inkOn` where the site's ink would fall below 4.5:1. Every option key the code reads is in that service's `item_schema`, and every schema key is read by the code (no inert options).
 
 ### 4.2 — Booking provisioning (only if `booking.detected` in manifest)
 

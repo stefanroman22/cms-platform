@@ -8,6 +8,7 @@ import {
   Download,
   Hash,
   Palette,
+  SlidersHorizontal,
   Box,
   type LucideProps,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   Download,
   Hash,
   Palette,
+  SlidersHorizontal,
 };
 
 interface ServiceIconProps extends LucideProps {
