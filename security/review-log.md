@@ -17,17 +17,17 @@ changed* over time, independent of the per-finding tracker.
   `ba613a1`/`ad00f45`/`87e5eba`, 2026-10-12) and **ADR-0012** (Google Maps lead import — `services/google_places/*`,
   commit `d8d0ec7`, 2026-10-11). Both got their first security review.
 - **New findings (3, all medium, all open):**
-  - **SEC-071** — public booking **create** path (`POST /booking/{slug}`) never re-validates the booking window;
+  - **SEC-096** — public booking **create** path (`POST /booking/{slug}`) never re-validates the booking window;
     `free_resource_ids_at` checks only opening-hours alignment + busy-overlap, so past / beyond-`max_advance` /
     `lead_time`-violating start times are accepted. The reschedule path validates the same window (and says
     "client is not trusted"); create does not. Integrity/availability abuse, bounded by the 5/h per-IP write cap.
-  - **SEC-072** — ADR-0012 website-enrichment SSRF guard is **check-then-connect (DNS-rebinding TOCTOU)**:
+  - **SEC-097** — ADR-0012 website-enrichment SSRF guard is **check-then-connect (DNS-rebinding TOCTOU)**:
     `assert_public_http_url` resolves + validates the host, discards the IP, then `urllib` re-resolves
     independently at connect. Reachable via `POST /admin/leads/google-import` on an attacker-owned Google
     listing. Bounded by admin-only trigger, the HTML-only Content-Type gate (drops the IMDS text/plain target),
     and the Vercel/Lambda runtime where IMDS-over-HTTP is generally unreachable. Verifiers split low/medium →
     recorded **medium (leaning low)**.
-  - **SEC-073** — `.claude/hooks/guard.mjs` PreToolUse guard (the control CLAUDE.md designates for the
+  - **SEC-098** — `.claude/hooks/guard.mjs` PreToolUse guard (the control CLAUDE.md designates for the
     non-negotiable no-push-to-main / no-prod-SQL / no-`--no-verify` rules) only inspects the first token of each
     command segment, so a one-layer wrapper (`bash -c '…'`, `env …`, `$(…)`) defeats all of them and the hook
     fails open (silent). No test coverage for the hook.
@@ -52,9 +52,9 @@ changed* over time, independent of the per-finding tracker.
   run that has the plugins (or by a human) to confirm no drift on the new `cms-files` bucket policies.
 - **Headline + top risks:** No new critical/high; the internet-facing edges held again. The live class-of-risk this
   week is **new-code hardening on ADR-0011/0012**: a reachable (if preconditioned) SSRF-guard bypass on the Google
-  import (SEC-072) and a booking-policy write bypass (SEC-071), plus the agent-guardrail wrapper bypass (SEC-073)
+  import (SEC-097) and a booking-policy write bypass (SEC-096), plus the agent-guardrail wrapper bypass (SEC-098)
   that matters specifically for the autonomous Connector/Website-Builder pipelines. Remediation order:
-  SEC-072 → SEC-073 → SEC-071 → standing low/info queue.
+  SEC-097 → SEC-098 → SEC-096 → standing low/info queue.
 
 ---
 

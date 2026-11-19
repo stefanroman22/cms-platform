@@ -17,7 +17,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `booking.py` — **public** create/availability (unauth surface)
 - [ ] `booking_admin.py` — tenant-scoped admin of bookings/services/hours
 - [ ] `forms.py` — **public** form submission → HTML email build (XSS sink)
-- [ ] `admin_leads.py` / `admin_conversions.py` — admin-only gating; **`admin_leads` Google-import endpoints** (ADR-0012) trigger the server-side website fetch (SSRF, SEC-072)
+- [ ] `admin_leads.py` / `admin_conversions.py` — admin-only gating; **`admin_leads` Google-import endpoints** (ADR-0012) trigger the server-side website fetch (SSRF, SEC-097)
 - [ ] `workspace.py` / `content.py` **upload paths** (ADR-0011) — MIME/extension/content-type validation on image/icon/SVG/font uploads, stored-file key path traversal, public-bucket active-content serving, per-project volume (D-17)
 
 ### Services (`services/`)
@@ -25,7 +25,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `sessions.py` · `auth_service.py` · `admin_keys.py` — token entropy, constant-time compare
 - [ ] `booking_*` (repo, admin_repo, availability, tenant, stats, i18n, email, manage_email, reminder_email) — tenant resolution + IDOR + email injection
 - [ ] `calendar_provider.py` · `google_calendar.py` — outbound + token handling
-- [ ] `google_places/` (ADR-0012 lead import) — `website_enrich.py` **(server-side fetch of lead-supplied URL → SSRF; the `assert_public_http_url` guard must pin the validated IP, SEC-072)**, `client.py`/`photos.py`/`resolve.py` (outbound Google API + short-link expansion), `importer.py`/`mapper.py` (untrusted Google response → DB write; raw `website_uri`/`googleMapsUri` → admin render, SEC-062), `quota.py`
+- [ ] `google_places/` (ADR-0012 lead import) — `website_enrich.py` **(server-side fetch of lead-supplied URL → SSRF; the `assert_public_http_url` guard must pin the validated IP, SEC-097)**, `client.py`/`photos.py`/`resolve.py` (outbound Google API + short-link expansion), `importer.py`/`mapper.py` (untrusted Google response → DB write; raw `website_uri`/`googleMapsUri` → admin render, SEC-062), `quota.py`
 - [ ] `svg_sanitize.py` (ADR-0011) — allow-list rewriter for **every uploaded SVG** before it reaches the public `cms-files` bucket; probe for script/event-handler/`xlink:href`/`foreignObject`/DOCTYPE-entity/CSS-url bypass
 - [ ] `theme.py` · `rich_text.py` · `content_structure.py` · `slug.py` (ADR-0011) — tenant theme/colour/font + rich text serialised to HTML/CSS on **public client sites**; untrusted → style/HTML escaping, font-URL/@font-face injection, `str.format`/regex-DoS in slug/repeater
 - [ ] `content_locale.py` · `segments.py` · `translation/` (provider, deepl, null, protect, sync) — outbound DeepL, untrusted content handling
@@ -61,7 +61,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `codeql.yml` — secret exposure, `${{ }}` injection
 
 ## Agent guardrails (`.claude/`)
-- [ ] `settings.json` + `hooks/guard.mjs` — PreToolUse hooks that block pushes to `main`, `--no-verify` and prod deploys, and ask before prod SQL/migrations: can a command shape bypass them? **(SEC-073: the guard only inspects the first token of each segment, so `bash -c '…'` / `env …` / `$(…)` wrappers defeat every rule — re-check any shell/exec-wrapper's inner command.)**
+- [ ] `settings.json` + `hooks/guard.mjs` — PreToolUse hooks that block pushes to `main`, `--no-verify` and prod deploys, and ask before prod SQL/migrations: can a command shape bypass them? **(SEC-098: the guard only inspects the first token of each segment, so `bash -c '…'` / `env …` / `$(…)` wrappers defeat every rule — re-check any shell/exec-wrapper's inner command.)**
 
 ## Agents (`agents/`)
 - [ ] `CMS Connector - Website/` — imports **client websites** to GitHub; URL/repo validation, prompt injection, output path traversal

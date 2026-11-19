@@ -22,9 +22,9 @@ See the 2026-10-22 note + the full table in [`FINDINGS.md`](./FINDINGS.md) and [
 > `list_tables` and confirm the new `cms-files` bucket policies on the next run that has the plugins.
 
 ### The next things to fix (2026-10-22 remediation order)
-1. **`SEC-072` (medium)** — pin the validated IP into the socket connect in `google_places/website_enrich.py` (resolve once, connect by address with the original Host/SNI), on the initial fetch **and** every redirect hop, and restrict the port to 80/443. Closes the DNS-rebinding SSRF-guard bypass.
-2. **`SEC-073` (medium)** — make `.claude/hooks/guard.mjs` recurse into shell/exec-wrapper inner commands (`bash -c`, `env`, `xargs`, `$(…)`, backticks) and fail **closed** on parse ambiguity; add unit tests. Restores the non-negotiable push-to-main / prod-SQL / `--no-verify` guards for the agent pipelines.
-3. **`SEC-071` (medium)** — re-validate the booking window server-side in the public `POST /booking/{slug}` create path, mirroring the reschedule handler (reject past / beyond-`max_advance` / `lead_time`-violating starts with 422).
+1. **`SEC-097` (medium)** — pin the validated IP into the socket connect in `google_places/website_enrich.py` (resolve once, connect by address with the original Host/SNI), on the initial fetch **and** every redirect hop, and restrict the port to 80/443. Closes the DNS-rebinding SSRF-guard bypass.
+2. **`SEC-098` (medium)** — make `.claude/hooks/guard.mjs` recurse into shell/exec-wrapper inner commands (`bash -c`, `env`, `xargs`, `$(…)`, backticks) and fail **closed** on parse ambiguity; add unit tests. Restores the non-negotiable push-to-main / prod-SQL / `--no-verify` guards for the agent pipelines.
+3. **`SEC-096` (medium)** — re-validate the booking window server-side in the public `POST /booking/{slug}` create path, mirroring the reschedule handler (reject past / beyond-`max_advance` / `lead_time`-violating starts with 422).
 4. **Standing low/info queue:** `SEC-066` (enforce admin-key `scopes`), `SEC-065` (verify the gitleaks binary checksum), `SEC-068` (login-lockout fail-open brake), `SEC-060` (tenant copy as `str.format` string), `SEC-029` (expire cancelled-booking manage tokens), `SEC-062` (href scheme allowlist — now fed by the ADR-0012 importer), `SEC-039` (credentialed-CORS `*.vercel.app` — needs-decision), `SEC-040` (frontend CSP).
 
 ## How to read this folder

@@ -6,11 +6,11 @@
 > new ADR-0011 (project theme / styled rich text / CMS media + SVG/font uploads) and ADR-0012 (Google Maps
 > lead import) code landed 2026-10-11/12. **+3 new findings (0 critical, 0 high, 3 medium, 0 low, 0 info)**,
 > all `open`; **3 candidates adversarially dismissed** (D-15/16/17). **No new critical/high.** New mediums:
-> **SEC-071** (public booking *create* path never re-validates the booking window → past/far-future/lead-time
-> bookings accepted — the reschedule path validates, create does not), **SEC-072** (ADR-0012 website-enrichment
+> **SEC-096** (public booking *create* path never re-validates the booking window → past/far-future/lead-time
+> bookings accepted — the reschedule path validates, create does not), **SEC-097** (ADR-0012 website-enrichment
 > SSRF guard is a check-then-connect **DNS-rebinding TOCTOU** — `assert_public_http_url` resolves and validates
 > the host, then `urllib` re-resolves independently at connect; four finders hit it; bounded by admin-only
-> trigger + HTML-only Content-Type gate + Vercel/Lambda IMDS unreachable), **SEC-073** (the `.claude/hooks/guard.mjs`
+> trigger + HTML-only Content-Type gate + Vercel/Lambda IMDS unreachable), **SEC-098** (the `.claude/hooks/guard.mjs`
 > PreToolUse guard enforcing the non-negotiable no-push-to-main / no-prod-SQL / no-`--no-verify` rules is defeated
 > by a one-layer shell wrapper — `bash -c '…'`, `env …`, `$(…)` — because it only inspects the first token of each
 > segment). **Status reconciliation (20 findings re-verified against the current tree):** `SEC-046` → **fixed**
@@ -21,7 +21,7 @@
 > (the enumeration route now carries `_public_read_limit`; the by-design existence/branding disclosure remains
 > info). Still `open` and re-confirmed present: SEC-015, 016, 029, 039, 040, 047, 051, 055, 060, 061, 062, 065,
 > 066, 068 (SEC-062's scraper source was removed but ADR-0012's importer `mapper.py` reintroduces the same
-> raw-`website_url` → unsanitised-admin-render chain). **Remediation order:** SEC-072 → SEC-073 → SEC-071 → then
+> raw-`website_url` → unsanitised-admin-render chain). **Remediation order:** SEC-097 → SEC-098 → SEC-096 → then
 > the standing low/info queue. **MCP gap:** this cloud run had **no Supabase or Vercel MCP** server attached —
 > `get_advisors`/`list_tables`/`get_project` could not be pulled; the DB layer was reviewed statically from the
 > migration SQL (no new RLS/grant gap found; `2026_10_11_cms_files_bucket_svg_fonts.sql` reviewed). See
@@ -117,7 +117,7 @@ This table is the **source of truth for status**. Detail for each finding lives 
 |---|---|---|---|---|---|
 | 1 | 4 | 16 | 38 | 12 | 71 |
 
-_2026-10-22: +3 medium (SEC-071/072/073). Lifecycle changes this run (counts above are confirmed-historical totals and do not decrement on fixed/obsolete): SEC-046 → fixed; SEC-024, SEC-027, SEC-067 → obsolete; SEC-048 → partially-fixed._
+_2026-10-22: +3 medium (SEC-096/072/073). Lifecycle changes this run (counts above are confirmed-historical totals and do not decrement on fixed/obsolete): SEC-046 → fixed; SEC-024, SEC-027, SEC-067 → obsolete; SEC-048 → partially-fixed._
 
 _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS). The 2026-06-20 review added **12 new findings** (all open), flipped **SEC-050 → fixed** and **SEC-007/023/025/026 → obsolete** (infra removed), and re-confirmed the remaining open items still present. Remediation ongoing — the **Saturday Solver routine** now drains open critical/high/medium automatically via tested PRs._
 
@@ -197,9 +197,9 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-067](findings/info.md#sec-067) | info | New `seo_*` tables inherit full anon/authenticated DML grants from Supabase default ACLs; safe only because RLS is enabled (no explicit REVOKE) | `backend/migrations/2026_06_14_seo_geo.sql:159-167` | supabase-db | obsolete (2026-10-22: all nine seo_* tables dropped CASCADE — `2026_09_27_drop_seo_email_configs_add_gc_jobs.sql`) |
 | [SEC-068](findings/low.md#sec-068) | low | Per-account login lockout fails open on any Postgres error, leaving only per-instance in-memory throttling | `backend/auth_service/core/pg_rate_limit.py:40-55; routers/auth.py:79-96` | authn-session | open |
 | [SEC-070](findings/medium.md#sec-070) | medium | Public booking `/{slug}/availability` omits the shared rate limiter; URL-keyed edge cache is trivially cache-busted → DB + external-calendar amplification DoS | `backend/auth_service/routers/booking.py:436-445,239-317` | ratelimit-dos | ✅ fixed (PR `security/fix-SEC-070-2026-10-10` → dev — `/{slug}/availability` now carries `Depends(_public_read_limit)` like every sibling public read; regression test added) |
-| [SEC-071](findings/medium.md#sec-071) | medium | Public booking **create** path never re-validates the booking window — past/far-future/lead-time-violating bookings accepted (reschedule validates, create does not) | `backend/auth_service/routers/booking.py:446-492; services/booking_availability.py:138-163` | public-tokens | open |
-| [SEC-072](findings/medium.md#sec-072) | medium | ADR-0012 website-enrichment SSRF guard is check-then-connect (**DNS-rebinding TOCTOU**): `assert_public_http_url` validates one DNS resolution, `urllib` re-resolves independently at connect | `backend/auth_service/services/google_places/website_enrich.py:129-181` | ssrf-outbound | open |
-| [SEC-073](findings/medium.md#sec-073) | medium | `.claude/hooks/guard.mjs` PreToolUse guard (no push-to-main / no prod-SQL / no `--no-verify`) bypassable via a one-layer shell wrapper (`bash -c`, `env`, `$(…)`) — only the first token of each segment is inspected | `.claude/hooks/guard.mjs:170-211` | agent-guardrails | open |
+| [SEC-096](findings/medium.md#sec-096) | medium | Public booking **create** path never re-validates the booking window — past/far-future/lead-time-violating bookings accepted (reschedule validates, create does not) | `backend/auth_service/routers/booking.py:446-492; services/booking_availability.py:138-163` | public-tokens | open |
+| [SEC-097](findings/medium.md#sec-097) | medium | ADR-0012 website-enrichment SSRF guard is check-then-connect (**DNS-rebinding TOCTOU**): `assert_public_http_url` validates one DNS resolution, `urllib` re-resolves independently at connect | `backend/auth_service/services/google_places/website_enrich.py:129-181` | ssrf-outbound | open |
+| [SEC-098](findings/medium.md#sec-098) | medium | `.claude/hooks/guard.mjs` PreToolUse guard (no push-to-main / no prod-SQL / no `--no-verify`) bypassable via a one-layer shell wrapper (`bash -c`, `env`, `$(…)`) — only the first token of each segment is inspected | `.claude/hooks/guard.mjs:170-211` | agent-guardrails | open |
 
 > **⚠ Saturday Solver 2026-10-10 — note on SEC-069/070 provenance.** SEC-069 and SEC-070 are
 > findings from the **2026-10-08 weekly review**, which lives on the unmerged

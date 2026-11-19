@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-22 (3 new mediums added this run: SEC-071 booking-window bypass, SEC-072 website-enrich DNS-rebinding SSRF, SEC-073 PreToolUse guard wrapper bypass).
+See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-22 (3 new mediums added this run: SEC-096 booking-window bypass, SEC-097 website-enrich DNS-rebinding SSRF, SEC-098 PreToolUse guard wrapper bypass).
 
 ---
 
@@ -758,9 +758,9 @@ suite: 4640 passed, 5 skipped.
 
 ---
 
-<a id="sec-071"></a>
+<a id="sec-096"></a>
 
-## SEC-071 — Public booking create path never re-validates the booking window (past dates, beyond max_advance, and lead_time all accepted)
+## SEC-096 — Public booking create path never re-validates the booking window (past dates, beyond max_advance, and lead_time all accepted)
 
 | | |
 |---|---|
@@ -827,9 +827,9 @@ path can never offer a slot the read path would never show.
 
 ---
 
-<a id="sec-072"></a>
+<a id="sec-097"></a>
 
-## SEC-072 — Website-enrichment SSRF guard is check-then-connect (DNS-rebinding TOCTOU): the IP allow-list check and the fetch resolve DNS independently
+## SEC-097 — Website-enrichment SSRF guard is check-then-connect (DNS-rebinding TOCTOU): the IP allow-list check and the fetch resolve DNS independently
 
 | | |
 |---|---|
@@ -897,9 +897,9 @@ logic is fine; the defect is that its result is discarded before the real socket
 
 ---
 
-<a id="sec-073"></a>
+<a id="sec-098"></a>
 
-## SEC-073 — PreToolUse agent guard (push-to-main / prod-SQL / --no-verify) is bypassable via a shell-interpreter wrapper or command substitution
+## SEC-098 — PreToolUse agent guard (push-to-main / prod-SQL / --no-verify) is bypassable via a shell-interpreter wrapper or command substitution
 
 | | |
 |---|---|
