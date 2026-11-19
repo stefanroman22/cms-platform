@@ -337,3 +337,71 @@ approved that file); if desired a human could tighten that branch too, but it is
 input and is out of scope for this finding.
 
 ---
+
+## SEC-097 — `guard.mjs` matches interpreters/wrappers by bare token, so an absolute path (`/bin/bash -c …`) defeats the recursive unwrap and bypasses every guardrail
+
+- **Severity:** high · **Dimension:** agent-guardrails · **Status:** open · **Added:** 2026-11-19 (net-new)
+- **Location:** `.claude/hooks/guard.mjs:176-177` (interpreter/strip sets), `:287-316` (`inspectSegment` unwrap)
+
+**Description.** `.claude/hooks/guard.mjs` is the PreToolUse hook that enforces the non-negotiable
+guardrails: H1 (deny `git push` to `main`), H2 (ask before prod SQL / migrations via the Supabase MCP),
+and H4 (deny `--no-verify` / `core.hooksPath` overrides that skip the pre-commit gitleaks scan). The
+SEC-073 fix added a recursive "unwrap" step (`inspectSegment` → `checkBash`) so wrapped commands
+(`bash -c '…'`, `env X=1 git …`, `xargs git …`, command substitution) are peeled and the inner command
+re-inspected. But every interpreter/wrapper lookup compares the **bare first token** with no
+path-basename normalisation:
+
+```js
+const SHELL_INTERPRETERS = new Set(["bash", "sh", "zsh", "dash", "ksh", "ash"]);   // :176
+const STRIP_PREFIXES    = new Set(["sudo", "command", "exec", "nohup"]);           // :177
+...
+function inspectSegment(seg, dir, depth) {
+  while (seg.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(seg[0])) seg = seg.slice(1);
+  while (seg.length && STRIP_PREFIXES.has(seg[0])) seg = seg.slice(1);
+  const [cmd, ...args] = seg;                       // :291 — first token verbatim, never basename'd
+  ...
+    if (SHELL_INTERPRETERS.has(cmd)) { /* re-check the -c string */ }   // :295
+    if (Object.hasOwn(ARGV_WRAPPERS, cmd)) { /* re-peel trailing argv */ }  // :306
+```
+
+Because `cmd` is used verbatim, invoking the same interpreter by **absolute or relative path** makes the
+lookup miss: `/bin/bash -c '…'` has `cmd === "/bin/bash"`, for which `SHELL_INTERPRETERS.has()` is
+`false`, so the inner `-c` string is never re-inspected. The same applies to `/usr/bin/env … git push …`
+(`cmd === "/usr/bin/env"` ∉ `ARGV_WRAPPERS`) and `./bash`, `/bin/sh -c`, etc.
+
+**Attack scenario.** The hook gates Claude's *own* Bash/MCP calls. These agents ingest untrusted
+content (the CMS Connector imports attacker-influenceable client websites; lead records; email
+bodies), so prompt injection that steers the agent into running a crafted shell string is the realistic
+trigger. An injected agent runs:
+
+```
+/bin/bash -c 'git push origin HEAD:main'          # H1 never fires
+/bin/bash -c 'git commit -m x --no-verify'        # H4 never fires
+/usr/bin/env git -c core.hooksPath=/dev/null commit -m x   # H4's -c check is skipped (not re-inspected)
+```
+
+Every guardrail routes through `inspectSegment`, so a single absolute-path shell wrapper neutralises the
+**entire** guard, not one rule.
+
+**Evidence / verification.** Confirmed by re-reading `guard.mjs`: `SHELL_INTERPRETERS`/`STRIP_PREFIXES`
+(`:176-177`) hold bare names; `inspectSegment` (`:288-316`) destructures `const [cmd, ...args] = seg`
+and does `SHELL_INTERPRETERS.has(cmd)` / `Object.hasOwn(ARGV_WRAPPERS, cmd)` with no `path.basename`.
+Adversarial verifier: **CONFIRMED high** ("a single absolute-path shell wrapper neutralises the entire
+guard").
+
+**Severity rationale (honest framing).** This is agent-guardrail **defense-in-depth**, not an
+internet-facing vulnerability: exploiting it requires an already-prompt-injected agent. Two of the three
+bypassed controls have **server-side backstops** — push-to-`main` is additionally blocked by GitHub
+branch protection + the manual promote gate, and committed secrets are re-scanned by the promote-gate
+gitleaks. The **sharp residual is H2**: the Supabase service-role key can run arbitrary SQL against the
+**single shared prod database**, and the guard's "ask the human" is the primary local control there, so
+bypassing it lets an injected agent run destructive/exfil prod SQL without the confirmation prompt. Rated
+high on that basis; a reviewer who weights the server-side backstops may reasonably call it medium.
+
+**Remediation.** Normalise the command token before every interpreter/wrapper lookup — compare
+`path.basename(cmd)` (and reject a token that is a path to a known interpreter), so `/bin/bash`,
+`./sh`, `/usr/bin/env` resolve to `bash`/`sh`/`env`. Add a regression case per wrapper invoked by path.
+This is a surgical change to `inspectSegment`; it is a `.claude/` guardrail edit (not application code),
+so it is **left for a human** per the read-only audit remit.
+
+---

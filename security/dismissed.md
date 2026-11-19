@@ -1,6 +1,6 @@
 # Dismissed findings (false positives / non-issues)
 
-These 14 candidate findings were raised by a finder agent but **adversarially verified as false positives or non-issues**. Kept here so future reviews don't re-raise them. Reviewed 2026-06-07.
+These candidate findings were raised by a finder agent but **adversarially verified as false positives or non-issues**. Kept here so future reviews don't re-raise them. D-01…D-14 reviewed 2026-06-07; **D-15…D-18 added 2026-11-19**.
 
 ---
 
@@ -178,5 +178,37 @@ So on Vercel, the leftmost XFF token is written by the trusted edge (the trust b
 The finding's own recommendation ("take the RIGHTMOST entry") would be actively harmful here: on Vercel the rightmost entry IS the attacker-spoofed value, so adopting it would CREATE the vulnerability the finding claims to fix.
 
 Caveat (separate, pre-existing, not this finding): both limiters are in-memory/per-process — slowapi default storage and bearer_limiter.py's documented process-local Bucket — so on serverless the counters fragment per warm instance. That weakens absolute throttle ceilings but is acknowledged in bearer_limiter.py's docstring and is unrelated to the XFF-spoofing claim under review.
+
+---
+
+## D-15 — Dashboard middleware trusts a 60s verified-cookie fast-path, delaying enforcement of server-side session revocation
+
+- **Claimed severity:** low · **Dimension:** authn-session · **Verdict:** false_positive (2026-11-19) · **Location:** `frontend/src/middleware.ts:86,16,20-28`
+
+**Why dismissed:** The mechanism is real — `middleware.ts:86` admits a request carrying both `sid` and `auth_verified` without re-calling the backend, `VERIFIED_TTL_SECONDS=60` (`:16`), and no server-side revoke clears that frontend cookie. But this is exactly the **already-accepted residual of SEC-019**, which deliberately cut the fast-path TTL from 13 min to 60 s. The 60 s window is a bounded staleness on the *page gate only*; every backend API call still validates the session server-side (`sessions.validate_session` filters `revoked=False`), so a revoked session cannot read or mutate data — it can at most briefly render a cached authenticated *page shell*. No data-access impact; re-raising the accepted 60 s tradeoff as a new finding is not warranted.
+
+---
+
+## D-16 — Public `/content/{slug}/types` endpoint leaks service keys and types of unpublished (draft-only) services
+
+- **Claimed severity:** low · **Dimension:** public-tokens · **Verdict:** false_positive (2026-11-19) · **Location:** `backend/auth_service/routers/content.py:346-351`
+
+**Why dismissed:** The mechanics are real — the `/content/{slug}/types` route emits `service_key: ts_type` for every service except `_PRIVATE_SERVICE_TYPES` (`content.py:347`) with no published-content gate, while the content *payload* endpoint (`get_project_content`) does filter services whose default-locale `published_content is None` (`:188-190`). So the types file can name a service key that has no published content yet. But the endpoint emits only **structural metadata** — a service *key* (an identifier the site build already knows and hard-codes) and its generic TS type (`string`, `Record<string,unknown>`, …) — never any draft *content*, title, or value. Service keys are not secrets (they ship in the client-site TypeScript and public manifest), and "a key exists but isn't published yet" is not sensitive for a single-tenant client site whose own developer requested the types file. No cross-tenant exposure (slug-scoped), no content disclosure. Hardening nit at most, not a finding.
+
+---
+
+## D-17 — Google-Maps short-link expansion does a server-side redirect-following fetch without the SSRF guard its ADR-0012 sibling uses
+
+- **Claimed severity:** low · **Dimension:** ssrf-outbound · **Verdict:** false_positive / hardening-note (2026-11-19) · **Location:** `backend/auth_service/services/google_places/resolve.py:68-75`
+
+**Why dismissed:** `expand_short_link` builds a `urllib.request.Request` and calls `client._urlopen` (plain `urllib.request.urlopen` with the default redirect handler) with no IP pinning — unlike the hardened sibling `website_enrich.fetch_html`, which uses `assert_public_http_url` + a pinned-IP HTTP handler + safe-redirect policy (the SEC-072/073 DNS-rebind hardening). So the observation is accurate. But no live exploit path exists in this deployment: the lead-import surface is **admin-authenticated** (`admin_leads`, `admin_user_via_bearer_or_sid`), the input is classified as a `maps_url`/short-link before expansion (goo.gl-family), the request is a bare GET whose body is never returned to the caller (only the final URL string), and an admin is already the most-trusted actor with the Places API key. This is the same low-value, operator-gated pattern the removed scraper carried as the obsolete SEC-049/052. Recorded as a **hardening opportunity** (route `expand_short_link` through the same `website_enrich` SSRF guard for consistency), not a finding. Noted in `scope-checklist.md`.
+
+---
+
+## D-18 — Untrusted model-output `service_key` interpolated unencoded into admin-authenticated provisioning URL paths (SEC-094 completeness gap)
+
+- **Claimed severity:** low · **Dimension:** ssrf-agents · **Verdict:** false_positive (2026-11-19) · **Location:** `agents/CMS Connector - Website/scan.py:708,749`
+
+**Why dismissed:** The snippet is real — `scan.py:708` is `put_url = f"{base}/projects/{slug}/services/{svc['service_key']}?seed=true"`, interpolating a manifest-derived `service_key` unquoted into the admin-key provisioning URL. But a concrete attack path does not exist because the seed PUT loop only runs for keys that **already passed the preceding server-side service-create validation** — the seed code iterates `created_resource`/`created` keys, so a `service_key` that the backend rejected (or that contained path-traversal/`?`/`#` characters) is never reached by the seed PUT. The server-side create endpoint constrains the key before any URL built from it is used. Operator- and `--provision`-gated throughout. Belt-and-suspenders `urllib.parse.quote(service_key, safe="")` at the interpolation site would be reasonable hardening but closes no live hole.
 
 ---

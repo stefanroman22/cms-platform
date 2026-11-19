@@ -5,23 +5,34 @@ It is built to compound: every review reconciles against it, so over time it tra
 broken, what's been fixed, and what's been judged not-a-problem — and it tells a future
 reviewer (human or agent) exactly what to scan and how.
 
-## Status snapshot — last full review **2026-06-20** (remediation in progress)
+## Status snapshot — last full review **2026-11-19**
 
-| Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **13** | **38** | **12** | **68** | 16 |
+| Critical | High | Medium | Low | Info | Dismissed (false-positive) |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| **1** (fixed) | 5 | 16 | 39 | 12 | 20 |
 
-The 2026-06-07 baseline's headline criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) are **fixed**.
-The 2026-06-20 review found **no new critical/high**; it added **12** lower-severity findings (all `open`) and flipped
-`SEC-050`→fixed and `SEC-007`/`SEC-023`/`SEC-025`/`SEC-026`→obsolete. See the 2026-06-20 note + the full table in
-[`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
+> Absolute counts are **cumulative-approximate** — the dev tracker header was never reconciled with the
+> parallel `SEC-069…095` numbering on the unmerged weekly-review branches (a human-owed reconciliation).
+> Trust the per-row `file:line` + status in [`FINDINGS.md`](./FINDINGS.md), not the header totals.
 
-### The next things to fix (2026-06-20 remediation order)
-1. **`SEC-058` + `SEC-059` (medium)** — move the unauthenticated **booking write paths** and the **marketing `/forms/contact`** endpoint onto the shared Postgres rate limiter; they still use the per-instance in-memory limiter (Resend cost/DoS amplification). Mechanical — the pattern already exists in-repo (`pg_rate_limit`).
-2. **`SEC-057` (medium)** — route the tenant `accent` through the `safe_hex` allowlist in `booking_email._cta_block` (the one email sink the `SEC-045` hardening missed).
-3. **`SEC-029` (low) + `SEC-060` (low)** — expire/invalidate cancelled-booking manage tokens for reads; stop using tenant copy overrides as a `str.format` format string.
-4. **`SEC-006` (medium)** — deny `Write`/`Edit` to `package.json`/lockfiles/`*.sh` during the untrusted Solver step (package-poisoning RCE), or run lint/test from the orchestrator after the agent exits against a clean tree.
-5. **Hygiene:** `SEC-066` (enforce admin-key `scopes`), `SEC-063`/`SEC-064`/`SEC-065` (pin the Solver CLI + actions, verify the gitleaks binary), `SEC-068` (login-lockout fail-open brake). The **Saturday Solver routine** now drains this queue automatically.
+The **2026-11-19 review found no new critical and no cross-tenant IDOR**; injection, XSS/CSS/email, and admin-privilege
+were all clean. The net-new **ADR-0013 display-options** feature (toggle/select/colour fields, options service,
+dark-theme colour variants) introduced no cross-tenant, injection or XSS issue — the colour→CSS path is validated at
+both the backend store boundary (`theme.normalize_hex`) and the kit read boundary (`readColor`). It added **1 high +
+3 medium + 1 low** (`SEC-096…100`), all in the **`.claude/hooks/guard.mjs` agent-guardrail** surface plus one CMS
+Connector prompt-injection. The 2026-06-07 baseline criticals/highs (`SEC-001…004`/`SEC-056`) remain **fixed**;
+`SEC-070/071/072/073/094/095` are fixed on dev. See [`FINDINGS.md`](./FINDINGS.md) + [`review-log.md`](./review-log.md).
+
+### The next things to fix (2026-11-19 remediation order)
+1. **`SEC-097` (high)** — in `guard.mjs`, normalise the command token with `path.basename` before every interpreter/wrapper lookup, so `/bin/bash -c …`, `/usr/bin/env …`, `./sh` resolve to `bash`/`env`/`sh` and the recursive unwrap re-inspects them. One absolute-path shell wrapper currently bypasses **every** guardrail (H1/H2/H4).
+2. **`SEC-100` (medium)** — add `into` to the `sqlIsReadOnly` write classifier so `SELECT … INTO new_table` (CREATE-TABLE-AS) takes the H2 "ask" path against the single shared prod Supabase.
+3. **`SEC-099` + `SEC-098` (medium)** — in H4, deny `GIT_CONFIG_*`/`--config-env` that set `core.hooksPath`, and expand git long-option abbreviations so `--no-verif` is caught.
+4. **`SEC-096` (low)** — pin the booking `owner_notification_email` to the operator-resolved client email (don't trust the model's `destination_email`), and add server-side email-format validation to `SettingsPatch`.
+5. **Hygiene (reconfirmed open):** `SEC-065` (verify the gitleaks binary checksum in `promote.yml`), `SEC-039` (`needs-decision`: split credentialed vs credential-less CORS), `SEC-040` (tighten CSP), `SEC-066`/`SEC-068` backlog.
+
+> **Note:** all five net-new items are `.claude/` guardrail or agent/application-code edits with no unit-testable
+> application seam, so this read-only review **leaves them for a human** (the Saturday Solver routine's auto-fix
+> threshold is application-code C/H/M with a testable seam).
 
 ## How to read this folder
 

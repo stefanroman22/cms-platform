@@ -20,6 +20,9 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `admin_leads.py` / `admin_conversions.py` — admin-only gating
 
 ### Services (`services/`)
+- [ ] `content_structure.py` — **ADR-0013 options + ADR-0011 media structural metadata**: `apply_structure_rules` (is `_schema`/`options`/`default`/`_hint`/`_formats` admin-only on save?), `validate_options_schema`, `normalize_options`/`normalize_option_fields`, `_option_value` colour path (→ `theme.normalize_hex`), `_image_value`/`_icon_value` (`_ICON_UNSAFE_RE` → CSS `url()`/mask sink)
+- [ ] `theme.py` — `normalize_hex` (**the only colour validator reaching client-site CSS**; strict `#([0-9a-fA-F]{3}|{6})` fullmatch), font-family allowlist
+- [ ] `google_places/` (ADR-0012 lead import) — `client.py` (`_request_json`/`fetch_bytes` outbound; URL is a fixed Google endpoint + model/admin-supplied `place_id`/`photo_name`), `resolve.py` `expand_short_link` (**server-side redirect-following GET without the `website_enrich` SSRF guard** — admin-gated, see D-17), `importer.py`
 - [ ] `supabase_client.py` — service-role usage, query builder, anon fallback
 - [ ] `sessions.py` · `auth_service.py` · `admin_keys.py` — token entropy, constant-time compare
 - [ ] `booking_*` (repo, admin_repo, availability, tenant, stats, i18n, email, manage_email, reminder_email) — tenant resolution + IDOR + email injection
@@ -42,6 +45,8 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] Function `search_path` pinning
 
 ## Frontend — Next.js (`frontend/src/`)
+- [ ] `components/dashboard/editors/{OptionFields,OptionsEditor,RepeaterEditor}.tsx` — **ADR-0013** colour/select/toggle field editors (client-set values → validated on backend save)
+- [ ] `lib/cms-rich-text/{options,theme,style}.ts` + `client-kit/rich-text/src/{options,theme,style,CmsIcon}.ts` — the kit's `readOptions`/`readColor`/`colorCss` + `themeCss` (colour/font → CSS var / `@font-face`; confirm `HEX_RE`/`FONT_FAMILY_RE`/`safeUrl` re-validation before every CSS sink)
 - [ ] `app/layout.tsx` — `dangerouslySetInnerHTML` (JSON-LD?) sink
 - [ ] `components/admin/leads/sections/DesignPromptSection.tsx` — `dangerouslySetInnerHTML` sink
 - [ ] `app/embed.js/` + `app/(widget)/` — the embeddable booking widget (cross-origin, postMessage, injected into client pages)
@@ -55,7 +60,7 @@ surfaces here** so coverage keeps pace. Tick boxes are a per-review working aid 
 - [ ] `codeql.yml` — secret exposure, `${{ }}` injection
 
 ## Agent guardrails (`.claude/`)
-- [ ] `settings.json` + `hooks/guard.mjs` — PreToolUse hooks that block pushes to `main`, `--no-verify` and prod deploys, and ask before prod SQL/migrations: can a command shape bypass them?
+- [ ] `settings.json` + `hooks/guard.mjs` — PreToolUse hooks that block pushes to `main`, `--no-verify` and prod deploys, and ask before prod SQL/migrations: can a command shape bypass them? **Known-open bypass classes (2026-11-19):** the `inspectSegment` unwrap matches interpreters/wrappers by **bare token**, so an absolute path (`/bin/bash -c …`, `/usr/bin/env …`) skips the recursive re-check (SEC-097, high); `--no-verify` is exact-match so `--no-verif` slips (SEC-098); `GIT_CONFIG_*`/`--config-env` set `core.hooksPath` (SEC-099); `sqlIsReadOnly` omits `INTO` so `SELECT … INTO` skips the H2 ask (SEC-100). Re-check `SHELL_INTERPRETERS`/`STRIP_PREFIXES`/`ARGV_WRAPPERS` matching and the SQL write-classifier regex each review.
 
 ## Agents (`agents/`)
 - [ ] `CMS Connector - Website/` — imports **client websites** to GitHub; URL/repo validation, prompt injection, output path traversal
