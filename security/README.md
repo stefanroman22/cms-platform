@@ -24,7 +24,7 @@ Connector prompt-injection. The 2026-06-07 baseline criticals/highs (`SEC-001…
 `SEC-070/071/072/073/094/095` are fixed on dev. See [`FINDINGS.md`](./FINDINGS.md) + [`review-log.md`](./review-log.md).
 
 ### The next things to fix (2026-11-19 remediation order)
-1. **`SEC-097` (high)** — in `guard.mjs`, normalise the command token with `path.basename` before every interpreter/wrapper lookup, so `/bin/bash -c …`, `/usr/bin/env …`, `./sh` resolve to `bash`/`env`/`sh` and the recursive unwrap re-inspects them. One absolute-path shell wrapper currently bypasses **every** guardrail (H1/H2/H4).
+1. ~~**`SEC-097` (high)**~~ — **✅ fixed on dev 2026-11-21 (PR #99)**: `guard.mjs` `inspectSegment` now dispatches on `path.basename(cmd)`, so `/bin/bash -c …`, `/usr/bin/env …`, `./sh` resolve to `bash`/`env`/`sh` and the recursive unwrap re-inspects them (8 regression tests, 7 FAIL pre-fix). No action remaining.
 2. **`SEC-100` (medium)** — add `into` to the `sqlIsReadOnly` write classifier so `SELECT … INTO new_table` (CREATE-TABLE-AS) takes the H2 "ask" path against the single shared prod Supabase.
 3. **`SEC-099` + `SEC-098` (medium)** — in H4, deny `GIT_CONFIG_*`/`--config-env` that set `core.hooksPath`, and expand git long-option abbreviations so `--no-verif` is caught.
 4. **`SEC-096` (low)** — pin the booking `owner_notification_email` to the operator-resolved client email (don't trust the model's `destination_email`), and add server-side email-format validation to `SettingsPatch`.

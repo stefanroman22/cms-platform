@@ -286,45 +286,50 @@ function grabBacktick(str, open, found) {
 
 function inspectSegment(seg, dir, depth) {
   while (seg.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(seg[0])) seg = seg.slice(1);
-  while (seg.length && STRIP_PREFIXES.has(seg[0])) seg = seg.slice(1);
+  while (seg.length && STRIP_PREFIXES.has(path.basename(seg[0]))) seg = seg.slice(1);
   const [cmd, ...args] = seg;
   if (!cmd) return dir;
+  // SEC-097: dispatch on the command's basename so an interpreter/wrapper invoked by
+  // absolute or relative path (`/bin/bash -c …`, `/usr/bin/env … git push …`, `./sh`)
+  // still matches here and gets unwrapped. A bare-token lookup misses the path form and
+  // lets the inner command slip past every guardrail.
+  const name = path.basename(cmd);
 
   if (depth < MAX_DEPTH) {
     // Shell interpreter: re-check the -c string (also -lc, -ic, … bundles ending in c).
-    if (SHELL_INTERPRETERS.has(cmd)) {
+    if (SHELL_INTERPRETERS.has(name)) {
       const ci = args.findIndex((a) => /^-[A-Za-z]*c$/.test(a));
       if (ci !== -1 && args[ci + 1] != null) checkBash(args[ci + 1], dir, depth + 1);
       return dir;
     }
     // eval: its arguments are concatenated and re-parsed as a command.
-    if (cmd === "eval") {
+    if (name === "eval") {
       checkBash(args.join(" "), dir, depth + 1);
       return dir;
     }
     // env/timeout/xargs/nice/…: the trailing argv is the real command — re-peel it.
-    if (Object.hasOwn(ARGV_WRAPPERS, cmd)) {
-      const inner = innerArgvOf(cmd, args);
+    if (Object.hasOwn(ARGV_WRAPPERS, name)) {
+      const inner = innerArgvOf(name, args);
       if (inner.length) inspectSegment(inner, dir, depth + 1);
       return dir;
     }
-    if (cmd === "ssh") {
+    if (name === "ssh") {
       const remote = sshRemoteCommand(args);
       if (remote) checkBash(remote, dir, depth + 1);
       return dir;
     }
   }
 
-  if (cmd === "cd" || cmd === "pushd") {
+  if (name === "cd" || name === "pushd") {
     if (args[0]) dir = path.resolve(dir, args[0].replace(/^~(?=$|\/)/, process.env.HOME ?? "~"));
     return dir;
   }
-  if (cmd === "git") checkGit(args, dir);
+  if (name === "git") checkGit(args, dir);
 
   // H1: no production deploy from a laptop; `vercel rollback` stays allowed for incidents.
   const vercelArgs =
-    cmd === "vercel" ? args : cmd === "npx" ? args.slice(args.findIndex((a) => a === "vercel") + 1) : null;
-  if (vercelArgs && (cmd === "vercel" || args.includes("vercel"))) {
+    name === "vercel" ? args : name === "npx" ? args.slice(args.findIndex((a) => a === "vercel") + 1) : null;
+  if (vercelArgs && (name === "vercel" || args.includes("vercel"))) {
     const prodFlag = vercelArgs.some(
       (a, j) => a === "--prod" || a === "--prod=true" || a === "--target=production" ||
         (a === "--target" && vercelArgs[j + 1] === "production"),
@@ -340,8 +345,8 @@ function inspectSegment(seg, dir, depth) {
   // H2: one Supabase database serves local, preview and prod — writes hit production.
   const tail = seg.join(" ");
   if (
-    cmd === "psql" ||
-    (cmd === "supabase" && /\b(db (push|reset)|migration up)\b/.test(tail)) ||
+    name === "psql" ||
+    (name === "supabase" && /\b(db (push|reset)|migration up)\b/.test(tail)) ||
     seg.some((a) => /apply_supabase_migration\.py$/.test(a))
   )
     decide(
