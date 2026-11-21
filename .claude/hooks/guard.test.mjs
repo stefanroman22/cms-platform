@@ -69,6 +69,33 @@ test("H2 migration survives a command substitution", () => {
   assert.equal(decide("echo $(python scripts/apply_supabase_migration.py drop.sql)"), "ask");
 });
 
+// --- SEC-097: an interpreter/wrapper invoked by absolute/relative path must not
+//     defeat the recursive unwrap (dispatch is basename-normalised). ---
+test("SEC-097 H1 survives /bin/bash -c (absolute interpreter path)", () => {
+  assert.equal(decide("/bin/bash -c 'git push origin main'"), "deny");
+});
+test("SEC-097 H1 survives /usr/bin/env prefix (absolute wrapper path)", () => {
+  assert.equal(decide("/usr/bin/env git push origin main"), "deny");
+});
+test("SEC-097 H1 survives ./sh -c (relative interpreter path)", () => {
+  assert.equal(decide("./sh -c \"git push origin main\""), "deny");
+});
+test("SEC-097 H1 survives git invoked by absolute path", () => {
+  assert.equal(decide("/usr/bin/git push origin main"), "deny");
+});
+test("SEC-097 H4 survives /usr/bin/env + -c core.hooksPath", () => {
+  assert.equal(decide("/usr/bin/env git -c core.hooksPath=/dev/null commit -m x"), "deny");
+});
+test("SEC-097 H4 --no-verify survives /bin/bash -c wrapper", () => {
+  assert.equal(decide("/bin/bash -c 'git commit --no-verify -m wip'"), "deny");
+});
+test("SEC-097 H2 migration survives /bin/sh -c wrapper", () => {
+  assert.equal(decide("/bin/sh -c 'python scripts/apply_supabase_migration.py drop.sql'"), "ask");
+});
+test("SEC-097 no false positive: a non-special binary by path stays silent", () => {
+  assert.equal(decide("/usr/bin/echo hello world"), null);
+});
+
 // --- No false positives: benign and quote-suppressed cases must stay silent. ---
 test("single-quoted substitution is not executed → silent", () => {
   assert.equal(decide("echo 'literal $(git push origin main)'"), null);
