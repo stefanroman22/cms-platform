@@ -102,8 +102,13 @@ function checkGit(args, dir) {
   const rest = args.slice(i + 1);
 
   // H4: never bypass the pre-commit hook (gitleaks is the only pre-push secret scan).
-  if ((sub === "commit" || sub === "push") && rest.includes("--no-verify"))
-    decide("deny", "Guardrail H4: --no-verify skips the pre-commit hook and its gitleaks scan.");
+  // Git accepts any unambiguous abbreviation of a long option, so `--no-veri` / `--no-verif`
+  // expand to --no-verify without containing the literal string (SEC-098). Deny the whole
+  // `--no-v…` prefix family of --no-verify; shorter/ambiguous forms git itself rejects, and
+  // --no-verbose abbreviations (`--no-verb…`) are not prefixes of --no-verify, so stay allowed.
+  const isNoVerify = (t) => t.length >= 6 && "--no-verify".startsWith(t);
+  if ((sub === "commit" || sub === "push") && rest.some(isNoVerify))
+    decide("deny", "Guardrail H4: --no-verify (or an abbreviation) skips the pre-commit hook and its gitleaks scan.");
   if (sub === "commit") {
     const valueFlags = new Set(["-m", "-F", "-C", "-c", "-t", "--author", "--date", "--message", "--file"]);
     for (let j = 0; j < rest.length; j++) {

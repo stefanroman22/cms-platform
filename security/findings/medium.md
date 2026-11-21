@@ -820,6 +820,62 @@ is per-IP via the edge client IP, consistent with every other public surface. If
 
 ---
 
+## SEC-098 — `guard.mjs` H4 `--no-verify` block is exact-match; git's `--no-veri`/`--no-verif` abbreviation bypasses the pre-commit secret-scan deny
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | ✅ fixed (PR `security/fix-SEC-098-2026-11-21` → dev) |
+| **Category** | Agent-guardrail bypass (defense-in-depth) |
+| **Dimension** | agent-guardrails |
+| **Location** | `.claude/hooks/guard.mjs:104-111` |
+| **First seen** | 2026-11-19 (weekly review branch; net-new, not previously on the dev tracker) |
+
+**Description**
+
+H4 denies commits/pushes that skip the pre-commit hook (gitleaks is the only secret scan before
+push). The check was an exact-string membership test on raw argv:
+`if ((sub === "commit" || sub === "push") && rest.includes("--no-verify")) decide("deny", …)`.
+git's `parse-options` accepts any **unambiguous abbreviation** of a long option, so the `--no-veri` /
+`--no-verif` forms expand to the full flag but do not contain the literal token, so the deny never
+fired and the commit was created with the hook skipped.
+
+**Evidence.** Empirically confirmed on the repo's git: the `--no-veri` and `--no-verif` forms exit 0
+with the pre-commit hook skipped; `--no-ver` and shorter are rejected as ambiguous
+(`could be --no-verbose or --no-verify`).
+
+**Attack scenario**
+
+An agent induced (e.g. via prompt injection in untrusted imported client-site content) to bypass the
+secret scan runs the abbreviated flag on a commit/push; the local gitleaks scan is skipped.
+
+**Fix (this run)**
+
+H4 now denies any token that is a prefix of the full flag of length ≥ 6:
+`const isNoVerify = (t) => t.length >= 6 && "--no-verify".startsWith(t);` applied with `rest.some(…)`.
+This covers every abbreviation git accepts; the shorter ambiguous forms git itself rejects.
+`--no-verbose` abbreviations (`--no-verb…`) are **not** prefixes of the full flag, so legit verbose
+toggles are unaffected (no false positive), and a commit message that merely mentions the flag is a
+single quoted token, not a prefix, so it stays allowed.
+
+**Test added**
+
+`.claude/hooks/guard.test.mjs` — 6 new "SEC-098" cases: deny the two abbreviated forms, the push
+form, and the abbreviated form inside a `bash -c` wrapper; plus two no-false-positive cases
+(`--no-verb` → silent; a `-m` message mentioning the flag → silent). The 4 bypass cases FAIL on the
+pre-fix guard and PASS after.
+
+**Dependents regression-tested**
+
+Standalone hook (no importers). Full `node --test .claude/hooks/guard.test.mjs` → **34 tests green**
+(28 prior + 6 new), including the SEC-073/097 wrapper regressions.
+
+**Residual risk:** defense-in-depth; the production promote gate re-runs gitleaks server-side, so
+secrets reaching prod stay backstopped. This restores the local first barrier. The companion
+config-channel bypass (`GIT_CONFIG_*` / `core.hooksPath`) is tracked separately as SEC-099.
+
+---
+
 <a id="2026-10-22-corroboration"></a>
 
 # 2026-10-22 review — corroborating detail (all three findings already fixed on dev)
