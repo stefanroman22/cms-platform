@@ -19,14 +19,14 @@ changed* over time, independent of the per-finding tracker.
 - **Findings (3 medium) — on merge-up all proved to be already-filed, already-fixed duplicates.** The 2026-10-22
   review independently surfaced the three mediums below, but when this branch was merged to current `dev`
   (2026-11-19) each turned out to match a finding the **2026-10-15 review** had already filed, and all three were
-  **already fixed on dev**: SEC-096 → PR #90 (`03a7aee`), SEC-097 (= 2026-10-15 SEC-072) → PR #88 (`4f9e9ea`),
+  **already fixed on dev**: SEC-096 → PR #90 (`03a7aee`), SEC-099 (= 2026-10-15 SEC-072) → PR #88 (`4f9e9ea`),
   SEC-098 (= 2026-10-15 SEC-073) → PR #89 (`e06cf1f`). So this run's net-new open count is **zero**; the entries are
   retained as independent corroboration. The three findings (as recorded):
   - **SEC-096** — public booking **create** path (`POST /booking/{slug}`) never re-validates the booking window;
     `free_resource_ids_at` checks only opening-hours alignment + busy-overlap, so past / beyond-`max_advance` /
     `lead_time`-violating start times are accepted. The reschedule path validates the same window (and says
     "client is not trusted"); create does not. Integrity/availability abuse, bounded by the 5/h per-IP write cap.
-  - **SEC-097** — ADR-0012 website-enrichment SSRF guard is **check-then-connect (DNS-rebinding TOCTOU)**:
+  - **SEC-099** — ADR-0012 website-enrichment SSRF guard is **check-then-connect (DNS-rebinding TOCTOU)**:
     `assert_public_http_url` resolves + validates the host, discards the IP, then `urllib` re-resolves
     independently at connect. Reachable via `POST /admin/leads/google-import` on an attacker-owned Google
     listing. Bounded by admin-only trigger, the HTML-only Content-Type gate (drops the IMDS text/plain target),
@@ -61,9 +61,11 @@ changed* over time, independent of the per-finding tracker.
   #89). The value of this run is the independent corroboration of those fixes plus the reconciliation (SEC-046
   fixed; SEC-024/027/067 obsolete; SEC-048 partial) and the 3 adversarial dismissals. No remediation is outstanding
   from this run beyond the standing low/info queue.
-- **Merge note (2026-11-19):** this branch was merged up to current `dev` before landing; its three findings were
-  renumbered SEC-071/072/073 → SEC-096/097/098 to avoid colliding with the 2026-10-15/11-05 review rows
-  (SEC-071…095) already on dev, and then marked fixed-duplicate once the dev fixes were confirmed present. The
+- **Merge note (2026-11-19, updated 2026-11-21):** this branch was merged up to current `dev` before landing; its
+  three findings were renumbered SEC-071/072/073 → SEC-096/098/099 to avoid colliding with the 2026-10-15/11-05
+  review rows (SEC-071…095) and `dev`'s net-new SEC-097 (guard-basename bypass, PR #99) — booking-window = SEC-096,
+  guard-wrapper = SEC-098, website-enrich SSRF = SEC-099 (first placed at SEC-097, re-bumped to SEC-099 on 2026-11-21
+  when dev took SEC-097). All three were marked fixed-duplicate once the dev fixes were confirmed present. The
   cross-branch ID collapse remains a human task (as the tracker's standing notes say).
 
 ---

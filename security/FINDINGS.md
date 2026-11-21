@@ -2,14 +2,17 @@
 
 **Last full review:** 2026-10-22 · **Reviewer:** multi-agent workflow (14 dimensions, adversarial verification) · **Supabase:** xeluydwpgiddbamysgyu · **Confirmed:** 71 (2026-10-22 review scope) · **Dismissed (false-positive):** 19
 
-> **⚠ Merge note (2026-11-19).** This 2026-10-22 review branch was merged up to current `dev`, which in the
-> interim gained the 2026-10-15 review's rows (SEC-071…093, detail authoritative on
-> `origin/security/weekly-review-2026-10-15`) and the 2026-11-05 review's SEC-094/095. To avoid the
-> cross-branch ID collision documented throughout this file, **this review's three findings were renumbered
-> SEC-071/072/073 → SEC-096/097/098** (above `dev`'s then-highest SEC-095). The header `Confirmed`/counts
-> below reflect the 2026-06-20 baseline + this review's +3 mediums; the merged SEC-071…095 rows are tracked
-> as rows/notes but **not yet folded into the severity totals** — a single cross-branch recount is still owed
-> to a human (see the repeated reconciliation notes below).
+> **⚠ Merge note (2026-11-19, updated 2026-11-21).** This 2026-10-22 review branch was merged up to current
+> `dev`, which in the interim gained the 2026-10-15 review's rows (SEC-071…093, detail authoritative on
+> `origin/security/weekly-review-2026-10-15`), the 2026-11-05 review's SEC-094/095, and the 2026-11-21
+> fix of a net-new **SEC-097** (guard.mjs basename bypass, high, PR #99). To avoid the cross-branch ID
+> collisions documented throughout this file, **this review's three findings were renumbered
+> SEC-071/072/073 → SEC-096/098/099**: booking-window = **SEC-096**, guard-wrapper = **SEC-098**, and the
+> website-enrich SSRF was first put at SEC-097 then **re-bumped to SEC-099** on 2026-11-21 once `dev` took
+> SEC-097 for the (unrelated) guard-basename finding. The header `Confirmed`/counts below reflect the
+> 2026-06-20 baseline + this review's +3 mediums; the merged SEC-071…097 rows are tracked as rows/notes but
+> **not yet folded into the severity totals** — a single cross-branch recount is still owed to a human (see
+> the repeated reconciliation notes below).
 
 > **2026-10-22 — Weekly full review (multi-agent, find → adversarial verify → reconcile).** Target: the
 > new ADR-0011 (project theme / styled rich text / CMS media + SVG/font uploads) and ADR-0012 (Google Maps
@@ -17,11 +20,11 @@
 > independently surfaced three mediums on the ADR-0011/0012 code — but on merge-up (2026-11-19) all three
 > proved to be **the same findings the 2026-10-15 review already filed, and all three are already fixed on
 > dev**: **SEC-096** = public booking *create* path missing the booking-window re-validation → **fixed** by
-> PR #90 (`03a7aee`); **SEC-097** = ADR-0012 website-enrichment **DNS-rebinding TOCTOU** SSRF (= 2026-10-15
+> PR #90 (`03a7aee`); **SEC-099** = ADR-0012 website-enrichment **DNS-rebinding TOCTOU** SSRF (= 2026-10-15
 > SEC-072) → **fixed** by PR #88 (`4f9e9ea`, IP-pinning + 80/443 allowlist); **SEC-098** = `.claude/hooks/guard.mjs`
 > one-layer-wrapper bypass of the non-negotiable push-to-main / prod-SQL / `--no-verify` guards (= 2026-10-15
 > SEC-073) → **fixed** by PR #89 (`e06cf1f`, unwraps shell/`env`/`xargs`/`$(…)` and fails closed; `guard.test.mjs`
-> added). Recorded as SEC-096/097/098 (duplicate, fixed) so the independent corroboration + adversarial detail
+> added). Recorded as SEC-096/098/099 (duplicate, fixed) so the independent corroboration + adversarial detail
 > are preserved; a human should collapse them into the 2026-10-15 IDs. Also this run: **3 candidates
 > adversarially dismissed** (D-15/16/17). **Status reconciliation (20 findings re-verified against the then-current tree):** `SEC-046` → **fixed**
 > (`deps.py` now wraps the Bearer path in `UserOut` before any authZ check); `SEC-024` → **obsolete**
@@ -31,7 +34,7 @@
 > (the enumeration route now carries `_public_read_limit`; the by-design existence/branding disclosure remains
 > info). Still `open` and re-confirmed present: SEC-015, 016, 029, 039, 040, 047, 051, 055, 060, 061, 062, 065,
 > 066, 068 (SEC-062's scraper source was removed but ADR-0012's importer `mapper.py` reintroduces the same
-> raw-`website_url` → unsanitised-admin-render chain). **Remediation order:** SEC-097 → SEC-098 → SEC-096 → then
+> raw-`website_url` → unsanitised-admin-render chain). **Remediation order:** SEC-099 → SEC-098 → SEC-096 → then
 > the standing low/info queue. **MCP gap:** this cloud run had **no Supabase or Vercel MCP** server attached —
 > `get_advisors`/`list_tables`/`get_project` could not be pulled; the DB layer was reviewed statically from the
 > migration SQL (no new RLS/grant gap found; `2026_10_11_cms_files_bucket_svg_fonts.sql` reviewed). See
@@ -127,7 +130,7 @@ This table is the **source of truth for status**. Detail for each finding lives 
 |---|---|---|---|---|---|
 | 1 | 4 | 16 | 38 | 12 | 71 |
 
-_2026-10-22: the review's three mediums (SEC-096/097/098) are duplicates of the 2026-10-15 review's findings and are all already **fixed** on dev (PRs #90/#88/#89) — zero net-new open findings, so the severity table is unchanged by this run (the "16 medium / 71 total" figure above is the 2026-06-20 baseline + these 3 recorded-but-fixed duplicates; the merged SEC-071…095 rows are still not folded in — human recount pending). Lifecycle changes this run: SEC-046 → fixed; SEC-024, SEC-027, SEC-067 → obsolete; SEC-048 → partially-fixed._
+_2026-10-22: the review's three mediums (SEC-096/098/099) are duplicates of the 2026-10-15 review's findings and are all already **fixed** on dev (PRs #90/#88/#89) — zero net-new open findings, so the severity table is unchanged by this run (the "16 medium / 71 total" figure above is the 2026-06-20 baseline + these 3 recorded-but-fixed duplicates; the merged SEC-071…095 rows are still not folded in — human recount pending). Lifecycle changes this run: SEC-046 → fixed; SEC-024, SEC-027, SEC-067 → obsolete; SEC-048 → partially-fixed._
 
 _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS). The 2026-06-20 review added **12 new findings** (all open), flipped **SEC-050 → fixed** and **SEC-007/023/025/026 → obsolete** (infra removed), and re-confirmed the remaining open items still present. Remediation ongoing — the **Saturday Solver routine** now drains open critical/high/medium automatically via tested PRs._
 
@@ -211,7 +214,7 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-094](findings/high.md#sec-094) | high | CMS Connector uses the model-returned `project_slug` raw as the provisioning/admin-URL target (prompt-injection → cross-tenant provisioning via the admin key) | `agents/CMS Connector - Website/scan.py:1098-1108 (scan branch), :611 (_provision), :785 (_vercel_setup)` | agents | ✅ fixed (PR `security/fix-SEC-094-2026-11-07` → dev — scan branch now pins `manifest["project_slug"] = slug` (the operator `--slug`) exactly as `cms_endpoint` is pinned, so a model echo can no longer redirect admin-key provisioning at another tenant; regression test added) |
 | [SEC-095](findings/medium.md#sec-095) | medium | Public `/content/*` read endpoints have no rate limiter (unauthenticated DB-amplification DoS against the single shared prod Supabase) | `backend/auth_service/routers/content.py` (all public read routes) | ratelimit-dos | ✅ fixed (PR `security/fix-SEC-095-2026-11-07` → dev — router-level `Depends(_public_read_limit)` on the content router, shared Postgres limiter keyed on edge client IP (120/60s), mirroring booking.py / SEC-070; regression tests added) |
 | [SEC-096](findings/medium.md#sec-096) | medium | Public booking **create** path never re-validates the booking window — past/far-future/lead-time-violating bookings accepted (reschedule validates, create does not) | `backend/auth_service/routers/booking.py:446-492; services/booking_availability.py:138-163` | public-tokens | ✅ fixed — **duplicate of the 2026-10-15 review's booking-window finding**, already fixed on dev by PR #90 (`03a7aee`: `_create_core` now rejects starts outside `lead_time_min`..`max_advance_days` with a 422). Independently re-confirmed by the 2026-10-22 review. |
-| [SEC-097](findings/medium.md#sec-097) | medium | ADR-0012 website-enrichment SSRF guard is check-then-connect (**DNS-rebinding TOCTOU**): `assert_public_http_url` validates one DNS resolution, `urllib` re-resolves independently at connect | `backend/auth_service/services/google_places/website_enrich.py:129-181` | ssrf-outbound | ✅ fixed — **duplicate of the 2026-10-15 review's SEC-072**, already fixed on dev by PR #88 (`4f9e9ea`: `_resolve_validated_ip` pins the connect to the validated IP + restricts ports to 80/443). Independently re-confirmed by the 2026-10-22 review. |
+| [SEC-099](findings/medium.md#sec-099) | medium | ADR-0012 website-enrichment SSRF guard is check-then-connect (**DNS-rebinding TOCTOU**): `assert_public_http_url` validates one DNS resolution, `urllib` re-resolves independently at connect | `backend/auth_service/services/google_places/website_enrich.py:129-181` | ssrf-outbound | ✅ fixed — **duplicate of the 2026-10-15 review's SEC-072**, already fixed on dev by PR #88 (`4f9e9ea`: `_resolve_validated_ip` pins the connect to the validated IP + restricts ports to 80/443). Independently re-confirmed by the 2026-10-22 review. |
 | [SEC-098](findings/medium.md#sec-098) | medium | `.claude/hooks/guard.mjs` PreToolUse guard (no push-to-main / no prod-SQL / no `--no-verify`) bypassable via a one-layer shell wrapper (`bash -c`, `env`, `$(…)`) — only the first token of each segment is inspected | `.claude/hooks/guard.mjs:170-211` | agent-guardrails | ✅ fixed — **duplicate of the 2026-10-15 review's SEC-073**, already fixed on dev by PR #89 (`e06cf1f`: guard unwraps shell interpreters / `env`·`timeout`·`xargs` / `$(…)` and fails closed; `guard.test.mjs` added). Independently re-confirmed by the 2026-10-22 review. |
 
 > **Saturday Solver 2026-11-07 — SEC-094 / SEC-095 provenance (net-new on the 2026-11-05 review).**

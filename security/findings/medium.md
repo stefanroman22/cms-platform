@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-22; the three mediums it recorded (SEC-096 booking-window, SEC-097 website-enrich DNS-rebinding SSRF, SEC-098 PreToolUse guard wrapper bypass) turned out to duplicate the 2026-10-15 review's findings and are all already **fixed** on dev (PRs #90/#88/#89) — kept as evidence of independent corroboration.
+See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-22; the three mediums it recorded (SEC-096 booking-window, SEC-099 website-enrich DNS-rebinding SSRF, SEC-098 PreToolUse guard wrapper bypass) turned out to duplicate the 2026-10-15 review's findings and are all already **fixed** on dev (PRs #90/#88/#89) — kept as evidence of independent corroboration.
 
 ---
 
@@ -891,9 +891,9 @@ path can never offer a slot the read path would never show.
 
 ---
 
-<a id="sec-097"></a>
+<a id="sec-099"></a>
 
-## SEC-097 — Website-enrichment SSRF guard is check-then-connect (DNS-rebinding TOCTOU): the IP allow-list check and the fetch resolve DNS independently
+## SEC-099 — Website-enrichment SSRF guard is check-then-connect (DNS-rebinding TOCTOU): the IP allow-list check and the fetch resolve DNS independently
 
 > **Status 2026-11-19: FIXED (duplicate of the 2026-10-15 review's SEC-072).** Fixed on dev by **PR #88 (`4f9e9ea`)** before this branch merged up: `website_enrich._resolve_validated_ip` now resolves once, rejects unless every resolved address is public, restricts the port to 80/443, and connects to the *validated IP* (so the socket no longer re-resolves the hostname), closing the rebinding TOCTOU on the initial fetch and every redirect hop. The analysis below is the 2026-10-22 review's independent corroboration, retained as evidence.
 

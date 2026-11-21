@@ -14,7 +14,7 @@ reviewer (human or agent) exactly what to scan and how.
 The 2026-06-07 baseline's headline criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) are **fixed**.
 The **2026-10-22** review found **no new critical/high and zero net-new open findings**: the three mediums it
 surfaced on the new ADR-0011/0012 code all turned out — on merge-up — to duplicate the **2026-10-15** review's
-findings and are **already fixed on dev** (SEC-096 booking-window → PR #90; SEC-097 website-enrich DNS-rebinding
+findings and are **already fixed on dev** (SEC-096 booking-window → PR #90; SEC-099 website-enrich DNS-rebinding
 SSRF → PR #88; SEC-098 guard.mjs wrapper bypass → PR #89). It also dismissed 3 candidates (D-15/16/17), flipped
 `SEC-046`→**fixed** and `SEC-024`/`SEC-027`/`SEC-067`→**obsolete**, and marked `SEC-048`→partially-fixed. (Counts
 above are the 2026-06-20 baseline + these 3 recorded-but-fixed duplicate mediums; the merged SEC-071…095 rows are
