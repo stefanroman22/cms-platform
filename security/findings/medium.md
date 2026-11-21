@@ -2,7 +2,7 @@
 
 _Schedule soon. Reflected XSS, CSRF, info disclosure, weak rate limiting, or authZ gaps on writes._
 
-See [`../FINDINGS.md`](../FINDINGS.md) for live status. Reviewed 2026-10-22; the three mediums it recorded (SEC-096 booking-window, SEC-099 website-enrich DNS-rebinding SSRF, SEC-098 PreToolUse guard wrapper bypass) turned out to duplicate the 2026-10-15 review's findings and are all already **fixed** on dev (PRs #90/#88/#89) — kept as evidence of independent corroboration.
+See [`../FINDINGS.md`](../FINDINGS.md) for live status. The 2026-10-22 review's three mediums (booking-window, website-enrich DNS-rebinding SSRF, PreToolUse guard wrapper bypass) all turned out to duplicate the 2026-10-15 review's findings and are already **fixed** on dev (PRs #90/#88/#89); **no new SEC IDs were minted** for them — their corroborating detail is the [2026-10-22 corroboration](#2026-10-22-corroboration) section at the end of this file.
 
 ---
 
@@ -820,11 +820,18 @@ is per-IP via the edge client IP, consistent with every other public surface. If
 
 ---
 
-<a id="sec-096"></a>
+<a id="2026-10-22-corroboration"></a>
 
-## SEC-096 — Public booking create path never re-validates the booking window (past dates, beyond max_advance, and lead_time all accepted)
+# 2026-10-22 review — corroborating detail (all three findings already fixed on dev)
 
-> **Status 2026-11-19: FIXED (duplicate).** This is the same finding the 2026-10-15 review filed for the booking create path; it was fixed on dev by **PR #90 (`03a7aee`)** before this 2026-10-22 review branch merged up. `_create_core` now re-validates the window server-side (rejects `start < now + lead_time_min` or `start > now + max_advance_days` with a 422), mirroring the reschedule path. Recorded here under a fresh id because the dev fix commit labelled the booking-window finding "SEC-071", which already denotes the unrelated CMS-Connector `public_slug` codegen finding — a human should collapse the duplicate ids. The analysis below is the 2026-10-22 review's independent corroboration, retained as evidence.
+_The 2026-10-22 weekly review independently re-derived the three findings below on the new ADR-0011/0012 code._
+_On merge-up each proved to duplicate a 2026-10-15 review finding already fixed on dev, so **no new SEC IDs are_
+_minted** for them (dev's active SEC-09x numbering is left for its own net-new findings). These write-ups are kept_
+_only as adversarial evidence corroborating the fixes; see the note in [`../FINDINGS.md`](../FINDINGS.md)._
+
+## (1) Public booking create path never re-validates the booking window — fixed on dev by PR #90 (`03a7aee`)
+
+> Same finding the 2026-10-15 review filed for the booking create path. `_create_core` now re-validates the window server-side (rejects `start < now + lead_time_min` or `start > now + max_advance_days` with a 422), mirroring the reschedule path. The write-up below is the 2026-10-22 review's independent corroboration.
 
 | | |
 |---|---|
@@ -891,9 +898,7 @@ path can never offer a slot the read path would never show.
 
 ---
 
-<a id="sec-099"></a>
-
-## SEC-099 — Website-enrichment SSRF guard is check-then-connect (DNS-rebinding TOCTOU): the IP allow-list check and the fetch resolve DNS independently
+## (2) Website-enrichment SSRF guard is a check-then-connect DNS-rebinding TOCTOU (= 2026-10-15 SEC-072) — fixed on dev by PR #88 (`4f9e9ea`)
 
 > **Status 2026-11-19: FIXED (duplicate of the 2026-10-15 review's SEC-072).** Fixed on dev by **PR #88 (`4f9e9ea`)** before this branch merged up: `website_enrich._resolve_validated_ip` now resolves once, rejects unless every resolved address is public, restricts the port to 80/443, and connects to the *validated IP* (so the socket no longer re-resolves the hostname), closing the rebinding TOCTOU on the initial fetch and every redirect hop. The analysis below is the 2026-10-22 review's independent corroboration, retained as evidence.
 
@@ -963,9 +968,7 @@ logic is fine; the defect is that its result is discarded before the real socket
 
 ---
 
-<a id="sec-098"></a>
-
-## SEC-098 — PreToolUse agent guard (push-to-main / prod-SQL / --no-verify) is bypassable via a shell-interpreter wrapper or command substitution
+## (3) PreToolUse agent guard bypassable via a shell-interpreter wrapper / command substitution (= 2026-10-15 SEC-073) — fixed on dev by PR #89 (`e06cf1f`)
 
 > **Status 2026-11-19: FIXED (duplicate of the 2026-10-15 review's SEC-073).** Fixed on dev by **PR #89 (`e06cf1f`)** before this branch merged up: `guard.mjs` now unwraps shell interpreters (`bash -c '…'`), `env`/`timeout`/`xargs`/`nice`/`setsid`/`ssh` wrappers, `eval`, and `$(…)`/backtick command substitution, re-running the same checks on the inner command and failing closed past a depth bound; `guard.test.mjs` was added. The analysis below is the 2026-10-22 review's independent corroboration, retained as evidence.
 

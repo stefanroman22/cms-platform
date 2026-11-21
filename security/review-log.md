@@ -16,23 +16,24 @@ changed* over time, independent of the per-finding tracker.
   styled rich text, CMS image/icon fields, SVG + font uploads to a public `cms-files` bucket — commits
   `ba613a1`/`ad00f45`/`87e5eba`, 2026-10-12) and **ADR-0012** (Google Maps lead import — `services/google_places/*`,
   commit `d8d0ec7`, 2026-10-11). Both got their first security review.
-- **Findings (3 medium) — on merge-up all proved to be already-filed, already-fixed duplicates.** The 2026-10-22
-  review independently surfaced the three mediums below, but when this branch was merged to current `dev`
-  (2026-11-19) each turned out to match a finding the **2026-10-15 review** had already filed, and all three were
-  **already fixed on dev**: SEC-096 → PR #90 (`03a7aee`), SEC-099 (= 2026-10-15 SEC-072) → PR #88 (`4f9e9ea`),
-  SEC-098 (= 2026-10-15 SEC-073) → PR #89 (`e06cf1f`). So this run's net-new open count is **zero**; the entries are
-  retained as independent corroboration. The three findings (as recorded):
-  - **SEC-096** — public booking **create** path (`POST /booking/{slug}`) never re-validates the booking window;
+- **Findings (3 medium) — on merge-up all proved to be already-filed, already-fixed duplicates; no new IDs minted.**
+  The 2026-10-22 review independently surfaced the three mediums below, but when this branch was merged to current
+  `dev` each turned out to match a finding the **2026-10-15 review** had already filed, and all three were **already
+  fixed on dev**: (1) booking-window → PR #90 (`03a7aee`); (2) website-enrich SSRF (= 2026-10-15 SEC-072) → PR #88
+  (`4f9e9ea`); (3) guard-wrapper (= 2026-10-15 SEC-073) → PR #89 (`e06cf1f`). So this run's net-new count is **zero**;
+  the write-ups are retained as independent corroboration (no competing SEC IDs minted — dev's Saturday-Solver is
+  actively using SEC-097/098 for its own net-new guard findings). The three findings (as recorded):
+  - **(1) booking-window** — public booking **create** path (`POST /booking/{slug}`) never re-validates the booking window;
     `free_resource_ids_at` checks only opening-hours alignment + busy-overlap, so past / beyond-`max_advance` /
     `lead_time`-violating start times are accepted. The reschedule path validates the same window (and says
     "client is not trusted"); create does not. Integrity/availability abuse, bounded by the 5/h per-IP write cap.
-  - **SEC-099** — ADR-0012 website-enrichment SSRF guard is **check-then-connect (DNS-rebinding TOCTOU)**:
+  - **(2) website-enrich SSRF** — ADR-0012 website-enrichment SSRF guard is **check-then-connect (DNS-rebinding TOCTOU)**:
     `assert_public_http_url` resolves + validates the host, discards the IP, then `urllib` re-resolves
     independently at connect. Reachable via `POST /admin/leads/google-import` on an attacker-owned Google
     listing. Bounded by admin-only trigger, the HTML-only Content-Type gate (drops the IMDS text/plain target),
     and the Vercel/Lambda runtime where IMDS-over-HTTP is generally unreachable. Verifiers split low/medium →
     recorded **medium (leaning low)**.
-  - **SEC-098** — `.claude/hooks/guard.mjs` PreToolUse guard (the control CLAUDE.md designates for the
+  - **(3) guard-wrapper** — `.claude/hooks/guard.mjs` PreToolUse guard (the control CLAUDE.md designates for the
     non-negotiable no-push-to-main / no-prod-SQL / no-`--no-verify` rules) only inspects the first token of each
     command segment, so a one-layer wrapper (`bash -c '…'`, `env …`, `$(…)`) defeats all of them and the hook
     fails open (silent). No test coverage for the hook.
@@ -61,12 +62,14 @@ changed* over time, independent of the per-finding tracker.
   #89). The value of this run is the independent corroboration of those fixes plus the reconciliation (SEC-046
   fixed; SEC-024/027/067 obsolete; SEC-048 partial) and the 3 adversarial dismissals. No remediation is outstanding
   from this run beyond the standing low/info queue.
-- **Merge note (2026-11-19, updated 2026-11-21):** this branch was merged up to current `dev` before landing; its
-  three findings were renumbered SEC-071/072/073 → SEC-096/098/099 to avoid colliding with the 2026-10-15/11-05
-  review rows (SEC-071…095) and `dev`'s net-new SEC-097 (guard-basename bypass, PR #99) — booking-window = SEC-096,
-  guard-wrapper = SEC-098, website-enrich SSRF = SEC-099 (first placed at SEC-097, re-bumped to SEC-099 on 2026-11-21
-  when dev took SEC-097). All three were marked fixed-duplicate once the dev fixes were confirmed present. The
-  cross-branch ID collapse remains a human task (as the tracker's standing notes say).
+- **Merge note (2026-11-19, updated 2026-11-21):** this branch was merged up to current `dev` before landing. Because
+  all three of its findings turned out to be already-fixed duplicates of 2026-10-15 findings, and `dev`'s
+  Saturday-Solver was concurrently minting sequential SEC-09x IDs for its own net-new guard work (SEC-097 path-form
+  bypass PR #99; SEC-098 `--no-verify`-abbreviation bypass PR #100), an initial attempt to renumber these three into
+  the SEC-096/097/098/099 range kept colliding. Final decision: **mint no competing IDs** — the three are recorded as
+  a note in `FINDINGS.md` + a corroboration section in `findings/medium.md`, mapping to the canonical 2026-10-15
+  findings (SEC-072 SSRF, SEC-073 guard-wrapper, and the booking-window finding). The cross-branch ID collapse remains
+  a human task (as the tracker's standing notes say).
 
 ---
 

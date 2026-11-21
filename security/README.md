@@ -9,16 +9,17 @@ reviewer (human or agent) exactly what to scan and how.
 
 | Critical | High | Medium | Low | Info | Confirmed total | Dismissed (false-positive) |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | **4** | **16** | **38** | **12** | **71** | 19 |
+| **1** | **4** | **13** | **38** | **12** | **68** | 19 |
 
 The 2026-06-07 baseline's headline criticals/highs (`SEC-001`/`SEC-002`/`SEC-003`/`SEC-004`/`SEC-056`) are **fixed**.
-The **2026-10-22** review found **no new critical/high and zero net-new open findings**: the three mediums it
-surfaced on the new ADR-0011/0012 code all turned out — on merge-up — to duplicate the **2026-10-15** review's
-findings and are **already fixed on dev** (SEC-096 booking-window → PR #90; SEC-099 website-enrich DNS-rebinding
-SSRF → PR #88; SEC-098 guard.mjs wrapper bypass → PR #89). It also dismissed 3 candidates (D-15/16/17), flipped
-`SEC-046`→**fixed** and `SEC-024`/`SEC-027`/`SEC-067`→**obsolete**, and marked `SEC-048`→partially-fixed. (Counts
-above are the 2026-06-20 baseline + these 3 recorded-but-fixed duplicate mediums; the merged SEC-071…095 rows are
-not yet folded into the totals — a cross-branch recount is owed to a human.)
+The **2026-10-22** review found **no new critical/high and zero net-new findings**: the three mediums it surfaced on
+the new ADR-0011/0012 code all turned out — on merge-up — to duplicate the **2026-10-15** review's findings and are
+**already fixed on dev** (booking-window → PR #90; website-enrich DNS-rebinding SSRF = 2026-10-15 SEC-072 → PR #88;
+guard.mjs wrapper bypass = 2026-10-15 SEC-073 → PR #89). **No new SEC IDs were minted** for them (dev's Saturday-Solver
+is actively using the SEC-09x range for its own net-new guard findings SEC-097/098) — their corroborating detail lives
+in `findings/medium.md`. This run also dismissed 3 candidates (D-15/16/17), flipped `SEC-046`→**fixed** and
+`SEC-024`/`SEC-027`/`SEC-067`→**obsolete**, and marked `SEC-048`→partially-fixed. (Counts stay at the 2026-06-20
+baseline; the merged SEC-071…098 rows are not yet folded into the totals — a cross-branch recount is owed to a human.)
 See the 2026-10-22 note + the full table in [`FINDINGS.md`](./FINDINGS.md) and [`review-log.md`](./review-log.md).
 
 > **MCP gap (2026-10-22):** this cloud run had **no Supabase or Vercel MCP** attached, so live advisor / table / project
