@@ -940,3 +940,57 @@ push origin main` test still denies via H1 — the env capture does not perturb 
 env vars still work. git exposes many config surfaces; this closes the ones that reach core.hooksPath.
 
 ---
+
+## SEC-100 — `guard.mjs` `sqlIsReadOnly` omits `INTO`, so `SELECT … INTO new_table` runs via `execute_sql` without the H2 ask
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | ✅ fixed (PR `security/fix-SEC-100-2026-11-21` → dev) |
+| **Category** | Agent-guardrail bypass (prod-SQL confirmation skip) |
+| **Dimension** | agent-guardrails |
+| **Location** | `.claude/hooks/guard.mjs:421-424` (`sqlIsReadOnly` write detector) |
+| **First seen** | 2026-11-19 (weekly review branch; net-new, not previously on the dev tracker) |
+
+**Description**
+
+H2 lets the Supabase MCP `execute_sql` run without asking the human only when the SQL is classified
+read-only. The write-keyword alternation did not include `into`. In PostgreSQL
+`SELECT … INTO new_table FROM …` is **CREATE-TABLE-AS** — a DDL write. It starts with `select`,
+contained none of the listed write keywords, and matched no `mutatingCalls`/`schemaCall`, so
+`sqlIsReadOnly` returned `true` and `checkSupabaseMcp` took the read-only branch, **skipping the H2
+ask**.
+
+**Attack scenario**
+
+An agent driving `execute_sql` (realistically one acting on prompt-injected content) submits
+`SELECT secret_col INTO public.exfil FROM auth_secrets` (or any table-creating write) against the
+**single shared prod Supabase** without the confirmation H2 is supposed to force. H2 is the primary
+local control for prod SQL (one DB serves local/preview/prod — CLAUDE.md Safety).
+
+**Fix (this run)**
+
+Add `into` to the `writes` alternation. `SELECT … INTO` now matches the write detector, so
+`sqlIsReadOnly` returns `false` and `checkSupabaseMcp` takes the ask branch. No read-only statement
+uses a standalone `INTO` (plain `SELECT`, CTEs and `EXPLAIN`/`SHOW` do not), so plain reads are
+unaffected; `INSERT INTO` was already caught by `insert` and now matches `into` too.
+
+**Test added**
+
+`.claude/hooks/guard.test.mjs` — 4 new "SEC-100" cases on the `execute_sql` path: `SELECT … INTO …`
+→ ask; `INSERT INTO …` → ask; plus two no-false-positive reads (a plain `SELECT … LIMIT` and a
+CTE read) → silent. The `SELECT … INTO` case FAILs on the pre-fix guard (classified read-only) and
+PASSes after; the reads pass on both.
+
+**Dependents regression-tested**
+
+Standalone hook (no importers). Full `node --test .claude/hooks/guard.test.mjs` → **48 tests green**
+(44 prior + 4 new). The only behavioural change is `SELECT … INTO` now taking the ask path; every
+existing read-only classification is unchanged.
+
+**Residual risk:** bounded — this is a confirmation-gate skip, not a capability grant; the fix restores
+the ask. The classifier remains a best-effort allowlist (statements must start with
+`select|explain|show|with` and miss every write/mutating/schema-call pattern); anything it cannot
+confidently prove read-only already defaults to the H2 ask.
+
+---
