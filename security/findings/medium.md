@@ -819,3 +819,116 @@ is per-IP via the edge client IP, consistent with every other public surface. If
 (many-IP) flood is a concern, that is a platform-wide edge/WAF control, out of scope for this finding.
 
 ---
+
+## SEC-098 — `guard.mjs` H4 `--no-verify` block is exact-match; git's `--no-verif` abbreviation bypasses the pre-commit secret-scan deny
+
+- **Severity:** medium · **Dimension:** agent-guardrails · **Status:** open · **Added:** 2026-11-19 (net-new dev ID; review-branch SEC-074 class)
+- **Location:** `.claude/hooks/guard.mjs:105-106`
+
+**Description.** H4 denies commits/pushes that skip the pre-commit hook (gitleaks is the only secret
+scan before push). The check is an exact-string membership test on raw argv:
+
+```js
+if ((sub === "commit" || sub === "push") && rest.includes("--no-verify"))      // :105
+  decide("deny", "Guardrail H4: --no-verify skips the pre-commit hook and its gitleaks scan.");
+```
+
+git's `parse-options` accepts any **unambiguous abbreviation** of a long option, so `git commit
+--no-verif` (and `--no-veri`) expand to `--no-verify` but do not contain the literal `"--no-verify"`
+substring, so `decide("deny")` never fires and the commit is created with the pre-commit hook skipped.
+
+**Attack scenario.** An agent induced (e.g. via prompt injection in untrusted imported client-site
+content) to bypass the secret scan runs `git commit --no-verif -m x` / `git push --no-verif …`; the
+local gitleaks scan is skipped.
+
+**Evidence / verification.** `rest.includes("--no-verify")` at `:105` is exact-match on
+`rest = args.slice(i+1)`. The adversarial verifier **empirically confirmed** `git commit --no-veri -m x`
+exits 0 and creates a commit with the hook skipped. **CONFIRMED medium.**
+
+**Severity rationale.** Defense-in-depth bypass; the production promote gate re-runs gitleaks
+server-side, so secrets reaching prod are backstopped. Medium because the local scan is the first and
+intended barrier and the bypass is trivial.
+
+**Remediation.** Normalise/expand git long-option abbreviations before the check, or deny the whole
+`--no-veri…` prefix family (and the short-circuit should also catch `-n`? — note `-n` is *not* an alias
+for `--no-verify` in `git commit`, so only the long-option prefixes need covering). `.claude/` guardrail
+edit — **left for a human**.
+
+---
+
+## SEC-099 — `guard.mjs` H4 guards only `-c core.hooksPath`; `GIT_CONFIG_*` env vars / `--config-env` set `core.hooksPath` to skip the pre-commit hook
+
+- **Severity:** medium · **Dimension:** agent-guardrails · **Status:** open · **Added:** 2026-11-19 (net-new dev ID; review-branch SEC-074 class)
+- **Location:** `.claude/hooks/guard.mjs:88-99` (global-option loop), `:288` (leading-assignment strip)
+
+**Description.** H4's `core.hooksPath` protection only matches the `git -c core.hooksPath=…` form:
+
+```js
+} else if (a === "-c") {
+  if (/^core\.hookspath=/i.test(args[i + 1] ?? ""))                     // :96
+    decide("deny", "Guardrail H4: overriding core.hooksPath skips the pre-commit secret scan.");
+  i += 2;
+} else i += 1;                                                          // :99 — any other dashed token skipped
+```
+
+Two equivalent ways to set `core.hooksPath` are not covered:
+
+1. **Env vars.** `inspectSegment` strips and **discards** leading `VAR=value` assignments
+   (`while (… /^[A-Za-z_][A-Za-z0-9_]*=/.test(seg[0])) seg = seg.slice(1)` at `:288`), so
+   `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x`
+   — or `GIT_CONFIG_GLOBAL=/tmp/evil.gitconfig git commit` with a `[core] hooksPath=` pointing at an
+   empty dir — reaches git with hooks disabled while the guard sees a plain `git commit`.
+2. **`--config-env` / long `-c`.** `git --config-env=core.hooksPath=VAR commit` passes the global-option
+   loop (`--config-env=…` starts with `-`, is neither `-C` nor `-c`, so hits `else i += 1`), and `sub`
+   is `commit` with no deny.
+
+**Attack scenario.** Same injected-agent trigger as SEC-097/098; the pre-commit gitleaks scan is
+skipped via a config channel the guard does not model.
+
+**Evidence / verification.** The global-option loop (`:88-99`) special-cases only `-C` and `-c`; the
+leading-assignment strip (`:288`) throws away env prefixes. Adversarial verifier **CONFIRMED medium**.
+
+**Remediation.** In H4, also deny when any `GIT_CONFIG_*` env assignment or `--config-env`/`-c` sets
+`core.hooksPath` (case-insensitive), and do not silently discard git-relevant env prefixes for the
+hooks-path decision. `.claude/` guardrail edit — **left for a human**.
+
+---
+
+## SEC-100 — `guard.mjs` `sqlIsReadOnly` omits `INTO`, so `SELECT … INTO new_table` runs via `execute_sql` without the H2 ask
+
+- **Severity:** medium · **Dimension:** agent-guardrails · **Status:** open · **Added:** 2026-11-19 (net-new dev ID; review-branch SEC-074 class)
+- **Location:** `.claude/hooks/guard.mjs:378-386`
+
+**Description.** H2 lets the Supabase MCP `execute_sql` run without asking the human only when the SQL is
+classified read-only. The write detector does not include `into`:
+
+```js
+const writes = /\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|comment|vacuum|call|do|copy|merge|refresh|reindex|cluster|lock|set|reset|begin|commit|security)\b/;  // :378
+...
+return statements.every(
+  (s) => /^(select|explain|show|with)\b/.test(s) && !writes.test(s) && !mutatingCalls.test(s) && !schemaCall.test(s),
+);                                                                                              // :383-386
+```
+
+In PostgreSQL `SELECT … INTO new_table FROM …` is **CREATE-TABLE-AS** — a DDL write. It starts with
+`select`, contains none of the `writes` keywords (`into` is absent), and matches no `mutatingCalls` or
+schema-qualified call, so `sqlIsReadOnly` returns `true` and `checkSupabaseMcp` takes the read-only
+branch, **skipping the H2 ask**.
+
+**Attack scenario.** An agent driving `execute_sql` (realistically one acting on prompt-injected
+content) submits `SELECT secret_col INTO public.exfil FROM auth_secrets` (or any table-creating write)
+against the **single shared prod Supabase** without the human confirmation that H2 is supposed to force.
+
+**Evidence / verification.** `writes` at `:378` has no `into`; the `.every(…)` classifier at `:383-386`
+accepts a `select`-prefixed statement that misses `writes`/`mutatingCalls`/`schemaCall`. Adversarial
+verifier **CONFIRMED medium**.
+
+**Severity rationale.** The guard's H2 is the primary local control for prod SQL (one DB serves local,
+preview and prod — CLAUDE.md Safety). An `INTO`-write bypasses the ask; impact is bounded by it being a
+confirmation-gate skip rather than granting new capability, hence medium not high.
+
+**Remediation.** Add `into` to the `writes` alternation (and consider `select … into` specifically), so
+CREATE-TABLE-AS is classified as a write and takes the H2 ask path. `.claude/` guardrail edit — **left
+for a human**.
+
+---
