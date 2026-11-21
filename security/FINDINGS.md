@@ -5,12 +5,12 @@
 > **⚠ Merge note (2026-11-19, updated 2026-11-21).** This 2026-10-22 review branch was merged up to current
 > `dev`, which in the interim gained the 2026-10-15 review's rows (SEC-071…093, detail authoritative on
 > `origin/security/weekly-review-2026-10-15`), the 2026-11-05 review's SEC-094/095, and two net-new guard.mjs
-> findings **SEC-097** (path-form bypass, PR #99) and **SEC-098** (`--no-verify` abbreviation bypass, PR #100).
+> guard/SQL findings **SEC-097…SEC-100** (path-form bypass #99, `--no-verify` abbreviation #100, env/`--config-env` `core.hooksPath` #101, `SELECT … INTO` as write #102).
 > Because this 2026-10-22 review's three findings all turned out to be **already-fixed duplicates** of the
 > 2026-10-15 review's findings (see the next note), and `dev`'s Saturday-Solver is actively minting sequential
 > SEC-09x IDs for its own net-new work, **no competing SEC IDs are minted here** — the three are recorded as a
 > note + a corroboration section, not as tracker rows. The header `Confirmed`/counts below are the 2026-06-20
-> baseline; the merged SEC-071…098 rows are tracked as rows/notes but **not yet folded into the severity
+> baseline; the merged SEC-071…100 rows are tracked as rows/notes but **not yet folded into the severity
 > totals** — a single cross-branch recount is still owed to a human.
 
 > **2026-10-22 — Weekly full review (multi-agent, find → adversarial verify → reconcile).** Target: the
@@ -128,7 +128,7 @@ This table is the **source of truth for status**. Detail for each finding lives 
 |---|---|---|---|---|---|
 | 1 | 4 | 13 | 38 | 12 | 68 |
 
-_2026-10-22: **zero net-new findings** — the review's three mediums were all already-fixed duplicates (no new IDs minted), so this table stays at the 2026-06-20 baseline. The merged SEC-071…098 rows from the 2026-10-15 / 11-05 / Saturday-Solver work are tracked as rows/notes but not yet folded into these totals — a human recount is pending. Lifecycle changes this run: SEC-046 → fixed; SEC-024, SEC-027, SEC-067 → obsolete; SEC-048 → partially-fixed._
+_2026-10-22: **zero net-new findings** — the review's three mediums were all already-fixed duplicates (no new IDs minted), so this table stays at the 2026-06-20 baseline. The merged SEC-071…100 rows from the 2026-10-15 / 11-05 / Saturday-Solver work are tracked as rows/notes but not yet folded into these totals — a human recount is pending. Lifecycle changes this run: SEC-046 → fixed; SEC-024, SEC-027, SEC-067 → obsolete; SEC-048 → partially-fixed._
 
 _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS). The 2026-06-20 review added **12 new findings** (all open), flipped **SEC-050 → fixed** and **SEC-007/023/025/026 → obsolete** (infra removed), and re-confirmed the remaining open items still present. Remediation ongoing — the **Saturday Solver routine** now drains open critical/high/medium automatically via tested PRs._
 
@@ -213,6 +213,8 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-095](findings/medium.md#sec-095) | medium | Public `/content/*` read endpoints have no rate limiter (unauthenticated DB-amplification DoS against the single shared prod Supabase) | `backend/auth_service/routers/content.py` (all public read routes) | ratelimit-dos | ✅ fixed (PR `security/fix-SEC-095-2026-11-07` → dev — router-level `Depends(_public_read_limit)` on the content router, shared Postgres limiter keyed on edge client IP (120/60s), mirroring booking.py / SEC-070; regression tests added) |
 | [SEC-097](findings/high.md#sec-097) | high | `guard.mjs` matched interpreters/wrappers by bare token, so an absolute/relative path (`/bin/bash -c …`, `/usr/bin/env … git push …`, `./sh`) defeated the recursive unwrap and bypassed **every** guardrail (H1 push-to-main, H2 prod-SQL ask, H4 secret-scan) | `.claude/hooks/guard.mjs:287-352 (inspectSegment dispatch)` | agent-guardrails | ✅ fixed (net-new from the 2026-11-19 review; PR `security/fix-SEC-097-2026-11-21` → dev — `inspectSegment` now dispatches on `path.basename(cmd)` so path-invoked interpreters/wrappers/git/eval/ssh/psql/supabase all still unwrap and match; 8 regression tests added, 7 FAIL pre-fix) |
 | [SEC-098](findings/medium.md#sec-098) | medium | `guard.mjs` H4 `--no-verify` block was exact-match; git's unambiguous long-option abbreviation `--no-veri`/`--no-verif` bypassed the pre-commit gitleaks deny (empirically verified) | `.claude/hooks/guard.mjs:104-111` | agent-guardrails | ✅ fixed (net-new from the 2026-11-19 review; PR `security/fix-SEC-098-2026-11-21` → dev — H4 now denies the whole `--no-v…` prefix family of `--no-verify` (len ≥ 6); `--no-verbose` abbreviations stay allowed; 6 tests added, 4 FAIL pre-fix) |
+| [SEC-099](findings/medium.md#sec-099) | medium | `guard.mjs` H4 guarded only `-c core.hooksPath=`; `GIT_CONFIG_*` env vars, `GIT_CONFIG_GLOBAL/SYSTEM`, `--config-env` and bare `-c core.hooksPath` set the hooks path to skip the pre-commit hook | `.claude/hooks/guard.mjs:86-135 (checkGit), :292-296 (env capture)` | agent-guardrails | ✅ fixed (net-new from the 2026-11-19 review; PR `security/fix-SEC-099-2026-11-21` → dev — checkGit now denies core.hooksPath via `GIT_CONFIG_KEY_*`/`GLOBAL`/`SYSTEM`/`PARAMETERS` env, `--config-env` and bare `-c`; 10 tests added, 8 FAIL pre-fix) |
+| [SEC-100](findings/medium.md#sec-100) | medium | `guard.mjs` `sqlIsReadOnly` omitted `into`, so `SELECT … INTO new_table` (CREATE-TABLE-AS, a DDL write) was classified read-only and ran via Supabase MCP `execute_sql` without the H2 ask | `.claude/hooks/guard.mjs:421-424` | agent-guardrails | ✅ fixed (net-new from the 2026-11-19 review; PR `security/fix-SEC-100-2026-11-21` → dev — `into` added to the write-keyword alternation; 4 tests added, 1 FAIL pre-fix) |
 
 > **2026-10-22 review — its three findings are already-fixed duplicates; no new IDs minted.** The 2026-10-22
 > weekly review independently re-derived three mediums on the new ADR-0011/0012 code, but each maps to a
@@ -223,7 +225,7 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 > `_resolve_validated_ip` pins the connect + 80/443 allowlist); (3) `.claude/hooks/guard.mjs` one-layer-wrapper
 > bypass (= 2026-10-15 **SEC-073**) → fixed by **PR #89** (`e06cf1f`). The 2026-10-22 run's adversarial detail for
 > all three is preserved in [`findings/medium.md`](./findings/medium.md#2026-10-22-corroboration). (dev's own
-> follow-on guard-hardening findings **SEC-097**/**SEC-098**, PRs #99/#100, are separate and tracked above/below.)
+> follow-on guard-hardening findings **SEC-097…SEC-100**, PRs #99–#102, are separate and tracked above.)
 
 > **Saturday Solver 2026-11-07 — SEC-094 / SEC-095 provenance (net-new on the 2026-11-05 review).**
 > SEC-094 (high) and SEC-095 (medium) are the two genuinely-new findings from the
