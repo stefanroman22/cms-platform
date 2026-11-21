@@ -1,8 +1,45 @@
 # Security Findings — Live Tracker
 
-**Last full review:** 2026-06-20 · **Reviewer:** multi-agent workflow (14 dimensions, adversarial verification) · **Supabase:** xeluydwpgiddbamysgyu · **Confirmed:** 68 · **Dismissed (false-positive):** 16
+**Last full review:** 2026-11-05 · **Reviewer:** multi-agent workflow (14 dimensions, adversarial verification; 43 agents) · **Supabase:** xeluydwpgiddbamysgyu (live MCP UNAVAILABLE this headless run — DB reviewed from migration SQL only) · **Confirmed (this dev-tracker sequence):** 70 · **Dismissed (false-positive):** 16
 
 This table is the **source of truth for status**. Detail for each finding lives in [`findings/`](./findings/) by severity. IDs are stable and never reused (see [`methodology.md`](./methodology.md) §5–6). Status: `open` · `in-progress` · `fixed` · `accepted-risk` · `false-positive` · `wont-fix`.
+
+> **2026-11-05 — Weekly full review (multi-agent, 14 dimensions). Net-new this week: 1 HIGH + 1 medium; the rest reconciled to prior reviews.**
+> **⚠ Provenance / honest scope note.** This run's cloud checkout was stale `main` (HEAD `87e5eba`),
+> which lags `dev` by a full review cycle, so the finder pass rediscovered many issues the unmerged
+> **2026-10-08 / 10-15 / 10-22 / 10-29** weekly-review branches already recorded (and that `dev` has
+> since fixed). Every candidate was re-verified against **`dev`'s actual code** before recording.
+> **Genuinely new (verified present on current `dev`), continuing past the highest ID ever used
+> (SEC-093) to avoid the cross-branch collisions documented below:**
+> - **`SEC-094` (HIGH)** — CMS Connector uses the model-returned `manifest["project_slug"]` **raw** as
+>   the provisioning/admin-URL target (`scan.py:611,785`); the scan branch (`scan.py:1098-1100`) pins
+>   only `cms_endpoint`, never re-pinning `project_slug` to the operator `--slug`, and unlike
+>   `public_slug` it is **not** passed through the new `_safe_slug()`. A prompt injection in the
+>   scanned client source can aim the admin-key provisioning (`/projects/{slug}/…`, `/admin/projects/{slug}`,
+>   Vercel binding) at another tenant. **This is distinct from the fixed `SEC-071`, which closed only
+>   the `public_slug`→`lib/booking.ts` codegen sink.**
+> - **`SEC-095` (medium)** — the public client-site content API (`routers/content.py`:
+>   `/content/{slug}`, `/{slug}/{locale}`, `/{slug}/types`) carries **no rate limiter** (no slowapi,
+>   no `pg_rate_limit`), unlike every sibling public surface (booking/forms). Unauthenticated
+>   DB-amplification DoS against the single shared prod Supabase; the direct parallel to the already-fixed
+>   SEC-070. Not tracked on any prior review branch.
+>
+> **Reconciled as already-found by prior reviews (not re-raised; verified against `dev`):** booking.ts
+> slug codegen → **SEC-071 (fixed on dev)**; website_enrich DNS-rebind TOCTOU → **SEC-072/073 (fixed on
+> dev)**; `expand_short_link` redirect SSRF → **SEC-074 (2026-10-29)**; `guard.mjs` literal-command-name
+> bypass → **SEC-072/075 (fixed on dev)**; leading `GIT_CONFIG_*` strip / `core.hooksPath` bypass →
+> **SEC-074 (2026-10-15, still present on dev)**; unmetered DeepL `retranslate`/`set_project_locales` →
+> **SEC-034 (reopened partial, 2026-10-29)**; upload no per-user limit → **SEC-078 (2026-10-29)**;
+> session lifetime no absolute cap → **SEC-077 (2026-10-29)**. Residual hardening also still present on
+> `dev` and left for the maintainer (already in the prior-review ID space, not re-numbered): the
+> `execute_sql` read-only classifier omits `SELECT … INTO` (`guard.mjs:378`), and the `--no-verify`
+> block is exact-match so git's `--no-verif` abbreviation slips through (`guard.mjs:105`).
+>
+> **⚠ Tracker reconciliation still owed to a human (unchanged, now worse).** Each weekly-review branch
+> (2026-09-03 … 2026-10-29) restarts numbering around SEC-057/SEC-072, so the same IDs mean different
+> findings across branches; this `dev` tracker is still at the 2026-06-20 header with only Saturday-Solver
+> fix-status rows merged in. **Trust the `file:line` + concrete vuln, not the bare ID.** SEC-094/095
+> deliberately sit above SEC-093 so they do not add new collisions. See [`review-log.md`](./review-log.md).
 
 > **Note 2026-08-26 — Feature removals.** The auto-fix pipeline (issues API + Slack S1/S1.5 +
 > Solver Agent + `solver-agent.yml`) and the lead scraper (`scraper/` + `admin_scrape_jobs`) were
@@ -90,7 +127,9 @@ This table is the **source of truth for status**. Detail for each finding lives 
 
 | Critical | High | Medium | Low | Info | Total |
 |---|---|---|---|---|---|
-| 1 | 4 | 13 | 38 | 12 | 68 |
+| 1 | 5 | 14 | 38 | 12 | 70 |
+
+_2026-11-05 delta (this dev-tracker sequence): +1 high (SEC-094), +1 medium (SEC-095). No open **critical** (SEC-001 fixed). Counts are for this tracker's own sequence; the unmerged weekly-review branches carry a parallel SEC-069…093 numbering a human must still reconcile._
 
 _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 accepted-risk** (SEC-054), **1 needs-decision** (SEC-039 credentialed-CORS). The 2026-06-20 review added **12 new findings** (all open), flipped **SEC-050 → fixed** and **SEC-007/023/025/026 → obsolete** (infra removed), and re-confirmed the remaining open items still present. Remediation ongoing — the **Saturday Solver routine** now drains open critical/high/medium automatically via tested PRs._
 
