@@ -875,3 +875,68 @@ secrets reaching prod stay backstopped. This restores the local first barrier. T
 config-channel bypass (`GIT_CONFIG_*` / `core.hooksPath`) is tracked separately as SEC-099.
 
 ---
+
+## SEC-099 — `guard.mjs` H4 guards only `-c core.hooksPath`; env channels / `--config-env` set core.hooksPath to skip the pre-commit hook
+
+| | |
+|---|---|
+| **Severity** | medium |
+| **Status** | ✅ fixed (PR `security/fix-SEC-099-2026-11-21` → dev) |
+| **Category** | Agent-guardrail bypass (defense-in-depth) |
+| **Dimension** | agent-guardrails |
+| **Location** | `.claude/hooks/guard.mjs:86-135` (`checkGit`), `:292-296` (`inspectSegment` env capture) |
+| **First seen** | 2026-11-19 (weekly review branch; net-new, not previously on the dev tracker) |
+
+**Description**
+
+H4's `core.hooksPath` protection matched only the `git -c core.hooksPath=…` form. Two equivalent
+ways to set the same config were not covered:
+
+1. **Env channels.** `inspectSegment` stripped and **discarded** leading `VAR=value` assignments, so
+   `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit` — or
+   `GIT_CONFIG_GLOBAL=/tmp/evil.gitconfig git commit` with a `[core] hooksPath=` pointing at an empty
+   dir, or `GIT_CONFIG_PARAMETERS` carrying `core.hooksPath=…` — reached git with hooks disabled while
+   the guard saw a plain `git commit`.
+2. **`--config-env` / bare `-c`.** `git --config-env=core.hooksPath=VAR commit` (and the space form)
+   passed the global-option loop untouched, and bare `git -c core.hooksPath commit` (no `=`, which git
+   reads as `hooksPath=true`, a non-existent path → no hook) was not matched by the `=`-anchored regex.
+
+**Attack scenario**
+
+Same injected-agent trigger as SEC-097/098; the pre-commit gitleaks scan is skipped via a config
+channel the guard did not model.
+
+**Fix (this run)**
+
+- `inspectSegment` now **keeps** the leading `VAR=value` assignments (into `env`) and passes them to
+  `checkGit(args, dir, env)` instead of silently discarding them.
+- `checkGit` denies when any of these sets core.hooksPath: `GIT_CONFIG_KEY_<n>=core.hooksPath` (the
+  structured env channel), `GIT_CONFIG_PARAMETERS` containing `core.hooksPath`, and
+  `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` on the hook-bearing `commit`/`push` subcommands (they point
+  git at an attacker-chosen config file that can carry `[core] hooksPath`).
+- The global-option loop now also handles `--config-env core.hooksPath=…` (attached and space forms)
+  and the bare `-c core.hooksPath` form (regex widened to `^core\.hookspath(=|$)`).
+
+Env channels flow through the same `env` capture whether written directly (`VAR=x git …`) or via the
+`env` wrapper (`env VAR=x git …`), since the wrapper unwraps to the same inner segment.
+
+**Test added**
+
+`.claude/hooks/guard.test.mjs` — 10 new "SEC-099" cases: `GIT_CONFIG_KEY_/VALUE_` core.hooksPath,
+`GIT_CONFIG_GLOBAL` on commit, `GIT_CONFIG_SYSTEM` on push, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`
+through an `env` wrapper, `--config-env=` (attached), `--config-env` (space), and bare `-c
+core.hooksPath`; plus two no-false-positive cases (`GIT_CONFIG_GLOBAL` on a `git status` read → silent;
+`GIT_CONFIG_*` setting a non-hooks key like `user.name` → silent). The 8 bypass cases FAIL on the
+pre-fix guard and PASS after.
+
+**Dependents regression-tested**
+
+Standalone hook (no importers). Full `node --test .claude/hooks/guard.test.mjs` → **44 tests green**
+(34 prior + 10 new), including all SEC-073/097/098 regressions (the existing `env GIT_PAGER=cat git
+push origin main` test still denies via H1 — the env capture does not perturb it).
+
+**Residual risk:** defense-in-depth; the promote-gate gitleaks backstops prod. `GIT_CONFIG_GLOBAL`/
+`SYSTEM` are blocked only on `commit`/`push` (where a hook skip matters), so benign reads with those
+env vars still work. git exposes many config surfaces; this closes the ones that reach core.hooksPath.
+
+---

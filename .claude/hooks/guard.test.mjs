@@ -117,6 +117,45 @@ test("SEC-098 no false positive: a commit message mentioning --no-verify stays s
   assert.equal(decide('git commit -m "mention --no-verify in docs"'), null);
 });
 
+// --- SEC-099: core.hooksPath can also be set via GIT_CONFIG_* env channels and
+//     --config-env, not only `-c core.hooksPath=…`; all must be denied. ---
+test("SEC-099 H4 denies GIT_CONFIG_KEY_/VALUE_ core.hooksPath env", () => {
+  assert.equal(
+    decide("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x"),
+    "deny",
+  );
+});
+test("SEC-099 H4 denies GIT_CONFIG_GLOBAL on commit", () => {
+  assert.equal(decide("GIT_CONFIG_GLOBAL=/tmp/evil.gitconfig git commit -m x"), "deny");
+});
+test("SEC-099 H4 denies GIT_CONFIG_SYSTEM on push", () => {
+  assert.equal(decide("GIT_CONFIG_SYSTEM=/tmp/evil.gitconfig git push origin dev"), "deny");
+});
+test("SEC-099 H4 denies GIT_CONFIG_PARAMETERS carrying core.hooksPath", () => {
+  assert.equal(decide("GIT_CONFIG_PARAMETERS='core.hooksPath=/dev/null' git commit -m x"), "deny");
+});
+test("SEC-099 H4 denies GIT_CONFIG_GLOBAL through an env wrapper", () => {
+  assert.equal(decide("env GIT_CONFIG_GLOBAL=/tmp/evil git commit -m x"), "deny");
+});
+test("SEC-099 H4 denies git --config-env=core.hooksPath=VAR (attached)", () => {
+  assert.equal(decide("git --config-env=core.hooksPath=EVIL commit -m x"), "deny");
+});
+test("SEC-099 H4 denies git --config-env core.hooksPath=VAR (space)", () => {
+  assert.equal(decide("git --config-env core.hooksPath=EVIL commit -m x"), "deny");
+});
+test("SEC-099 H4 denies bare -c core.hooksPath (no =)", () => {
+  assert.equal(decide("git -c core.hooksPath commit -m x"), "deny");
+});
+test("SEC-099 no false positive: GIT_CONFIG_GLOBAL on a read (git status) stays silent", () => {
+  assert.equal(decide("GIT_CONFIG_GLOBAL=/tmp/x git status"), null);
+});
+test("SEC-099 no false positive: GIT_CONFIG_* setting a non-hooks key stays silent", () => {
+  assert.equal(
+    decide("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=bot git commit -m x"),
+    null,
+  );
+});
+
 // --- No false positives: benign and quote-suppressed cases must stay silent. ---
 test("single-quoted substitution is not executed → silent", () => {
   assert.equal(decide("echo 'literal $(git push origin main)'"), null);
