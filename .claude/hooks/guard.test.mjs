@@ -156,6 +156,22 @@ test("SEC-099 no false positive: GIT_CONFIG_* setting a non-hooks key stays sile
   );
 });
 
+// --- SEC-100: `SELECT … INTO new_table` is CREATE-TABLE-AS (a DDL write); the H2
+//     read-only classifier for execute_sql must not treat it as read-only. ---
+const sql = (query) => decide(null, { tool: "mcp__supabase__execute_sql", input: { query } });
+test("SEC-100 H2 asks on SELECT … INTO (CREATE-TABLE-AS write)", () => {
+  assert.equal(sql("SELECT secret_col INTO public.exfil FROM auth_secrets"), "ask");
+});
+test("SEC-100 H2 still asks on a plain INSERT INTO", () => {
+  assert.equal(sql("INSERT INTO t (a) VALUES (1)"), "ask");
+});
+test("SEC-100 no false positive: a plain SELECT stays read-only (silent)", () => {
+  assert.equal(sql("select id, name from projects limit 10"), null);
+});
+test("SEC-100 no false positive: a CTE read stays read-only (silent)", () => {
+  assert.equal(sql("with c as (select 1 as n) select * from c"), null);
+});
+
 // --- No false positives: benign and quote-suppressed cases must stay silent. ---
 test("single-quoted substitution is not executed → silent", () => {
   assert.equal(decide("echo 'literal $(git push origin main)'"), null);

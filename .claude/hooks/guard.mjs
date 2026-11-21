@@ -418,8 +418,10 @@ function sqlIsReadOnly(sql) {
     .toLowerCase();
   const statements = body.split(";").map((s) => s.trim()).filter(Boolean);
   if (!statements.length) return false;
+  // `into` covers `SELECT … INTO new_table` (CREATE-TABLE-AS, a DDL write that otherwise
+  // starts with `select` and matches none of the other write keywords) — SEC-100.
   const writes =
-    /\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|comment|vacuum|call|do|copy|merge|refresh|reindex|cluster|lock|set|reset|begin|commit|security)\b/;
+    /\b(insert|update|delete|into|drop|alter|create|truncate|grant|revoke|comment|vacuum|call|do|copy|merge|refresh|reindex|cluster|lock|set|reset|begin|commit|security)\b/;
   const mutatingCalls =
     /\b(nextval|setval|set_config|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_advisory\w*|lo_\w+|dblink\w*)\s*\(/;
   const schemaCall = /\b[a-z_][a-z0-9_]*\s*\.\s*[a-z_][a-z0-9_]*\s*\(/;
