@@ -96,6 +96,27 @@ test("SEC-097 no false positive: a non-special binary by path stays silent", () 
   assert.equal(decide("/usr/bin/echo hello world"), null);
 });
 
+// --- SEC-098: git accepts unambiguous long-option abbreviations, so --no-verify's
+//     --no-veri / --no-verif forms must also be denied (empirically git runs them). ---
+test("SEC-098 H4 denies git commit --no-verif", () => {
+  assert.equal(decide("git commit --no-verif -m wip"), "deny");
+});
+test("SEC-098 H4 denies git commit --no-veri", () => {
+  assert.equal(decide("git commit --no-veri -m wip"), "deny");
+});
+test("SEC-098 H4 denies git push --no-veri", () => {
+  assert.equal(decide("git push --no-veri origin dev"), "deny");
+});
+test("SEC-098 H4 --no-veri survives a bash -c wrapper", () => {
+  assert.equal(decide("bash -c 'git commit --no-veri -m wip'"), "deny");
+});
+test("SEC-098 no false positive: --no-verbose abbreviation (--no-verb) stays silent", () => {
+  assert.equal(decide("git commit --no-verb -m wip"), null);
+});
+test("SEC-098 no false positive: a commit message mentioning --no-verify stays silent", () => {
+  assert.equal(decide('git commit -m "mention --no-verify in docs"'), null);
+});
+
 // --- No false positives: benign and quote-suppressed cases must stay silent. ---
 test("single-quoted substitution is not executed → silent", () => {
   assert.equal(decide("echo 'literal $(git push origin main)'"), null);
