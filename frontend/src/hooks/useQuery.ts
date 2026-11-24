@@ -96,15 +96,22 @@ export function useQuery<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled]);
 
-  // Periodic background refetch
+  // Periodic background refetch. Skipped while the tab is hidden (a dashboard left open in a
+  // background tab would otherwise keep calling the backend and the database all day); when the
+  // tab becomes visible again, stale data is refetched at once, so the user sees no difference.
   useEffect(() => {
     if (!enabled || !refetchInterval) return;
-    const id = setInterval(() => {
-      if (cache.isStale(key, ttl)) {
+    const refetchIfStale = () => {
+      if (document.visibilityState === "visible" && cache.isStale(key, ttl)) {
         doFetch(true); // silent — no loading spinner
       }
-    }, refetchInterval);
-    return () => clearInterval(id);
+    };
+    const id = setInterval(refetchIfStale, refetchInterval);
+    document.addEventListener("visibilitychange", refetchIfStale);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", refetchIfStale);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled, refetchInterval, ttl]);
 

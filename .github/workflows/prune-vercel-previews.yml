@@ -1,7 +1,8 @@
-# Weekly cleanup of old Vercel preview deployments so Function Storage
+# Daily cleanup of old Vercel preview deployments so Function Storage
 # stays under the Hobby free tier (10 GB). Keeps every PRODUCTION deploy
-# and the newest preview per branch (your `dev` check-it URL); deletes
-# only older previews. See scripts/prune_vercel_previews.py.
+# and ONE preview per project (the `cms-preview` URL for client sites, the
+# `dev` URL for the CMS); deletes every other preview.
+# See scripts/prune_vercel_previews.py.
 #
 # Requires repo secret: VERCEL_TOKEN (token from
 # https://vercel.com/account/tokens, scoped to the team).
@@ -12,7 +13,7 @@ name: Prune old Vercel previews
 
 on:
   schedule:
-    - cron: "0 4 * * 0" # Sundays 04:00 UTC
+    - cron: "0 4 * * *" # daily 04:00 UTC
   workflow_dispatch:
     inputs:
       dry_run:

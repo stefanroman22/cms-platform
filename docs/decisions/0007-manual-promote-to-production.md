@@ -14,6 +14,10 @@ changes.
 
 - Feature branches and `dev` run no GitHub Actions. Pushing to `dev` makes Vercel build preview
   deployments of both apps (on the shared production database, see ADR-0001).
+- Branches matching `security/**`, `claude/**` and `chore/**` build no Vercel deployments
+  (`git.deploymentEnabled` in both `vercel.json` files), to stay inside the Hobby Function Storage
+  limit. Their changes are previewed once merged into `dev`. The daily prune
+  (`scripts/prune_vercel_previews.py`) keeps one preview per project.
 - Production is the `main` branch. It changes only when someone runs the manual
   "Promote dev → main" workflow (`.github/workflows/promote.yml`). The workflow:
   1. runs gitleaks on the working tree;

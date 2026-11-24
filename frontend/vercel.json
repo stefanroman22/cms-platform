@@ -1,3 +1,6 @@
 {
-  "regions": ["dub1"]
+  "regions": ["dub1"],
+  "git": {
+    "deploymentEnabled": { "security/**": false, "claude/**": false, "chore/**": false }
+  }
 }

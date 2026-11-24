@@ -17,6 +17,9 @@ The price is that every request may run in a fresh or a different instance.
   Rate limiting uses the Postgres limiter (`core/pg_rate_limit.py`), because the in-memory slowapi
   limiter "resets per Vercel serverless invocation and is not shared across warm instances, so its
   limits were effectively N×limit".
+  Its `rate_limits` table is UNLOGGED (`2026_11_24_rate_limits_unlogged.sql`): every public
+  content read writes a counter, and skipping WAL keeps that off the Supabase Disk IO budget. A
+  crash empties the counters, which only restarts the current windows.
 - Scheduled work runs in the database, not in the app: Supabase `pg_cron` jobs (session and
   rate-limit GC, the e2e purge). A job that needs app code calls a backend HTTP endpoint through
   `pg_net`, authenticated with a shared secret. The parked booking reminders are the template
