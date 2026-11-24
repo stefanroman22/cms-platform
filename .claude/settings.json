@@ -30,6 +30,16 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "matcher": "mcp__github__(push_files|create_or_update_file|delete_file|merge_pull_request)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.mjs\"",
+            "timeout": 15
+          }
+        ]
       }
     ]
   }
