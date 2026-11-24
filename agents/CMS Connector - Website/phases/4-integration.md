@@ -87,6 +87,7 @@ non-text data (images, hours, contact, brand) from **static constants in
    - `.env.local` for localhost must set `CMS_PREVIEW_TOKEN` (matching the DB token)
      so the developer sees drafts locally exactly like cms-preview.
    The canonical multilingual reference is the samir-kapsalon `lib/cms-content.ts`
+   (archived copy: `reference/samir-kapsalon/lib/`; the site itself was retired 2026-11-24)
    (single-locale sites: the it-global-services `src/lib/cms.ts` pattern).
 
    **Vite + React 19 SPA sites — `src/lib/cms-content.ts` branches on `VITE_CMS_PREVIEW_TOKEN`:**
@@ -158,7 +159,8 @@ non-text data (images, hours, contact, brand) from **static constants in
    `<svg>` icons on services, features, items or contact methods) outside the fallbacks:
    every one is a CMS image/icon field. UI-control icons (menu, close, chevrons, arrows,
    spinners, form affordances) stay in code and are not flagged.
-   (Canonical reference: the samir-kapsalon `lib/cms-content.ts` + `lib/cms-site.ts`.)
+   (Canonical reference: the samir-kapsalon `lib/cms-content.ts` + `lib/cms-site.ts`, archived in
+   `reference/samir-kapsalon/lib/`.)
 
    **The same data is often rendered in MULTIPLE places — wire ALL of them.** A
    service is only "wired" if *every* surface that displays it reads the CMS, not a
