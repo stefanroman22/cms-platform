@@ -7,10 +7,12 @@ need while keeping everything that matters:
 
   KEEP  every production deployment (target == "production") — live sites
         and full rollback history are never touched.
-  KEEP  the newest preview per (project, git branch) — that's the URL you
-        open to check a `dev` / feature push (…-git-<branch>-…vercel.app
-        always points at it).
-  DELETE every older preview.
+  KEEP  ONE preview per project: the newest working (READY) preview on the
+        project's preview branch — `cms-preview` for client sites (the
+        dashboard's preview link), `dev` for the CMS itself. A project with
+        neither keeps its newest working preview from any branch. The
+        …-git-<branch>-…vercel.app URL always points at that kept deployment.
+  DELETE every other preview (older ones, other branches, failed builds).
 
 In-progress deployments (BUILDING / QUEUED / INITIALIZING) are left alone.
 
@@ -83,22 +85,35 @@ def _created(dep: dict) -> int:
     return dep.get("created") or dep.get("createdAt") or 0
 
 
+# Branches whose newest preview is the project's one kept preview URL, in priority order.
+PREVIEW_BRANCHES = ("cms-preview", "dev")
+
+
+def _keep_rank(dep: dict) -> tuple[int, int, int]:
+    """Sort key (higher = better) for choosing a project's one kept preview: a preview
+    branch first, then a working build, then the newest."""
+    branch = _branch(dep)
+    on_preview_branch = (
+        len(PREVIEW_BRANCHES) - PREVIEW_BRANCHES.index(branch) if branch in PREVIEW_BRANCHES else 0
+    )
+    return (on_preview_branch, 1 if dep.get("state") == "READY" else 0, _created(dep))
+
+
 def select_for_deletion(deployments: list[dict]) -> tuple[list[dict], dict]:
-    """Returns (to_delete, kept_latest_per_branch_by_group)."""
-    previews_by_group: dict[tuple[str, str], list[dict]] = {}
+    """Returns (to_delete, kept_preview_by_project)."""
+    previews_by_project: dict[str, list[dict]] = {}
     for dep in deployments:
         if _target(dep) == "production":
             continue  # keep all production
-        group = (_project(dep), _branch(dep))
-        previews_by_group.setdefault(group, []).append(dep)
+        previews_by_project.setdefault(_project(dep), []).append(dep)
 
     to_delete: list[dict] = []
-    kept: dict[tuple[str, str], dict] = {}
-    for group, deps in previews_by_group.items():
-        deps.sort(key=_created, reverse=True)  # newest first
-        kept[group] = deps[0]  # keep newest preview for this branch
-        for dep in deps[1:]:
-            if dep.get("state") in DELETABLE_STATES:
+    kept: dict[str, dict] = {}
+    for project, deps in previews_by_project.items():
+        keep = max(deps, key=_keep_rank)
+        kept[project] = keep
+        for dep in deps:
+            if dep is not keep and dep.get("state") in DELETABLE_STATES:
                 to_delete.append(dep)
     return to_delete, kept
 
@@ -133,7 +148,7 @@ def main() -> int:
 
     print(f"  total deployments:        {len(deployments)}")
     print(f"  production (always kept):  {prod}")
-    print(f"  latest previews kept:      {len(kept)}")
+    print(f"  previews kept (1/project): {len(kept)}")
     print(f"  old previews to delete:    {len(to_delete)}\n")
 
     if not to_delete:
@@ -160,7 +175,7 @@ def main() -> int:
         print(f"\nDry run complete. {len(to_delete)} would be deleted.")
         return 0
     print(
-        f"\nDone. {deleted} deleted, {errors} errors, {prod} production kept, {len(kept)} latest previews kept."
+        f"\nDone. {deleted} deleted, {errors} errors, {prod} production kept, {len(kept)} previews kept (one per project)."
     )
     return 0 if errors == 0 else 1
 

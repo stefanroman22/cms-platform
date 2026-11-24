@@ -3,6 +3,9 @@
     { "src": "vercel_entry.py", "use": "@vercel/python" }
   ],
   "regions": ["dub1"],
+  "git": {
+    "deploymentEnabled": { "security/**": false, "claude/**": false, "chore/**": false }
+  },
   "routes": [
     { "src": "/(.*)", "dest": "/vercel_entry.py" }
   ],

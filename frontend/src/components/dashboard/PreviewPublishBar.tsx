@@ -66,10 +66,20 @@ export function PreviewPublishBar({
     }
   }, [projectSlug]);
 
+  // Poll only while the tab is visible: a hidden dashboard tab would otherwise call the backend
+  // (and the shared database) every 30s all day. Becoming visible refreshes at once, so the
+  // status is never staler than before when the user looks at it.
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, POLL_MS);
-    return () => clearInterval(id);
+    const pollIfVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const id = setInterval(pollIfVisible, POLL_MS);
+    document.addEventListener("visibilitychange", pollIfVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", pollIfVisible);
+    };
   }, [refresh]);
 
   // Saves and re-translates elsewhere in the dashboard invalidate this key so

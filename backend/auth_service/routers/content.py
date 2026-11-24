@@ -164,16 +164,7 @@ def _build_content_map(
 async def get_project_content(project_slug: str, request: Request):
     project = _resolve_project(project_slug)
 
-    sb = get_supabase_admin()
-    services_result = (
-        sb.table("project_services")
-        .select(
-            "service_key, label, display_order, service_type_slug, content_entries(locale, published_content, draft_content, updated_at)"
-        )
-        .eq("project_id", project["id"])
-        .order("display_order")
-        .execute()
-    )
+    services_result = _fetch_services(project["id"], draft=False)
 
     content_map: dict = {}
     last_updated: str | None = None
@@ -361,13 +352,24 @@ async def get_project_types(project_slug: str):
     )
 
 
-def _fetch_services(project_id: str):
+# Public reads never return drafts, so they skip `draft_content`. That column can be as large
+# as the published one; leaving it out cuts what every client-site page view reads from the
+# shared database (Supabase Disk IO budget). The draft endpoints still select both.
+_PUBLIC_SERVICE_COLUMNS = (
+    "service_key, label, display_order, service_type_slug,"
+    " content_entries(locale, published_content, updated_at)"
+)
+_DRAFT_SERVICE_COLUMNS = (
+    "service_key, label, display_order, service_type_slug,"
+    " content_entries(locale, published_content, draft_content, updated_at)"
+)
+
+
+def _fetch_services(project_id: str, *, draft: bool):
     sb = get_supabase_admin()
     return (
         sb.table("project_services")
-        .select(
-            "service_key, label, display_order, service_type_slug, content_entries(locale, published_content, draft_content, updated_at)"
-        )
+        .select(_DRAFT_SERVICE_COLUMNS if draft else _PUBLIC_SERVICE_COLUMNS)
         .eq("project_id", project_id)
         .order("display_order")
         .execute()
@@ -381,7 +383,7 @@ async def get_project_content_locale(project_slug: str, locale: str, request: Re
     if locale not in (project.get("locales") or [default_locale]):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Locale not configured")
 
-    services_result = _fetch_services(project["id"])
+    services_result = _fetch_services(project["id"], draft=False)
     content_map, last_updated = _build_content_map(
         services_result.data, locale, default_locale, draft=False
     )
@@ -420,7 +422,7 @@ async def get_project_draft_content_locale(project_slug: str, locale: str, reque
     if locale not in (project.get("locales") or [default_locale]):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Locale not configured")
 
-    services_result = _fetch_services(project["id"])
+    services_result = _fetch_services(project["id"], draft=True)
     content_map, last_updated = _build_content_map(
         services_result.data, locale, default_locale, draft=True
     )
