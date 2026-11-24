@@ -6,7 +6,12 @@ from .supabase_client import get_supabase_admin
 
 DEFAULT_DAYS = 30
 REMEMBER_ME_DAYS = 60
-RENEWAL_WINDOW = timedelta(minutes=5)
+# How far a session's expiry may lag behind "now + full lifetime" before a request slides it
+# forward. Each slide is an UPDATE, and on the shared Supabase instance any committed write makes
+# Postgres close and archive a whole 16 MB WAL segment (archive_timeout = 2 min), so an open
+# dashboard at 5 minutes cost a segment every 5 minutes. One hour keeps the sliding lifetime
+# (30/60 days, now accurate to the hour) at a twelfth of the writes.
+RENEWAL_WINDOW = timedelta(hours=1)
 MAX_SESSIONS_PER_USER = 5
 
 
