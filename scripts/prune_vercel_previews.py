@@ -51,20 +51,37 @@ def _request(token: str, method: str, path: str) -> dict:
         return json.loads(raw)
 
 
-def list_all_deployments(token: str, team_id: str) -> list[dict]:
-    """Pages through /v6/deployments and returns every deployment in scope."""
-    deployments: list[dict] = []
-    base = f"/v6/deployments?limit=100&teamId={team_id}"
+def _paged(token: str, base: str, key: str) -> list[dict]:
+    items: list[dict] = []
     path = base
     while True:
         data = _request(token, "GET", path)
-        batch = data.get("deployments", [])
-        deployments.extend(batch)
-        pagination = data.get("pagination") or {}
-        next_ts = pagination.get("next")
+        batch = data.get(key, [])
+        items.extend(batch)
+        next_ts = (data.get("pagination") or {}).get("next")
         if not next_ts or not batch:
-            return deployments
+            return items
         path = f"{base}&until={next_ts}"
+
+
+def list_all_deployments(token: str, team_id: str) -> list[dict]:
+    """Returns every deployment in the team, listed project by project.
+
+    A single team-wide /v6/deployments listing returned only one project's
+    deployments, so old previews of every other project were never pruned.
+    Listing per project covers them all and prints what was seen.
+    """
+    projects = _paged(token, f"/v9/projects?limit=100&teamId={team_id}", "projects")
+    deployments: list[dict] = []
+    for proj in projects:
+        deps = _paged(
+            token,
+            f"/v6/deployments?limit=100&projectId={proj['id']}&teamId={team_id}",
+            "deployments",
+        )
+        print(f"  {proj.get('name', proj['id'])}: {len(deps)} deployments")
+        deployments.extend(deps)
+    return deployments
 
 
 def _target(dep: dict) -> str:
