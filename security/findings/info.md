@@ -10,6 +10,8 @@ _Best-practice notes and accepted-by-design observations._
 
 ## SEC-046 — Bearer auth path returns a plain dict while the rest of the codebase assumes a UserOut object, creating an authZ-shape fragility
 
+> **Status 2026-10-22: FIXED.** `admin_user_via_bearer_or_sid` (`routers/deps.py:59-67`) now returns `UserOut(id=user["id"], email=user["email"], is_admin=user.get("is_admin", False))` for the Bearer path before any downstream authZ check, so `require_project_access` (which reads `user.id` / `user.is_admin`) gets the same type as the session path — the shape fragility is resolved. (`verify_admin_api_key` still returns a dict internally, but it is wrapped before use.)
+
 | | |
 |---|---|
 | **Severity** | info |
@@ -102,6 +104,8 @@ Optional: preserve the user's original remember_me preference when re-minting th
 <a id="sec-048"></a>
 
 ## SEC-048 — Public booking slug allows tenant existence enumeration via config endpoint
+
+> **Status 2026-10-22: PARTIALLY-FIXED.** `public_config` (`routers/booking.py:314`) now carries `dependencies=[Depends(_public_read_limit)]` (the shared per-IP read limiter from SEC-030/SEC-070 hardening), which bounds slug-sweeping. The by-design behaviour — 404 for unknown/inactive slug, 200 + public branding for a known one — is unchanged and remains an accepted info-level existence/branding disclosure.
 
 | | |
 |---|---|
@@ -499,6 +503,8 @@ Correct the docstring/threat-model comments from 192 to 128 bits (or raise SECRE
 <a id="sec-067"></a>
 
 ## SEC-067 — New seo_* tables inherit full anon/authenticated DML grants from Supabase default ACLs; safe only because RLS is enabled (no explicit REVOKE)
+
+> **Status 2026-10-22: OBSOLETE.** All nine `seo_*` tables (seo_changes, seo_plan_items, seo_audits, seo_competitors, seo_articles, seo_page_meta, seo_jobs, seo_learnings, seo_runs) were dropped `CASCADE` in `backend/migrations/2026_09_27_drop_seo_email_configs_add_gc_jobs.sql` (SEO/GEO teardown). The original migration `2026_06_14_seo_geo.sql` remains in-repo unedited (applied-migration policy) but its grant surface no longer exists.
 
 | | |
 |---|---|

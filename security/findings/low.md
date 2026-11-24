@@ -430,6 +430,8 @@ Add probe retry/backoff before declaring failure to avoid reverting on transient
 
 ## SEC-024 — Two workflows use unpinned (mutable-tag) third-party actions while the rest are SHA-pinned
 
+> **Status 2026-10-22: OBSOLETE.** Both cited workflow files (`solver-agent.yml`, `scraper-ci.yml`) were removed in the Solver/SEO teardown. Every surviving workflow (`promote.yml`, `codeql.yml`, `prune-vercel-previews.yml`) SHA-pins all third-party actions to 40-hex commits (`grep -rn 'uses:.*@v[0-9]' .github/workflows/` returns nothing). The gitleaks-binary fetch the 2026-08-26 note called this finding's "live remainder" is a `curl | tar` of a release asset, not a GitHub Action, and is tracked correctly as SEC-065.
+
 | | |
 |---|---|
 | **Severity** | low |
@@ -572,6 +574,8 @@ Restrict auto-merge to the `direct:production` / security-update dependency set 
 <a id="sec-027"></a>
 
 ## SEC-027 — Stale, unpinned legacy backend/auth_service/requirements.txt drifted far behind the deployed manifest
+
+> **Status 2026-10-22: OBSOLETE.** The cited file `backend/auth_service/requirements.txt` no longer exists (removed in the dead-code cleanup `9164b34`). The single source of truth is now `backend/requirements.txt` + `requirements.lock`, exactly as this finding recommended.
 
 | | |
 |---|---|
