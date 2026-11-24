@@ -18,6 +18,11 @@ changes.
   (`git.deploymentEnabled` in both `vercel.json` files), to stay inside the Hobby Function Storage
   limit. Their changes are previewed once merged into `dev`. The daily prune
   (`scripts/prune_vercel_previews.py`) keeps one preview per project.
+- Both Vercel projects also carry an Ignored Build Step (project setting, so it applies to
+  branches cut before the `vercel.json` rule existed): `main` always builds, `dev` builds an app
+  only when the push changed its root directory (`frontend/` or `backend/`), and every other
+  branch is skipped. A skipped `dev` build leaves the previous preview in place.
+  `case "$VERCEL_GIT_COMMIT_REF" in main) exit 1 ;; dev) git diff --quiet "$VERCEL_GIT_PREVIOUS_SHA" HEAD -- . ;; *) exit 0 ;; esac`
 - Production is the `main` branch. It changes only when someone runs the manual
   "Promote dev → main" workflow (`.github/workflows/promote.yml`). The workflow:
   1. runs gitleaks on the working tree;

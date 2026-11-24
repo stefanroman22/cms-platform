@@ -18,10 +18,16 @@ The price is that every request may run in a fresh or a different instance.
   limiter "resets per Vercel serverless invocation and is not shared across warm instances, so its
   limits were effectively N×limit".
   Its `rate_limits` table is UNLOGGED (`2026_11_24_rate_limits_unlogged.sql`): every public
-  content read writes a counter, and skipping WAL keeps that off the Supabase Disk IO budget. A
-  crash empties the counters, which only restarts the current windows.
+  content read writes a counter, and an unlogged table writes no row data to the WAL. A crash
+  empties the counters, which only restarts the current windows. Each hit still commits a
+  transaction, and that small commit record is enough for Postgres to close and archive a whole
+  16 MB WAL segment once per `archive_timeout` (2 minutes, set by Supabase). So Disk IO follows
+  "how many 2-minute windows saw any write", not write volume: keep periodic writes rare (the
+  session expiry slides at most once an hour, `services/sessions.py`).
 - Scheduled work runs in the database, not in the app: Supabase `pg_cron` jobs (session and
-  rate-limit GC, the e2e purge). A job that needs app code calls a backend HTTP endpoint through
+  rate-limit GC, the e2e purge, and a monthly `pg_stat_statements` reset that stops Supabase's
+  metrics exporter from spilling a temp file to disk every minute,
+  `2026_11_24_pg_stat_statements_monthly_reset.sql`). A job that needs app code calls a backend HTTP endpoint through
   `pg_net`, authenticated with a shared secret. The parked booking reminders are the template
   (`migrations/2026_06_05_booking_reminders_cron.sql`, `POST /booking/cron/reminders`); their job
   was unscheduled in `2026_09_30_drop_booking_reminder_cron.sql`.
