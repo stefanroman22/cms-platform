@@ -1,5 +1,5 @@
 -- 2026-11-24 rate_limits: UNLOGGED + fillfactor 70, to cut Disk IO.
--- STATUS: NOT APPLIED
+-- STATUS: APPLIED 2026-11-24
 --
 -- Why: since SEC-095 every public /content read (every client-site page view) runs
 -- rate_limit_hit(), an UPDATE on this table. On a logged table each of those commits writes
