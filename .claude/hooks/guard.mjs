@@ -83,7 +83,7 @@ function segments(command) {
   return out;
 }
 
-function checkGit(args, dir) {
+function checkGit(args, dir, env = []) {
   // Global options before the subcommand.
   let i = 0;
   while (i < args.length && args[i].startsWith("-")) {
@@ -93,17 +93,52 @@ function checkGit(args, dir) {
       i += 2;
     } else if (a === "-c") {
       // H4: never bypass the pre-commit hook (gitleaks is the only pre-push secret scan).
-      if (/^core\.hookspath=/i.test(args[i + 1] ?? ""))
+      // `-c core.hooksPath=…` and bare `-c core.hooksPath` (set to "true", a non-dir path) both skip it.
+      if (/^core\.hookspath(=|$)/i.test(args[i + 1] ?? ""))
         decide("deny", "Guardrail H4: overriding core.hooksPath skips the pre-commit secret scan.");
       i += 2;
+    } else if (a === "--config-env") {
+      // SEC-099: `git --config-env core.hooksPath=ENVVAR …` sets the key from an env var.
+      if (/^core\.hookspath=/i.test(args[i + 1] ?? ""))
+        decide("deny", "Guardrail H4: overriding core.hooksPath (via --config-env) skips the pre-commit secret scan.");
+      i += 2;
+    } else if (a.startsWith("--config-env=")) {
+      if (/^core\.hookspath=/i.test(a.slice("--config-env=".length)))
+        decide("deny", "Guardrail H4: overriding core.hooksPath (via --config-env) skips the pre-commit secret scan.");
+      i += 1;
     } else i += 1;
   }
   const sub = args[i];
   const rest = args.slice(i + 1);
 
+  // H4 (env channels, SEC-099): git also reads core.hooksPath / its global config from the
+  // environment, which inspectSegment strips off before the command. Setting core.hooksPath by any
+  // of these channels skips the pre-commit hook exactly as `-c core.hooksPath` does.
+  for (const assignment of env) {
+    const eq = assignment.indexOf("=");
+    const key = assignment.slice(0, eq);
+    const val = assignment.slice(eq + 1);
+    if (
+      // GIT_CONFIG_KEY_<n>=core.hooksPath (its paired GIT_CONFIG_VALUE_<n> sets the path)
+      (/^GIT_CONFIG_KEY_\d+$/.test(key) && /^core\.hookspath$/i.test(val)) ||
+      // GIT_CONFIG_PARAMETERS="'core.hooksPath=…'" — git's inline config channel
+      (key === "GIT_CONFIG_PARAMETERS" && /core\.hookspath/i.test(val))
+    )
+      decide("deny", "Guardrail H4: setting core.hooksPath via GIT_CONFIG_* env skips the pre-commit secret scan.");
+    // GIT_CONFIG_GLOBAL / GIT_CONFIG_SYSTEM point git at an attacker-chosen config file that can
+    // carry `[core] hooksPath` — block them on the hook-bearing subcommands.
+    if ((key === "GIT_CONFIG_GLOBAL" || key === "GIT_CONFIG_SYSTEM") && (sub === "commit" || sub === "push"))
+      decide("deny", "Guardrail H4: GIT_CONFIG_GLOBAL/SYSTEM can redirect core.hooksPath and skip the pre-commit secret scan.");
+  }
+
   // H4: never bypass the pre-commit hook (gitleaks is the only pre-push secret scan).
-  if ((sub === "commit" || sub === "push") && rest.includes("--no-verify"))
-    decide("deny", "Guardrail H4: --no-verify skips the pre-commit hook and its gitleaks scan.");
+  // Git accepts any unambiguous abbreviation of a long option, so `--no-veri` / `--no-verif`
+  // expand to --no-verify without containing the literal string (SEC-098). Deny the whole
+  // `--no-v…` prefix family of --no-verify; shorter/ambiguous forms git itself rejects, and
+  // --no-verbose abbreviations (`--no-verb…`) are not prefixes of --no-verify, so stay allowed.
+  const isNoVerify = (t) => t.length >= 6 && "--no-verify".startsWith(t);
+  if ((sub === "commit" || sub === "push") && rest.some(isNoVerify))
+    decide("deny", "Guardrail H4: --no-verify (or an abbreviation) skips the pre-commit hook and its gitleaks scan.");
   if (sub === "commit") {
     const valueFlags = new Set(["-m", "-F", "-C", "-c", "-t", "--author", "--date", "--message", "--file"]);
     for (let j = 0; j < rest.length; j++) {
@@ -285,7 +320,10 @@ function grabBacktick(str, open, found) {
 }
 
 function inspectSegment(seg, dir, depth) {
-  while (seg.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(seg[0])) seg = seg.slice(1);
+  // SEC-099: keep the leading VAR=value assignments instead of silently discarding them —
+  // git reads core.hooksPath / global config from several of these env channels.
+  const env = [];
+  while (seg.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(seg[0])) env.push(seg.shift());
   while (seg.length && STRIP_PREFIXES.has(path.basename(seg[0]))) seg = seg.slice(1);
   const [cmd, ...args] = seg;
   if (!cmd) return dir;
@@ -324,7 +362,7 @@ function inspectSegment(seg, dir, depth) {
     if (args[0]) dir = path.resolve(dir, args[0].replace(/^~(?=$|\/)/, process.env.HOME ?? "~"));
     return dir;
   }
-  if (name === "git") checkGit(args, dir);
+  if (name === "git") checkGit(args, dir, env);
 
   // H1: no production deploy from a laptop; `vercel rollback` stays allowed for incidents.
   const vercelArgs =
@@ -380,8 +418,10 @@ function sqlIsReadOnly(sql) {
     .toLowerCase();
   const statements = body.split(";").map((s) => s.trim()).filter(Boolean);
   if (!statements.length) return false;
+  // `into` covers `SELECT … INTO new_table` (CREATE-TABLE-AS, a DDL write that otherwise
+  // starts with `select` and matches none of the other write keywords) — SEC-100.
   const writes =
-    /\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|comment|vacuum|call|do|copy|merge|refresh|reindex|cluster|lock|set|reset|begin|commit|security)\b/;
+    /\b(insert|update|delete|into|drop|alter|create|truncate|grant|revoke|comment|vacuum|call|do|copy|merge|refresh|reindex|cluster|lock|set|reset|begin|commit|security)\b/;
   const mutatingCalls =
     /\b(nextval|setval|set_config|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_advisory\w*|lo_\w+|dblink\w*)\s*\(/;
   const schemaCall = /\b[a-z_][a-z0-9_]*\s*\.\s*[a-z_][a-z0-9_]*\s*\(/;

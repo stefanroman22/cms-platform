@@ -25,8 +25,8 @@ Connector prompt-injection. The 2026-06-07 baseline criticals/highs (`SEC-001…
 
 ### The next things to fix (2026-11-19 remediation order)
 1. ~~**`SEC-097` (high)**~~ — **✅ fixed on dev 2026-11-21 (PR #99)**: `guard.mjs` `inspectSegment` now dispatches on `path.basename(cmd)`, so `/bin/bash -c …`, `/usr/bin/env …`, `./sh` resolve to `bash`/`env`/`sh` and the recursive unwrap re-inspects them (8 regression tests, 7 FAIL pre-fix). No action remaining.
-2. **`SEC-100` (medium)** — add `into` to the `sqlIsReadOnly` write classifier so `SELECT … INTO new_table` (CREATE-TABLE-AS) takes the H2 "ask" path against the single shared prod Supabase.
-3. **`SEC-099` + `SEC-098` (medium)** — in H4, deny `GIT_CONFIG_*`/`--config-env` that set `core.hooksPath`, and expand git long-option abbreviations so `--no-verif` is caught.
+2. ~~**`SEC-100` (medium)**~~ — **✅ fixed on dev 2026-11-24 (PR #102)**: `into` added to the `sqlIsReadOnly` write classifier.
+3. ~~**`SEC-099` + `SEC-098` (medium)**~~ — **✅ fixed on dev 2026-11-24 (PRs #101/#100)**: H4 now denies `GIT_CONFIG_*`/`--config-env`/bare-`-c` `core.hooksPath` and the `--no-v…` abbreviation family. **The whole guard.mjs cluster (SEC-097/098/099/100) is now closed.**
 4. **`SEC-096` (low)** — pin the booking `owner_notification_email` to the operator-resolved client email (don't trust the model's `destination_email`), and add server-side email-format validation to `SettingsPatch`.
 5. **Hygiene (reconfirmed open):** `SEC-065` (verify the gitleaks binary checksum in `promote.yml`), `SEC-039` (`needs-decision`: split credentialed vs credential-less CORS), `SEC-040` (tighten CSP), `SEC-066`/`SEC-068` backlog.
 
