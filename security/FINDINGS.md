@@ -97,6 +97,32 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 > **Note (FINDINGS.md is canonical for status).** Per-finding detail files may still show their
 > original `open` status inline; this table is the source of truth.
 
+> **Saturday Solver 2026-11-28 — status-only run (no fixes shipped; no open critical/high/medium exist).**
+> Freshest review source: `origin/security/weekly-review-2026-11-19` (no newer weekly-review branch was
+> present this run). Selected against the `open`/`in-progress` × critical/high/medium threshold and
+> **verified every candidate against the actual current `dev` tree** (HEAD `e108f64`), not the bare
+> tracker IDs. Result: **zero open/in-progress critical/high/medium vulnerabilities remain on `dev`** —
+> so no fix PRs were shipped. Verification performed this run:
+> - **Guard.mjs cluster SEC-097 (high) / SEC-098 / SEC-099 / SEC-100 (medium)** — all genuinely merged to
+>   `dev` and effective: `d9c20c0` (SEC-097, `inspectSegment` dispatches on `path.basename(cmd)`),
+>   `4766639` (SEC-098, `--no-v…` prefix family denied), `b577052` (SEC-099, `core.hooksPath` via
+>   `-c`/`--config-env`/`GIT_CONFIG_*` env denied), `ea0a94b` (SEC-100, `into` in the write-keyword
+>   alternation). Confirmed by reading `.claude/hooks/guard.mjs` on `dev`.
+> - **SEC-094 (high)** `manifest["project_slug"] = slug` pin present (`scan.py:1132`); **SEC-071 (high)**
+>   `_safe_slug` + `json.dumps` slug emission present; **SEC-095 / SEC-070 (medium)** public read limiters
+>   present. All verified in dev source.
+> - **SEC-096 (low, open)** reconfirmed present (`scan.py:393` — `destination_email` used unvalidated as
+>   `owner_notification_email`). It is the only net-new open finding from the 2026-11-19 review; **low**
+>   severity, multiply operator- + `--provision`-gated, so **below this routine's C/H/M fix threshold** —
+>   recorded here (dev tracker previously lacked the row) and left for a human / future run.
+> - **⚠ Needs a human (unchanged):** **SEC-039** (`needs-decision`, credentialed CORS reflects any
+>   `*.vercel.app`) — not auto-fixed by policy; and the long-standing **tracker ID / header reconciliation**
+>   (dev header still `2026-06-20`; parallel `SEC-069…100` numbering on the unmerged weekly-review branches).
+>   Trust the per-row `file:line` + status, not the header count.
+> - Remaining genuinely-open work is all **low/info** (below the C/H/M threshold): SEC-015, SEC-016,
+>   SEC-024(remnant), SEC-027, SEC-029, SEC-040, SEC-046, SEC-047, SEC-048, SEC-051, SEC-055, SEC-060,
+>   SEC-061, SEC-062, SEC-065, SEC-066, SEC-067, SEC-068, SEC-096. None was modified this run.
+
 ## Open findings
 
 | ID | Sev | Title | Location | Dimension | Status |
@@ -173,6 +199,7 @@ _Status (updated 2026-06-20): the 2026-06-07 baseline reached **28 fixed**, **1 
 | [SEC-071](findings/high.md#sec-071) | high | CMS Connector writes the scan-derived `public_slug` into generated `lib/booking.ts` via a raw f-string → code injection into the committed/deployed client site | `agents/CMS Connector - Website/scan.py:469-471` | agents | ✅ fixed (PR `security/fix-SEC-071-2026-10-17` → dev — `_safe_slug()` validates/slugifies the manifest `public_slug` at the single derivation point, and `_write_booking_ts` emits `SLUG` via `json.dumps`; regression tests added) |
 | [SEC-094](findings/high.md#sec-094) | high | CMS Connector uses the model-returned `project_slug` raw as the provisioning/admin-URL target (prompt-injection → cross-tenant provisioning via the admin key) | `agents/CMS Connector - Website/scan.py:1098-1108 (scan branch), :611 (_provision), :785 (_vercel_setup)` | agents | ✅ fixed (PR `security/fix-SEC-094-2026-11-07` → dev — scan branch now pins `manifest["project_slug"] = slug` (the operator `--slug`) exactly as `cms_endpoint` is pinned, so a model echo can no longer redirect admin-key provisioning at another tenant; regression test added) |
 | [SEC-095](findings/medium.md#sec-095) | medium | Public `/content/*` read endpoints have no rate limiter (unauthenticated DB-amplification DoS against the single shared prod Supabase) | `backend/auth_service/routers/content.py` (all public read routes) | ratelimit-dos | ✅ fixed (PR `security/fix-SEC-095-2026-11-07` → dev — router-level `Depends(_public_read_limit)` on the content router, shared Postgres limiter keyed on edge client IP (120/60s), mirroring booking.py / SEC-070; regression tests added) |
+| [SEC-096](findings/low.md#sec-096) | low | CMS Connector uses the model-returned `destination_email` unvalidated as the booking `owner_notification_email` — prompt injection in scanned client content can redirect customer-PII notification emails | `agents/CMS Connector - Website/scan.py:391-405` | agents | open (net-new 2026-11-19; operator- + `--provision`-gated; same class as fixed SEC-094; below the Saturday-Solver C/H/M fix threshold — left for a human / future run) |
 | [SEC-097](findings/high.md#sec-097) | high | `guard.mjs` matched interpreters/wrappers by bare token, so an absolute/relative path (`/bin/bash -c …`, `/usr/bin/env … git push …`, `./sh`) defeated the recursive unwrap and bypassed **every** guardrail (H1 push-to-main, H2 prod-SQL ask, H4 secret-scan) | `.claude/hooks/guard.mjs:287-352 (inspectSegment dispatch)` | agent-guardrails | ✅ fixed (net-new from the 2026-11-19 review; PR `security/fix-SEC-097-2026-11-21` → dev — `inspectSegment` now dispatches on `path.basename(cmd)` so path-invoked interpreters/wrappers/git/eval/ssh/psql/supabase all still unwrap and match; 8 regression tests added, 7 FAIL pre-fix) |
 | [SEC-098](findings/medium.md#sec-098) | medium | `guard.mjs` H4 `--no-verify` block was exact-match; git's unambiguous long-option abbreviation `--no-veri`/`--no-verif` bypassed the pre-commit gitleaks deny (empirically verified) | `.claude/hooks/guard.mjs:104-111` | agent-guardrails | ✅ fixed (net-new from the 2026-11-19 review; PR `security/fix-SEC-098-2026-11-21` → dev — H4 now denies the whole `--no-v…` prefix family of `--no-verify` (len ≥ 6); `--no-verbose` abbreviations stay allowed; 6 tests added, 4 FAIL pre-fix) |
 | [SEC-099](findings/medium.md#sec-099) | medium | `guard.mjs` H4 guarded only `-c core.hooksPath=`; `GIT_CONFIG_*` env vars, `GIT_CONFIG_GLOBAL/SYSTEM`, `--config-env` and bare `-c core.hooksPath` set the hooks path to skip the pre-commit hook | `.claude/hooks/guard.mjs:86-135 (checkGit), :292-296 (env capture)` | agent-guardrails | ✅ fixed (net-new from the 2026-11-19 review; PR `security/fix-SEC-099-2026-11-21` → dev — checkGit now denies core.hooksPath via `GIT_CONFIG_KEY_*`/`GLOBAL`/`SYSTEM`/`PARAMETERS` env, `--config-env` and bare `-c`; 10 tests added, 8 FAIL pre-fix) |
